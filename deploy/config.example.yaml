@@ -1117,6 +1117,15 @@ gemini:
 # Update Configuration (在线更新配置)
 # =============================================================================
 update:
+  # Built-in binary self-update switch.
+  # Lingqu AI Docker deployments should keep this disabled and upgrade by changing the image tag.
+  # 应用内二进制自更新开关。灵渠AI Docker 部署请保持关闭，通过修改镜像 tag 升级。
+  enabled: false
+
+  # GitHub repository used for update checks when enabled is true.
+  # 启用应用内更新时使用的 GitHub 发布仓库。
+  repo: "gavin20150423/lingqu-ai"
+
   # Proxy URL for accessing GitHub (used for online updates and pricing data)
   # 用于访问 GitHub 的代理地址（用于在线更新和定价数据获取）
   # Supports: http, https, socks5, socks5h

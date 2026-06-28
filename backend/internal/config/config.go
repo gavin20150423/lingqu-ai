@@ -150,6 +150,11 @@ type GeminiTierQuotaConfig struct {
 }
 
 type UpdateConfig struct {
+	// Enabled controls the built-in binary self-updater.
+	// Docker deployments should keep this disabled and upgrade by image tag.
+	Enabled bool `mapstructure:"enabled"`
+	// Repo is the GitHub repository used for release checks when Enabled is true.
+	Repo string `mapstructure:"repo"`
 	// ProxyURL 用于访问 GitHub 的代理地址
 	// 支持 http/https/socks5/socks5h 协议
 	// 例如: "http://127.0.0.1:7890", "socks5://127.0.0.1:1080"
@@ -1762,6 +1767,11 @@ func setDefaults() {
 	viper.SetDefault("rate_limit.overload_cooldown_minutes", 10)
 	viper.SetDefault("rate_limit.oauth_401_cooldown_minutes", 10)
 
+	// Update - Lingqu AI Docker deployments upgrade by image tag.
+	viper.SetDefault("update.enabled", false)
+	viper.SetDefault("update.repo", "gavin20150423/lingqu-ai")
+	viper.SetDefault("update.proxy_url", "")
+
 	// Pricing - 从 model-price-repo 同步模型定价和上下文窗口数据（固定到 commit，避免分支漂移）
 	viper.SetDefault("pricing.remote_url", "https://raw.githubusercontent.com/Wei-Shaw/model-price-repo/main/model_prices_and_context_window.json")
 	viper.SetDefault("pricing.hash_url", "https://raw.githubusercontent.com/Wei-Shaw/model-price-repo/main/model_prices_and_context_window.sha256")
@@ -2040,6 +2050,13 @@ func (c *Config) Validate() error {
 		}
 		if c.Log.Sampling.Thereafter < 0 {
 			return fmt.Errorf("log.sampling.thereafter must be non-negative")
+		}
+	}
+
+	if c.Update.Enabled {
+		repoParts := strings.Split(strings.Trim(strings.TrimSpace(c.Update.Repo), "/"), "/")
+		if len(repoParts) != 2 || repoParts[0] == "" || repoParts[1] == "" {
+			return fmt.Errorf("update.repo must be in owner/repo format when update.enabled is true")
 		}
 	}
 

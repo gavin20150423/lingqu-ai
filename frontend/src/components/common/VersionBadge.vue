@@ -226,6 +226,32 @@
                 </button>
               </div>
 
+              <!-- Priority 3: Built-in update disabled for Docker/tag deployments -->
+              <div v-else-if="!updateEnabled" class="space-y-2">
+                <div
+                  class="flex items-center gap-3 rounded-lg border border-blue-200 bg-blue-50 p-3 dark:border-blue-800/50 dark:bg-blue-900/20"
+                >
+                  <div
+                    class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900/50"
+                  >
+                    <Icon
+                      name="infoCircle"
+                      size="sm"
+                      :stroke-width="2"
+                      class="text-blue-600 dark:text-blue-400"
+                    />
+                  </div>
+                  <div class="min-w-0 flex-1">
+                    <p class="text-sm font-medium text-blue-700 dark:text-blue-300">
+                      {{ t('version.dockerMode') }}
+                    </p>
+                    <p class="text-xs text-blue-600/70 dark:text-blue-400/70">
+                      {{ t('version.dockerModeHint') }}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
               <!-- Priority 3: Update available for source build - show git pull hint -->
               <div v-else-if="hasUpdate && !isReleaseBuild" class="space-y-2">
                 <a
@@ -408,6 +434,7 @@ const latestVersion = computed(() => appStore.latestVersion)
 const hasUpdate = computed(() => appStore.hasUpdate)
 const releaseInfo = computed(() => appStore.releaseInfo)
 const buildType = computed(() => appStore.buildType)
+const updateEnabled = computed(() => appStore.updateEnabled)
 
 // Update process states (local to this component)
 const updating = ref(false)

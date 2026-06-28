@@ -10,10 +10,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -26,9 +28,8 @@ var (
 )
 
 const (
-	updateCacheKey = "update_check_cache"
-	updateCacheTTL = 1200 // 20 minutes
-	githubRepo     = "Wei-Shaw/sub2api"
+	updateCacheTTL    = 1200 // 20 minutes
+	defaultUpdateRepo = "gavin20150423/lingqu-ai"
 
 	// Security: allowed download domains for updates
 	allowedDownloadHost = "github.com"
@@ -57,15 +58,24 @@ type UpdateService struct {
 	githubClient   GitHubReleaseClient
 	currentVersion string
 	buildType      string // "source" for manual builds, "release" for CI builds
+	enabled        bool
+	repo           string
 }
 
 // NewUpdateService creates a new UpdateService
 func NewUpdateService(cache UpdateCache, githubClient GitHubReleaseClient, version, buildType string) *UpdateService {
+	return NewUpdateServiceWithConfig(cache, githubClient, version, buildType, false, defaultUpdateRepo)
+}
+
+func NewUpdateServiceWithConfig(cache UpdateCache, githubClient GitHubReleaseClient, version, buildType string, enabled bool, repo string) *UpdateService {
+	repo = normalizeUpdateRepo(repo)
 	return &UpdateService{
 		cache:          cache,
 		githubClient:   githubClient,
 		currentVersion: version,
 		buildType:      buildType,
+		enabled:        enabled,
+		repo:           repo,
 	}
 }
 
@@ -78,6 +88,8 @@ type UpdateInfo struct {
 	Cached         bool         `json:"cached"`
 	Warning        string       `json:"warning,omitempty"`
 	BuildType      string       `json:"build_type"` // "source" or "release"
+	UpdateEnabled  bool         `json:"update_enabled"`
+	UpdateRepo     string       `json:"update_repo,omitempty"`
 }
 
 // ReleaseInfo contains GitHub release details
@@ -114,6 +126,10 @@ type GitHubAsset struct {
 
 // CheckUpdate checks for available updates
 func (s *UpdateService) CheckUpdate(ctx context.Context, force bool) (*UpdateInfo, error) {
+	if !s.enabled {
+		return s.disabledUpdateInfo(), nil
+	}
+
 	// Try cache first
 	if !force {
 		if cached, err := s.getFromCache(ctx); err == nil && cached != nil {
@@ -135,6 +151,8 @@ func (s *UpdateService) CheckUpdate(ctx context.Context, force bool) (*UpdateInf
 			HasUpdate:      false,
 			Warning:        err.Error(),
 			BuildType:      s.buildType,
+			UpdateEnabled:  s.enabled,
+			UpdateRepo:     s.repo,
 		}, nil
 	}
 
@@ -146,6 +164,10 @@ func (s *UpdateService) CheckUpdate(ctx context.Context, force bool) (*UpdateInf
 // PerformUpdate downloads and applies the update
 // Uses atomic file replacement pattern for safe in-place updates
 func (s *UpdateService) PerformUpdate(ctx context.Context) error {
+	if !s.enabled {
+		return infraerrors.Forbidden("UPDATE_DISABLED", "built-in updates are disabled; upgrade the Docker image tag instead")
+	}
+
 	info, err := s.CheckUpdate(ctx, true)
 	if err != nil {
 		return err
@@ -280,12 +302,12 @@ func (s *UpdateService) Rollback() error {
 }
 
 func (s *UpdateService) fetchLatestRelease(ctx context.Context) (*UpdateInfo, error) {
-	release, err := s.githubClient.FetchLatestRelease(ctx, githubRepo)
+	release, err := s.githubClient.FetchLatestRelease(ctx, s.repo)
 	if err != nil {
 		return nil, err
 	}
 
-	latestVersion := strings.TrimPrefix(release.TagName, "v")
+	latestVersion := s.latestCompatibleVersion(release)
 
 	assets := make([]Asset, len(release.Assets))
 	for i, a := range release.Assets {
@@ -307,9 +329,49 @@ func (s *UpdateService) fetchLatestRelease(ctx context.Context) (*UpdateInfo, er
 			HTMLURL:     release.HTMLURL,
 			Assets:      assets,
 		},
-		Cached:    false,
-		BuildType: s.buildType,
+		Cached:        false,
+		BuildType:     s.buildType,
+		UpdateEnabled: s.enabled,
+		UpdateRepo:    s.repo,
 	}, nil
+}
+
+func (s *UpdateService) disabledUpdateInfo() *UpdateInfo {
+	return &UpdateInfo{
+		CurrentVersion: s.currentVersion,
+		LatestVersion:  s.currentVersion,
+		HasUpdate:      false,
+		Cached:         false,
+		BuildType:      s.buildType,
+		UpdateEnabled:  false,
+		UpdateRepo:     s.repo,
+		Warning:        "Built-in updates are disabled for this build. Upgrade by changing the Docker image tag.",
+	}
+}
+
+func (s *UpdateService) latestCompatibleVersion(release *GitHubRelease) string {
+	latestVersion := strings.TrimPrefix(release.TagName, "v")
+	if !isLingquVersion(s.currentVersion) {
+		return latestVersion
+	}
+	if isLingquVersion(latestVersion) {
+		return latestVersion
+	}
+	candidates := make([]string, 0, len(release.Assets))
+	for _, asset := range release.Assets {
+		version, ok := lingquVersionFromAsset(asset.Name)
+		if ok {
+			candidates = append(candidates, version)
+		}
+	}
+	if len(candidates) == 0 {
+		slog.Warn("latest release is not a Lingqu tag and no Lingqu asset version was found", "repo", s.repo, "tag", release.TagName)
+		return s.currentVersion
+	}
+	sort.Slice(candidates, func(i, j int) bool {
+		return compareVersions(candidates[i], candidates[j]) > 0
+	})
+	return candidates[0]
 }
 
 func (s *UpdateService) downloadFile(ctx context.Context, downloadURL, dest string) error {
@@ -482,10 +544,14 @@ func (s *UpdateService) getFromCache(ctx context.Context) (*UpdateInfo, error) {
 	var cached struct {
 		Latest      string       `json:"latest"`
 		ReleaseInfo *ReleaseInfo `json:"release_info"`
+		Repo        string       `json:"repo"`
 		Timestamp   int64        `json:"timestamp"`
 	}
 	if err := json.Unmarshal([]byte(data), &cached); err != nil {
 		return nil, err
+	}
+	if cached.Repo != s.repo {
+		return nil, fmt.Errorf("cache repo mismatch")
 	}
 
 	if time.Now().Unix()-cached.Timestamp > updateCacheTTL {
@@ -499,6 +565,8 @@ func (s *UpdateService) getFromCache(ctx context.Context) (*UpdateInfo, error) {
 		ReleaseInfo:    cached.ReleaseInfo,
 		Cached:         true,
 		BuildType:      s.buildType,
+		UpdateEnabled:  s.enabled,
+		UpdateRepo:     s.repo,
 	}, nil
 }
 
@@ -506,10 +574,12 @@ func (s *UpdateService) saveToCache(ctx context.Context, info *UpdateInfo) {
 	cacheData := struct {
 		Latest      string       `json:"latest"`
 		ReleaseInfo *ReleaseInfo `json:"release_info"`
+		Repo        string       `json:"repo"`
 		Timestamp   int64        `json:"timestamp"`
 	}{
 		Latest:      info.LatestVersion,
 		ReleaseInfo: info.ReleaseInfo,
+		Repo:        s.repo,
 		Timestamp:   time.Now().Unix(),
 	}
 
@@ -519,10 +589,10 @@ func (s *UpdateService) saveToCache(ctx context.Context, info *UpdateInfo) {
 
 // compareVersions compares two semantic versions
 func compareVersions(current, latest string) int {
-	currentParts := parseVersion(current)
-	latestParts := parseVersion(latest)
+	currentParts := parseVersionForCompare(current)
+	latestParts := parseVersionForCompare(latest)
 
-	for i := 0; i < 3; i++ {
+	for i := 0; i < len(currentParts) && i < len(latestParts); i++ {
 		if currentParts[i] < latestParts[i] {
 			return -1
 		}
@@ -533,14 +603,79 @@ func compareVersions(current, latest string) int {
 	return 0
 }
 
-func parseVersion(v string) [3]int {
+func parseVersionForCompare(v string) []int {
 	v = strings.TrimPrefix(v, "v")
+	v = strings.ReplaceAll(v, "-lingqu.", ".")
+	v = strings.ReplaceAll(v, "+lingqu.", ".")
+	if idx := strings.Index(v, "-"); idx >= 0 {
+		v = v[:idx]
+	}
+	if idx := strings.Index(v, "+"); idx >= 0 {
+		v = v[:idx]
+	}
 	parts := strings.Split(v, ".")
-	result := [3]int{0, 0, 0}
-	for i := 0; i < len(parts) && i < 3; i++ {
-		if parsed, err := strconv.Atoi(parts[i]); err == nil {
+	result := []int{0, 0, 0, 0}
+	for i := 0; i < len(parts) && i < len(result); i++ {
+		part := numericPrefix(parts[i])
+		if part == "" {
+			continue
+		}
+		if parsed, err := strconv.Atoi(part); err == nil {
 			result[i] = parsed
 		}
 	}
 	return result
+}
+
+func numericPrefix(value string) string {
+	var b strings.Builder
+	for _, r := range value {
+		if r < '0' || r > '9' {
+			break
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
+}
+
+func normalizeUpdateRepo(repo string) string {
+	repo = strings.TrimSpace(repo)
+	if repo == "" {
+		return defaultUpdateRepo
+	}
+	if strings.HasPrefix(repo, "https://github.com/") {
+		repo = strings.TrimPrefix(repo, "https://github.com/")
+	}
+	return strings.Trim(repo, "/")
+}
+
+func isLingquVersion(version string) bool {
+	return strings.Contains(strings.TrimPrefix(version, "v"), "-lingqu.")
+}
+
+func lingquVersionFromAsset(name string) (string, bool) {
+	const marker = "-lingqu."
+	idx := strings.Index(name, marker)
+	if idx < 0 {
+		return "", false
+	}
+	start := idx - 1
+	for start >= 0 {
+		ch := name[start]
+		if (ch >= '0' && ch <= '9') || ch == '.' || ch == 'v' {
+			start--
+			continue
+		}
+		break
+	}
+	version := strings.Trim(name[start+1:], "-_.")
+	end := strings.IndexAny(version, "_/")
+	if end >= 0 {
+		version = version[:end]
+	}
+	version = strings.TrimPrefix(version, "v")
+	if !isLingquVersion(version) {
+		return "", false
+	}
+	return version, true
 }

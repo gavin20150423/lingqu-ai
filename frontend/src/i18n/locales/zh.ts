@@ -6899,6 +6899,8 @@ export default {
     viewRelease: '查看发布',
     viewChangelog: '查看更新日志',
     refresh: '刷新',
+    dockerMode: 'Docker 镜像更新',
+    dockerModeHint: '灵渠AI Docker 版请修改镜像 tag 后重启，不使用应用内更新。',
     sourceMode: '源码构建',
     sourceModeHint: '源码构建请使用 git pull 更新',
     updateNow: '立即更新',

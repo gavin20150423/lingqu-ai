@@ -181,6 +181,24 @@ func TestLoadDefaultOpenAIWSConfig(t *testing.T) {
 	}
 }
 
+func TestLoadDefaultUpdateConfig(t *testing.T) {
+	resetViperWithJWTSecret(t)
+
+	cfg, err := Load()
+	require.NoError(t, err)
+	require.False(t, cfg.Update.Enabled)
+	require.Equal(t, "gavin20150423/lingqu-ai", cfg.Update.Repo)
+}
+
+func TestUpdateRepoValidationWhenEnabled(t *testing.T) {
+	resetViperWithJWTSecret(t)
+	t.Setenv("UPDATE_ENABLED", "true")
+	t.Setenv("UPDATE_REPO", "bad-repo")
+
+	_, err := Load()
+	require.ErrorContains(t, err, "update.repo must be in owner/repo format")
+}
+
 func TestLoadDefaultOpenAIHTTP2Enabled(t *testing.T) {
 	resetViperWithJWTSecret(t)
 

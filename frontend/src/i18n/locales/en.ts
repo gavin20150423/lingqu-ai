@@ -6744,6 +6744,8 @@ export default {
     viewRelease: 'View Release',
     viewChangelog: 'View Changelog',
     refresh: 'Refresh',
+    dockerMode: 'Docker image updates',
+    dockerModeHint: 'Lingqu AI Docker builds are upgraded by changing the image tag and restarting.',
     sourceMode: 'Source Build',
     sourceModeHint: 'Source build, use git pull to update',
     updateNow: 'Update Now',
