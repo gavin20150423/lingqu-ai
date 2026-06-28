@@ -35,6 +35,7 @@ type OpenAIGatewayHandler struct {
 	errorPassthroughService  *service.ErrorPassthroughService
 	contentModerationService *service.ContentModerationService
 	opsService               *service.OpsService
+	imageAsyncTaskStore      service.OpenAIImageAsyncTaskStore
 	concurrencyHelper        *ConcurrencyHelper
 	imageLimiter             *imageConcurrencyLimiter
 	maxAccountSwitches       int
@@ -114,6 +115,7 @@ func NewOpenAIGatewayHandler(
 	errorPassthroughService *service.ErrorPassthroughService,
 	contentModerationService *service.ContentModerationService,
 	opsService *service.OpsService,
+	imageAsyncTaskStore service.OpenAIImageAsyncTaskStore,
 	cfg *config.Config,
 ) *OpenAIGatewayHandler {
 	pingInterval := time.Duration(0)
@@ -124,7 +126,7 @@ func NewOpenAIGatewayHandler(
 			maxAccountSwitches = cfg.Gateway.MaxAccountSwitches
 		}
 	}
-	return &OpenAIGatewayHandler{
+	h := &OpenAIGatewayHandler{
 		gatewayService:           gatewayService,
 		billingCacheService:      billingCacheService,
 		apiKeyService:            apiKeyService,
@@ -132,11 +134,14 @@ func NewOpenAIGatewayHandler(
 		errorPassthroughService:  errorPassthroughService,
 		contentModerationService: contentModerationService,
 		opsService:               opsService,
+		imageAsyncTaskStore:      imageAsyncTaskStore,
 		concurrencyHelper:        NewConcurrencyHelper(concurrencyService, SSEPingFormatComment, pingInterval),
 		imageLimiter:             &imageConcurrencyLimiter{},
 		maxAccountSwitches:       maxAccountSwitches,
 		cfg:                      cfg,
 	}
+	h.startOpenAIImageAsyncWorker()
+	return h
 }
 
 // Responses handles OpenAI Responses API endpoint

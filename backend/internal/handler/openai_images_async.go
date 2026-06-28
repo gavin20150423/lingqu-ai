@@ -4,12 +4,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
@@ -21,181 +21,31 @@ import (
 )
 
 const (
-	openAIImageAsyncTaskRetention = 24 * time.Hour
-	openAIImageAsyncTaskLimit     = 100
+	openAIImageAsyncWorkerDequeueWait    = 5 * time.Second
+	openAIImageAsyncWorkerLeaseTTL       = 10 * time.Minute
+	openAIImageAsyncWorkerHeartbeatEvery = 30 * time.Second
 )
-
-type openAIImageAsyncTaskStatus string
-
-const (
-	openAIImageAsyncTaskQueued    openAIImageAsyncTaskStatus = "queued"
-	openAIImageAsyncTaskRunning   openAIImageAsyncTaskStatus = "running"
-	openAIImageAsyncTaskCompleted openAIImageAsyncTaskStatus = "completed"
-	openAIImageAsyncTaskFailed    openAIImageAsyncTaskStatus = "failed"
-)
-
-type openAIImageAsyncTask struct {
-	ID             string
-	UserID         int64
-	APIKeyID       int64
-	Status         openAIImageAsyncTaskStatus
-	ResultStatus   int
-	ResultBody     []byte
-	ResultMimeType string
-	ErrorMessage   string
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
-	FinishedAt     time.Time
-}
-
-type openAIImageAsyncJob struct {
-	Request      *http.Request
-	APIKey       *service.APIKey
-	Subject      middleware2.AuthSubject
-	Role         string
-	Subscription *service.UserSubscription
-	Endpoint     string
-}
-
-type openAIImageAsyncTaskStore struct {
-	mu    sync.Mutex
-	tasks map[string]*openAIImageAsyncTask
-}
-
-var openAIImageAsyncTasks = &openAIImageAsyncTaskStore{
-	tasks: make(map[string]*openAIImageAsyncTask),
-}
 
 func wantsOpenAIImageAsyncTask(c *gin.Context) bool {
 	value := strings.ToLower(strings.TrimSpace(c.Query("async")))
 	return value == "1" || value == "true" || value == "yes" || value == "on"
 }
 
-func (s *openAIImageAsyncTaskStore) enqueue(userID int64, apiKeyID int64) (*openAIImageAsyncTask, bool) {
-	now := time.Now()
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	s.cleanupLocked(now)
-	if len(s.tasks) >= openAIImageAsyncTaskLimit {
-		s.evictOldestTerminalLocked()
-	}
-	if len(s.tasks) >= openAIImageAsyncTaskLimit {
-		return nil, false
-	}
-
-	task := &openAIImageAsyncTask{
-		ID:        "imgtask_" + uuid.NewString(),
-		UserID:    userID,
-		APIKeyID:  apiKeyID,
-		Status:    openAIImageAsyncTaskQueued,
-		CreatedAt: now,
-		UpdatedAt: now,
-	}
-	s.tasks[task.ID] = task
-	return cloneOpenAIImageAsyncTask(task), true
-}
-
-func (s *openAIImageAsyncTaskStore) markRunning(taskID string) {
-	s.update(taskID, func(task *openAIImageAsyncTask, now time.Time) {
-		task.Status = openAIImageAsyncTaskRunning
-		task.UpdatedAt = now
-	})
-}
-
-func (s *openAIImageAsyncTaskStore) markCompleted(taskID string, statusCode int, body []byte, contentType string) {
-	s.update(taskID, func(task *openAIImageAsyncTask, now time.Time) {
-		task.Status = openAIImageAsyncTaskCompleted
-		task.ResultStatus = statusCode
-		task.ResultBody = append(task.ResultBody[:0], body...)
-		task.ResultMimeType = strings.TrimSpace(contentType)
-		task.UpdatedAt = now
-		task.FinishedAt = now
-	})
-}
-
-func (s *openAIImageAsyncTaskStore) markFailed(taskID string, message string) {
-	s.update(taskID, func(task *openAIImageAsyncTask, now time.Time) {
-		task.Status = openAIImageAsyncTaskFailed
-		task.ErrorMessage = strings.TrimSpace(message)
-		if task.ErrorMessage == "" {
-			task.ErrorMessage = "图片任务执行失败"
-		}
-		task.UpdatedAt = now
-		task.FinishedAt = now
-	})
-}
-
-func (s *openAIImageAsyncTaskStore) get(taskID string) (*openAIImageAsyncTask, bool) {
-	now := time.Now()
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	s.cleanupLocked(now)
-	task, ok := s.tasks[taskID]
-	if !ok {
-		return nil, false
-	}
-	return cloneOpenAIImageAsyncTask(task), true
-}
-
-func (s *openAIImageAsyncTaskStore) update(taskID string, mutate func(*openAIImageAsyncTask, time.Time)) {
-	now := time.Now()
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	task, ok := s.tasks[taskID]
-	if !ok {
+func (h *OpenAIGatewayHandler) enqueueOpenAIImageAsyncTask(c *gin.Context, apiKey *service.APIKey, subject middleware2.AuthSubject, body []byte) {
+	if h.imageAsyncTaskStore == nil {
+		h.errorResponse(c, http.StatusServiceUnavailable, "service_unavailable", "图片异步任务存储暂不可用，请稍后再试")
 		return
 	}
-	mutate(task, now)
-}
-
-func (s *openAIImageAsyncTaskStore) cleanupLocked(now time.Time) {
-	for id, task := range s.tasks {
-		anchor := task.UpdatedAt
-		if !task.FinishedAt.IsZero() {
-			anchor = task.FinishedAt
-		}
-		if now.Sub(anchor) > openAIImageAsyncTaskRetention {
-			delete(s.tasks, id)
-		}
-	}
-}
-
-func (s *openAIImageAsyncTaskStore) evictOldestTerminalLocked() {
-	var oldest *openAIImageAsyncTask
-	for _, task := range s.tasks {
-		if task.Status != openAIImageAsyncTaskCompleted && task.Status != openAIImageAsyncTaskFailed {
-			continue
-		}
-		if oldest == nil || task.UpdatedAt.Before(oldest.UpdatedAt) {
-			oldest = task
-		}
-	}
-	if oldest != nil {
-		delete(s.tasks, oldest.ID)
-	}
-}
-
-func cloneOpenAIImageAsyncTask(task *openAIImageAsyncTask) *openAIImageAsyncTask {
-	if task == nil {
-		return nil
-	}
-	cloned := *task
-	if task.ResultBody != nil {
-		cloned.ResultBody = append([]byte(nil), task.ResultBody...)
-	}
-	return &cloned
-}
-
-func (h *OpenAIGatewayHandler) enqueueOpenAIImageAsyncTask(c *gin.Context, apiKey *service.APIKey, subject middleware2.AuthSubject, body []byte) {
-	task, ok := openAIImageAsyncTasks.enqueue(subject.UserID, apiKey.ID)
-	if !ok {
+	taskRequest := snapshotOpenAIImageAsyncTaskRequest(c, apiKey, subject, body)
+	task, err := h.imageAsyncTaskStore.Enqueue(c.Request.Context(), taskRequest)
+	if errors.Is(err, service.ErrOpenAIImageAsyncTaskStoreFull) {
 		h.errorResponse(c, http.StatusTooManyRequests, "rate_limit_error", "图片任务队列已满，请稍后再试")
 		return
 	}
-	job := snapshotOpenAIImageAsyncJob(c, apiKey, subject, body)
+	if err != nil {
+		h.errorResponse(c, http.StatusServiceUnavailable, "service_unavailable", "图片任务创建失败，请稍后再试")
+		return
+	}
 
 	c.Header("Location", openAIImageTaskLocation(c.Request.URL, task.ID))
 	c.JSON(http.StatusAccepted, gin.H{
@@ -204,26 +54,71 @@ func (h *OpenAIGatewayHandler) enqueueOpenAIImageAsyncTask(c *gin.Context, apiKe
 			"status":  task.Status,
 		},
 	})
-
-	go h.runOpenAIImageAsyncTask(job, task.ID)
 }
 
-func (h *OpenAIGatewayHandler) runOpenAIImageAsyncTask(job openAIImageAsyncJob, taskID string) {
-	openAIImageAsyncTasks.markRunning(taskID)
+func (h *OpenAIGatewayHandler) startOpenAIImageAsyncWorker() {
+	if h == nil || h.imageAsyncTaskStore == nil {
+		return
+	}
+	go h.openAIImageAsyncWorkerLoop(context.Background())
+}
 
+func (h *OpenAIGatewayHandler) openAIImageAsyncWorkerLoop(ctx context.Context) {
+	workerID := "openai-image-worker-" + uuid.NewString()
+	_, _ = h.imageAsyncTaskStore.RequeueStaleRunning(ctx, openAIImageAsyncWorkerLeaseTTL)
+	nextRecoverAt := time.Now().Add(openAIImageAsyncWorkerHeartbeatEvery)
+	for {
+		if time.Now().After(nextRecoverAt) {
+			_, _ = h.imageAsyncTaskStore.RequeueStaleRunning(ctx, openAIImageAsyncWorkerLeaseTTL)
+			nextRecoverAt = time.Now().Add(openAIImageAsyncWorkerHeartbeatEvery)
+		}
+		task, err := h.imageAsyncTaskStore.Dequeue(ctx, openAIImageAsyncWorkerDequeueWait)
+		if err != nil {
+			time.Sleep(time.Second)
+			continue
+		}
+		if task == nil {
+			continue
+		}
+		h.runOpenAIImageAsyncTask(ctx, workerID, task)
+	}
+}
+
+func (h *OpenAIGatewayHandler) runOpenAIImageAsyncTask(ctx context.Context, workerID string, task *service.OpenAIImageAsyncTask) {
+	if h.imageAsyncTaskStore == nil || task == nil {
+		return
+	}
+	if task.Request == nil {
+		_ = h.imageAsyncTaskStore.MarkFailed(ctx, task.ID, "图片任务请求已丢失，请重新提交")
+		return
+	}
+	locked, err := h.imageAsyncTaskStore.MarkRunning(ctx, task.ID, workerID, openAIImageAsyncWorkerLeaseTTL)
+	if err != nil || !locked {
+		return
+	}
+	stopHeartbeat := h.startOpenAIImageAsyncHeartbeat(ctx, task.ID, workerID)
+	defer stopHeartbeat()
+
+	h.executeOpenAIImageAsyncTask(ctx, task.ID, task.Request)
+}
+
+func (h *OpenAIGatewayHandler) executeOpenAIImageAsyncTask(ctx context.Context, taskID string, taskRequest *service.OpenAIImageAsyncTaskRequest) {
 	rec := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(rec)
-	c.Request = job.Request
-	c.Set(string(middleware2.ContextKeyAPIKey), job.APIKey)
-	c.Set(string(middleware2.ContextKeyUser), job.Subject)
-	if job.Role != "" {
-		c.Set(string(middleware2.ContextKeyUserRole), job.Role)
+	c.Request = openAIImageAsyncHTTPRequest(ctx, taskRequest)
+	c.Set(string(middleware2.ContextKeyAPIKey), taskRequest.APIKey)
+	c.Set(string(middleware2.ContextKeyUser), middleware2.AuthSubject{
+		UserID:      taskRequest.Subject.UserID,
+		Concurrency: taskRequest.Subject.Concurrency,
+	})
+	if taskRequest.Role != "" {
+		c.Set(string(middleware2.ContextKeyUserRole), taskRequest.Role)
 	}
-	if job.Subscription != nil {
-		c.Set(string(middleware2.ContextKeySubscription), job.Subscription)
+	if taskRequest.Subscription != nil {
+		c.Set(string(middleware2.ContextKeySubscription), taskRequest.Subscription)
 	}
-	if job.Endpoint != "" {
-		c.Set(ctxKeyInboundEndpoint, job.Endpoint)
+	if taskRequest.Endpoint != "" {
+		c.Set(ctxKeyInboundEndpoint, taskRequest.Endpoint)
 	}
 
 	h.Images(c)
@@ -234,56 +129,115 @@ func (h *OpenAIGatewayHandler) runOpenAIImageAsyncTask(job openAIImageAsyncJob, 
 	}
 	bodyBytes := rec.Body.Bytes()
 	if statusCode < http.StatusOK || statusCode >= http.StatusMultipleChoices {
-		openAIImageAsyncTasks.markFailed(taskID, openAIImageAsyncErrorMessage(bodyBytes, statusCode))
+		_ = h.imageAsyncTaskStore.MarkFailed(ctx, taskID, openAIImageAsyncErrorMessage(bodyBytes, statusCode))
 		return
 	}
 	if !json.Valid(bodyBytes) {
-		openAIImageAsyncTasks.markFailed(taskID, "图片任务完成但返回内容不是有效 JSON")
+		_ = h.imageAsyncTaskStore.MarkFailed(ctx, taskID, "图片任务完成但返回内容不是有效 JSON")
 		return
 	}
-	openAIImageAsyncTasks.markCompleted(taskID, statusCode, bodyBytes, rec.Header().Get("Content-Type"))
+	_ = h.imageAsyncTaskStore.MarkCompleted(ctx, taskID, statusCode, bodyBytes, rec.Header().Get("Content-Type"))
 }
 
-func snapshotOpenAIImageAsyncJob(parent *gin.Context, apiKey *service.APIKey, subject middleware2.AuthSubject, body []byte) openAIImageAsyncJob {
-	job := openAIImageAsyncJob{
-		Request:  cloneOpenAIImageAsyncRequest(parent, apiKey, body),
+func (h *OpenAIGatewayHandler) startOpenAIImageAsyncHeartbeat(ctx context.Context, taskID string, workerID string) func() {
+	done := make(chan struct{})
+	go func() {
+		ticker := time.NewTicker(openAIImageAsyncWorkerHeartbeatEvery)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				_ = h.imageAsyncTaskStore.RenewRunning(ctx, taskID, workerID, openAIImageAsyncWorkerLeaseTTL)
+			case <-done:
+				return
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+	var stopped bool
+	return func() {
+		if stopped {
+			return
+		}
+		stopped = true
+		close(done)
+	}
+}
+
+func snapshotOpenAIImageAsyncTaskRequest(parent *gin.Context, apiKey *service.APIKey, subject middleware2.AuthSubject, body []byte) *service.OpenAIImageAsyncTaskRequest {
+	req := &service.OpenAIImageAsyncTaskRequest{
+		Method:   http.MethodPost,
 		APIKey:   apiKey,
-		Subject:  subject,
+		Subject:  service.OpenAIImageAsyncTaskSubject{UserID: subject.UserID, Concurrency: subject.Concurrency},
 		Endpoint: GetInboundEndpoint(parent),
-	}
-	if apiKey != nil && apiKey.User != nil {
-		job.Role = apiKey.User.Role
-	}
-	if subscription, ok := middleware2.GetSubscriptionFromContext(parent); ok {
-		job.Subscription = subscription
-	}
-	return job
-}
-
-func cloneOpenAIImageAsyncRequest(parent *gin.Context, apiKey *service.APIKey, body []byte) *http.Request {
-	ctx := context.Background()
-	if apiKey != nil && apiKey.Group != nil {
-		ctx = context.WithValue(ctx, ctxkey.Group, apiKey.Group)
+		Body:     append([]byte(nil), body...),
 	}
 	if parent != nil && parent.Request != nil {
-		ctx = usageRecordContext(parent.Request.Context(), ctx)
+		req.Method = parent.Request.Method
+		if parent.Request.URL != nil {
+			copiedURL := *parent.Request.URL
+			values := copiedURL.Query()
+			values.Del("async")
+			copiedURL.RawQuery = values.Encode()
+			req.URL = copiedURL.String()
+		}
+		req.Header = parent.Request.Header.Clone()
+		delete(req.Header, "Authorization")
+		delete(req.Header, "X-Api-Key")
+		delete(req.Header, "X-Goog-Api-Key")
 	}
+	if req.URL == "" {
+		req.URL = "/v1/images/generations"
+	}
+	if apiKey != nil && apiKey.User != nil {
+		req.Role = apiKey.User.Role
+	}
+	if subscription, ok := middleware2.GetSubscriptionFromContext(parent); ok {
+		req.Subscription = subscription
+	}
+	return req
+}
 
-	req := parent.Request.Clone(ctx)
-	req.Body = io.NopCloser(bytes.NewReader(body))
+func openAIImageAsyncHTTPRequest(ctx context.Context, taskRequest *service.OpenAIImageAsyncTaskRequest) *http.Request {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if taskRequest != nil && taskRequest.APIKey != nil && taskRequest.APIKey.Group != nil {
+		ctx = context.WithValue(ctx, ctxkey.Group, taskRequest.APIKey.Group)
+	}
+	method := http.MethodPost
+	target := "/v1/images/generations"
+	var body []byte
+	if taskRequest != nil {
+		if strings.TrimSpace(taskRequest.Method) != "" {
+			method = taskRequest.Method
+		}
+		if strings.TrimSpace(taskRequest.URL) != "" {
+			target = taskRequest.URL
+		}
+		body = taskRequest.Body
+	}
+	req := httptest.NewRequest(method, target, bytes.NewReader(body)).WithContext(ctx)
 	req.GetBody = func() (io.ReadCloser, error) {
 		return io.NopCloser(bytes.NewReader(body)), nil
 	}
 	req.ContentLength = int64(len(body))
-
-	if req.URL != nil {
-		copiedURL := *req.URL
-		values := copiedURL.Query()
-		values.Del("async")
-		copiedURL.RawQuery = values.Encode()
-		req.URL = &copiedURL
+	if taskRequest != nil && taskRequest.Header != nil {
+		req.Header = cloneOpenAIImageAsyncHeader(taskRequest.Header)
 	}
 	return req
+}
+
+func cloneOpenAIImageAsyncHeader(header map[string][]string) http.Header {
+	if header == nil {
+		return nil
+	}
+	out := make(http.Header, len(header))
+	for key, values := range header {
+		out[key] = append([]string(nil), values...)
+	}
+	return out
 }
 
 func openAIImageTaskLocation(current *url.URL, taskID string) string {
@@ -312,6 +266,10 @@ func openAIImageAsyncErrorMessage(body []byte, statusCode int) string {
 }
 
 func (h *OpenAIGatewayHandler) ImageTask(c *gin.Context) {
+	if h.imageAsyncTaskStore == nil {
+		h.errorResponse(c, http.StatusServiceUnavailable, "service_unavailable", "图片异步任务存储暂不可用，请稍后再试")
+		return
+	}
 	apiKey, ok := middleware2.GetAPIKeyFromContext(c)
 	if !ok {
 		h.errorResponse(c, http.StatusUnauthorized, "authentication_error", "Invalid API key")
@@ -324,9 +282,13 @@ func (h *OpenAIGatewayHandler) ImageTask(c *gin.Context) {
 	}
 
 	taskID := strings.TrimSpace(c.Param("task_id"))
-	task, ok := openAIImageAsyncTasks.get(taskID)
-	if !ok || task.UserID != subject.UserID || task.APIKeyID != apiKey.ID {
+	task, err := h.imageAsyncTaskStore.Get(c.Request.Context(), taskID)
+	if errors.Is(err, service.ErrOpenAIImageAsyncTaskNotFound) || (err == nil && (task.UserID != subject.UserID || task.APIKeyID != apiKey.ID)) {
 		h.errorResponse(c, http.StatusNotFound, "not_found_error", "图片任务不存在或已过期")
+		return
+	}
+	if err != nil {
+		h.errorResponse(c, http.StatusServiceUnavailable, "service_unavailable", "图片任务查询失败，请稍后再试")
 		return
 	}
 
@@ -342,9 +304,9 @@ func (h *OpenAIGatewayHandler) ImageTask(c *gin.Context) {
 	}
 
 	switch task.Status {
-	case openAIImageAsyncTaskCompleted:
+	case service.OpenAIImageAsyncTaskCompleted:
 		data["result"] = json.RawMessage(task.ResultBody)
-	case openAIImageAsyncTaskFailed:
+	case service.OpenAIImageAsyncTaskFailed:
 		message := task.ErrorMessage
 		if message == "" {
 			message = "图片任务执行失败"
