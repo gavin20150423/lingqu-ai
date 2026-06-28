@@ -144,8 +144,10 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 
 		// ── 5. 加载订阅（订阅模式时始终加载） ───────────────────────
 
-		// skipBilling: /v1/usage 只需鉴权，跳过所有计费执行
-		skipBilling := c.Request.URL.Path == "/v1/usage"
+		// skipBilling: /v1/usage 与图片任务查询只需鉴权，跳过所有计费执行。
+		// 图片任务提交时已完成余额/订阅校验，轮询阶段只是在取回同一任务结果。
+		requestPath := c.Request.URL.Path
+		skipBilling := requestPath == "/v1/usage" || strings.Contains(requestPath, "/images/tasks/")
 
 		var subscription *service.UserSubscription
 		isSubscriptionType := apiKey.Group != nil && apiKey.Group.IsSubscriptionType()

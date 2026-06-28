@@ -1,36 +1,109 @@
 <template>
-  <AppLayout>
-    <div class="mx-auto max-w-4xl space-y-6">
+  <UserWorkspaceLayout>
+    <div class="lingqu-console-page lingqu-console-page--purchase">
+      <section class="lingqu-console-hero">
+        <div>
+          <span class="lingqu-console-eyebrow">补给站</span>
+          <h1>充值/订阅</h1>
+          <p>充值余额，或选择订阅套餐。</p>
+        </div>
+        <div class="lingqu-console-actions">
+          <button
+            v-if="paymentEnabled && !checkout.balance_disabled"
+            type="button"
+            class="lingqu-console-button"
+            :class="{ 'lingqu-console-button--primary': activeTab === 'recharge' }"
+            @click="activeTab = 'recharge'; selectedPlan = null"
+          >
+            <Icon name="dollar" size="sm" />
+            {{ t('payment.tabTopUp') }}
+          </button>
+          <button
+            v-if="paymentEnabled"
+            type="button"
+            class="lingqu-console-button"
+            :class="{ 'lingqu-console-button--primary': activeTab === 'subscription' }"
+            @click="activeTab = 'subscription'; selectedPlan = null"
+          >
+            <Icon name="badge" size="sm" />
+            {{ t('payment.tabSubscribe') }}
+          </button>
+        </div>
+      </section>
+
+      <section class="lingqu-console-stats">
+        <article class="lingqu-console-stat">
+          <small>{{ t('payment.currentBalance') }}</small>
+          <strong>${{ user?.balance?.toFixed(2) || '0.00' }}</strong>
+        </article>
+        <article class="lingqu-console-stat">
+          <small>可选套餐</small>
+          <strong>{{ checkout.plans.length }}</strong>
+        </article>
+        <article class="lingqu-console-stat">
+          <small>当前订阅</small>
+          <strong>{{ activeSubscriptions.length }}</strong>
+        </article>
+        <article class="lingqu-console-stat">
+          <small>支付方式</small>
+          <strong>{{ enabledMethods.length }}</strong>
+        </article>
+      </section>
+
       <div v-if="loading" class="flex items-center justify-center py-20">
         <div class="h-8 w-8 animate-spin rounded-full border-4 border-primary-500 border-t-transparent"></div>
       </div>
       <template v-else>
+        <section v-if="!paymentEnabled" class="payment-closed lingqu-console-card">
+          <div class="payment-closed__mascot" aria-hidden="true">
+            <Icon name="creditCard" size="lg" />
+          </div>
+          <div class="payment-closed__copy">
+            <span class="lingqu-console-eyebrow">Coming Soon</span>
+            <h2>充值/订阅暂未开放</h2>
+            <p>
+              当前站点还没有开启自助支付。你可以先创建 Key 直接接入模型，余额和订阅开通后会在这里统一管理。
+            </p>
+          </div>
+          <div class="payment-closed__actions">
+            <router-link to="/keys?create=1" class="lingqu-console-button lingqu-console-button--primary">
+              <Icon name="key" size="sm" />
+              创建 Key
+            </router-link>
+            <router-link to="/profile" class="lingqu-console-button">
+              <Icon name="user" size="sm" />
+              查看账户
+            </router-link>
+          </div>
+        </section>
+
         <!-- Tab Switcher (hide during payment and subscription confirm) -->
-        <div v-if="tabs.length > 1 && paymentPhase === 'select' && !selectedPlan" class="flex space-x-1 rounded-xl bg-gray-100 p-1 dark:bg-dark-800">
-          <button v-for="tab in tabs" :key="tab.key"
-            class="flex-1 rounded-lg px-4 py-2.5 text-sm font-medium transition-all"
-            :class="activeTab === tab.key ? 'bg-white text-gray-900 shadow dark:bg-dark-700 dark:text-white' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'"
-            @click="activeTab = tab.key">{{ tab.label }}</button>
-        </div>
-        <!-- Payment in progress (shared by recharge and subscription) -->
-        <template v-if="paymentPhase === 'paying'">
-          <PaymentStatusPanel
-            :order-id="paymentState.orderId"
-            :qr-code="paymentState.qrCode"
-            :expires-at="paymentState.expiresAt"
-            :payment-type="paymentState.paymentType"
-            :pay-url="paymentState.payUrl"
-            :order-type="paymentState.orderType"
-            :currency="paymentState.currency || selectedCurrency"
-            @done="onPaymentDone"
-            @success="onPaymentSuccess"
-            @settled="onPaymentSettled"
-          />
-        </template>
-        <!-- Tab content (select phase) -->
         <template v-else>
-          <!-- Top-up Tab -->
-          <template v-if="activeTab === 'recharge'">
+          <div v-if="false && tabs.length > 1 && paymentPhase === 'select' && !selectedPlan" class="flex space-x-1 rounded-xl bg-gray-100 p-1 dark:bg-dark-800">
+            <button v-for="tab in tabs" :key="tab.key"
+              class="flex-1 rounded-lg px-4 py-2.5 text-sm font-medium transition-all"
+              :class="activeTab === tab.key ? 'bg-white text-gray-900 shadow dark:bg-dark-700 dark:text-white' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'"
+              @click="activeTab = tab.key">{{ tab.label }}</button>
+          </div>
+          <!-- Payment in progress (shared by recharge and subscription) -->
+          <template v-if="paymentPhase === 'paying'">
+            <PaymentStatusPanel
+              :order-id="paymentState.orderId"
+              :qr-code="paymentState.qrCode"
+              :expires-at="paymentState.expiresAt"
+              :payment-type="paymentState.paymentType"
+              :pay-url="paymentState.payUrl"
+              :order-type="paymentState.orderType"
+              :currency="paymentState.currency || selectedCurrency"
+              @done="onPaymentDone"
+              @success="onPaymentSuccess"
+              @settled="onPaymentSettled"
+            />
+          </template>
+          <!-- Tab content (select phase) -->
+          <template v-else>
+            <!-- Top-up Tab -->
+            <template v-if="activeTab === 'recharge'">
             <!-- Recharge Account Card -->
             <div class="card p-5">
               <p class="text-xs font-medium text-gray-400 dark:text-gray-500">{{ t('payment.rechargeAccount') }}</p>
@@ -88,9 +161,9 @@
               <span v-else>{{ t('payment.createOrder') }} {{ formatSelectedPaymentAmount(totalAmount) }}</span>
             </button>
             </template>
-          </template>
+            </template>
           <!-- Subscribe Tab -->
-          <template v-else-if="activeTab === 'subscription'">
+            <template v-else-if="activeTab === 'subscription'">
             <!-- Subscription confirm (inline, replaces plan list) -->
             <template v-if="selectedPlan">
               <div class="card p-5">
@@ -204,16 +277,17 @@
                 </div>
               </div>
             </template>
+            </template>
           </template>
-        </template>
-        <div v-if="(checkout.help_text || checkout.help_image_url) && paymentPhase === 'select' && !selectedPlan" class="card p-4">
-          <div class="flex flex-col items-center gap-3">
-            <img v-if="checkout.help_image_url" :src="checkout.help_image_url" alt=""
-              class="h-40 max-w-full cursor-pointer rounded-lg object-contain transition-opacity hover:opacity-80"
-              @click="previewImage = checkout.help_image_url" />
-            <p v-if="checkout.help_text" class="text-center text-sm text-gray-500 dark:text-gray-400">{{ checkout.help_text }}</p>
+          <div v-if="(checkout.help_text || checkout.help_image_url) && paymentPhase === 'select' && !selectedPlan" class="card p-4">
+            <div class="flex flex-col items-center gap-3">
+              <img v-if="checkout.help_image_url" :src="checkout.help_image_url" alt=""
+                class="h-40 max-w-full cursor-pointer rounded-lg object-contain transition-opacity hover:opacity-80"
+                @click="previewImage = checkout.help_image_url" />
+              <p v-if="checkout.help_text" class="text-center text-sm text-gray-500 dark:text-gray-400">{{ checkout.help_text }}</p>
+            </div>
           </div>
-        </div>
+        </template>
       </template>
     </div>
     <!-- Renewal Plan Selection Modal -->
@@ -241,7 +315,7 @@
         </div>
       </Transition>
     </Teleport>
-  </AppLayout>
+  </UserWorkspaceLayout>
 </template>
 
 <script setup lang="ts">
@@ -256,7 +330,7 @@ import { paymentAPI } from '@/api/payment'
 import { extractApiErrorMessage, extractI18nErrorMessage } from '@/utils/apiError'
 import { isMobileDevice } from '@/utils/device'
 import type { SubscriptionPlan, CheckoutInfoResponse, CreateOrderResult, OrderType } from '@/types/payment'
-import AppLayout from '@/components/layout/AppLayout.vue'
+import UserWorkspaceLayout from '@/components/layout/UserWorkspaceLayout.vue'
 import AmountInput from '@/components/payment/AmountInput.vue'
 import PaymentMethodSelector from '@/components/payment/PaymentMethodSelector.vue'
 import { METHOD_ORDER, getPaymentPopupFeatures } from '@/components/payment/providerConfig'
@@ -291,6 +365,7 @@ const appStore = useAppStore()
 
 const user = computed(() => authStore.user)
 const activeSubscriptions = computed(() => subscriptionStore.activeSubscriptions)
+const paymentEnabled = computed(() => appStore.cachedPublicSettings?.payment_enabled === true)
 
 function getDaysRemaining(expiresAt: string): number {
   const diff = new Date(expiresAt).getTime() - Date.now()
@@ -1075,3 +1150,69 @@ onMounted(async () => {
   subscriptionStore.fetchActiveSubscriptions().catch(() => {})
 })
 </script>
+
+<style scoped>
+.payment-closed {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 1.1rem;
+}
+
+.payment-closed__mascot {
+  width: 5rem;
+  height: 5rem;
+  display: grid;
+  place-items: center;
+  border: 3px solid #211f1c;
+  border-radius: 26px;
+  background:
+    radial-gradient(circle at 68% 28%, rgba(255, 255, 255, 0.8), transparent 26%),
+    linear-gradient(135deg, #ff7aa5, #4ee9ff);
+  box-shadow: 5px 5px 0 rgba(33, 31, 28, 0.82);
+  color: #211f1c;
+  transform: rotate(-4deg);
+}
+
+.payment-closed__copy h2 {
+  margin-top: 0.55rem;
+  color: #211f1c;
+  font-size: clamp(1.65rem, 4vw, 2.5rem);
+  font-weight: 950;
+  line-height: 1;
+}
+
+.payment-closed__copy p {
+  max-width: 34rem;
+  margin-top: 0.55rem;
+  color: rgba(33, 31, 28, 0.62);
+  font-weight: 800;
+  line-height: 1.7;
+}
+
+.payment-closed__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.65rem;
+}
+
+@media (max-width: 760px) {
+  .payment-closed {
+    grid-template-columns: 1fr;
+  }
+
+  .payment-closed__actions {
+    justify-content: flex-start;
+  }
+}
+
+.payment-closed__mascot {
+  border: 1px solid rgba(33, 31, 28, 0.12);
+  background:
+    radial-gradient(circle at 68% 28%, rgba(255, 255, 255, 0.8), transparent 26%),
+    linear-gradient(135deg, #fff8df, #edfafa);
+  box-shadow: 0 10px 24px rgba(29, 42, 42, 0.08);
+  transform: none;
+}
+</style>

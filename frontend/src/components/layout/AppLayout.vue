@@ -1,8 +1,5 @@
 <template>
-  <div class="min-h-screen bg-gray-50 dark:bg-dark-950">
-    <!-- Background Decoration -->
-    <div class="pointer-events-none fixed inset-0 bg-mesh-gradient"></div>
-
+  <div class="min-h-screen bg-[#f5f7fb] text-gray-900">
     <!-- Sidebar -->
     <AppSidebar />
 
@@ -39,7 +36,7 @@ const isAdmin = computed(() => authStore.user?.role === 'admin')
 
 const { replayTour } = useOnboardingTour({
   storageKey: isAdmin.value ? 'admin_guide' : 'user_guide',
-  autoStart: true
+  autoStart: false
 })
 
 const onboardingStore = useOnboardingStore()
@@ -50,3 +47,41 @@ onMounted(() => {
 
 defineExpose({ replayTour })
 </script>
+
+<style scoped>
+:deep(.card) {
+  background: rgba(255, 255, 255, 0.96);
+  border-color: rgb(226 232 240);
+  border-radius: 1rem;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.06);
+}
+
+:deep(.card-hover:hover) {
+  transform: translateY(-1px);
+  border-color: rgb(203 213 225);
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.08);
+}
+
+:deep(.glass),
+:deep(.glass-card),
+:deep(.dropdown),
+:deep(.modal-content),
+:deep(.dialog-container),
+:deep(.select-dropdown-portal),
+:deep(.date-picker-dropdown) {
+  border-color: rgb(226 232 240);
+  box-shadow: 0 14px 36px rgba(15, 23, 42, 0.08);
+}
+
+:deep(.btn-primary) {
+  box-shadow: 0 8px 18px rgba(240, 68, 56, 0.16);
+}
+
+:deep(.btn-secondary) {
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.05);
+}
+
+:deep(.table-container) {
+  border-color: rgb(226 232 240);
+}
+</style>

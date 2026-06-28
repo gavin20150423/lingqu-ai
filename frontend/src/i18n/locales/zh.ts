@@ -113,7 +113,7 @@ export default {
   // Key Usage Query Page
   keyUsage: {
     title: 'API Key 用量查询',
-    subtitle: '输入您的 API Key 以查看实时消费金额与使用状态',
+    subtitle: '输入 Key，立即查看实时用量与状态',
     placeholder: 'sk-ant-mirror-xxxxxxxxxxxx',
     query: '查询',
     querying: '查询中...',
@@ -6905,10 +6905,10 @@ export default {
     // Admin tour steps
     admin: {
       welcome: {
-        title: '👋 欢迎使用 Sub2API',
+        title: '👋 欢迎使用灵渠AI',
         description:
-          '<div style="line-height: 1.8;"><p style="margin-bottom: 16px;">Sub2API 是一个强大的 AI 服务中转平台，让您轻松管理和分发 AI 服务。</p><p style="margin-bottom: 12px;"><b>🎯 核心功能：</b></p><ul style="margin-left: 20px; margin-bottom: 16px;"><li>📦 <b>分组管理</b> - 创建不同的服务套餐（VIP、免费试用等）</li><li>🔗 <b>账号池</b> - 连接多个上游 AI 服务商账号</li><li>🔑 <b>密钥分发</b> - 为用户生成独立的 API Key</li><li>💰 <b>计费管理</b> - 灵活的费率和配额控制</li></ul><p style="color: #10b981; font-weight: 600;">接下来，我们将用 3 分钟带您完成首次配置 →</p></div>',
-        nextBtn: '开始配置 🚀',
+          '<div style="line-height: 1.8;"><p style="margin-bottom: 16px;">灵渠AI 是一个面向多模型接入的 AI 服务平台，帮助您集中管理账号、Key、渠道和计费策略。</p><p style="margin-bottom: 12px;"><b>核心能力：</b></p><ul style="margin-left: 20px; margin-bottom: 16px;"><li><b>分组管理</b> - 为不同客户配置服务套餐</li><li><b>账号池</b> - 连接多个上游 AI 服务账号</li><li><b>密钥分发</b> - 为用户生成独立 API Key</li><li><b>计费管理</b> - 控制倍率、额度和消费记录</li></ul><p style="color: #10b981; font-weight: 600;">接下来可以按需完成首次配置 →</p></div>',
+        nextBtn: '开始配置',
         prevBtn: '跳过'
       },
       groupManage: {
@@ -7026,10 +7026,10 @@ export default {
     // User tour steps
     user: {
       welcome: {
-        title: '👋 欢迎使用 Sub2API',
+        title: '👋 欢迎使用灵渠AI',
         description:
-          '<div style="line-height: 1.8;"><p style="margin-bottom: 16px;">您好！欢迎来到 Sub2API AI 服务平台。</p><p style="margin-bottom: 12px;"><b>🎯 快速开始：</b></p><ul style="margin-left: 20px; margin-bottom: 16px;"><li>🔑 创建 API 密钥</li><li>📋 复制密钥到您的应用</li><li>🚀 开始使用 AI 服务</li></ul><p style="color: #10b981; font-weight: 600;">只需 1 分钟，让我们开始吧 →</p></div>',
-        nextBtn: '开始 🚀',
+          '<div style="line-height: 1.8;"><p style="margin-bottom: 16px;">您好！欢迎来到灵渠AI。</p><p style="margin-bottom: 12px;"><b>快速开始：</b></p><ul style="margin-left: 20px; margin-bottom: 16px;"><li>创建 API 密钥</li><li>复制密钥到您的应用</li><li>开始使用 AI 服务</li></ul><p style="color: #10b981; font-weight: 600;">只需 1 分钟，让我们开始吧 →</p></div>',
+        nextBtn: '开始',
         prevBtn: '跳过'
       },
       keyManage: {

@@ -1,6 +1,43 @@
 <template>
-  <AppLayout>
-    <div class="space-y-6">
+  <UserWorkspaceLayout>
+    <div class="lingqu-console-page">
+      <section class="lingqu-console-hero">
+        <div>
+          <span class="lingqu-console-eyebrow">订阅卡包</span>
+          <h1>我的订阅</h1>
+          <p>查看套餐、额度和到期时间。</p>
+        </div>
+        <div class="lingqu-console-actions">
+          <button type="button" class="lingqu-console-button" @click="loadSubscriptions">
+            <Icon name="refresh" size="sm" :class="{ 'animate-spin': loading }" />
+            {{ t('common.refresh') }}
+          </button>
+          <button type="button" class="lingqu-console-button lingqu-console-button--primary" @click="router.push('/purchase')">
+            <Icon name="creditCard" size="sm" />
+            {{ t('nav.buySubscription') }}
+          </button>
+        </div>
+      </section>
+
+      <section class="lingqu-console-stats">
+        <article class="lingqu-console-stat">
+          <small>订阅数量</small>
+          <strong>{{ subscriptionSummary.total }}</strong>
+        </article>
+        <article class="lingqu-console-stat">
+          <small>可用订阅</small>
+          <strong>{{ subscriptionSummary.active }}</strong>
+        </article>
+        <article class="lingqu-console-stat">
+          <small>即将到期</small>
+          <strong>{{ subscriptionSummary.expiringSoon }}</strong>
+        </article>
+        <article class="lingqu-console-stat">
+          <small>最早到期</small>
+          <strong>{{ subscriptionSummary.nearest }}</strong>
+        </article>
+      </section>
+
       <!-- Loading State -->
       <div v-if="loading" class="flex justify-center py-12">
         <div
@@ -9,7 +46,7 @@
       </div>
 
       <!-- Empty State -->
-      <div v-else-if="subscriptions.length === 0" class="card p-12 text-center">
+      <div v-else-if="subscriptions.length === 0" class="lingqu-console-card p-12 text-center">
         <div
           class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gray-100 dark:bg-dark-700"
         >
@@ -21,6 +58,10 @@
         <p class="text-gray-500 dark:text-dark-400">
           {{ t('userSubscriptions.noActiveSubscriptionsDesc') }}
         </p>
+        <button type="button" class="lingqu-console-button lingqu-console-button--primary mt-5" @click="router.push('/purchase')">
+          <Icon name="creditCard" size="sm" />
+          {{ t('nav.buySubscription') }}
+        </button>
       </div>
 
       <!-- Subscriptions Grid -->
@@ -238,17 +279,17 @@
         </div>
       </div>
     </div>
-  </AppLayout>
+  </UserWorkspaceLayout>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { useAppStore } from '@/stores/app'
 import subscriptionsAPI from '@/api/subscriptions'
 import type { UserSubscription } from '@/types'
-import AppLayout from '@/components/layout/AppLayout.vue'
+import UserWorkspaceLayout from '@/components/layout/UserWorkspaceLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { formatDateOnly } from '@/utils/format'
 import { platformBorderClass, platformBadgeClass, platformButtonClass, platformLabel } from '@/utils/platformColors'
@@ -270,6 +311,26 @@ const appStore = useAppStore()
 
 const subscriptions = ref<UserSubscription[]>([])
 const loading = ref(true)
+
+const subscriptionSummary = computed(() => {
+  const active = subscriptions.value.filter((item) => item.status === 'active')
+  const expiringSoon = active.filter((item) => {
+    if (!item.expires_at) return false
+    const days = Math.ceil((new Date(item.expires_at).getTime() - Date.now()) / 86400000)
+    return days >= 0 && days <= 7
+  })
+  const nearestDate = active
+    .map((item) => item.expires_at)
+    .filter((value): value is string => Boolean(value))
+    .sort((a, b) => new Date(a).getTime() - new Date(b).getTime())[0]
+
+  return {
+    total: subscriptions.value.length,
+    active: active.length,
+    expiringSoon: expiringSoon.length,
+    nearest: nearestDate ? formatDateOnly(nearestDate) : '-'
+  }
+})
 
 async function loadSubscriptions() {
   try {

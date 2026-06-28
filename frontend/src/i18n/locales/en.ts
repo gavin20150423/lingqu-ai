@@ -113,7 +113,7 @@ export default {
   // Key Usage Query Page
   keyUsage: {
     title: 'API Key Usage',
-    subtitle: 'Enter your API Key to view real-time spending and usage status',
+    subtitle: 'Enter a key to view real-time usage and status',
     placeholder: 'sk-ant-mirror-xxxxxxxxxxxx',
     query: 'Query',
     querying: 'Querying...',
@@ -6752,9 +6752,9 @@ export default {
     // Admin tour steps
     admin: {
       welcome: {
-        title: '👋 Welcome to Sub2API',
-        description: '<div style="line-height: 1.8;"><p style="margin-bottom: 16px;">Sub2API is a powerful AI service gateway platform that helps you easily manage and distribute AI services.</p><p style="margin-bottom: 12px;"><b>🎯 Core Features:</b></p><ul style="margin-left: 20px; margin-bottom: 16px;"><li>📦 <b>Group Management</b> - Create service tiers (VIP, Free Trial, etc.)</li><li>🔗 <b>Account Pool</b> - Connect multiple upstream AI service accounts</li><li>🔑 <b>Key Distribution</b> - Generate independent API Keys for users</li><li>💰 <b>Billing Control</b> - Flexible rate and quota management</li></ul><p style="color: #10b981; font-weight: 600;">Let\'s complete the initial setup in 3 minutes →</p></div>',
-        nextBtn: 'Start Setup 🚀',
+        title: '👋 Welcome to Lingqu AI',
+        description: '<div style="line-height: 1.8;"><p style="margin-bottom: 16px;">Lingqu AI is a multi-model access platform that helps you manage accounts, keys, channels, and billing policies in one place.</p><p style="margin-bottom: 12px;"><b>Core capabilities:</b></p><ul style="margin-left: 20px; margin-bottom: 16px;"><li><b>Group management</b> - set up service packages for different customers</li><li><b>Account pool</b> - connect multiple upstream AI service accounts</li><li><b>Key distribution</b> - issue independent API keys</li><li><b>Billing control</b> - manage multipliers, quotas, and usage records</li></ul><p style="color: #10b981; font-weight: 600;">Let\'s finish the first setup step by step →</p></div>',
+        nextBtn: 'Start setup',
         prevBtn: 'Skip'
       },
       groupManage: {
@@ -6852,9 +6852,9 @@ export default {
     // User tour steps
     user: {
       welcome: {
-        title: '👋 Welcome to Sub2API',
-        description: '<div style="line-height: 1.8;"><p style="margin-bottom: 16px;">Hello! Welcome to the Sub2API AI service platform.</p><p style="margin-bottom: 12px;"><b>🎯 Quick Start:</b></p><ul style="margin-left: 20px; margin-bottom: 16px;"><li>🔑 Create API Key</li><li>📋 Copy key to your application</li><li>🚀 Start using AI services</li></ul><p style="color: #10b981; font-weight: 600;">Just 1 minute, let\'s get started →</p></div>',
-        nextBtn: 'Start 🚀',
+        title: '👋 Welcome to Lingqu AI',
+        description: '<div style="line-height: 1.8;"><p style="margin-bottom: 16px;">Hello! Welcome to Lingqu AI.</p><p style="margin-bottom: 12px;"><b>Quick start:</b></p><ul style="margin-left: 20px; margin-bottom: 16px;"><li>Create an API key</li><li>Copy the key into your app</li><li>Start using AI services</li></ul><p style="color: #10b981; font-weight: 600;">Let\'s get started →</p></div>',
+        nextBtn: 'Start',
         prevBtn: 'Skip'
       },
       keyManage: {

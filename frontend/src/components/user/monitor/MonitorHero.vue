@@ -1,56 +1,67 @@
 <template>
-  <section class="py-3 md:py-4">
-    <div class="flex items-center justify-end gap-3 flex-wrap">
-      <div
-        role="tablist"
-        class="inline-flex p-0.5 rounded-xl bg-gray-100 dark:bg-dark-800 border border-gray-200/60 dark:border-dark-700/60 text-xs"
-      >
+  <section class="lingqu-console-hero monitor-hero">
+    <div class="monitor-hero__copy">
+      <span class="lingqu-console-eyebrow">Channel Watch</span>
+      <h1>{{ t('channelStatus.title') }}</h1>
+      <p>自动观察各模型通道的可用率和延迟。你只需要看哪条线路稳定、哪条线路最快，Key 会继续走灵渠AI调度。</p>
+
+      <div class="monitor-hero__badges" aria-label="渠道状态优势">
+        <span>
+          <Icon name="shield" size="sm" />
+          稳定优先
+        </span>
+        <span>
+          <Icon name="bolt" size="sm" />
+          延迟可见
+        </span>
+        <span>
+          <Icon name="server" size="sm" />
+          {{ intervalSeconds }}s 巡检
+        </span>
+      </div>
+    </div>
+
+    <div class="monitor-hero__panel">
+      <span class="monitor-hero__status" :class="overallChipClass">
+        <span :class="overallDotClass"></span>
+        {{ overallLabel }}
+      </span>
+
+      <div role="tablist" class="monitor-hero__tabs" aria-label="状态时间窗口">
         <button
           v-for="opt in windowOptions"
           :key="opt.value"
           type="button"
           role="tab"
           :aria-selected="window === opt.value"
-          class="px-3 py-1 rounded-lg transition-colors"
-          :class="window === opt.value
-            ? 'bg-white dark:bg-dark-700 shadow-sm text-gray-900 dark:text-white font-semibold'
-            : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'"
+          :class="{ 'monitor-hero__tab--active': window === opt.value }"
           @click="emit('update:window', opt.value)"
         >
           {{ opt.label }}
         </button>
       </div>
 
-      <span
-        class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold tracking-wider uppercase"
-        :class="overallChipClass"
-      >
-        <span
-          class="w-1.5 h-1.5 rounded-full mr-1.5"
-          :class="overallDotClass"
-        ></span>
-        {{ overallLabel }}
-      </span>
+      <div class="monitor-hero__actions">
+        <button
+          type="button"
+          class="monitor-hero__refresh"
+          :disabled="loading"
+          :title="t('common.refresh')"
+          @click="emit('refresh')"
+        >
+          <Icon name="refresh" size="md" :class="loading ? 'animate-spin' : ''" />
+        </button>
 
-      <button
-        type="button"
-        class="h-8 w-8 rounded-lg flex items-center justify-center text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-dark-700 transition-colors disabled:opacity-50"
-        :disabled="loading"
-        :title="t('common.refresh')"
-        @click="emit('refresh')"
-      >
-        <Icon name="refresh" size="md" :class="loading ? 'animate-spin' : ''" />
-      </button>
-
-      <AutoRefreshButton
-        v-if="autoRefresh"
-        :enabled="autoRefresh.enabled.value"
-        :interval-seconds="autoRefresh.intervalSeconds.value"
-        :countdown="autoRefresh.countdown.value"
-        :intervals="autoRefresh.intervals"
-        @update:enabled="autoRefresh.setEnabled"
-        @update:interval="autoRefresh.setInterval"
-      />
+        <AutoRefreshButton
+          v-if="autoRefresh"
+          :enabled="autoRefresh.enabled.value"
+          :interval-seconds="autoRefresh.intervalSeconds.value"
+          :countdown="autoRefresh.countdown.value"
+          :intervals="autoRefresh.intervals"
+          @update:enabled="autoRefresh.setEnabled"
+          @update:interval="autoRefresh.setInterval"
+        />
+      </div>
     </div>
   </section>
 </template>
@@ -106,11 +117,171 @@ const overallChipClass = computed(() => {
 const overallDotClass = computed(() => {
   switch (props.overallStatus) {
     case 'operational':
-      return 'bg-emerald-500 animate-pulse'
+      return 'monitor-hero__dot monitor-hero__dot--ok'
     case 'degraded':
     default:
-      return 'bg-amber-500 animate-pulse'
+      return 'monitor-hero__dot monitor-hero__dot--warn'
   }
 })
 
 </script>
+
+<style scoped>
+.monitor-hero {
+  margin-bottom: 0.8rem;
+  padding: 0.9rem 1rem;
+}
+
+.monitor-hero__copy {
+  min-width: 0;
+}
+
+.monitor-hero__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 0.7rem;
+}
+
+.monitor-hero__badges span,
+.monitor-hero__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border: 2px solid #211f1c;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: 3px 3px 0 rgba(33, 31, 28, 0.72);
+  color: #211f1c;
+  padding: 0.28rem 0.62rem;
+  font-size: 0.74rem;
+  font-weight: 950;
+}
+
+.monitor-hero__panel {
+  min-width: min(100%, 21rem);
+  display: grid;
+  gap: 0.5rem;
+  justify-items: end;
+}
+
+.monitor-hero__status {
+  text-transform: uppercase;
+}
+
+.monitor-hero__dot {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 999px;
+  animation: monitorPulse 1.5s ease-in-out infinite;
+}
+
+.monitor-hero__dot--ok {
+  background: #2ecf9f;
+}
+
+.monitor-hero__dot--warn {
+  background: #ffd447;
+}
+
+.monitor-hero__tabs {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.35rem;
+  border: 3px solid #211f1c;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.86);
+  box-shadow: 4px 4px 0 rgba(33, 31, 28, 0.78);
+  padding: 0.28rem;
+}
+
+.monitor-hero__tabs button {
+  min-height: 1.85rem;
+  border-radius: 12px;
+  color: rgba(33, 31, 28, 0.62);
+  padding: 0 0.68rem;
+  font-size: 0.8rem;
+  font-weight: 950;
+  transition: transform 150ms ease, background 150ms ease, color 150ms ease;
+}
+
+.monitor-hero__tabs button:hover,
+.monitor-hero__tab--active {
+  background: #fff0bd;
+  color: #211f1c;
+  transform: translateY(-1px);
+}
+
+.monitor-hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.45rem;
+}
+
+.monitor-hero__refresh {
+  width: 2.15rem;
+  height: 2.15rem;
+  display: grid;
+  place-items: center;
+  border: 3px solid #211f1c;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 4px 4px 0 rgba(33, 31, 28, 0.78);
+  color: #211f1c;
+  transition: transform 150ms ease, box-shadow 150ms ease;
+}
+
+.monitor-hero__refresh:hover:not(:disabled) {
+  transform: translate(-1px, -2px) rotate(-2deg);
+  box-shadow: 6px 6px 0 rgba(33, 31, 28, 0.86);
+}
+
+.monitor-hero__refresh:disabled {
+  opacity: 0.65;
+}
+
+.monitor-hero :deep(.relative > button) {
+  min-height: 2.15rem;
+  border: 3px solid #211f1c;
+  border-radius: 14px;
+  background: #fff7d0;
+  box-shadow: 4px 4px 0 rgba(33, 31, 28, 0.78);
+  color: #211f1c;
+  font-weight: 950;
+}
+
+.monitor-hero :deep(.absolute) {
+  border: 3px solid #211f1c;
+  border-radius: 16px;
+  box-shadow: 5px 5px 0 rgba(33, 31, 28, 0.82);
+}
+
+@media (max-width: 900px) {
+  .monitor-hero {
+    padding: 0.8rem;
+  }
+
+  .monitor-hero__panel {
+    justify-items: start;
+  }
+
+  .monitor-hero__actions,
+  .monitor-hero__tabs {
+    justify-content: flex-start;
+  }
+}
+
+@keyframes monitorPulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.35);
+    opacity: 0.65;
+  }
+}
+</style>

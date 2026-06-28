@@ -268,7 +268,7 @@ describe('useAppStore', () => {
 
       expect(result).toBe(true)
       expect(store.siteName).toBe('TestSite')
-      expect(store.siteLogo).toBe('/logo.png')
+      expect(store.siteLogo).toBe('/brand/lingqu-ai-logo.svg')
       expect(store.siteVersion).toBe('1.0.0')
       expect(store.publicSettingsLoaded).toBe(true)
     })
@@ -307,7 +307,7 @@ describe('useAppStore', () => {
         turnstile_site_key: '',
         site_name: 'Updated Site',
         site_logo: '',
-        site_subtitle: '',
+        site_subtitle: 'Subscription to API Conversion Platform',
         api_base_url: '',
         contact_info: '',
         doc_url: '',
@@ -327,6 +327,7 @@ describe('useAppStore', () => {
       const store = useAppStore()
       await store.fetchPublicSettings(true)
 
+      expect(store.cachedPublicSettings?.site_subtitle).toBe('一个 Key 接入各大顶尖大模型')
       expect((window as any).__APP_CONFIG__.table_default_page_size).toBe(1000)
       expect((window as any).__APP_CONFIG__.table_page_size_options).toEqual([20, 100, 1000])
       expect(localStorage.getItem('table-page-size')).toBeNull()

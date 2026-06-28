@@ -1,13 +1,19 @@
 <template>
-  <div class="relative flex min-h-screen flex-col bg-gray-50 dark:bg-dark-950">
-    <!-- Header (same pattern as HomeView) -->
-    <header class="relative z-20 px-6 py-4">
-      <nav class="mx-auto flex max-w-6xl items-center justify-between">
+  <div class="key-usage-anime-shell relative flex min-h-screen flex-col overflow-hidden">
+    <div class="pointer-events-none absolute inset-0 key-usage-anime-shell__grid"></div>
+    <div class="pointer-events-none absolute inset-x-0 top-0 h-1 bg-comic-ink/10"></div>
+
+    <!-- Header -->
+    <header class="relative z-20 border-b-2 border-comic-ink/80 bg-[#fffdf5]/[0.96] px-4 py-4 backdrop-blur-sm sm:px-6 dark:border-dark-700/70 dark:bg-dark-950/[0.92]">
+      <nav class="mx-auto flex max-w-7xl items-center justify-between gap-4">
         <router-link to="/home" class="flex items-center gap-3">
-          <div class="h-10 w-10 overflow-hidden rounded-xl shadow-md">
-            <img :src="siteLogo || '/logo.png'" alt="Logo" class="h-full w-full object-contain" />
+          <div class="h-11 w-11 overflow-hidden rounded-[16px] border-[3px] border-comic-ink bg-white shadow-[4px_4px_0_rgba(33,31,28,0.9)]">
+            <img :src="siteLogo || '/brand/lingqu-ai-logo.svg'" alt="Logo" class="h-full w-full object-contain" />
           </div>
-          <span class="text-lg font-semibold tracking-tight text-gray-900 dark:text-white">{{ siteName }}</span>
+          <div class="min-w-0">
+            <span class="block truncate text-lg font-black text-comic-ink dark:text-white">{{ siteName }}</span>
+            <span class="block text-[11px] font-black uppercase tracking-[0.2em] text-comic-ink/45 dark:text-white/45">KEY 观测舱</span>
+          </div>
         </router-link>
         <div class="flex items-center gap-3">
           <LocaleSwitcher />
@@ -16,132 +22,191 @@
             :href="docUrl"
             target="_blank"
             rel="noopener noreferrer"
-            class="rounded-lg p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-dark-400 dark:hover:bg-dark-800 dark:hover:text-white"
+            class="flex items-center gap-2 rounded-[14px] border-2 border-transparent px-3 py-2 text-sm font-medium text-comic-ink transition-colors hover:border-comic-ink/70 hover:bg-yellow-100/80 dark:text-dark-200 dark:hover:border-dark-600 dark:hover:bg-dark-800"
             :title="t('home.viewDocs')"
           >
             <Icon name="book" size="md" />
+            <span class="hidden sm:inline">{{ t('home.docs') }}</span>
           </a>
-          <button
-            @click="toggleTheme"
-            class="rounded-lg p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-dark-400 dark:hover:bg-dark-800 dark:hover:text-white"
-            :title="isDark ? t('home.switchToLight') : t('home.switchToDark')"
-          >
-            <Icon v-if="isDark" name="sun" size="md" />
-            <Icon v-else name="moon" size="md" />
-          </button>
         </div>
       </nav>
     </header>
 
     <!-- Main Content -->
-    <main class="flex-1 w-full max-w-5xl mx-auto px-6 py-12">
-      <!-- Hero -->
-      <div class="text-center mb-12">
-        <h1 class="text-3xl sm:text-4xl font-bold tracking-tight mb-3 text-gray-900 dark:text-white">
-          {{ t('keyUsage.title') }}
-        </h1>
-        <p class="text-gray-500 dark:text-dark-400 text-base max-w-md mx-auto">
-          {{ t('keyUsage.subtitle') }}
-        </p>
-      </div>
+    <main class="relative z-10 flex-1 px-4 py-6 sm:px-6 lg:px-8">
+      <div class="mx-auto flex max-w-7xl flex-col gap-6">
+        <section class="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
+          <div class="key-usage-panel key-usage-panel--hero">
+            <div class="key-usage-kicker">灵渠AI · Key 观测舱</div>
+            <h1 class="key-usage-title">
+              一把 Key，看见全部用量脉络。
+            </h1>
+            <p class="key-usage-lead">
+              输入任意 Key，立刻展开额度、周期、模型分布与今日消耗。这里是灵渠AI的透明仪表盘，不再是默认后台模板。
+            </p>
 
-      <!-- Input Section -->
-      <div class="max-w-xl mx-auto mb-14">
-        <div class="flex gap-3">
-          <div class="flex-1 relative">
-            <div class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 dark:text-dark-500">
-              <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-              </svg>
-            </div>
-            <input
-              v-model="apiKey"
-              :type="keyVisible ? 'text' : 'password'"
-              :placeholder="t('keyUsage.placeholder')"
-              class="input-ring w-full h-12 pl-12 pr-12 rounded-xl border border-gray-200 bg-white text-sm text-gray-900 placeholder:text-gray-400 transition-all dark:border-dark-700 dark:bg-dark-900 dark:text-white dark:placeholder:text-dark-500"
-              @keydown.enter="queryKey"
-            />
-            <button
-              @click="keyVisible = !keyVisible"
-              class="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700 dark:text-dark-500 dark:hover:text-white transition-colors"
-            >
-              <svg v-if="!keyVisible" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
-                <line x1="1" y1="1" x2="23" y2="23"/>
-              </svg>
-              <svg v-else class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
-              </svg>
-            </button>
-          </div>
-          <button
-            @click="queryKey"
-            :disabled="isQuerying"
-            class="h-12 px-7 rounded-xl bg-primary-500 hover:bg-primary-600 text-white font-medium text-sm transition-all active:scale-[0.97] flex items-center gap-2 whitespace-nowrap disabled:opacity-60"
-          >
-            <svg v-if="isQuerying" class="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
-              <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" opacity="0.25"/>
-              <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
-            </svg>
-            <svg v-else class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-            </svg>
-            {{ isQuerying ? t('keyUsage.querying') : t('keyUsage.query') }}
-          </button>
-        </div>
-        <p class="text-xs text-gray-400 dark:text-dark-500 mt-3 text-center">
-          {{ t('keyUsage.privacyNote') }}
-        </p>
+            <form class="mt-6 key-usage-hero-console" @submit.prevent="queryKey">
+              <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <p class="key-usage-console-label">{{ t('keyUsage.subtitle') }}</p>
+                  <h2 class="key-usage-console-title">把 Key 丢进来，立刻出结果。</h2>
+                </div>
+                <p class="key-usage-console-note">
+                  {{ t('keyUsage.privacyNote') }}
+                </p>
+              </div>
 
-        <!-- Date Range Picker -->
-        <div v-if="showDatePicker" class="mt-4">
-          <div class="flex flex-wrap items-center gap-2 justify-center">
-            <span class="text-xs text-gray-500 dark:text-dark-400">{{ t('keyUsage.dateRange') }}</span>
-            <button
-              v-for="range in dateRanges"
-              :key="range.key"
-              @click="setDateRange(range.key)"
-              class="text-xs px-3 py-1.5 rounded-lg border transition-all"
-              :class="currentRange === range.key
-                ? 'bg-primary-500 text-white border-primary-500'
-                : 'border-gray-200 bg-white text-gray-700 dark:border-dark-700 dark:bg-dark-900 dark:text-dark-200 hover:border-primary-300 dark:hover:border-dark-600'"
-            >{{ range.label }}</button>
-            <div v-if="currentRange === 'custom'" class="flex items-center gap-2 ml-1">
-              <input
-                v-model="customStartDate"
-                type="date"
-                class="input-ring text-xs px-2 py-1.5 rounded-lg border border-gray-200 bg-white text-gray-900 dark:border-dark-700 dark:bg-dark-900 dark:text-white"
-              />
-              <span class="text-xs text-gray-400">-</span>
-              <input
-                v-model="customEndDate"
-                type="date"
-                class="input-ring text-xs px-2 py-1.5 rounded-lg border border-gray-200 bg-white text-gray-900 dark:border-dark-700 dark:bg-dark-900 dark:text-white"
-              />
-              <button
-                @click="queryKey"
-                class="text-xs px-3 py-1.5 rounded-lg bg-primary-500 text-white hover:bg-primary-600"
-              >{{ t('keyUsage.apply') }}</button>
+              <div class="mt-4 query-input-frame" :class="{ 'query-input-frame--active': apiKey || keyVisible }">
+                <div class="query-input-icon" aria-hidden="true">
+                  <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="11" width="18" height="10" rx="2" />
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                  </svg>
+                </div>
+                <span v-if="!apiKey" class="query-placeholder" aria-hidden="true">
+                  <span class="query-placeholder__text">输入你的万能 Key 密令</span>
+                </span>
+                <input
+                  v-model="apiKey"
+                  :type="keyVisible ? 'text' : 'password'"
+                  :placeholder="t('keyUsage.placeholder')"
+                  class="query-input"
+                  autocomplete="off"
+                  spellcheck="false"
+                />
+                <button
+                  type="button"
+                  @click="keyVisible = !keyVisible"
+                  class="query-visibility-btn"
+                  :aria-label="keyVisible ? '隐藏密钥' : '显示密钥'"
+                >
+                  <svg v-if="!keyVisible" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+                    <line x1="1" y1="1" x2="23" y2="23" />
+                  </svg>
+                  <svg v-else class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                    <circle cx="12" cy="12" r="3" />
+                  </svg>
+                </button>
+              </div>
+
+              <div class="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div class="key-usage-signal-strip" aria-hidden="true">
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                  <strong>Multi-model route ready</strong>
+                </div>
+                <button
+                  type="submit"
+                  :disabled="isQuerying"
+                  class="query-submit-btn"
+                >
+                  <svg v-if="isQuerying" class="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                    <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" opacity="0.25" />
+                    <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" stroke-width="3" stroke-linecap="round" />
+                  </svg>
+                  <svg v-else class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="11" cy="11" r="8" />
+                    <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                  </svg>
+                  <span>{{ isQuerying ? t('keyUsage.querying') : t('keyUsage.query') }}</span>
+                </button>
+              </div>
+
+              <div v-if="showDatePicker" class="mt-5 key-usage-filter-bar">
+                <div class="flex flex-wrap items-center gap-2">
+                  <span class="key-usage-filter-bar__label">{{ t('keyUsage.dateRange') }}</span>
+                  <button
+                    v-for="range in dateRanges"
+                    :key="range.key"
+                    type="button"
+                    @click="setDateRange(range.key)"
+                    class="key-usage-range-btn"
+                    :class="currentRange === range.key && 'key-usage-range-btn--active'"
+                  >
+                    {{ range.label }}
+                  </button>
+                </div>
+                <div v-if="currentRange === 'custom'" class="mt-3 flex flex-wrap items-center gap-2">
+                  <input
+                    v-model="customStartDate"
+                    type="date"
+                    class="key-usage-date-input"
+                  />
+                  <span class="text-xs font-semibold text-comic-ink/45 dark:text-white/45">-</span>
+                  <input
+                    v-model="customEndDate"
+                    type="date"
+                    class="key-usage-date-input"
+                  />
+                  <button
+                    type="button"
+                    @click="queryKey"
+                    class="key-usage-apply-btn"
+                  >
+                    {{ t('keyUsage.apply') }}
+                  </button>
+                </div>
+              </div>
+            </form>
+
+            <div class="mt-6 grid gap-3 sm:grid-cols-3">
+              <div class="key-usage-stat">
+                <span class="key-usage-stat__label">单 Key</span>
+                <strong class="key-usage-stat__value">全链路</strong>
+              </div>
+              <div class="key-usage-stat">
+                <span class="key-usage-stat__label">模型</span>
+                <strong class="key-usage-stat__value">一屏追踪</strong>
+              </div>
+              <div class="key-usage-stat">
+                <span class="key-usage-stat__label">用量</span>
+                <strong class="key-usage-stat__value">实时可见</strong>
+              </div>
             </div>
           </div>
-        </div>
+
+          <div class="key-usage-panel key-usage-panel--art">
+            <div class="key-usage-art__ribbon">流量路由图</div>
+            <div class="key-usage-art__frame">
+              <img
+                src="/illustrations/anime-gateway-hero.svg"
+                alt="动漫风格 AI 模型网关插画"
+                class="key-usage-art__image"
+              />
+            </div>
+            <div class="mt-4 grid gap-3 sm:grid-cols-2">
+              <div class="key-usage-mini-card">
+                <span class="key-usage-mini-card__label">接入</span>
+                <strong class="key-usage-mini-card__value">一个 Key</strong>
+              </div>
+              <div class="key-usage-mini-card">
+                <span class="key-usage-mini-card__label">风格</span>
+                <strong class="key-usage-mini-card__value">动漫卡通</strong>
+              </div>
+            </div>
+          </div>
+        </section>
+
       </div>
 
       <!-- Results Container -->
-      <div v-if="showResults">
+      <div v-if="showResults" class="mx-auto mt-8 max-w-7xl">
         <!-- Loading Skeleton -->
         <div v-if="showLoading" class="space-y-6">
           <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div class="rounded-2xl border border-gray-200 bg-white p-8 dark:border-dark-700 dark:bg-dark-900">
+            <div class="key-usage-result-card p-8">
               <div class="skeleton h-5 w-24 mb-6"></div>
               <div class="flex justify-center"><div class="skeleton w-44 h-44 rounded-full"></div></div>
             </div>
-            <div class="rounded-2xl border border-gray-200 bg-white p-8 dark:border-dark-700 dark:bg-dark-900">
+            <div class="key-usage-result-card p-8">
               <div class="skeleton h-5 w-24 mb-6"></div>
               <div class="flex justify-center"><div class="skeleton w-44 h-44 rounded-full"></div></div>
             </div>
           </div>
-          <div class="rounded-2xl border border-gray-200 bg-white p-8 dark:border-dark-700 dark:bg-dark-900">
+          <div class="key-usage-result-card p-8">
             <div class="skeleton h-5 w-32 mb-6"></div>
             <div class="space-y-4">
               <div class="skeleton h-4 w-full"></div>
@@ -156,14 +221,14 @@
         <div v-else-if="resultData" class="space-y-6">
           <!-- Status Badge -->
           <div v-if="statusInfo" class="fade-up flex items-center justify-center mb-2">
-            <div class="inline-flex items-center gap-2 px-5 py-2.5 rounded-full border border-gray-200 bg-white/90 shadow-sm backdrop-blur-sm dark:border-dark-700 dark:bg-dark-900/90">
+            <div class="key-usage-status-badge">
               <span
                 class="w-2.5 h-2.5 rounded-full pulse-dot"
                 :class="statusInfo.isActive ? 'bg-emerald-500' : 'bg-rose-500'"
               ></span>
-              <span class="text-sm font-medium text-gray-900 dark:text-white">{{ statusInfo.label }}</span>
-              <span class="text-xs text-gray-400 dark:text-dark-500">|</span>
-              <span class="text-xs text-gray-500 dark:text-dark-400">{{ statusInfo.statusText }}</span>
+              <span class="text-sm font-black text-comic-ink dark:text-white">{{ statusInfo.label }}</span>
+              <span class="text-xs text-comic-ink/35 dark:text-white/35">|</span>
+              <span class="text-xs font-bold text-comic-ink/58 dark:text-white/58">{{ statusInfo.statusText }}</span>
             </div>
           </div>
 
@@ -172,7 +237,7 @@
             <div
               v-for="(ring, i) in ringItems"
               :key="i"
-              class="fade-up rounded-2xl border border-gray-200 bg-white/90 p-8 backdrop-blur-sm transition-all duration-300 hover:shadow-lg dark:border-dark-700 dark:bg-dark-900/90"
+              class="fade-up key-usage-result-card p-8 transition-transform duration-300 hover:-translate-y-1"
               :class="`fade-up-delay-${Math.min(i + 1, 4)}`"
             >
               <div class="flex items-center justify-between mb-6">
@@ -239,7 +304,7 @@
           <!-- Detail Card -->
           <div
             v-if="detailRows.length > 0"
-            class="fade-up fade-up-delay-3 rounded-2xl border border-gray-200 bg-white/90 backdrop-blur-sm overflow-hidden dark:border-dark-700 dark:bg-dark-900/90"
+            class="fade-up fade-up-delay-3 key-usage-result-card overflow-hidden"
           >
             <div class="px-8 py-5 border-b border-gray-200 dark:border-dark-700">
               <h3 class="text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-dark-400">{{ t('keyUsage.detailInfo') }}</h3>
@@ -272,7 +337,7 @@
           <!-- Usage Stats Card -->
           <div
             v-if="usageStatCells.length > 0"
-            class="fade-up fade-up-delay-3 rounded-2xl border border-gray-200 bg-white/90 backdrop-blur-sm overflow-hidden dark:border-dark-700 dark:bg-dark-900/90"
+            class="fade-up fade-up-delay-3 key-usage-result-card overflow-hidden"
           >
             <div class="px-8 py-5 border-b border-gray-200 dark:border-dark-700">
               <h3 class="text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-dark-400">{{ t('keyUsage.tokenStats') }}</h3>
@@ -292,7 +357,7 @@
           <!-- Daily Usage Table -->
           <div
             v-if="showDailyUsage"
-            class="fade-up fade-up-delay-4 rounded-2xl border border-gray-200 bg-white/90 backdrop-blur-sm overflow-hidden dark:border-dark-700 dark:bg-dark-900/90"
+            class="fade-up fade-up-delay-4 key-usage-result-card overflow-hidden"
           >
             <div class="flex flex-col gap-3 px-8 py-5 border-b border-gray-200 dark:border-dark-700 sm:flex-row sm:items-center sm:justify-between">
               <h3 class="text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-dark-400">{{ t('keyUsage.dailyDetail') }}</h3>
@@ -348,7 +413,7 @@
           <!-- Model Stats Table -->
           <div
             v-if="modelStats.length > 0"
-            class="fade-up fade-up-delay-4 rounded-2xl border border-gray-200 bg-white/90 backdrop-blur-sm overflow-hidden dark:border-dark-700 dark:bg-dark-900/90"
+            class="fade-up fade-up-delay-4 key-usage-result-card overflow-hidden"
           >
             <div class="px-8 py-5 border-b border-gray-200 dark:border-dark-700">
               <h3 class="text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-dark-400">{{ t('keyUsage.modelStats') }}</h3>
@@ -391,9 +456,9 @@
     </main>
 
     <!-- Footer (same pattern as HomeView) -->
-    <footer class="relative z-10 border-t border-gray-200/50 px-6 py-8 dark:border-dark-800/50">
+    <footer class="relative z-10 border-t-2 border-comic-ink/15 px-6 py-8 dark:border-dark-800/50">
       <div class="mx-auto flex max-w-6xl flex-col items-center justify-center gap-4 text-center sm:flex-row sm:text-left">
-        <p class="text-sm text-gray-500 dark:text-dark-400">
+        <p class="text-sm font-semibold text-comic-ink/50 dark:text-dark-400">
           &copy; {{ currentYear }} {{ siteName }}. {{ t('home.footer.allRightsReserved') }}
         </p>
         <div class="flex items-center gap-4">
@@ -402,13 +467,13 @@
             :href="docUrl"
             target="_blank"
             rel="noopener noreferrer"
-            class="text-sm text-gray-500 transition-colors hover:text-gray-700 dark:text-dark-400 dark:hover:text-white"
+            class="text-sm font-semibold text-comic-ink/50 transition-colors hover:text-comic-ink dark:text-dark-400 dark:hover:text-white"
           >{{ t('home.docs') }}</a>
           <a
             :href="githubUrl"
             target="_blank"
             rel="noopener noreferrer"
-            class="text-sm text-gray-500 transition-colors hover:text-gray-700 dark:text-dark-400 dark:hover:text-white"
+            class="text-sm font-semibold text-comic-ink/50 transition-colors hover:text-comic-ink dark:text-dark-400 dark:hover:text-white"
           >GitHub</a>
         </div>
       </div>
@@ -422,26 +487,17 @@ import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores'
 import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
 import Icon from '@/components/icons/Icon.vue'
+import { resolveBrandLogo, resolveBrandName } from '@/constants/brand'
 
 const { t, locale } = useI18n()
 const appStore = useAppStore()
 
 // ==================== Site Settings (same as HomeView) ====================
 
-const siteName = computed(() => appStore.cachedPublicSettings?.site_name || appStore.siteName || 'Sub2API')
-const siteLogo = computed(() => appStore.cachedPublicSettings?.site_logo || appStore.siteLogo || '')
+const siteName = computed(() => resolveBrandName(appStore.cachedPublicSettings?.site_name || appStore.siteName))
+const siteLogo = computed(() => resolveBrandLogo(appStore.cachedPublicSettings?.site_logo || appStore.siteLogo))
 const docUrl = computed(() => appStore.cachedPublicSettings?.doc_url || appStore.docUrl || '')
 const githubUrl = 'https://github.com/Wei-Shaw/sub2api'
-
-// ==================== Theme (same as HomeView) ====================
-
-const isDark = ref(document.documentElement.classList.contains('dark'))
-
-function toggleTheme() {
-  isDark.value = !isDark.value
-  document.documentElement.classList.toggle('dark', isDark.value)
-  localStorage.setItem('theme', isDark.value ? 'dark' : 'light')
-}
 
 const currentYear = computed(() => new Date().getFullYear())
 
@@ -534,7 +590,7 @@ const RING_GRADIENTS = [
 const ringAnimated = ref(false)
 const displayPcts = ref<number[]>([])
 
-const ringTrackColor = computed(() => isDark.value ? '#222222' : '#F0F0EE')
+const ringTrackColor = computed(() => '#F0F0EE')
 
 interface RingItem {
   title: string
@@ -904,14 +960,6 @@ async function queryKey() {
 
 // ==================== Lifecycle ====================
 
-function initTheme() {
-  const savedTheme = localStorage.getItem('theme')
-  if (savedTheme === 'dark' || (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-    isDark.value = true
-    document.documentElement.classList.add('dark')
-  }
-}
-
 function formatResetTime(resetAt: string | null | undefined): string {
   if (!resetAt) return ''
   const diff = new Date(resetAt).getTime() - now.value.getTime()
@@ -925,7 +973,6 @@ function formatResetTime(resetAt: string | null | undefined): string {
 }
 
 onMounted(() => {
-  initTheme()
   if (!appStore.publicSettingsLoaded) {
     appStore.fetchPublicSettings()
   }
@@ -938,14 +985,491 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-/* Input focus ring */
-.input-ring {
-  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+.key-usage-anime-shell {
+  background:
+    radial-gradient(circle at 12% 10%, rgba(255, 122, 174, 0.18), transparent 26%),
+    radial-gradient(circle at 88% 14%, rgba(78, 233, 255, 0.18), transparent 28%),
+    radial-gradient(circle at 50% 0%, rgba(255, 212, 71, 0.22), transparent 24%),
+    linear-gradient(135deg, #fff9ed 0%, #eefbff 48%, #fff1f8 100%);
 }
-.input-ring:focus {
-  box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.2);
-  border-color: #14b8a6;
+
+:global(.dark) .key-usage-anime-shell {
+  background:
+    radial-gradient(circle at 12% 10%, rgba(255, 122, 174, 0.12), transparent 26%),
+    radial-gradient(circle at 88% 14%, rgba(78, 233, 255, 0.12), transparent 28%),
+    radial-gradient(circle at 50% 0%, rgba(255, 212, 71, 0.12), transparent 24%),
+    linear-gradient(135deg, #12110f 0%, #171a28 52%, #25181e 100%);
+}
+
+.key-usage-anime-shell__grid {
+  background-image:
+    linear-gradient(rgba(33, 31, 28, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(33, 31, 28, 0.045) 1px, transparent 1px);
+  background-size: 24px 24px;
+  mask-image: linear-gradient(to bottom, #000 0%, transparent 88%);
+}
+
+.key-usage-panel {
+  border: 4px solid #211f1c;
+  border-radius: 30px;
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: 12px 12px 0 rgba(33, 31, 28, 0.92);
+  backdrop-filter: blur(18px);
+}
+
+:global(.dark) .key-usage-panel {
+  background: rgba(24, 24, 32, 0.82);
+}
+
+.key-usage-panel--hero,
+.key-usage-panel--query {
+  padding: clamp(1.25rem, 3vw, 1.75rem);
+}
+
+.key-usage-panel--art {
+  padding: clamp(1.15rem, 3vw, 1.5rem);
+}
+
+.key-usage-kicker,
+.key-usage-section-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border: 2px solid #211f1c;
+  border-radius: 999px;
+  background: #ffd447;
+  padding: 0.35rem 0.7rem;
+  color: #211f1c;
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  box-shadow: 3px 3px 0 rgba(33, 31, 28, 0.9);
+}
+
+.key-usage-title,
+.key-usage-section-title {
+  margin-top: 1rem;
+  font-family: theme('fontFamily.display');
+  font-weight: 950;
+  line-height: 0.95;
+  letter-spacing: 0;
+  color: #ff4f7b;
+  text-shadow: 4px 4px 0 #211f1c;
+}
+
+.key-usage-title {
+  max-width: 12ch;
+  font-size: clamp(2.6rem, 6vw, 5rem);
+}
+
+.key-usage-section-title {
+  font-size: clamp(1.8rem, 4vw, 3rem);
+}
+
+.key-usage-lead {
+  margin-top: 1rem;
+  max-width: 42rem;
+  color: rgba(33, 31, 28, 0.68);
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.85;
+}
+
+:global(.dark) .key-usage-lead {
+  color: rgba(255, 250, 240, 0.68);
+}
+
+.key-usage-stat,
+.key-usage-mini-card {
+  border: 2px solid #211f1c;
+  border-radius: 20px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(255, 249, 220, 0.92));
+  box-shadow: 5px 5px 0 rgba(33, 31, 28, 0.9);
+}
+
+:global(.dark) .key-usage-stat,
+:global(.dark) .key-usage-mini-card {
+  background: linear-gradient(180deg, rgba(30, 30, 40, 0.96), rgba(24, 24, 32, 0.96));
+}
+
+.key-usage-stat {
+  padding: 0.95rem 1rem;
+}
+
+.key-usage-mini-card {
+  min-height: 4rem;
+  padding: 0.8rem 0.95rem;
+}
+
+.key-usage-stat__label,
+.key-usage-mini-card__label {
+  display: block;
+  color: rgba(33, 31, 28, 0.46);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+:global(.dark) .key-usage-stat__label,
+:global(.dark) .key-usage-mini-card__label {
+  color: rgba(255, 250, 240, 0.46);
+}
+
+.key-usage-stat__value,
+.key-usage-mini-card__value {
+  display: block;
+  margin-top: 0.45rem;
+  color: #211f1c;
+  font-size: 1.1rem;
+  font-weight: 900;
+}
+
+:global(.dark) .key-usage-stat__value,
+:global(.dark) .key-usage-mini-card__value {
+  color: #fffaf0;
+}
+
+.key-usage-art__ribbon {
+  display: inline-flex;
+  margin-bottom: 0.9rem;
+  border: 2px solid #211f1c;
+  border-radius: 999px;
+  background: #4ee9ff;
+  padding: 0.35rem 0.72rem;
+  color: #211f1c;
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  box-shadow: 3px 3px 0 rgba(33, 31, 28, 0.88);
+}
+
+.key-usage-art__frame {
+  overflow: hidden;
+  border: 3px solid #211f1c;
+  border-radius: 24px;
+  background: #fff;
+  box-shadow: 7px 7px 0 rgba(33, 31, 28, 0.86);
+}
+
+.key-usage-art__image {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 11;
+  object-fit: cover;
+}
+
+.key-usage-hero-console {
+  border: 3px solid #211f1c;
+  border-radius: 26px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(255, 244, 209, 0.82)),
+    radial-gradient(circle at top right, rgba(78, 233, 255, 0.2), transparent 34%);
+  padding: clamp(1rem, 2.2vw, 1.25rem);
+  box-shadow: 7px 7px 0 rgba(33, 31, 28, 0.9);
+}
+
+:global(.dark) .key-usage-hero-console {
+  background:
+    linear-gradient(135deg, rgba(30, 30, 40, 0.94), rgba(38, 33, 44, 0.86)),
+    radial-gradient(circle at top right, rgba(78, 233, 255, 0.14), transparent 34%);
+}
+
+.key-usage-console-label {
+  color: rgba(33, 31, 28, 0.52);
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.key-usage-console-title {
+  margin-top: 0.28rem;
+  color: #211f1c;
+  font-size: clamp(1.08rem, 2.2vw, 1.55rem);
+  font-weight: 950;
+  line-height: 1.08;
+  letter-spacing: 0;
+}
+
+:global(.dark) .key-usage-console-label {
+  color: rgba(255, 250, 240, 0.52);
+}
+
+:global(.dark) .key-usage-console-title {
+  color: #fffaf0;
+}
+
+.key-usage-console-note {
+  max-width: 15rem;
+  color: rgba(33, 31, 28, 0.48);
+  font-size: 0.78rem;
+  font-weight: 800;
+  line-height: 1.6;
+}
+
+:global(.dark) .key-usage-console-note {
+  color: rgba(255, 250, 240, 0.48);
+}
+
+.query-input-frame {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  border: 4px solid #211f1c;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.86);
+  padding: 0.75rem 0.85rem;
+  box-shadow: 8px 8px 0 rgba(33, 31, 28, 0.92);
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease,
+    border-color 180ms ease;
+}
+
+:global(.dark) .query-input-frame {
+  background: rgba(27, 27, 35, 0.9);
+}
+
+.query-input-frame--active {
+  transform: translateY(-1px);
+  box-shadow: 10px 10px 0 rgba(33, 31, 28, 0.95);
+}
+
+.query-input-icon,
+.query-visibility-btn {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border: 2px solid #211f1c;
+  border-radius: 16px;
+  background: #ffd447;
+  color: #211f1c;
+  box-shadow: 3px 3px 0 rgba(33, 31, 28, 0.9);
+}
+
+.query-visibility-btn {
+  background: #4ee9ff;
+}
+
+.query-input {
+  position: relative;
+  z-index: 2;
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  background: transparent;
+  color: #211f1c;
+  font-size: 1rem;
+  font-weight: 700;
   outline: none;
+}
+
+:global(.dark) .query-input {
+  color: #fffaf0;
+}
+
+.query-placeholder {
+  pointer-events: none;
+  position: absolute;
+  left: 4.4rem;
+  right: 4.2rem;
+  top: 50%;
+  z-index: 1;
+  display: flex;
+  transform: translateY(-50%);
+  overflow: hidden;
+  color: rgba(33, 31, 28, 0.44);
+  font-size: 0.92rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+:global(.dark) .query-placeholder {
+  color: rgba(255, 250, 240, 0.44);
+}
+
+.query-placeholder__text {
+  display: inline-block;
+  overflow: hidden;
+  max-width: 0;
+  white-space: nowrap;
+  animation: keyUsageTypewriter 4.8s steps(14, end) infinite;
+}
+
+.query-placeholder__text::after {
+  content: '';
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  margin-left: 0.16rem;
+  background: #ff4f7b;
+  vertical-align: -0.12em;
+  animation: keyUsageCaret 0.8s steps(2, end) infinite;
+}
+
+.query-submit-btn,
+.key-usage-apply-btn,
+.key-usage-range-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  border: 2px solid #211f1c;
+  border-radius: 16px;
+  padding: 0.72rem 1rem;
+  font-size: 0.9rem;
+  font-weight: 900;
+  transition:
+    transform 160ms ease,
+    box-shadow 160ms ease,
+    background-color 160ms ease;
+}
+
+.query-submit-btn:hover,
+.key-usage-apply-btn:hover,
+.key-usage-range-btn:hover {
+  transform: translateY(-1px);
+}
+
+.query-submit-btn {
+  background: #ff4f7b;
+  color: #fffaf0;
+  box-shadow: 4px 4px 0 rgba(33, 31, 28, 0.9);
+}
+
+.query-submit-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+  transform: none;
+}
+
+.key-usage-signal-strip {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.45rem;
+  color: rgba(33, 31, 28, 0.54);
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.key-usage-signal-strip span {
+  width: 0.55rem;
+  height: 0.55rem;
+  border: 2px solid #211f1c;
+  border-radius: 999px;
+  background: #4ee9ff;
+  box-shadow: 2px 2px 0 rgba(33, 31, 28, 0.82);
+  animation: keyUsageSignalPulse 1.6s ease-in-out infinite;
+}
+
+.key-usage-signal-strip span:nth-child(2) {
+  background: #ffd447;
+  animation-delay: 0.18s;
+}
+
+.key-usage-signal-strip span:nth-child(3) {
+  background: #ff7aae;
+  animation-delay: 0.36s;
+}
+
+.key-usage-signal-strip strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+:global(.dark) .key-usage-signal-strip {
+  color: rgba(255, 250, 240, 0.54);
+}
+
+.key-usage-filter-bar {
+  border: 3px solid #211f1c;
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.7);
+  padding: 1rem;
+  box-shadow: 6px 6px 0 rgba(33, 31, 28, 0.9);
+}
+
+:global(.dark) .key-usage-filter-bar {
+  background: rgba(24, 24, 32, 0.72);
+}
+
+.key-usage-status-badge,
+.key-usage-result-card {
+  border: 3px solid #211f1c;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.84);
+  box-shadow: 7px 7px 0 rgba(33, 31, 28, 0.9);
+  backdrop-filter: blur(18px);
+}
+
+:global(.dark) .key-usage-status-badge,
+:global(.dark) .key-usage-result-card {
+  background: rgba(24, 24, 32, 0.84);
+}
+
+.key-usage-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.7rem 1rem;
+}
+
+.key-usage-filter-bar__label {
+  display: inline-flex;
+  align-items: center;
+  border: 2px solid #211f1c;
+  border-radius: 999px;
+  background: #ffd447;
+  padding: 0.3rem 0.7rem;
+  color: #211f1c;
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  box-shadow: 3px 3px 0 rgba(33, 31, 28, 0.85);
+}
+
+.key-usage-range-btn {
+  background: #fffaf0;
+  color: #211f1c;
+  box-shadow: 3px 3px 0 rgba(33, 31, 28, 0.85);
+}
+
+:global(.dark) .key-usage-range-btn {
+  background: rgba(30, 30, 40, 0.96);
+  color: #fffaf0;
+}
+
+.key-usage-range-btn--active {
+  background: #4ee9ff;
+}
+
+.key-usage-date-input {
+  border: 2px solid #211f1c;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.95);
+  padding: 0.6rem 0.8rem;
+  color: #211f1c;
+  font-size: 0.85rem;
+  font-weight: 700;
+  box-shadow: 3px 3px 0 rgba(33, 31, 28, 0.85);
+}
+
+:global(.dark) .key-usage-date-input {
+  background: rgba(30, 30, 40, 0.96);
+  color: #fffaf0;
 }
 
 /* Ring animation */
@@ -996,6 +1520,107 @@ onUnmounted(() => {
 /* Tabular nums */
 .tabular-nums {
   font-variant-numeric: tabular-nums;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
+}
+
+@keyframes keyUsageTypewriter {
+  0%,
+  16% {
+    max-width: 0;
+  }
+  52%,
+  80% {
+    max-width: 22ch;
+  }
+  100% {
+    max-width: 0;
+  }
+}
+
+@keyframes keyUsageCaret {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.18;
+  }
+}
+
+@keyframes keyUsageSignalPulse {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-2px);
+  }
+}
+
+@media (max-width: 640px) {
+  .key-usage-panel {
+    border-width: 3px;
+    border-radius: 24px;
+    box-shadow: 7px 7px 0 rgba(33, 31, 28, 0.92);
+  }
+
+  .key-usage-panel--hero,
+  .key-usage-panel--art {
+    padding: 1rem;
+  }
+
+  .key-usage-title {
+    max-width: 12ch;
+    font-size: clamp(2.1rem, 13vw, 2.95rem);
+    line-height: 0.98;
+    text-shadow: 3px 3px 0 #211f1c;
+  }
+
+  .key-usage-lead {
+    font-size: 0.92rem;
+    line-height: 1.72;
+  }
+
+  .key-usage-hero-console {
+    border-width: 2px;
+    border-radius: 22px;
+    padding: 0.9rem;
+    box-shadow: 5px 5px 0 rgba(33, 31, 28, 0.9);
+  }
+
+  .query-input-frame {
+    gap: 0.55rem;
+    border-width: 3px;
+    border-radius: 20px;
+    padding: 0.58rem;
+    box-shadow: 5px 5px 0 rgba(33, 31, 28, 0.92);
+  }
+
+  .query-input-icon,
+  .query-visibility-btn {
+    width: 2.35rem;
+    height: 2.35rem;
+    border-radius: 14px;
+  }
+
+  .query-placeholder {
+    left: 3.65rem;
+    right: 3.65rem;
+    font-size: 0.82rem;
+  }
+
+  .query-submit-btn {
+    width: 100%;
+  }
+
+  .key-usage-signal-strip {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .key-usage-mini-card,
+  .key-usage-stat {
+    border-radius: 18px;
+    box-shadow: 4px 4px 0 rgba(33, 31, 28, 0.88);
+  }
 }
 </style>

@@ -67,9 +67,8 @@ const messages: Record<string, string> = {
   'keyUsage.queryFailed': 'Query failed',
   'keyUsage.queryFailedRetry': 'Query failed, please try again later',
   'home.viewDocs': 'Docs',
-  'home.switchToLight': 'Light',
-  'home.switchToDark': 'Dark',
   'home.footer.allRightsReserved': 'All rights reserved.',
+  'home.docs': 'Docs',
 }
 
 vi.mock('vue-i18n', async () => {
@@ -86,8 +85,8 @@ vi.mock('vue-i18n', async () => {
 vi.mock('@/stores', () => ({
   useAppStore: () => ({
     cachedPublicSettings: null,
-    siteName: 'Sub2API',
-    siteLogo: '',
+    siteName: '灵渠AI',
+    siteLogo: '/brand/lingqu-ai-logo.svg',
     docUrl: '',
     publicSettingsLoaded: true,
     fetchPublicSettings,
@@ -176,8 +175,11 @@ describe('KeyUsageView daily detail', () => {
       },
     })
 
+    expect(wrapper.text()).toContain('Key 观测舱')
+    expect(wrapper.text()).toContain('把 Key 丢进来，立刻出结果。')
+
     await wrapper.find('input').setValue('sk-test-key')
-    await wrapper.find('input').trigger('keydown.enter')
+    await wrapper.find('form').trigger('submit.prevent')
     await flushPromises()
     await nextTick()
 
@@ -195,6 +197,7 @@ describe('KeyUsageView daily detail', () => {
     expect(text).toContain('Date')
     expect(text).toContain('Cache Read')
     expect(text).toContain('Cache Write')
+    expect(text).toContain('全链路')
     expect(text).toContain('2026-05-19')
     expect(text).toContain('12')
     expect(text).toContain('100')

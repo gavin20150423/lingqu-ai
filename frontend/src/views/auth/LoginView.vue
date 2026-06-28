@@ -3,24 +3,33 @@
     <div class="space-y-6">
       <!-- Title -->
       <div class="text-center">
-        <h2 class="text-2xl font-bold text-gray-900 dark:text-white">
-          {{ t('auth.welcomeBack') }}
+        <div class="mb-3 inline-flex rounded-full border-2 border-comic-ink bg-[#fff7d0] px-3 py-1 text-xs font-black uppercase tracking-[0.18em] text-comic-ink shadow-[3px_3px_0_rgba(33,31,28,0.82)] dark:bg-dark-800 dark:text-white">
+          Lingqu AI Login
+        </div>
+        <h2 class="comic-display text-3xl font-black leading-tight text-comic-ink dark:text-white">
+          登录灵渠AI
         </h2>
-        <p class="mt-2 text-sm text-gray-500 dark:text-dark-400">
-          {{ t('auth.signInToAccount') }}
+        <p class="mx-auto mt-2 max-w-sm text-sm font-semibold leading-relaxed text-comic-ink/65 dark:text-white/55">
+          进去后拿到一个 Key，就能开始接入多个顶尖模型。
         </p>
       </div>
       <!-- Login Form -->
       <form @submit.prevent="handleLogin" class="space-y-5">
         <!-- Email Input -->
-        <div>
+        <div class="space-y-2">
           <label for="email" class="input-label">
             {{ t('auth.emailLabel') }}
           </label>
-          <div class="relative">
+          <div
+            class="typing-input-frame relative"
+            :class="{ 'typing-input-frame--active': focusedField === 'email' }"
+          >
             <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
-              <Icon name="mail" size="md" class="text-gray-400 dark:text-dark-500" />
+              <Icon name="mail" size="md" class="text-comic-ink/[0.45] dark:text-dark-500" />
             </div>
+            <span v-if="!formData.email" class="typing-placeholder" aria-hidden="true">
+              <span class="typing-placeholder__text typing-placeholder__text--email">pilot@lingqu.ai</span>
+            </span>
             <input
               id="email"
               v-model="formData.email"
@@ -29,22 +38,30 @@
               autofocus
               autocomplete="email"
               :disabled="authActionDisabled"
-              class="input pl-11"
+              class="input typing-input pl-11"
               :class="{ 'input-error': errors.email }"
-              :placeholder="t('auth.emailPlaceholder')"
+              placeholder=""
+              @focus="focusedField = 'email'"
+              @blur="focusedField = null"
             />
           </div>
         </div>
 
         <!-- Password Input -->
-        <div>
+        <div class="space-y-2">
           <label for="password" class="input-label">
             {{ t('auth.passwordLabel') }}
           </label>
-          <div class="relative">
+          <div
+            class="typing-input-frame relative"
+            :class="{ 'typing-input-frame--active': focusedField === 'password' }"
+          >
             <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
-              <Icon name="lock" size="md" class="text-gray-400 dark:text-dark-500" />
+              <Icon name="lock" size="md" class="text-comic-ink/[0.45] dark:text-dark-500" />
             </div>
+            <span v-if="!formData.password" class="typing-placeholder typing-placeholder--password" aria-hidden="true">
+              <span class="typing-placeholder__text typing-placeholder__text--password">输入密码</span>
+            </span>
             <input
               id="password"
               v-model="formData.password"
@@ -52,15 +69,17 @@
               required
               autocomplete="current-password"
               :disabled="authActionDisabled"
-              class="input pl-11 pr-11"
+              class="input typing-input pl-11 pr-11"
               :class="{ 'input-error': errors.password }"
-              :placeholder="t('auth.passwordPlaceholder')"
+              placeholder=""
+              @focus="focusedField = 'password'"
+              @blur="focusedField = null"
             />
             <button
               type="button"
               @click="showPassword = !showPassword"
               :disabled="authActionDisabled"
-              class="absolute inset-y-0 right-0 flex items-center pr-3.5 text-gray-400 transition-colors hover:text-gray-600 dark:hover:text-dark-300"
+              class="absolute inset-y-0 right-0 flex items-center pr-3.5 text-comic-ink/[0.45] transition-colors hover:text-comic-ink dark:hover:text-dark-300"
             >
               <Icon v-if="showPassword" name="eyeOff" size="md" />
               <Icon v-else name="eye" size="md" />
@@ -71,7 +90,7 @@
             <router-link
               v-if="passwordResetEnabled && !backendModeEnabled"
               to="/forgot-password"
-              class="text-sm font-medium text-primary-600 transition-colors hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
+              class="text-sm font-medium text-primary-700 transition-colors hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
             >
               {{ t('auth.forgotPassword') }}
             </router-link>
@@ -93,7 +112,7 @@
         <button
           type="submit"
           :disabled="authActionDisabled || (turnstileEnabled && !turnstileToken)"
-          class="btn btn-primary w-full"
+          class="btn btn-primary w-full bg-gradient-to-r from-[#ff4f7b] to-[#ffb938] text-base font-black"
         >
           <svg
             v-if="isLoading"
@@ -116,7 +135,7 @@
             ></path>
           </svg>
           <Icon v-else name="login" size="md" class="mr-2" />
-          {{ isLoading ? t('auth.signingIn') : t('auth.signIn') }}
+          {{ isLoading ? t('auth.signingIn') : '登录' }}
         </button>
 
         <LoginAgreementPrompt
@@ -134,7 +153,7 @@
         <div v-if="showOAuthLogin" class="space-y-3 pt-1">
           <div class="flex items-center gap-3">
             <div class="h-px flex-1 bg-gray-200 dark:bg-dark-700"></div>
-            <span class="text-xs text-gray-500 dark:text-dark-400">
+            <span class="text-xs text-comic-ink/60 dark:text-dark-400">
               {{ t('auth.oauthOrContinue') }}
             </span>
             <div class="h-px flex-1 bg-gray-200 dark:bg-dark-700"></div>
@@ -178,7 +197,7 @@
         {{ t('auth.dontHaveAccount') }}
         <router-link
           to="/register"
-          class="font-medium text-primary-600 transition-colors hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
+          class="font-medium text-primary-700 transition-colors hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
         >
           {{ t('auth.signUp') }}
         </router-link>
@@ -232,6 +251,7 @@ const isLoading = ref<boolean>(false)
 const errorMessage = ref<string>('')
 const showPassword = ref<boolean>(false)
 const publicSettingsLoaded = ref<boolean>(false)
+const focusedField = ref<'email' | 'password' | null>(null)
 
 // Public settings
 const turnstileEnabled = ref<boolean>(false)
@@ -462,6 +482,16 @@ function validateForm(): boolean {
   return isValid
 }
 
+function resolvePostLoginRedirect(): string {
+  const redirect = router.currentRoute.value.query.redirect
+  if (typeof redirect === 'string' && redirect.trim()) {
+    if (!authStore.isAdmin || redirect.startsWith('/admin')) {
+      return redirect
+    }
+  }
+  return authStore.isAdmin ? '/admin/dashboard' : '/dashboard'
+}
+
 // ==================== Form Handlers ====================
 
 async function handleLogin(): Promise<void> {
@@ -497,9 +527,7 @@ async function handleLogin(): Promise<void> {
     clearAllAffiliateReferralCodes()
     appStore.showSuccess(t('auth.loginSuccess'))
 
-    // Redirect to dashboard or intended route
-    const redirectTo = (router.currentRoute.value.query.redirect as string) || '/dashboard'
-    await router.push(redirectTo)
+    await router.push(resolvePostLoginRedirect())
   } catch (error: unknown) {
     // Reset Turnstile on error
     if (turnstileRef.value) {
@@ -531,9 +559,7 @@ async function handle2FAVerify(code: string): Promise<void> {
     clearAllAffiliateReferralCodes()
     appStore.showSuccess(t('auth.loginSuccess'))
 
-    // Redirect to dashboard or intended route
-    const redirectTo = (router.currentRoute.value.query.redirect as string) || '/dashboard'
-    await router.push(redirectTo)
+    await router.push(resolvePostLoginRedirect())
   } catch (error: unknown) {
     const err = error as { message?: string; response?: { data?: { message?: string } } }
     const message = err.response?.data?.message || err.message || t('profile.totp.loginFailed')
@@ -553,6 +579,97 @@ function handle2FACancel(): void {
 </script>
 
 <style scoped>
+.typing-input-frame {
+  border-radius: 0.875rem;
+  transition:
+    transform 180ms ease,
+    filter 180ms ease;
+}
+
+.typing-input-frame--active {
+  transform: translateY(-2px);
+  filter: drop-shadow(0 8px 0 rgba(255, 185, 56, 0.18));
+}
+
+.typing-input {
+  position: relative;
+  z-index: 2;
+  background-color: rgba(255, 255, 255, 0.74);
+}
+
+.typing-placeholder {
+  pointer-events: none;
+  position: absolute;
+  left: 2.75rem;
+  right: 1rem;
+  top: 50%;
+  z-index: 3;
+  display: flex;
+  max-width: calc(100% - 4.25rem);
+  transform: translateY(-50%);
+  overflow: hidden;
+  color: rgba(33, 31, 28, 0.42);
+  font-size: 0.875rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.typing-placeholder--password {
+  right: 2.8rem;
+  max-width: calc(100% - 5.75rem);
+}
+
+.typing-placeholder__text {
+  display: inline-block;
+  overflow: hidden;
+  max-width: 0;
+  white-space: nowrap;
+}
+
+.typing-placeholder__text--email {
+  animation: loginTypewriter 4.8s steps(16, end) infinite;
+}
+
+.typing-placeholder__text--password {
+  animation: loginTypewriter 5.4s steps(12, end) infinite;
+}
+
+.typing-placeholder__text::after {
+  content: '';
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  margin-left: 0.16rem;
+  background: #ff4f7b;
+  vertical-align: -0.12em;
+  animation: loginCaret 0.8s steps(2, end) infinite;
+}
+
+@keyframes loginTypewriter {
+  0%,
+  12% {
+    max-width: 0;
+  }
+  52%,
+  78% {
+    max-width: 18ch;
+  }
+  100% {
+    max-width: 0;
+  }
+}
+
+@keyframes loginCaret {
+  0%,
+  45% {
+    opacity: 1;
+  }
+  46%,
+  100% {
+    opacity: 0;
+  }
+}
+
 .fade-enter-active,
 .fade-leave-active {
   transition: all 0.3s ease;

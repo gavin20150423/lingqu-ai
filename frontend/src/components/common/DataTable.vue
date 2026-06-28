@@ -871,6 +871,7 @@ tbody tr:hover .sticky-col {
 .dark .is-scrollable .sticky-col-right::before {
   background: linear-gradient(to left, rgba(0, 0, 0, 0.2), transparent);
 }
+
 </style>
 
 <style>

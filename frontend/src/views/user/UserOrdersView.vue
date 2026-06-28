@@ -1,14 +1,48 @@
 <template>
-  <AppLayout>
-    <div class="space-y-4">
+  <UserWorkspaceLayout>
+    <div class="lingqu-console-page">
+      <section class="lingqu-console-hero">
+        <div>
+          <span class="lingqu-console-eyebrow">订单记录</span>
+          <h1>我的订单</h1>
+          <p>充值、订阅、退款状态都在这里。</p>
+        </div>
+        <div class="lingqu-console-actions">
+          <button type="button" class="lingqu-console-button" @click="fetchOrders" :disabled="loading">
+            <Icon name="refresh" size="sm" :class="{ 'animate-spin': loading }" />
+            {{ t('common.refresh') }}
+          </button>
+          <button type="button" class="lingqu-console-button lingqu-console-button--primary" @click="router.push('/purchase')">
+            <Icon name="creditCard" size="sm" />
+            {{ t('payment.result.backToRecharge') }}
+          </button>
+        </div>
+      </section>
+
+      <section class="lingqu-console-stats">
+        <article class="lingqu-console-stat">
+          <small>订单数量</small>
+          <strong>{{ orderSummary.total }}</strong>
+        </article>
+        <article class="lingqu-console-stat">
+          <small>{{ t('payment.status.pending') }}</small>
+          <strong>{{ orderSummary.pending }}</strong>
+        </article>
+        <article class="lingqu-console-stat">
+          <small>{{ t('payment.status.completed') }}</small>
+          <strong>{{ orderSummary.completed }}</strong>
+        </article>
+        <article class="lingqu-console-stat">
+          <small>本页金额</small>
+          <strong>¥{{ orderSummary.amount }}</strong>
+        </article>
+      </section>
+
       <!-- Filters -->
       <div class="card p-4">
         <div class="flex flex-wrap items-center gap-3">
           <Select v-model="currentFilter" :options="statusFilters" class="w-36" @change="fetchOrders" />
           <div class="flex flex-1 items-center justify-end gap-2">
-            <button @click="fetchOrders" :disabled="loading" class="btn btn-secondary" :title="t('common.refresh')">
-              <Icon name="refresh" size="md" :class="loading ? 'animate-spin' : ''" />
-            </button>
             <button class="btn btn-primary" @click="router.push('/purchase')">{{ t('payment.result.backToRecharge') }}</button>
           </div>
         </div>
@@ -77,7 +111,7 @@
         </div>
       </template>
     </BaseDialog>
-  </AppLayout>
+  </UserWorkspaceLayout>
 </template>
 
 <script setup lang="ts">
@@ -88,7 +122,7 @@ import { useAppStore } from '@/stores'
 import { paymentAPI } from '@/api/payment'
 import { extractI18nErrorMessage } from '@/utils/apiError'
 import type { PaymentOrder } from '@/types/payment'
-import AppLayout from '@/components/layout/AppLayout.vue'
+import UserWorkspaceLayout from '@/components/layout/UserWorkspaceLayout.vue'
 import Pagination from '@/components/common/Pagination.vue'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import Select from '@/components/common/Select.vue'
@@ -108,6 +142,13 @@ const cancelTargetId = ref<number | null>(null)
 const refundTarget = ref<PaymentOrder | null>(null)
 const refundReason = ref('')
 const pagination = reactive({ page: 1, page_size: 20, total: 0 })
+
+const orderSummary = computed(() => ({
+  total: pagination.total || orders.value.length,
+  pending: orders.value.filter((order) => order.status === 'PENDING').length,
+  completed: orders.value.filter((order) => order.status === 'COMPLETED').length,
+  amount: orders.value.reduce((sum, order) => sum + (order.pay_amount || 0), 0).toFixed(2)
+}))
 
 const statusFilters = computed(() => [
   { value: '', label: t('common.all') },

@@ -1,26 +1,41 @@
 <template>
-  <AppLayout>
-    <div class="mx-auto max-w-2xl space-y-6">
-      <!-- Current Balance Card -->
-      <div class="card overflow-hidden">
-        <div class="bg-gradient-to-br from-primary-500 to-primary-600 px-6 py-8 text-center">
-          <div
-            class="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-white/20 backdrop-blur-sm"
-          >
-            <Icon name="creditCard" size="xl" class="text-white" />
-          </div>
-          <p class="text-sm font-medium text-primary-100">{{ t('redeem.currentBalance') }}</p>
-          <p class="mt-2 text-4xl font-bold text-white">
-            ${{ user?.balance?.toFixed(2) || '0.00' }}
-          </p>
-          <p class="mt-2 text-sm text-primary-100">
-            {{ t('redeem.concurrency') }}: {{ user?.concurrency || 0 }} {{ t('redeem.requests') }}
-          </p>
+  <UserWorkspaceLayout>
+    <div class="lingqu-console-page lingqu-console-page--redeem">
+      <section class="lingqu-console-hero">
+        <div>
+          <span class="lingqu-console-eyebrow">兑换礼盒</span>
+          <h1>兑换</h1>
+          <p>输入兑换码，余额、并发或订阅会自动到账。</p>
         </div>
-      </div>
+        <div class="lingqu-console-actions">
+          <button type="button" class="lingqu-console-button" @click="fetchHistory">
+            <Icon name="refresh" size="sm" :class="{ 'animate-spin': loadingHistory }" />
+            {{ t('common.refresh') }}
+          </button>
+        </div>
+      </section>
+
+      <section class="lingqu-console-stats">
+        <article class="lingqu-console-stat">
+          <small>{{ t('redeem.currentBalance') }}</small>
+          <strong>${{ user?.balance?.toFixed(2) || '0.00' }}</strong>
+        </article>
+        <article class="lingqu-console-stat">
+          <small>{{ t('redeem.concurrency') }}</small>
+          <strong>{{ user?.concurrency || 0 }}</strong>
+        </article>
+        <article class="lingqu-console-stat">
+          <small>{{ t('redeem.recentActivity') }}</small>
+          <strong>{{ history.length }}</strong>
+        </article>
+        <article class="lingqu-console-stat">
+          <small>客服</small>
+          <strong>{{ contactInfo ? '已配置' : '-' }}</strong>
+        </article>
+      </section>
 
       <!-- Redeem Form -->
-      <div class="card">
+      <div class="lingqu-console-card">
         <div class="p-6">
           <form @submit.prevent="handleRedeem" class="space-y-5">
             <div>
@@ -338,7 +353,7 @@
         </div>
       </div>
     </div>
-  </AppLayout>
+  </UserWorkspaceLayout>
 </template>
 
 <script setup lang="ts">
@@ -348,7 +363,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useAppStore } from '@/stores/app'
 import { useSubscriptionStore } from '@/stores/subscriptions'
 import { redeemAPI, authAPI, type RedeemHistoryItem } from '@/api'
-import AppLayout from '@/components/layout/AppLayout.vue'
+import UserWorkspaceLayout from '@/components/layout/UserWorkspaceLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { formatDateTime } from '@/utils/format'
 

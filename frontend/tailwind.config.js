@@ -5,82 +5,89 @@ export default {
   theme: {
     extend: {
       colors: {
-        // 主色调 - Teal/Cyan 青色系
+        // 主色调 - Comic red
         primary: {
-          50: '#f0fdfa',
-          100: '#ccfbf1',
-          200: '#99f6e4',
-          300: '#5eead4',
-          400: '#2dd4bf',
-          500: '#14b8a6',
-          600: '#0d9488',
-          700: '#0f766e',
-          800: '#115e59',
-          900: '#134e4a',
-          950: '#042f2e'
+          50: '#fff1ef',
+          100: '#ffe1dc',
+          200: '#ffc5bb',
+          300: '#ff9b8c',
+          400: '#ff6e5c',
+          500: '#f04438',
+          600: '#d92d20',
+          700: '#b42318',
+          800: '#912018',
+          900: '#7a271a',
+          950: '#45100b'
         },
-        // 辅助色 - 深蓝灰
+        // 辅助色 - comic cyan
         accent: {
-          50: '#f8fafc',
-          100: '#f1f5f9',
-          200: '#e2e8f0',
-          300: '#cbd5e1',
-          400: '#94a3b8',
-          500: '#64748b',
-          600: '#475569',
-          700: '#334155',
-          800: '#1e293b',
-          900: '#0f172a',
-          950: '#020617'
+          50: '#eefbff',
+          100: '#d6f5ff',
+          200: '#acecff',
+          300: '#72ddff',
+          400: '#2bc5f4',
+          500: '#08a9d6',
+          600: '#0788b5',
+          700: '#0b6d92',
+          800: '#115977',
+          900: '#134a64',
+          950: '#082f44'
         },
-        // 深色模式背景
+        comic: {
+          ink: '#211f1c',
+          paper: '#fffdf5',
+          panel: '#fff9dc',
+          yellow: '#ffd447',
+          red: '#f04438',
+          cyan: '#08a9d6',
+          mint: '#2ecf9f',
+          violet: '#7c5cff'
+        },
+        // 深色模式背景 - ink scale
         dark: {
-          50: '#f8fafc',
-          100: '#f1f5f9',
-          200: '#e2e8f0',
-          300: '#cbd5e1',
-          400: '#94a3b8',
-          500: '#64748b',
-          600: '#475569',
-          700: '#334155',
-          800: '#1e293b',
-          900: '#0f172a',
-          950: '#020617'
+          50: '#fbfaf6',
+          100: '#ece7da',
+          200: '#d3ccb9',
+          300: '#b6ac93',
+          400: '#92866d',
+          500: '#736850',
+          600: '#5c523f',
+          700: '#433b30',
+          800: '#2d2924',
+          900: '#211f1c',
+          950: '#12110f'
         }
       },
       fontFamily: {
         sans: [
-          'system-ui',
-          '-apple-system',
-          'BlinkMacSystemFont',
-          'Segoe UI',
-          'Roboto',
-          'Helvetica Neue',
-          'Arial',
+          'Avenir Next',
+          'Trebuchet MS',
           'PingFang SC',
           'Hiragino Sans GB',
           'Microsoft YaHei',
+          'system-ui',
           'sans-serif'
         ],
+        display: ['Marker Felt', 'Comic Sans MS', 'Trebuchet MS', 'PingFang SC', 'sans-serif'],
         mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'monospace']
       },
       boxShadow: {
-        glass: '0 8px 32px rgba(0, 0, 0, 0.08)',
-        'glass-sm': '0 4px 16px rgba(0, 0, 0, 0.06)',
-        glow: '0 0 20px rgba(20, 184, 166, 0.25)',
-        'glow-lg': '0 0 40px rgba(20, 184, 166, 0.35)',
-        card: '0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.06)',
-        'card-hover': '0 10px 40px rgba(0, 0, 0, 0.08)',
-        'inner-glow': 'inset 0 1px 0 rgba(255, 255, 255, 0.1)'
+        glass: '5px 5px 0 rgba(33, 31, 28, 0.95)',
+        'glass-sm': '3px 3px 0 rgba(33, 31, 28, 0.9)',
+        glow: '0 0 0 3px rgba(255, 212, 71, 0.45), 5px 5px 0 rgba(33, 31, 28, 0.95)',
+        'glow-lg': '0 0 0 5px rgba(255, 212, 71, 0.42), 8px 8px 0 rgba(33, 31, 28, 0.95)',
+        card: '4px 4px 0 rgba(33, 31, 28, 0.95)',
+        'card-hover': '7px 7px 0 rgba(33, 31, 28, 0.95)',
+        'inner-glow': 'inset 0 2px 0 rgba(255, 255, 255, 0.75)'
       },
       backgroundImage: {
         'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
-        'gradient-primary': 'linear-gradient(135deg, #14b8a6 0%, #0d9488 100%)',
-        'gradient-dark': 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
+        'gradient-primary': 'linear-gradient(135deg, #f04438 0%, #ff8a3d 100%)',
+        'gradient-dark': 'linear-gradient(135deg, #211f1c 0%, #12110f 100%)',
         'gradient-glass':
-          'linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%)',
+          'linear-gradient(135deg, rgba(255,253,245,0.9) 0%, rgba(255,249,220,0.78) 100%)',
         'mesh-gradient':
-          'radial-gradient(at 40% 20%, rgba(20, 184, 166, 0.12) 0px, transparent 50%), radial-gradient(at 80% 0%, rgba(6, 182, 212, 0.08) 0px, transparent 50%), radial-gradient(at 0% 50%, rgba(20, 184, 166, 0.08) 0px, transparent 50%)'
+          'radial-gradient(circle at 12px 12px, rgba(33, 31, 28, 0.12) 2px, transparent 2.5px), linear-gradient(135deg, rgba(255, 212, 71, 0.18), rgba(8, 169, 214, 0.14), rgba(240, 68, 56, 0.12))'
       },
       animation: {
         'fade-in': 'fadeIn 0.3s ease-out',
@@ -118,8 +125,8 @@ export default {
           '100%': { backgroundPosition: '200% 0' }
         },
         glow: {
-          '0%': { boxShadow: '0 0 20px rgba(20, 184, 166, 0.25)' },
-          '100%': { boxShadow: '0 0 30px rgba(20, 184, 166, 0.4)' }
+          '0%': { boxShadow: '0 0 0 3px rgba(255, 212, 71, 0.28), 4px 4px 0 rgba(33, 31, 28, 0.9)' },
+          '100%': { boxShadow: '0 0 0 5px rgba(8, 169, 214, 0.24), 7px 7px 0 rgba(33, 31, 28, 0.95)' }
         }
       },
       backdropBlur: {

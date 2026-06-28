@@ -206,6 +206,16 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/images',
+    name: 'ImagePlayground',
+    component: () => import('@/views/user/ImagePlaygroundView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      title: '图工坊'
+    }
+  },
+  {
     path: '/usage',
     name: 'Usage',
     component: () => import('@/views/user/UsageView.vue'),
@@ -215,6 +225,16 @@ const routes: RouteRecordRaw[] = [
       title: 'Usage Records',
       titleKey: 'usage.title',
       descriptionKey: 'usage.description'
+    }
+  },
+  {
+    path: '/billing',
+    name: 'BillingCenter',
+    component: () => import('@/views/user/BillingCenterView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      title: '账单中心'
     }
   },
   {
@@ -826,8 +846,8 @@ router.beforeEach(async (to, _from, next) => {
   // Check payment requirement (internal payment system only)
   if (to.meta.requiresPayment) {
     const paymentEnabled = appStore.cachedPublicSettings?.payment_enabled
-    if (!paymentEnabled) {
-      next(authStore.isAdmin ? '/admin/dashboard' : '/dashboard')
+    if (!paymentEnabled && to.path.startsWith('/admin/')) {
+      next('/admin/dashboard')
       return
     }
   }
@@ -845,9 +865,7 @@ router.beforeEach(async (to, _from, next) => {
     const restrictedPaths = [
       '/admin/groups',
       '/admin/subscriptions',
-      '/admin/redeem',
-      '/subscriptions',
-      '/redeem'
+      '/admin/redeem'
     ]
 
     if (restrictedPaths.some((path) => to.path.startsWith(path))) {

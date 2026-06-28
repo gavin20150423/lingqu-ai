@@ -1,10 +1,29 @@
 <template>
-  <AppLayout>
-    <TablePageLayout>
-      <template #actions>
-        <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
+  <UserWorkspaceLayout>
+    <div class="lingqu-console-page">
+      <section class="lingqu-console-hero">
+        <div>
+          <span class="lingqu-console-eyebrow">调用小账本</span>
+          <h1>使用记录</h1>
+          <p>请求量、Token、费用和耗时都在这里，出问题时先看这张表。</p>
+        </div>
+        <div class="lingqu-console-actions">
+          <button @click="applyFilters" :disabled="loading" class="lingqu-console-button">
+            <Icon name="refresh" size="sm" :class="loading ? 'animate-spin' : ''" />
+            {{ t('common.refresh') }}
+          </button>
+          <button @click="exportToCSV" :disabled="exporting" class="lingqu-console-button lingqu-console-button--primary">
+            <Icon :name="exporting ? 'refresh' : 'download'" size="sm" :class="{ 'animate-spin': exporting }" />
+            {{ exporting ? t('usage.exporting') : t('usage.exportCsv') }}
+          </button>
+        </div>
+      </section>
+
+      <TablePageLayout>
+        <template #actions>
+          <div class="lingqu-console-stats">
           <!-- Total Requests -->
-          <div class="card p-4">
+          <div class="lingqu-console-stat">
           <div class="flex items-center gap-3">
             <div class="rounded-lg bg-blue-100 p-2 dark:bg-blue-900/30">
               <Icon name="document" size="md" class="text-blue-600 dark:text-blue-400" />
@@ -24,7 +43,7 @@
         </div>
 
         <!-- Total Tokens -->
-        <div class="card p-4">
+        <div class="lingqu-console-stat">
           <div class="flex items-center gap-3">
             <div class="rounded-lg bg-amber-100 p-2 dark:bg-amber-900/30">
               <Icon name="cube" size="md" class="text-amber-600 dark:text-amber-400" />
@@ -60,7 +79,7 @@
         </div>
 
         <!-- Total Cost -->
-        <div class="card p-4">
+        <div class="lingqu-console-stat">
           <div class="flex items-center gap-3">
             <div class="rounded-lg bg-green-100 p-2 dark:bg-green-900/30">
               <Icon name="dollar" size="md" class="text-green-600 dark:text-green-400" />
@@ -82,7 +101,7 @@
         </div>
 
         <!-- Average Duration -->
-        <div class="card p-4">
+        <div class="lingqu-console-stat">
           <div class="flex items-center gap-3">
             <div class="rounded-lg bg-purple-100 p-2 dark:bg-purple-900/30">
               <Icon name="clock" size="md" class="text-purple-600 dark:text-purple-400" />
@@ -98,10 +117,10 @@
             </div>
           </div>
         </div>
-        </div>
-      </template>
+          </div>
+        </template>
 
-      <template #filters>
+        <template #filters>
         <div class="card">
           <div class="px-6 py-4">
           <div class="flex flex-wrap items-end gap-4">
@@ -128,42 +147,16 @@
 
             <!-- Actions -->
             <div class="ml-auto flex items-center gap-3">
-              <button @click="applyFilters" :disabled="loading" class="btn btn-secondary">
-                {{ t('common.refresh') }}
-              </button>
               <button @click="resetFilters" class="btn btn-secondary">
                 {{ t('common.reset') }}
-              </button>
-              <button @click="exportToCSV" :disabled="exporting" class="btn btn-primary">
-                <svg
-                  v-if="exporting"
-                  class="-ml-1 mr-2 h-4 w-4 animate-spin"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                >
-                  <circle
-                    class="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    stroke-width="4"
-                  ></circle>
-                  <path
-                    class="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  ></path>
-                </svg>
-                {{ exporting ? t('usage.exporting') : t('usage.exportCsv') }}
               </button>
             </div>
           </div>
         </div>
         </div>
-      </template>
+        </template>
 
-      <template #table>
+        <template #table>
         <!-- Tab 切换栏 -->
         <div v-if="errorViewEnabled" class="mb-0 flex gap-2 border-b border-gray-200 px-4 pt-3 dark:border-dark-700">
           <button class="tab" :class="{ 'tab-active': activeTab === 'usage' }" @click="activeTab = 'usage'">
@@ -385,9 +378,9 @@
             @update:pageSize="onErrorPageSize"
           />
         </div>
-      </template>
+        </template>
 
-      <template #pagination>
+        <template #pagination>
         <Pagination
           v-if="pagination.total > 0 && activeTab === 'usage'"
           :page="pagination.page"
@@ -396,9 +389,10 @@
           @update:page="handlePageChange"
           @update:pageSize="handlePageSizeChange"
         />
-      </template>
-    </TablePageLayout>
-  </AppLayout>
+        </template>
+      </TablePageLayout>
+    </div>
+  </UserWorkspaceLayout>
 
   <!-- Token Tooltip Portal -->
   <Teleport to="body">
@@ -611,7 +605,7 @@ import { ref, computed, reactive, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { usageAPI, keysAPI } from '@/api'
-import AppLayout from '@/components/layout/AppLayout.vue'
+import UserWorkspaceLayout from '@/components/layout/UserWorkspaceLayout.vue'
 import TablePageLayout from '@/components/layout/TablePageLayout.vue'
 import DataTable from '@/components/common/DataTable.vue'
 import Pagination from '@/components/common/Pagination.vue'
