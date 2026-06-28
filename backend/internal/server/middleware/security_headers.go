@@ -92,7 +92,12 @@ func SecurityHeaders(cfg config.CSPConfig, getFrameSrcOrigins func() []string) g
 		}
 
 		c.Header("X-Content-Type-Options", "nosniff")
-		c.Header("X-Frame-Options", "DENY")
+		if isSameOriginEmbeddablePath(c) {
+			c.Header("X-Frame-Options", "SAMEORIGIN")
+			finalPolicy = setDirective(finalPolicy, "frame-ancestors", []string{"'self'"})
+		} else {
+			c.Header("X-Frame-Options", "DENY")
+		}
 		c.Header("Referrer-Policy", "strict-origin-when-cross-origin")
 		if isAPIRoutePath(c) {
 			c.Next()
@@ -127,6 +132,14 @@ func isAPIRoutePath(c *gin.Context) bool {
 		strings.HasPrefix(path, "/images")
 }
 
+func isSameOriginEmbeddablePath(c *gin.Context) bool {
+	if c == nil || c.Request == nil || c.Request.URL == nil {
+		return false
+	}
+	path := c.Request.URL.Path
+	return path == "/image-playground" || strings.HasPrefix(path, "/image-playground/")
+}
+
 // enhanceCSPPolicy 确保 CSP 策略包含 nonce 支持和支付 SDK 必需域名。
 // 这样旧配置文件没有及时补域名时，前端支付组件仍能正常加载。
 func enhanceCSPPolicy(policy string) string {
@@ -158,6 +171,25 @@ func directiveHasValue(policy, directive, value string) bool {
 		return false
 	}
 	return false
+}
+
+func setDirective(policy, directive string, values []string) string {
+	replacement := strings.TrimSpace(directive + " " + strings.Join(values, " "))
+	parts := strings.Split(policy, ";")
+	for i, rawDirective := range parts {
+		fields := strings.Fields(strings.TrimSpace(rawDirective))
+		if len(fields) == 0 {
+			continue
+		}
+		if fields[0] == directive {
+			parts[i] = " " + replacement
+			return strings.TrimSpace(strings.Join(parts, ";"))
+		}
+	}
+	if strings.TrimSpace(policy) == "" {
+		return replacement
+	}
+	return strings.TrimSpace(policy) + "; " + replacement
 }
 
 // addToDirective adds a value to a specific CSP directive.
