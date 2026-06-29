@@ -633,7 +633,7 @@ func numericPrefix(value string) string {
 		if r < '0' || r > '9' {
 			break
 		}
-		b.WriteRune(r)
+		_, _ = b.WriteRune(r)
 	}
 	return b.String()
 }
@@ -643,9 +643,7 @@ func normalizeUpdateRepo(repo string) string {
 	if repo == "" {
 		return defaultUpdateRepo
 	}
-	if strings.HasPrefix(repo, "https://github.com/") {
-		repo = strings.TrimPrefix(repo, "https://github.com/")
-	}
+	repo = strings.TrimPrefix(repo, "https://github.com/")
 	return strings.Trim(repo, "/")
 }
 

@@ -19,7 +19,9 @@ func newOpenAIImageAsyncTaskStoreForTest(t *testing.T) (*openAIImageAsyncTaskSto
 	t.Cleanup(func() {
 		_ = rdb.Close()
 	})
-	return NewOpenAIImageAsyncTaskStore(rdb).(*openAIImageAsyncTaskStore), mr
+	store, ok := NewOpenAIImageAsyncTaskStore(rdb).(*openAIImageAsyncTaskStore)
+	require.True(t, ok)
+	return store, mr
 }
 
 func newOpenAIImageAsyncTaskRequestForTest(userID int64, apiKeyID int64) *service.OpenAIImageAsyncTaskRequest {

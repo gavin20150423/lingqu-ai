@@ -349,18 +349,19 @@ func (s *openAIImageAsyncTaskStore) update(ctx context.Context, taskID string, m
 		Score:  float64(task.UpdatedAt.Unix()),
 		Member: task.ID,
 	})
-	if task.Status == service.OpenAIImageAsyncTaskCompleted || task.Status == service.OpenAIImageAsyncTaskFailed {
+	switch task.Status {
+	case service.OpenAIImageAsyncTaskCompleted, service.OpenAIImageAsyncTaskFailed:
 		pipe.ZAdd(ctx, openAIImageAsyncTaskTerminalKey, redis.Z{
 			Score:  float64(task.UpdatedAt.Unix()),
 			Member: task.ID,
 		})
 		pipe.ZRem(ctx, openAIImageAsyncTaskRunningKey, task.ID)
-	} else if task.Status == service.OpenAIImageAsyncTaskRunning {
+	case service.OpenAIImageAsyncTaskRunning:
 		pipe.ZAdd(ctx, openAIImageAsyncTaskRunningKey, redis.Z{
 			Score:  float64(task.UpdatedAt.Unix()),
 			Member: task.ID,
 		})
-	} else {
+	default:
 		pipe.ZRem(ctx, openAIImageAsyncTaskTerminalKey, task.ID)
 		pipe.ZRem(ctx, openAIImageAsyncTaskRunningKey, task.ID)
 	}
