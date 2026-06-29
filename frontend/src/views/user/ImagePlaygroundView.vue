@@ -127,7 +127,31 @@ function buildBridgePayload(key: ApiKey) {
   }
 }
 
-function launchWorkspace(openInNewWindow = false, silent = false) {
+async function resetImagePlaygroundRuntime() {
+  try {
+    if ('serviceWorker' in navigator) {
+      const registrations = await navigator.serviceWorker.getRegistrations()
+      await Promise.all(
+        registrations
+          .filter((registration) => registration.scope.includes('/image-playground/'))
+          .map((registration) => registration.unregister())
+      )
+    }
+
+    if ('caches' in window) {
+      const keys = await window.caches.keys()
+      await Promise.all(
+        keys
+          .filter((key) => key.startsWith('lingqu-image-playground-'))
+          .map((key) => window.caches.delete(key))
+      )
+    }
+  } catch (error) {
+    console.warn('Failed to reset image playground runtime:', error)
+  }
+}
+
+async function launchWorkspace(openInNewWindow = false, silent = false) {
   const key = selectedKey.value
   if (!key) {
     if (!silent) appStore.showWarning('先选择一个可用 Key')
@@ -139,7 +163,8 @@ function launchWorkspace(openInNewWindow = false, silent = false) {
     const payload = JSON.stringify(buildBridgePayload(key))
     window.sessionStorage.setItem(LINGQU_BRIDGE_STORAGE_KEY, payload)
     window.localStorage.setItem(LINGQU_BRIDGE_STORAGE_KEY, payload)
-    const url = `/image-playground/index.html?lingqu=${Date.now()}`
+    await resetImagePlaygroundRuntime()
+    const url = `/image-playground/?lingqu=${Date.now()}`
     if (openInNewWindow) {
       window.open(url, '_blank', 'noopener,noreferrer')
     } else {

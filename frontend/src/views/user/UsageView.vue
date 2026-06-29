@@ -121,11 +121,10 @@
         </template>
 
         <template #filters>
-        <div class="card">
-          <div class="px-6 py-4">
-          <div class="flex flex-wrap items-end gap-4">
+        <div class="lingqu-console-filter-card">
+          <div class="lingqu-console-filter-row">
             <!-- API Key Filter -->
-            <div class="min-w-[180px]">
+            <div class="lingqu-console-filter-field">
               <label class="input-label">{{ t('usage.apiKeyFilter') }}</label>
               <Select
                 v-model="filters.api_key_id"
@@ -136,7 +135,7 @@
             </div>
 
             <!-- Date Range Filter -->
-            <div>
+            <div class="lingqu-console-filter-field lingqu-console-filter-field--date">
               <label class="input-label">{{ t('usage.timeRange') }}</label>
               <DateRangePicker
                 v-model:start-date="startDate"
@@ -146,13 +145,12 @@
             </div>
 
             <!-- Actions -->
-            <div class="ml-auto flex items-center gap-3">
-              <button @click="resetFilters" class="btn btn-secondary">
+            <div class="lingqu-console-filter-actions">
+              <button @click="resetFilters" class="lingqu-console-reset-button">
                 {{ t('common.reset') }}
               </button>
             </div>
           </div>
-        </div>
         </div>
         </template>
 
@@ -602,6 +600,7 @@
 
 <script setup lang="ts">
 import { ref, computed, reactive, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { usageAPI, keysAPI } from '@/api'
@@ -643,6 +642,7 @@ import {
 
 const { t } = useI18n()
 const appStore = useAppStore()
+const route = useRoute()
 
 let abortController: AbortController | null = null
 
@@ -716,8 +716,16 @@ weekAgo.setDate(weekAgo.getDate() - 6)
 const startDate = ref(formatLocalDate(weekAgo))
 const endDate = ref(formatLocalDate(now))
 
+const getInitialApiKeyFilter = (): number | undefined => {
+  const raw = route.query.api_key_id || route.query.key_id
+  const value = Array.isArray(raw) ? raw[0] : raw
+  if (!value) return undefined
+  const numeric = Number(value)
+  return Number.isFinite(numeric) && numeric > 0 ? numeric : undefined
+}
+
 const filters = ref<UsageQueryParams>({
-  api_key_id: undefined,
+  api_key_id: getInitialApiKeyFilter(),
   start_date: undefined,
   end_date: undefined
 })
@@ -1115,3 +1123,206 @@ onMounted(() => {
   loadUsageStats()
 })
 </script>
+
+<style scoped>
+.lingqu-console-page {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.lingqu-console-page :deep(.table-page-layout) {
+  gap: 0.82rem;
+  height: auto;
+  min-height: 0;
+  overflow: visible;
+}
+
+.lingqu-console-page :deep(.layout-section-fixed) {
+  position: relative;
+  z-index: 18;
+}
+
+.lingqu-console-page :deep(.layout-section-scrollable) {
+  min-height: 28rem;
+  position: relative;
+  z-index: 1;
+}
+
+.lingqu-console-page :deep(.table-scroll-container) {
+  min-height: 28rem;
+  border-radius: 18px;
+  border-color: rgba(33, 31, 28, 0.12);
+  box-shadow: 0 14px 32px rgba(33, 31, 28, 0.06);
+}
+
+.lingqu-console-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border: 1px solid rgba(33, 31, 28, 0.12);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.86);
+  box-shadow: 0 12px 28px rgba(33, 31, 28, 0.06);
+  padding: 0.82rem 0.95rem;
+}
+
+.lingqu-console-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.34rem;
+  border: 1px solid rgba(33, 31, 28, 0.14);
+  border-radius: 999px;
+  background: #fff8df;
+  color: rgba(33, 31, 28, 0.72);
+  padding: 0.2rem 0.58rem;
+  font-size: 0.7rem;
+  font-weight: 950;
+}
+
+.lingqu-console-eyebrow::before {
+  content: '';
+  width: 0.34rem;
+  height: 0.34rem;
+  border-radius: 999px;
+  background: #45d5d1;
+}
+
+.lingqu-console-hero h1 {
+  margin-top: 0.18rem;
+  color: #211f1c;
+  font-family: theme('fontFamily.display');
+  font-size: clamp(1.18rem, 1.8vw, 1.55rem);
+  font-weight: 950;
+  line-height: 1.06;
+}
+
+.lingqu-console-hero p {
+  margin-top: 0.14rem;
+  color: rgba(33, 31, 28, 0.58);
+  font-size: 0.78rem;
+  font-weight: 760;
+}
+
+.lingqu-console-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.lingqu-console-button,
+.lingqu-console-reset-button {
+  display: inline-flex;
+  min-height: 2.15rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  border: 1px solid rgba(33, 31, 28, 0.14);
+  border-radius: 13px;
+  background: #fff;
+  color: #211f1c;
+  padding: 0 0.72rem;
+  font-size: 0.78rem;
+  font-weight: 950;
+  box-shadow: 0 8px 18px rgba(33, 31, 28, 0.06);
+  transition: transform 150ms ease, box-shadow 150ms ease;
+}
+
+.lingqu-console-button:hover,
+.lingqu-console-reset-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 24px rgba(33, 31, 28, 0.09);
+}
+
+.lingqu-console-button--primary {
+  border-color: rgba(33, 31, 28, 0.18);
+  background: linear-gradient(135deg, #ffd86b, #ff8f75);
+}
+
+.lingqu-console-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.7rem;
+}
+
+.lingqu-console-stat {
+  min-height: 4.6rem;
+  border: 1px solid rgba(33, 31, 28, 0.12);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: 0 10px 24px rgba(33, 31, 28, 0.06);
+  padding: 0.76rem;
+}
+
+.lingqu-console-filter-card {
+  position: relative;
+  z-index: 20;
+  width: fit-content;
+  max-width: 100%;
+  border: 1px solid rgba(33, 31, 28, 0.12);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 10px 24px rgba(33, 31, 28, 0.05);
+  padding: 0.68rem 0.82rem;
+}
+
+.lingqu-console-filter-row {
+  display: flex;
+  align-items: end;
+  gap: 0.72rem;
+  max-width: 100%;
+}
+
+.lingqu-console-filter-field {
+  width: 11rem;
+  min-width: 0;
+}
+
+.lingqu-console-filter-field--date {
+  width: 13.5rem;
+}
+
+.lingqu-console-filter-actions {
+  display: flex;
+  align-items: center;
+}
+
+.lingqu-console-page :deep(.date-picker-dropdown) {
+  z-index: 60;
+}
+
+.lingqu-console-page :deep(.date-picker-trigger) {
+  min-height: 2.35rem;
+  border-radius: 12px;
+}
+
+@media (max-width: 980px) {
+  .lingqu-console-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .lingqu-console-filter-row,
+  .lingqu-console-hero {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .lingqu-console-actions,
+  .lingqu-console-filter-actions {
+    margin-left: 0;
+  }
+
+  .lingqu-console-filter-card,
+  .lingqu-console-filter-field,
+  .lingqu-console-filter-field--date {
+    width: 100%;
+  }
+}
+
+@media (max-width: 560px) {
+  .lingqu-console-stats {
+    grid-template-columns: 1fr;
+  }
+}
+</style>

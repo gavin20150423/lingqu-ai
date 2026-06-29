@@ -3,9 +3,9 @@
     <div class="lingqu-keys">
       <section class="lingqu-keys__hero">
         <div class="lingqu-keys__copy">
-          <span>Key 工作台</span>
-          <h1>一个 Key，接入顶尖大模型</h1>
-          <p>创建后直接复制使用，高级限制需要时再打开。</p>
+          <span>我的 Key</span>
+          <h1>创建一个 Key，马上接入 AI</h1>
+          <p>复制 Key 和 Base URL 即可使用，额度与限制可以之后再设置。</p>
         </div>
 
         <div class="lingqu-keys__hero-tools">
@@ -13,6 +13,11 @@
             <Icon name="plus" size="md" />
             创建 Key
           </button>
+
+          <router-link to="/usage" class="lingqu-keys__usage-entry">
+            <Icon name="chart" size="md" />
+            使用记录
+          </router-link>
 
           <button
             type="button"
@@ -181,6 +186,10 @@
           </div>
 
           <div class="lingqu-key-card__actions">
+            <router-link :to="{ path: '/usage', query: { api_key_id: key.id } }">
+              <Icon name="chart" size="sm" />
+              用量明细
+            </router-link>
             <button type="button" @click="openUseKeyModal(key)">
               <Icon name="terminal" size="sm" />
               {{ t('keys.useKey') }}
@@ -1667,7 +1676,7 @@ onUnmounted(() => {
 <style scoped>
 .lingqu-keys {
   display: grid;
-  gap: 1rem;
+  gap: 0.72rem;
 }
 
 .lingqu-keys__hero,
@@ -1677,37 +1686,29 @@ onUnmounted(() => {
 .lingqu-keys__empty {
   position: relative;
   overflow: hidden;
-  border: 3px solid #211f1c;
+  border: 1px solid rgba(33, 31, 28, 0.1);
   background: rgba(255, 255, 255, 0.86);
-  box-shadow: 7px 7px 0 rgba(33, 31, 28, 0.88);
+  box-shadow: 0 10px 26px rgba(29, 42, 42, 0.06);
 }
 
 .lingqu-keys__hero {
-  min-height: 5.1rem;
+  min-height: 4.6rem;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(17rem, 0.9fr) minmax(24rem, 1fr);
   align-items: center;
-  gap: clamp(0.65rem, 1.8vw, 1rem);
-  border-radius: 18px;
+  gap: clamp(0.75rem, 2vw, 1.2rem);
+  border-radius: 20px;
   background:
-    radial-gradient(circle at 94% 18%, rgba(78, 233, 255, 0.16), transparent 26%),
-    radial-gradient(circle at 12% 100%, rgba(255, 95, 143, 0.1), transparent 24%),
-    linear-gradient(135deg, rgba(255, 247, 208, 0.95), rgba(255, 255, 255, 0.86));
-  padding: 0.62rem 0.75rem;
-  box-shadow: 4px 4px 0 rgba(33, 31, 28, 0.84);
+    linear-gradient(90deg, rgba(255, 248, 223, 0.9), rgba(255, 255, 255, 0.78) 46%, rgba(231, 250, 255, 0.78)),
+    rgba(255, 255, 255, 0.9);
+  padding: 0.72rem 0.85rem;
   animation: keyPageRise 520ms ease both;
 }
 
 .lingqu-keys__hero::before,
 .lingqu-key-card::before,
 .lingqu-keys__empty::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background-image: radial-gradient(circle at 10px 10px, rgba(33, 31, 28, 0.055) 1.2px, transparent 1.5px);
-  background-size: 18px 18px;
-  opacity: 0.65;
-  pointer-events: none;
+  display: none;
 }
 
 .lingqu-keys__hero > *,
@@ -1720,32 +1721,30 @@ onUnmounted(() => {
 .lingqu-keys__copy > span {
   display: inline-flex;
   width: fit-content;
-  border: 2px solid #211f1c;
+  border: 1px solid rgba(33, 31, 28, 0.12);
   border-radius: 999px;
-  background: #fff7d0;
-  box-shadow: 2px 2px 0 rgba(33, 31, 28, 0.72);
-  padding: 0.16rem 0.46rem;
-  font-size: 0.64rem;
+  background: #fff8df;
+  padding: 0.14rem 0.48rem;
+  font-size: 0.62rem;
   font-weight: 950;
 }
 
 .lingqu-keys__copy h1 {
   max-width: none;
-  margin-top: 0.24rem;
+  margin-top: 0.22rem;
   font-family: theme('fontFamily.display');
-  font-size: clamp(1.2rem, 1.8vw, 1.52rem);
+  font-size: clamp(1.08rem, 1.8vw, 1.42rem);
   font-weight: 950;
   letter-spacing: 0;
   line-height: 1.08;
-  color: #ff5f8f;
-  text-shadow: 1.4px 1.4px 0 rgba(33, 31, 28, 0.8);
+  color: #211f1c;
 }
 
 .lingqu-keys__copy p {
   max-width: 36rem;
   margin-top: 0.1rem;
-  color: rgba(33, 31, 28, 0.66);
-  font-size: 0.74rem;
+  color: rgba(33, 31, 28, 0.58);
+  font-size: 0.73rem;
   font-weight: 800;
   line-height: 1.35;
 }
@@ -1753,59 +1752,66 @@ onUnmounted(() => {
 .lingqu-keys__hero-tools {
   min-width: 0;
   display: grid;
-  grid-template-columns: auto minmax(13rem, 18rem);
+  grid-template-columns: minmax(8rem, 12rem) minmax(7rem, 10rem) minmax(12rem, 1fr);
   align-items: center;
-  gap: 0.55rem;
+  gap: 0.46rem;
 }
 
 .lingqu-keys__primary,
 .lingqu-keys__secondary,
 .lingqu-keys__endpoint,
+.lingqu-keys__usage-entry,
+.lingqu-key-card__actions a,
 .lingqu-key-card__actions button,
 .lingqu-key-card__copy {
   display: inline-flex;
-  min-height: 2.15rem;
+  min-height: 2.12rem;
   align-items: center;
   justify-content: center;
   gap: 0.32rem;
-  border: 3px solid #211f1c;
+  border: 1px solid rgba(33, 31, 28, 0.13);
   border-radius: 12px;
   color: #211f1c;
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   font-weight: 950;
-  box-shadow: 2px 2px 0 rgba(33, 31, 28, 0.78);
+  box-shadow: none;
   transition: transform 150ms ease, box-shadow 150ms ease, filter 150ms ease;
 }
 
 .lingqu-keys__primary {
-  background: linear-gradient(135deg, #ff7aa5, #ffd95a);
-  padding: 0 0.72rem;
+  background: linear-gradient(135deg, #f8df86, #f4b4bd);
+  padding: 0 0.78rem;
 }
 
 .lingqu-keys__primary--hero {
-  min-height: 2.55rem;
-  border-radius: 16px;
-  padding: 0 0.88rem;
-  font-size: 0.86rem;
+  min-height: 2.28rem;
+  border-radius: 13px;
+  font-size: 0.82rem;
 }
 
 .lingqu-keys__secondary,
+.lingqu-keys__usage-entry,
+.lingqu-key-card__actions a,
 .lingqu-key-card__actions button,
 .lingqu-key-card__copy {
-  background: rgba(255, 255, 255, 0.86);
-  padding: 0 0.68rem;
+  background: rgba(255, 255, 255, 0.72);
+  padding: 0 0.66rem;
+}
+
+.lingqu-keys__usage-entry,
+.lingqu-key-card__actions a {
+  text-decoration: none;
 }
 
 .lingqu-keys__endpoint {
   min-width: 0;
-  max-width: 18rem;
+  max-width: none;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
-  border-width: 2px;
-  border-radius: 16px;
-  background: #211f1c;
+  border-color: rgba(38, 51, 49, 0.92);
+  border-radius: 13px;
+  background: #263331;
   color: #fffdf5;
-  box-shadow: 3px 3px 0 rgba(33, 31, 28, 0.5);
   padding: 0 0.62rem;
 }
 
@@ -1814,13 +1820,13 @@ onUnmounted(() => {
   align-items: center;
   gap: 0.3rem;
   color: rgba(255, 253, 245, 0.72);
-  font-size: 0.68rem;
+  font-size: 0.66rem;
 }
 
 .lingqu-keys__endpoint code {
   overflow: hidden;
-  color: #ffd447;
-  font-size: 0.7rem;
+  color: #f8e08a;
+  font-size: 0.66rem;
   font-weight: 950;
   text-align: left;
   text-overflow: ellipsis;
@@ -1830,62 +1836,66 @@ onUnmounted(() => {
 .lingqu-keys__primary:hover,
 .lingqu-keys__secondary:hover:not(:disabled),
 .lingqu-keys__endpoint:hover,
+.lingqu-keys__usage-entry:hover,
+.lingqu-key-card__actions a:hover,
 .lingqu-key-card__actions button:hover,
 .lingqu-key-card__copy:hover {
-  transform: translate(-1px, -2px) rotate(-0.5deg);
-  box-shadow: 6px 6px 0 rgba(33, 31, 28, 0.9);
-  filter: saturate(1.05);
+  transform: translateY(-2px);
+  box-shadow: 0 12px 24px rgba(29, 42, 42, 0.1);
+  filter: none;
 }
 
 .lingqu-keys__stats {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0.55rem;
+  gap: 0.48rem;
 }
 
 .lingqu-keys__stats article {
-  min-height: 5.25rem;
+  min-height: 3.15rem;
   display: grid;
-  align-content: center;
-  gap: 0.22rem;
-  border-radius: 16px;
-  background:
-    radial-gradient(circle at 100% 0%, rgba(78, 233, 255, 0.14), transparent 34%),
-    rgba(255, 255, 255, 0.86);
-  padding: 0.68rem;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.45rem;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.64);
+  padding: 0.48rem 0.62rem;
   transition: transform 160ms ease, box-shadow 160ms ease;
 }
 
 .lingqu-keys__stats article:hover {
-  transform: translateY(-3px) rotate(-0.35deg);
-  box-shadow: 9px 9px 0 rgba(33, 31, 28, 0.9);
+  transform: translateY(-2px);
+  box-shadow: 0 12px 24px rgba(29, 42, 42, 0.08);
 }
 
 .lingqu-keys__stats svg {
   color: #08a9d6;
+  width: 1.05rem;
+  height: 1.05rem;
 }
 
 .lingqu-keys__stats small,
 .lingqu-key-card small {
   color: rgba(33, 31, 28, 0.54);
-  font-size: 0.74rem;
+  font-size: 0.68rem;
   font-weight: 950;
 }
 
 .lingqu-keys__stats strong {
   overflow-wrap: anywhere;
-  font-size: 1.02rem;
+  font-size: 0.92rem;
   font-weight: 950;
   color: #211f1c;
+  text-align: right;
 }
 
 .lingqu-keys__toolbar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.55rem;
-  border-radius: 16px;
-  padding: 0.6rem;
+  gap: 0.46rem;
+  border-radius: 14px;
+  padding: 0.48rem;
 }
 
 .lingqu-keys__refresh {
@@ -1904,16 +1914,16 @@ onUnmounted(() => {
 .lingqu-key-list {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1rem;
+  gap: 0.8rem;
 }
 
 .lingqu-key-card,
 .lingqu-keys__empty {
-  border-radius: 26px;
+  border-radius: 18px;
   background:
-    radial-gradient(circle at 100% 0%, rgba(255, 122, 165, 0.12), transparent 34%),
-    linear-gradient(135deg, rgba(255, 253, 245, 0.94), rgba(239, 251, 255, 0.86));
-  padding: 1rem;
+    radial-gradient(circle at 100% 0%, rgba(72, 185, 200, 0.08), transparent 34%),
+    rgba(255, 255, 255, 0.86);
+  padding: 0.86rem;
   animation: keyPageRise 460ms ease both;
 }
 
@@ -1938,14 +1948,14 @@ onUnmounted(() => {
 .lingqu-key-card h2,
 .lingqu-keys__empty h2 {
   font-family: theme('fontFamily.display');
-  font-size: 1.45rem;
+  font-size: 1.28rem;
   font-weight: 950;
   line-height: 1.1;
   color: #211f1c;
 }
 
 .lingqu-key-card__status {
-  border: 2px solid rgba(33, 31, 28, 0.72);
+  border: 1px solid rgba(33, 31, 28, 0.12);
   border-radius: 999px;
   background: #fff;
   padding: 0.16rem 0.52rem;
@@ -1954,7 +1964,7 @@ onUnmounted(() => {
 }
 
 .lingqu-key-card__status--active {
-  background: #d9fbca;
+  background: #edf9f3;
 }
 
 .lingqu-key-card__status--inactive {
@@ -1983,7 +1993,7 @@ onUnmounted(() => {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  border: 2px solid rgba(33, 31, 28, 0.14);
+  border: 1px solid rgba(33, 31, 28, 0.12);
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.74);
   padding: 0.3rem 0.55rem;
@@ -1992,8 +2002,8 @@ onUnmounted(() => {
 }
 
 .lingqu-key-card__copy {
-  width: 2.65rem;
-  min-height: 2.65rem;
+  width: 2.34rem;
+  min-height: 2.34rem;
   flex: 0 0 auto;
   padding: 0;
 }
@@ -2001,10 +2011,10 @@ onUnmounted(() => {
 .lingqu-key-card__secret {
   display: grid;
   gap: 0.3rem;
-  border: 3px solid #211f1c;
-  border-radius: 18px;
-  background: #211f1c;
-  padding: 0.82rem;
+  border: 1px solid rgba(38, 51, 49, 0.92);
+  border-radius: 14px;
+  background: #263331;
+  padding: 0.68rem;
   box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.05);
 }
 
@@ -2014,24 +2024,24 @@ onUnmounted(() => {
 
 .lingqu-key-card__secret code {
   overflow-wrap: anywhere;
-  color: #ffd447;
-  font-size: 0.86rem;
+  color: #f8e08a;
+  font-size: 0.78rem;
   font-weight: 900;
 }
 
 .lingqu-key-card__metrics {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0.5rem;
+  gap: 0.42rem;
 }
 
 .lingqu-key-card__metrics > div {
   display: grid;
   gap: 0.18rem;
-  border: 2px solid rgba(33, 31, 28, 0.14);
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.66);
-  padding: 0.66rem;
+  border: 1px solid rgba(33, 31, 28, 0.1);
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.58);
+  padding: 0.52rem;
 }
 
 .lingqu-key-card__metrics strong {
@@ -2044,16 +2054,15 @@ onUnmounted(() => {
 .lingqu-key-card__actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: 0.42rem;
 }
 
+.lingqu-key-card__actions a,
 .lingqu-key-card__actions button {
-  min-height: 2.35rem;
-  border-width: 2px;
+  min-height: 2.14rem;
   border-radius: 13px;
-  box-shadow: 3px 3px 0 rgba(33, 31, 28, 0.75);
-  font-size: 0.78rem;
-  padding: 0 0.62rem;
+  font-size: 0.74rem;
+  padding: 0 0.58rem;
 }
 
 .lingqu-key-card__actions .lingqu-key-card__danger {
@@ -2077,14 +2086,14 @@ onUnmounted(() => {
 }
 
 .lingqu-keys__empty-icon {
-  width: 5rem;
-  height: 5rem;
+  width: 4.2rem;
+  height: 4.2rem;
   display: grid;
   place-items: center;
-  border: 3px solid #211f1c;
-  border-radius: 24px;
+  border: 1px solid rgba(33, 31, 28, 0.12);
+  border-radius: 18px;
   background: #fff7d0;
-  box-shadow: 5px 5px 0 rgba(33, 31, 28, 0.86);
+  box-shadow: 0 10px 24px rgba(29, 42, 42, 0.07);
 }
 
 .lingqu-key-card--loading {
@@ -2114,6 +2123,10 @@ onUnmounted(() => {
 
   .lingqu-keys__stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .lingqu-keys__hero-tools {
+    grid-template-columns: minmax(8rem, 1fr) minmax(7rem, 0.8fr) minmax(12rem, 1fr);
   }
 }
 
@@ -2155,6 +2168,7 @@ onUnmounted(() => {
   }
 
   .lingqu-keys__primary--hero,
+  .lingqu-keys__usage-entry,
   .lingqu-keys__endpoint {
     width: 100%;
     max-width: none;
@@ -2166,7 +2180,8 @@ onUnmounted(() => {
   }
 
   .lingqu-keys__primary,
-  .lingqu-keys__secondary {
+  .lingqu-keys__secondary,
+  .lingqu-keys__usage-entry {
     min-height: 2rem;
     padding: 0 0.62rem;
   }
@@ -2206,102 +2221,5 @@ onUnmounted(() => {
   50% {
     opacity: 0.9;
   }
-}
-
-/* Calm product skin: keep the mascot language, remove the heavy comic block feel. */
-.lingqu-keys__hero,
-.lingqu-keys__stats article,
-.lingqu-keys__toolbar,
-.lingqu-key-card,
-.lingqu-keys__empty {
-  border: 1px solid rgba(33, 31, 28, 0.1);
-  background: rgba(255, 255, 255, 0.84);
-  box-shadow: 0 10px 26px rgba(29, 42, 42, 0.07);
-}
-
-.lingqu-keys__hero {
-  background:
-    radial-gradient(circle at 94% 18%, rgba(72, 185, 200, 0.1), transparent 26%),
-    rgba(255, 255, 255, 0.88);
-  box-shadow: 0 10px 26px rgba(29, 42, 42, 0.07);
-}
-
-.lingqu-keys__hero::before,
-.lingqu-key-card::before,
-.lingqu-keys__empty::before {
-  opacity: 0;
-}
-
-.lingqu-keys__copy > span,
-.lingqu-keys__primary,
-.lingqu-keys__secondary,
-.lingqu-keys__endpoint,
-.lingqu-key-card__actions button,
-.lingqu-key-card__copy,
-.lingqu-key-card__status,
-.lingqu-key-card__secret,
-.lingqu-key-card__metrics > div,
-.lingqu-keys__empty-icon {
-  border-color: rgba(33, 31, 28, 0.12);
-  box-shadow: none;
-}
-
-.lingqu-keys__copy > span {
-  border-width: 1px;
-  background: #fff8df;
-}
-
-.lingqu-keys__copy h1 {
-  color: #211f1c;
-  text-shadow: none;
-}
-
-.lingqu-keys__primary {
-  background: linear-gradient(135deg, #f8e08a, #f4b4bd);
-}
-
-.lingqu-keys__endpoint,
-.lingqu-key-card__secret {
-  background: #263331;
-}
-
-.lingqu-keys__endpoint code,
-.lingqu-key-card__secret code {
-  color: #f8e08a;
-}
-
-.lingqu-keys__primary:hover,
-.lingqu-keys__secondary:hover:not(:disabled),
-.lingqu-keys__endpoint:hover,
-.lingqu-key-card__actions button:hover,
-.lingqu-key-card__copy:hover,
-.lingqu-keys__stats article:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 14px 30px rgba(29, 42, 42, 0.1);
-  filter: none;
-}
-
-.lingqu-key-card,
-.lingqu-keys__empty {
-  border-radius: 18px;
-  background:
-    radial-gradient(circle at 100% 0%, rgba(72, 185, 200, 0.08), transparent 34%),
-    rgba(255, 255, 255, 0.86);
-}
-
-.lingqu-key-card__status--active {
-  background: #edf9f3;
-}
-
-.lingqu-key-card__status--quota_exhausted,
-.lingqu-key-card__status--expired,
-.lingqu-key-card__actions .lingqu-key-card__danger {
-  background: #fff0f4;
-}
-
-.lingqu-keys__empty-icon {
-  border-width: 1px;
-  background: #fff8df;
-  box-shadow: 0 10px 24px rgba(29, 42, 42, 0.07);
 }
 </style>

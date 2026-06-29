@@ -110,11 +110,18 @@
 
         <div
           class="user-workspace__announcement-ticker"
-          :class="{ 'user-workspace__announcement-ticker--empty': tickerAnnouncements.length === 0 }"
+          :class="{
+            'user-workspace__announcement-ticker--empty': tickerAnnouncements.length === 0,
+            'user-workspace__announcement-ticker--single': tickerAnnouncements.length === 1
+          }"
         >
-          <div v-if="tickerAnnouncements.length > 0" class="user-workspace__announcement-track">
+          <div
+            v-if="tickerAnnouncements.length > 0"
+            class="user-workspace__announcement-track"
+            :class="{ 'user-workspace__announcement-track--single': tickerAnnouncements.length === 1 }"
+          >
             <div
-              v-for="loop in 2"
+              v-for="loop in announcementTickerLoopCount"
               :key="loop"
               class="user-workspace__announcement-sequence"
             >
@@ -125,7 +132,9 @@
                 :class="{ 'user-workspace__announcement-item--unread': !item.read_at }"
               >
                 <span class="user-workspace__announcement-dot" aria-hidden="true"></span>
-                <span class="user-workspace__announcement-title">{{ item.title }}</span>
+                <span class="user-workspace__announcement-title" :title="item.title">
+                  {{ formatAnnouncementTickerText(item) }}
+                </span>
               </div>
             </div>
           </div>
@@ -164,6 +173,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useAnnouncementStore } from '@/stores'
 import Icon from '@/components/icons/Icon.vue'
 import { DEFAULT_SITE_LOGO, resolveBrandLogo, resolveBrandName } from '@/constants/brand'
+import type { UserAnnouncement } from '@/types'
 
 const route = useRoute()
 const router = useRouter()
@@ -178,6 +188,7 @@ const dropdownRef = ref<HTMLElement | null>(null)
 const user = computed(() => authStore.user)
 const isAdmin = computed(() => authStore.isAdmin)
 const tickerAnnouncements = computed(() => announcements.value.slice(0, 8))
+const announcementTickerLoopCount = computed(() => tickerAnnouncements.value.length > 1 ? 2 : 1)
 
 const siteName = computed(() => resolveBrandName(appStore.cachedPublicSettings?.site_name || appStore.siteName))
 const siteLogo = computed(() => resolveBrandLogo(appStore.cachedPublicSettings?.site_logo || appStore.siteLogo) || DEFAULT_SITE_LOGO)
@@ -229,6 +240,21 @@ function isNavActive(item: (typeof navItems)[number]): boolean {
 
 function closeDropdown() {
   dropdownOpen.value = false
+}
+
+function stripAnnouncementMarkup(value: string) {
+  return value
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/!\[[^\]]*]\([^)]*\)/g, ' ')
+    .replace(/\[([^\]]+)]\([^)]*\)/g, '$1')
+    .replace(/[`*_~>#-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function formatAnnouncementTickerText(item: UserAnnouncement) {
+  const content = stripAnnouncementMarkup(item.content || '')
+  return content || item.title
 }
 
 async function handleLogout() {
@@ -680,6 +706,11 @@ onBeforeUnmount(() => {
   background: linear-gradient(270deg, rgba(255, 250, 232, 0.98), rgba(255, 250, 232, 0));
 }
 
+.user-workspace__announcement-ticker--single::before,
+.user-workspace__announcement-ticker--single::after {
+  display: none;
+}
+
 .user-workspace__announcement-track {
   display: flex;
   width: max-content;
@@ -687,6 +718,12 @@ onBeforeUnmount(() => {
   align-items: center;
   animation: userWorkspaceTicker 28s linear infinite;
   will-change: transform;
+}
+
+.user-workspace__announcement-track--single {
+  width: 100%;
+  animation: none;
+  will-change: auto;
 }
 
 .user-workspace__announcement-ticker:hover .user-workspace__announcement-track,
@@ -700,6 +737,11 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 2rem;
   padding-right: 2rem;
+}
+
+.user-workspace__announcement-track--single .user-workspace__announcement-sequence {
+  width: 100%;
+  padding: 0 1rem;
 }
 
 .user-workspace__announcement-item {
@@ -731,6 +773,10 @@ onBeforeUnmount(() => {
 .user-workspace__announcement-title {
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.user-workspace__announcement-track--single .user-workspace__announcement-title {
+  min-width: 0;
 }
 
 .user-workspace__announcement-empty {
@@ -1367,39 +1413,47 @@ onBeforeUnmount(() => {
 
 .user-workspace__summary {
   border-width: 1px;
-  min-height: 3.25rem;
-  margin-top: 0.68rem;
-  border-radius: 18px;
+  min-height: 2.56rem;
+  margin-top: 0.56rem;
+  border-radius: 16px;
   background: rgba(255, 255, 255, 0.72);
-  box-shadow: 0 10px 24px rgba(29, 42, 42, 0.06);
-  padding: 0.5rem 0.58rem;
+  box-shadow: 0 8px 20px rgba(29, 42, 42, 0.05);
+  gap: 0.48rem;
+  padding: 0.36rem 0.46rem;
 }
 
 .user-workspace__announcement-badge {
-  min-height: 2.1rem;
+  min-height: 1.78rem;
   border-color: rgba(33, 31, 28, 0.12);
   background: #fff8df;
   box-shadow: none;
-  font-size: 0.78rem;
+  padding: 0 0.58rem;
+  font-size: 0.72rem;
 }
 
 .user-workspace__announcement-badge::after {
-  width: 0.38rem;
-  height: 0.38rem;
-  background: #e9849b;
-  box-shadow: none;
-  animation: none;
+  display: none;
 }
 
 .user-workspace__announcement-ticker {
-  min-height: 2.1rem;
+  min-height: 1.78rem;
   border-color: rgba(33, 31, 28, 0.08);
   background: rgba(255, 255, 255, 0.74);
 }
 
+.user-workspace__announcement-ticker--empty {
+  flex: 0 1 14rem;
+  background: rgba(255, 255, 255, 0.5);
+}
+
 .user-workspace__announcement-track,
 .user-workspace__announcement-empty {
-  min-height: 2.1rem;
+  min-height: 1.78rem;
+}
+
+.user-workspace__announcement-empty {
+  padding: 0 0.72rem;
+  font-size: 0.76rem;
 }
 
 .user-workspace__announcement-item {

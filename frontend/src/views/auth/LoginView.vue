@@ -79,7 +79,7 @@
               type="button"
               @click="showPassword = !showPassword"
               :disabled="authActionDisabled"
-              class="absolute inset-y-0 right-0 flex items-center pr-3.5 text-comic-ink/[0.45] transition-colors hover:text-comic-ink dark:hover:text-dark-300"
+              class="absolute inset-y-0 right-0 z-10 flex items-center pr-3.5 text-comic-ink/[0.45] transition-colors hover:text-comic-ink dark:hover:text-dark-300"
             >
               <Icon v-if="showPassword" name="eyeOff" size="md" />
               <Icon v-else name="eye" size="md" />

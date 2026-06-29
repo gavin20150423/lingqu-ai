@@ -763,3 +763,15 @@
     padding-bottom: env(safe-area-inset-bottom);
   }
 }
+
+/* Keep app-level overlays above sticky tables and table-local menus. */
+.modal-overlay,
+.dialog-overlay,
+[class~='fixed'][class~='inset-0'][class~='z-50'],
+[class~='fixed'][class~='inset-0'][class~='z-[60]'],
+[class~='fixed'][class~='inset-0'][class~='z-[100]'],
+[class~='fixed'][class~='inset-0'][class~='z-[110]'],
+[class~='fixed'][class~='inset-0'][class~='z-[120]'],
+[class~='fixed'][class~='inset-0'][class~='z-[140]'] {
+  z-index: 20000 !important;
+}

@@ -9,8 +9,10 @@ import (
 	"encoding/json"
 	"io"
 	"io/fs"
+	"mime"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -97,20 +99,18 @@ func (s *FrontendServer) Middleware() gin.HandlerFunc {
 			cleanPath = "index.html"
 		}
 
-		// For index.html or SPA routes, serve with injected settings
-		if cleanPath == "index.html" || !s.fileExists(cleanPath) {
+		// For root index.html, serve the host SPA with injected settings.
+		if cleanPath == "index.html" {
 			s.serveIndexHTML(c)
 			return
 		}
 
-		// Try local override first
-		if s.tryServeOverride(c, cleanPath) {
+		if staticPath, ok := s.resolveStaticPath(cleanPath); ok {
+			s.serveStaticPath(c, staticPath)
 			return
 		}
 
-		// Serve static files normally
-		s.fileServer.ServeHTTP(c.Writer, c.Request)
-		c.Abort()
+		s.serveIndexHTML(c)
 	}
 }
 
@@ -121,6 +121,78 @@ func (s *FrontendServer) fileExists(path string) bool {
 	}
 	_ = file.Close()
 	return true
+}
+
+func (s *FrontendServer) resolveStaticPath(cleanPath string) (string, bool) {
+	normalized := strings.TrimPrefix(path.Clean("/"+cleanPath), "/")
+	if normalized == "." {
+		normalized = ""
+	}
+	if normalized == "" || normalized == "index.html" {
+		return "", false
+	}
+
+	info, ok := s.fileInfo(normalized)
+	if ok && !info.IsDir() {
+		return normalized, true
+	}
+
+	if ok && info.IsDir() {
+		indexPath := path.Join(normalized, "index.html")
+		if indexInfo, indexOk := s.fileInfo(indexPath); indexOk && !indexInfo.IsDir() {
+			return indexPath, true
+		}
+	}
+
+	return "", false
+}
+
+func (s *FrontendServer) fileInfo(path string) (fs.FileInfo, bool) {
+	file, err := s.distFS.Open(path)
+	if err != nil {
+		return nil, false
+	}
+	defer func() { _ = file.Close() }()
+
+	info, err := file.Stat()
+	if err != nil {
+		return nil, false
+	}
+	return info, true
+}
+
+func (s *FrontendServer) serveStaticPath(c *gin.Context, cleanPath string) {
+	if s.tryServeOverride(c, cleanPath) {
+		return
+	}
+
+	if strings.HasSuffix(cleanPath, "/index.html") || cleanPath == "image-playground/sw.js" {
+		s.serveEmbeddedStaticFile(c, cleanPath)
+		return
+	}
+
+	requestCopy := c.Request.Clone(c.Request.Context())
+	requestCopy.URL.Path = "/" + cleanPath
+	s.fileServer.ServeHTTP(c.Writer, requestCopy)
+	c.Abort()
+}
+
+func (s *FrontendServer) serveEmbeddedStaticFile(c *gin.Context, cleanPath string) {
+	content, err := fs.ReadFile(s.distFS, cleanPath)
+	if err != nil {
+		s.serveIndexHTML(c)
+		return
+	}
+
+	contentType := mime.TypeByExtension(path.Ext(cleanPath))
+	if contentType == "" {
+		contentType = http.DetectContentType(content)
+	}
+	if strings.HasSuffix(cleanPath, "/index.html") || cleanPath == "image-playground/sw.js" {
+		c.Header("Cache-Control", "no-store, max-age=0")
+	}
+	c.Data(http.StatusOK, contentType, content)
+	c.Abort()
 }
 
 // tryServeOverride checks if a local override file exists and serves it.
@@ -266,19 +338,80 @@ func ServeEmbeddedFrontend() gin.HandlerFunc {
 			cleanPath = "index.html"
 		}
 
-		if file, err := distFS.Open(cleanPath); err == nil {
-			_ = file.Close()
+		if staticPath, ok := resolveStaticPath(distFS, cleanPath); ok {
 			// Try local override first
-			if tryServeOverrideFile(c, overrideDir, cleanPath) {
+			if tryServeOverrideFile(c, overrideDir, staticPath) {
 				return
 			}
-			fileServer.ServeHTTP(c.Writer, c.Request)
+			if strings.HasSuffix(staticPath, "/index.html") || staticPath == "image-playground/sw.js" {
+				serveEmbeddedStaticFile(c, distFS, staticPath)
+				return
+			}
+			requestCopy := c.Request.Clone(c.Request.Context())
+			requestCopy.URL.Path = "/" + staticPath
+			fileServer.ServeHTTP(c.Writer, requestCopy)
 			c.Abort()
 			return
 		}
 
 		serveIndexHTML(c, distFS)
 	}
+}
+
+func resolveStaticPath(fsys fs.FS, cleanPath string) (string, bool) {
+	normalized := strings.TrimPrefix(path.Clean("/"+cleanPath), "/")
+	if normalized == "." {
+		normalized = ""
+	}
+	if normalized == "" || normalized == "index.html" {
+		return "", false
+	}
+
+	info, ok := fsFileInfo(fsys, normalized)
+	if ok && !info.IsDir() {
+		return normalized, true
+	}
+
+	if ok && info.IsDir() {
+		indexPath := path.Join(normalized, "index.html")
+		if indexInfo, indexOk := fsFileInfo(fsys, indexPath); indexOk && !indexInfo.IsDir() {
+			return indexPath, true
+		}
+	}
+
+	return "", false
+}
+
+func fsFileInfo(fsys fs.FS, path string) (fs.FileInfo, bool) {
+	file, err := fsys.Open(path)
+	if err != nil {
+		return nil, false
+	}
+	defer func() { _ = file.Close() }()
+
+	info, err := file.Stat()
+	if err != nil {
+		return nil, false
+	}
+	return info, true
+}
+
+func serveEmbeddedStaticFile(c *gin.Context, fsys fs.FS, cleanPath string) {
+	content, err := fs.ReadFile(fsys, cleanPath)
+	if err != nil {
+		serveIndexHTML(c, fsys)
+		return
+	}
+
+	contentType := mime.TypeByExtension(path.Ext(cleanPath))
+	if contentType == "" {
+		contentType = http.DetectContentType(content)
+	}
+	if strings.HasSuffix(cleanPath, "/index.html") || cleanPath == "image-playground/sw.js" {
+		c.Header("Cache-Control", "no-store, max-age=0")
+	}
+	c.Data(http.StatusOK, contentType, content)
+	c.Abort()
 }
 
 // tryServeOverrideFile is a standalone version of tryServeOverride for legacy usage.
