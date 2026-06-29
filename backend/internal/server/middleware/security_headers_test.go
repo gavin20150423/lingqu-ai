@@ -170,6 +170,24 @@ func TestSecurityHeaders(t *testing.T) {
 		assert.NotContains(t, csp, "frame-ancestors 'none'")
 	})
 
+	t.Run("app_pages_can_embed_same_origin_frames", func(t *testing.T) {
+		cfg := config.CSPConfig{
+			Enabled: true,
+			Policy:  "default-src 'self'; frame-src https://example.com; script-src 'self' __CSP_NONCE__",
+		}
+		middleware := SecurityHeaders(cfg, nil)
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodGet, "/image-tools", nil)
+
+		middleware(c)
+
+		csp := w.Header().Get("Content-Security-Policy")
+		assert.True(t, directiveHasValue(csp, "frame-src", "'self'"))
+		assert.True(t, directiveHasValue(csp, "frame-src", "https://example.com"))
+	})
+
 	t.Run("csp_enabled_with_nonce_placeholder", func(t *testing.T) {
 		cfg := config.CSPConfig{
 			Enabled: true,
