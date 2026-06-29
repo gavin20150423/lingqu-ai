@@ -1,12 +1,13 @@
 import type { ApiMode, AppSettings, CustomProviderDefinition } from '../types'
 import { DEFAULT_STREAM_PARTIAL_IMAGES } from '../types'
-import { DEFAULT_OPENAI_PROFILE_ID } from './apiProfiles'
+import { DEFAULT_OPENAI_PROFILE_ID, normalizeSettings } from './apiProfiles'
 
 export const LINGQU_BRIDGE_STORAGE_KEY = 'lingqu:image-playground:bridge'
-const LINGQU_ASYNC_PROVIDER_ID = 'lingqu-async-openai'
+export const LINGQU_ASYNC_PROVIDER_ID = 'lingqu-async-openai'
 
 export interface LingquBridgePayload {
   apiUrl?: string
+  keyId?: string | number
   apiKey?: string
   keyName?: string
   model?: string
@@ -31,6 +32,20 @@ function readPayload(): LingquBridgePayload | null {
 export function getLingquBridgePayload(): LingquBridgePayload | null {
   if (typeof window === 'undefined') return null
   return readPayload()
+}
+
+export function isLingquBridgeSettings(input: Partial<AppSettings> | unknown): boolean {
+  const normalized = normalizeSettings(input)
+  const active = normalized.profiles.find((profile) => profile.id === normalized.activeProfileId) ?? normalized.profiles[0]
+  const provider = normalized.customProviders.find((item) => item.id === LINGQU_ASYNC_PROVIDER_ID)
+
+  return Boolean(
+    active &&
+    provider?.poll &&
+    active.provider === LINGQU_ASYNC_PROVIDER_ID &&
+    active.apiKey.trim() &&
+    active.baseUrl.trim()
+  )
 }
 
 export function buildLingquSettings(currentSettings: AppSettings, payload: LingquBridgePayload | null): Partial<AppSettings> {

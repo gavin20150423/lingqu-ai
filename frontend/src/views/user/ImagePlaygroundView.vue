@@ -85,6 +85,7 @@ import { useAuthStore } from '@/stores/auth'
 import type { ApiKey } from '@/types'
 
 const LINGQU_BRIDGE_STORAGE_KEY = 'lingqu:image-playground:bridge'
+const LINGQU_SELECTED_KEY_STORAGE_KEY = 'lingqu:image-playground:selected-key-id'
 
 const route = useRoute()
 const appStore = useAppStore()
@@ -118,12 +119,33 @@ const emptyHint = computed(() => {
 function buildBridgePayload(key: ApiKey) {
   return {
     apiUrl: `${window.location.origin}/v1`,
+    keyId: key.id,
     apiKey: key.key,
     keyName: key.name,
     model: 'gpt-image-2',
     apiMode: 'images',
     userEmail: authStore.user?.email || '',
     launchedAt: Date.now(),
+  }
+}
+
+function readStoredSelectedKeyId() {
+  try {
+    return window.localStorage.getItem(LINGQU_SELECTED_KEY_STORAGE_KEY) || ''
+  } catch {
+    return ''
+  }
+}
+
+function writeStoredSelectedKeyId(keyId: string) {
+  try {
+    if (keyId) {
+      window.localStorage.setItem(LINGQU_SELECTED_KEY_STORAGE_KEY, keyId)
+    } else {
+      window.localStorage.removeItem(LINGQU_SELECTED_KEY_STORAGE_KEY)
+    }
+  } catch {
+    // Storage can be unavailable in private browsing; the page still works without persistence.
   }
 }
 
@@ -200,17 +222,29 @@ async function loadApiKeys() {
 }
 
 watch(imageKeys, (keys) => {
+  const keyIds = new Set(keys.map((key) => String(key.id)))
   const queryKeyId = typeof route.query.key_id === 'string' ? route.query.key_id : ''
-  if (queryKeyId && keys.some((key) => String(key.id) === queryKeyId)) {
-    selectedKeyId.value = queryKeyId
-    return
-  }
-  if (!selectedKeyId.value && keys.length > 0) {
-    selectedKeyId.value = String(keys[0].id)
+  const storedKeyId = readStoredSelectedKeyId()
+
+  const nextKeyId = [
+    queryKeyId,
+    storedKeyId,
+    selectedKeyId.value,
+    keys[0] ? String(keys[0].id) : '',
+  ].find((keyId) => keyId && keyIds.has(keyId)) || ''
+
+  if (selectedKeyId.value !== nextKeyId) {
+    selectedKeyId.value = nextKeyId
   }
 }, { immediate: true })
 
 watch(selectedKeyId, () => {
+  if (selectedKey.value) {
+    writeStoredSelectedKeyId(selectedKeyId.value)
+  } else if (!selectedKeyId.value) {
+    writeStoredSelectedKeyId('')
+  }
+
   if (selectedKey.value && !frameSrc.value) {
     launchWorkspace(false, true)
   }

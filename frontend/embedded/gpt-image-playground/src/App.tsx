@@ -2,9 +2,9 @@ import { useEffect, useState } from 'react'
 import { initStore } from './store'
 import { useStore } from './store'
 import { buildSettingsFromUrlParams, clearUrlSettingParams, hasUrlSettingParams } from './lib/urlSettings'
-import { isSystemApiSettings, mergeImportedSettings, normalizeSystemApiSettings } from './lib/apiProfiles'
+import { isSystemApiSettings, mergeImportedSettings, normalizeSettings, normalizeSystemApiSettings } from './lib/apiProfiles'
 import { getCustomProviderConfigUrl, loadCustomProviderSettingsFromUrl } from './lib/customProviderConfigUrl'
-import { buildLingquSettings, getLingquBridgePayload } from './lib/lingquBridge'
+import { buildLingquSettings, getLingquBridgePayload, isLingquBridgeSettings } from './lib/lingquBridge'
 import { useDockerApiUrlMigrationNotice } from './hooks/useDockerApiUrlMigrationNotice'
 import Header from './components/Header'
 import SearchBar from './components/SearchBar'
@@ -40,19 +40,27 @@ export default function App() {
   }, [appMode, setAppMode])
 
   useEffect(() => {
-    if (!isSystemApiSettings(settings)) setSettings(normalizeSystemApiSettings(settings))
+    if (!isSystemApiSettings(settings) && !isLingquBridgeSettings(settings)) {
+      setSettings(normalizeSystemApiSettings(settings))
+    }
   }, [settings, setSettings])
 
   useEffect(() => {
     const searchParams = new URLSearchParams(window.location.search)
     const currentSettings = useStore.getState().settings
     const nextSettings = buildSettingsFromUrlParams(currentSettings, searchParams)
+    const bridgePayload = getLingquBridgePayload()
     const bridgedSettings = buildLingquSettings(
       { ...currentSettings, ...nextSettings },
-      getLingquBridgePayload(),
+      bridgePayload,
     )
+    const mergedSettings = { ...currentSettings, ...nextSettings, ...bridgedSettings }
 
-    setSettings(normalizeSystemApiSettings({ ...currentSettings, ...nextSettings, ...bridgedSettings }))
+    setSettings(
+      isLingquBridgeSettings(mergedSettings)
+        ? normalizeSettings(mergedSettings)
+        : normalizeSystemApiSettings(mergedSettings),
+    )
 
     if (hasUrlSettingParams(searchParams)) {
       clearUrlSettingParams(searchParams)
