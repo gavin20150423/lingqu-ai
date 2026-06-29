@@ -391,7 +391,13 @@ function CaseCard({ item, onAction }: { item: InspirationCase; onAction: (text: 
     <article className="flex min-h-[360px] flex-col overflow-hidden rounded-2xl border border-gray-200/70 bg-white/70 shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg dark:border-white/[0.08] dark:bg-white/[0.03]">
       <div className="relative h-36 overflow-hidden bg-gray-100 dark:bg-white/[0.04] sm:h-40">
         {item.thumbnailUrl ? (
-          <img src={item.thumbnailUrl} alt={item.title} className="h-full w-full object-cover" loading="lazy" />
+          <img
+            src={item.thumbnailUrl}
+            alt={item.title}
+            className="h-full w-full object-cover"
+            loading="lazy"
+            referrerPolicy="no-referrer"
+          />
         ) : (
           <div className={`absolute inset-0 ${getPreviewClass(item.category)}`} />
         )}
@@ -454,7 +460,13 @@ function TemplateLibrary({
               <div className="text-sm font-semibold">{group.title}</div>
               {group.coverUrl && (
                 <div className="mt-3 aspect-[16/9] overflow-hidden rounded-xl bg-gray-100 dark:bg-white/[0.04]">
-                  <img src={group.coverUrl} alt={group.title} className="h-full w-full object-cover" loading="lazy" />
+                  <img
+                    src={group.coverUrl}
+                    alt={group.title}
+                    className="h-full w-full object-cover"
+                    loading="lazy"
+                    referrerPolicy="no-referrer"
+                  />
                 </div>
               )}
               <div className="mt-2 flex flex-wrap gap-1">
