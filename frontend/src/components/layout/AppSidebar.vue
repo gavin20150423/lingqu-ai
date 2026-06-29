@@ -337,6 +337,7 @@ const adminNavItems = computed((): NavItem[] => {
     { path: '/admin/dashboard', label: t('nav.dashboard'), icon: 'grid' },
     { path: '/admin/ops', label: t('nav.ops'), icon: 'chart', featureFlag: flagOpsMonitoring },
     { path: '/admin/users', label: t('nav.users'), icon: 'users', hideInSimpleMode: true },
+    { path: '/admin/groups', label: t('nav.groups'), icon: 'grid', hideInSimpleMode: true },
     { path: '/admin/accounts', label: t('nav.accounts'), icon: 'globe' },
     {
       path: '/admin/channels',
