@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo, useRef } from 'react'
-import { useStore, getCachedImage, ensureImageCached, reuseConfig, editOutputs, removeTask, showCodexCliPrompt, getCodexCliPromptKey, retryTask } from '../store'
+import { useStore, getCachedImage, ensureImageCached, reuseConfig, editOutputs, removeTask, showCodexCliPrompt, getCodexCliPromptKey, retryTask, getCustomerSafeErrorMessage } from '../store'
 import { useCloseOnEscape } from '../hooks/useCloseOnEscape'
 import { usePreventBackgroundScroll } from '../hooks/usePreventBackgroundScroll'
 import { useTooltip } from '../hooks/useTooltip'
@@ -202,6 +202,10 @@ export default function DetailModal() {
   if (!task) return null
 
   const isAgentTask = task.sourceMode === 'agent' || Boolean(task.agentConversationId || task.agentRoundId)
+  const customerSafeError = getCustomerSafeErrorMessage(task.error || '', '生成失败')
+  const safeRawResponsePayload = task.rawResponsePayload && getCustomerSafeErrorMessage(task.rawResponsePayload, '') === task.rawResponsePayload.trim()
+    ? task.rawResponsePayload
+    : ''
   const showPendingPrompt = isAgentTaskPromptPending(task)
   const isAgentEditTool = task.status === 'done' && String(task.agentToolAction ?? '').toLowerCase() === 'edit'
   const showReferenceSection = allInputImageIds.length > 0 || isAgentEditTool
@@ -288,7 +292,7 @@ export default function DetailModal() {
   }
 
   const handleCopyError = async () => {
-    const errorText = task.error || '生成失败'
+    const errorText = customerSafeError
     try {
       await copyTextToClipboard(errorText)
       showToast('完整报错已复制', 'success')
@@ -654,7 +658,7 @@ export default function DetailModal() {
                   WebkitLineClamp: 10,
                 }}
               >
-                {task.error || '生成失败'}
+                {customerSafeError}
               </p>
               <div className="mt-3 flex items-center justify-center gap-2">
                 <div className="relative group">
@@ -674,7 +678,7 @@ export default function DetailModal() {
                     复制完整报错
                   </ViewportTooltip>
                 </div>
-                {task.rawResponsePayload && (
+                {safeRawResponsePayload && (
                   <div className="relative group">
                     <button
                       type="button"
@@ -1072,7 +1076,7 @@ export default function DetailModal() {
         </div>
       )}
 
-      {showRawResponseModal && task?.rawResponsePayload && (
+      {showRawResponseModal && safeRawResponsePayload && (
         <div
           className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm sm:p-6"
           onPointerDown={(e) => {
@@ -1099,7 +1103,7 @@ export default function DetailModal() {
                   type="button"
                   onClick={async () => {
                     try {
-                      await copyTextToClipboard(task.rawResponsePayload!)
+                      await copyTextToClipboard(safeRawResponsePayload)
                       showToast('复制成功', 'success')
                     } catch (err) {
                       showToast(getClipboardFailureMessage('复制失败', err), 'error')
@@ -1121,7 +1125,7 @@ export default function DetailModal() {
             </div>
             <div className="flex-1 min-h-0 overflow-y-auto p-5 bg-gray-50/50 dark:bg-black/20 overscroll-contain">
               <pre data-selectable-text className="text-[11px] sm:text-xs text-gray-600 dark:text-gray-300 font-mono whitespace-pre-wrap break-all select-text">
-                {task.rawResponsePayload.replace(/"(b64_json|base64|data)":\s*"[^"]+"/g, '"$1": "<base64_data>"')}
+                {safeRawResponsePayload.replace(/"(b64_json|base64|data)":\s*"[^"]+"/g, '"$1": "<base64_data>"')}
               </pre>
             </div>
           </div>

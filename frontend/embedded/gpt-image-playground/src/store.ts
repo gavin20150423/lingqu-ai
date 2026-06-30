@@ -45,7 +45,7 @@ import { callImageApi } from './lib/api'
 import { callAgentConversationTitleApi, callAgentResponsesApi, callBatchImageSingle, parseBatchImageCallArguments, type AgentApiResultImage, type BatchImageCallResult } from './lib/agentApi'
 import { collectAgentRoundOutputImageSlots, extractAgentReferenceIds, getAgentCurrentReferenceId, getAgentGeneratedImageReferenceId, replaceAgentPromptImageReferencesForApi } from './lib/agentImageReferences'
 import { showBrowserNotification } from './lib/browserNotification'
-import { IMAGE_FETCH_CORS_HINT } from './lib/imageApiShared'
+import { LINGQU_ASYNC_PROVIDER_ID } from './lib/lingquBridge'
 import { getFalErrorMessage, getFalQueuedImageResult } from './lib/falAiImageApi'
 import { getCustomQueuedImageResult, getOpenAICompatibleQueuedImageResult } from './lib/openaiCompatibleImageApi'
 import { validateMaskMatchesImage } from './lib/canvasImage'
@@ -87,6 +87,8 @@ const OPENAI_INTERRUPTED_ERROR = '请求中断'
 const AGENT_STOPPED_MESSAGE = '已停止生成。'
 const AGENT_CONVERSATION_TITLE_MAX_LENGTH = 28
 const ERROR_TOAST_MAX_LENGTH = 80
+const OPENAI_IMAGE_PROMPT_MAX_CHARS = 32_000
+const OPENAI_IMAGE_PROMPT_GUARD_PREFIX = 'Use the following text as the complete prompt. Do not rewrite it:'
 type ToastType = 'info' | 'success' | 'error'
 type AgentInputDraft = {
   prompt: string
@@ -111,12 +113,60 @@ export function getErrorToastMessage(message: string): string {
   return firstLine || '操作失败'
 }
 
+export function getCustomerSafeErrorMessage(err: unknown, fallback = '生成失败，请稍后重试'): string {
+  const message = err instanceof Error ? err.message : String(err)
+  const text = message.trim()
+  if (!text) return fallback
+  if (isInternalDiagnosticErrorMessage(text)) return fallback
+  return text
+}
+
+function isInternalDiagnosticErrorMessage(message: string): boolean {
+  return [
+    /failed to fetch/i,
+    /fetch failed/i,
+    /load failed/i,
+    /networkerror/i,
+    /network request failed/i,
+    /upstream/i,
+    /temporarily unavailable/i,
+    /gateway/i,
+    /\b(?:http|status)\s*(?:502|503|504|524)\b/i,
+    /\b(?:502|503|504|524)\b/,
+    /\/v1\/(?:images|responses)/i,
+    /\/images\/(?:generations|edits|tasks)/i,
+    /multipart\/form-data/i,
+    /\bCORS\b/i,
+    /跨域/,
+    /Docker/i,
+    /API\s*(?:URL|代理|proxy|服务器|不支持)/i,
+    /反向代理|网关|中转站|服务商|上游|预检|Authorization|client_max_body_size|body 限制|proxy_read_timeout|Cloudflare/i,
+  ].some((pattern) => pattern.test(message))
+}
+
 function getToastMessage(message: string, type: ToastType): string {
   return type === 'error' ? getErrorToastMessage(message) : message
 }
 
 function isErrorToastTitle(title: string): boolean {
   return /(?:失败|错误|异常|报错|无法|不能|超时|中断|断开|请先|请输入|已达上限|不存在|已丢失)$/.test(title)
+}
+
+function getOpenAIImageEffectivePromptLength(prompt: string, profile: ApiProfile): number {
+  const effectivePrompt = profile.codexCli
+    ? `${OPENAI_IMAGE_PROMPT_GUARD_PREFIX}\n${prompt}`
+    : prompt
+  return effectivePrompt.length
+}
+
+function validateOpenAIImagePromptLength(prompt: string, profile: ApiProfile): string | null {
+  if (profile.provider !== 'openai' && profile.provider !== LINGQU_ASYNC_PROVIDER_ID) return null
+  if (!profile.model.trim().toLowerCase().startsWith('gpt-image-')) return null
+
+  const length = getOpenAIImageEffectivePromptLength(prompt, profile)
+  if (length <= OPENAI_IMAGE_PROMPT_MAX_CHARS) return null
+
+  return `提示词过长：当前模型最多支持 ${OPENAI_IMAGE_PROMPT_MAX_CHARS.toLocaleString()} 个字符，当前约 ${length.toLocaleString()} 个。请精简提示词后再提交。`
 }
 
 export type SettingsTab = 'general' | 'api' | 'data'
@@ -1846,19 +1896,23 @@ function getApiRequestNetworkErrorHint(
   createdAt: number,
   usesApiProxy: boolean,
   profile?: Pick<ApiProfile, 'provider' | 'apiMode' | 'streamImages' | 'streamPartialImages'> | null,
+  options: { hasInputImages?: boolean } = {},
 ): string | null {
   if (!isApiRequestNetworkError(err)) return null
 
   const elapsedSeconds = Math.max(0, (Date.now() - createdAt) / 1000)
+  const imageEditHint = options.hasInputImages
+    ? '\n· 当前任务带参考图，会请求 /v1/images/edits?async=true，并上传 multipart/form-data。请重点检查该接口的 CORS OPTIONS 预检、Authorization 放行、反向代理 client_max_body_size/body 限制'
+    : ''
 
   if (elapsedSeconds <= 15) {
     if (usesApiProxy) {
-      return '提示：请求立即失败，请检查 API 代理服务是否正常运行。'
+      return `提示：请求立即失败，请检查 API 代理服务是否正常运行。${imageEditHint}`
     }
     const unsupportedApiHint = profile?.provider === 'openai'
       ? `\n· API 不支持 ${getApiModeApiName(profile.apiMode)}`
       : ''
-    return `提示：请求立即失败，可能原因：\n· API 服务器不可达或地址有误，请检查 API URL 是否正确、服务是否正常运行${unsupportedApiHint}\n· 接口不支持浏览器跨域请求，可使用 Docker 部署版或本地运行版并配置 API 代理解决`
+    return `提示：请求立即失败，可能原因：\n· API 服务器不可达或地址有误，请检查 API URL 是否正确、服务是否正常运行${unsupportedApiHint}${imageEditHint}\n· 接口不支持浏览器跨域请求，可使用 Docker 部署版或本地运行版并配置 API 代理解决`
   }
 
   if (elapsedSeconds >= 55 && elapsedSeconds <= 75) {
@@ -1877,9 +1931,12 @@ function getRawErrorPayload(err: unknown): Pick<Partial<TaskRecord>, 'rawImageUr
 
   const rawImageUrls = 'rawImageUrls' in err ? (err as { rawImageUrls?: unknown }).rawImageUrls : undefined
   const rawResponsePayload = 'rawResponsePayload' in err ? (err as { rawResponsePayload?: unknown }).rawResponsePayload : undefined
+  const safeRawResponsePayload = typeof rawResponsePayload === 'string' && !isInternalDiagnosticErrorMessage(rawResponsePayload)
+    ? rawResponsePayload
+    : undefined
   return {
     rawImageUrls: Array.isArray(rawImageUrls) && rawImageUrls.length ? rawImageUrls.filter((url): url is string => typeof url === 'string') : undefined,
-    rawResponsePayload: typeof rawResponsePayload === 'string' ? rawResponsePayload : undefined,
+    rawResponsePayload: safeRawResponsePayload,
   }
 }
 
@@ -2282,6 +2339,12 @@ export async function submitTask(options: { allowFullMask?: boolean; useCurrentA
     showToast('请输入提示词', 'error')
     return
   }
+  const trimmedPrompt = prompt.trim()
+  const promptLengthError = validateOpenAIImagePromptLength(trimmedPrompt, activeProfile)
+  if (promptLengthError) {
+    showToast(promptLengthError, 'error')
+    return
+  }
 
   let orderedInputImages = inputImages
   let maskImageId: string | null = null
@@ -2326,8 +2389,15 @@ export async function submitTask(options: { allowFullMask?: boolean; useCurrentA
     ? getTransparentRequestParams(normalizedParams)
     : { ...normalizedParams, transparent_output: false }
   const transparentMeta = taskParams.transparent_output
-    ? createTransparentOutputMeta(prompt.trim())
+    ? createTransparentOutputMeta(trimmedPrompt)
     : null
+  const transparentPromptLengthError = transparentMeta
+    ? validateOpenAIImagePromptLength(transparentMeta.effectivePrompt, activeProfile)
+    : null
+  if (transparentPromptLengthError) {
+    showToast(transparentPromptLengthError, 'error')
+    return
+  }
   const normalizedParamPatch = getChangedParams(params, taskParams)
   if (Object.keys(normalizedParamPatch).length) {
     useStore.getState().setParams(normalizedParamPatch)
@@ -2336,7 +2406,7 @@ export async function submitTask(options: { allowFullMask?: boolean; useCurrentA
   const taskId = genId()
   const task: TaskRecord = {
     id: taskId,
-    prompt: prompt.trim(),
+    prompt: trimmedPrompt,
     params: taskParams,
     apiProvider: activeProfile.provider,
     apiProfileId: activeProfile.id,
@@ -3139,6 +3209,11 @@ export async function submitAgentMessage() {
   const trimmedPrompt = prompt.trim()
   if (!trimmedPrompt) {
     showToast('请输入消息', 'error')
+    return
+  }
+  const promptLengthError = validateOpenAIImagePromptLength(trimmedPrompt, activeProfile)
+  if (promptLengthError) {
+    showToast(promptLengthError, 'error')
     return
   }
 
@@ -3946,12 +4021,20 @@ async function executeAgentRound(
       return
     }
 
-    let message = err instanceof Error ? err.message : String(err)
+    const rawMessage = err instanceof Error ? err.message : String(err)
     const usesApiProxy = activeProfile.apiProxy ?? requestSettings.apiProxy
     const networkErrorHint = getApiRequestNetworkErrorHint(err, startedAt, usesApiProxy, activeProfile)
-    if (networkErrorHint && !message.includes(IMAGE_FETCH_CORS_HINT)) {
-      message += `\n${networkErrorHint}`
+    if (networkErrorHint) {
+      console.warn('Agent request failed with internal diagnostics hidden from the customer UI.', {
+        error: err,
+        hint: networkErrorHint,
+        profile: activeProfile.name,
+      })
     }
+    const message = getCustomerSafeErrorMessage(
+      networkErrorHint ? `${rawMessage}\n${networkErrorHint}` : rawMessage,
+      '请求失败，请稍后重试',
+    )
 
     updateAgentConversation(conversationId, (current) => {
       const failedRound = current.rounds.find((round) => round.id === roundId)
@@ -4178,7 +4261,7 @@ async function executeTask(taskId: string) {
       })
       scheduleCustomRecovery(taskId)
     } else {
-      let errorMessage = err instanceof Error ? err.message : String(err)
+      const rawErrorMessage = err instanceof Error ? err.message : String(err)
       const settings = useStore.getState().settings
       const profile = getTaskApiProfile(settings, latestTask)
       const usesApiProxy = profile?.apiProxy ?? settings.apiProxy
@@ -4189,10 +4272,20 @@ async function executeTask(taskId: string) {
         streamImages: activeProfile.streamImages,
         streamPartialImages: activeProfile.streamPartialImages,
       }
-      const networkErrorHint = getApiRequestNetworkErrorHint(err, latestTask.createdAt, usesApiProxy, hintProfile)
-      if (networkErrorHint && !errorMessage.includes(IMAGE_FETCH_CORS_HINT)) {
-        errorMessage += `\n${networkErrorHint}`
+      const networkErrorHint = getApiRequestNetworkErrorHint(err, latestTask.createdAt, usesApiProxy, hintProfile, {
+        hasInputImages: latestTask.inputImageIds.length > 0,
+      })
+      if (networkErrorHint) {
+        console.warn('Image generation failed with internal diagnostics hidden from the customer UI.', {
+          error: err,
+          hint: networkErrorHint,
+          taskId,
+          profile: profile?.name,
+        })
       }
+      const errorMessage = getCustomerSafeErrorMessage(
+        networkErrorHint ? `${rawErrorMessage}\n${networkErrorHint}` : rawErrorMessage,
+      )
       updateTaskInStore(taskId, {
         status: 'error',
         error: errorMessage,

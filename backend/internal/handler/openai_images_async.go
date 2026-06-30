@@ -13,11 +13,13 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/tidwall/gjson"
+	"go.uber.org/zap"
 )
 
 const (
@@ -129,6 +131,7 @@ func (h *OpenAIGatewayHandler) executeOpenAIImageAsyncTask(ctx context.Context, 
 	}
 	bodyBytes := rec.Body.Bytes()
 	if statusCode < http.StatusOK || statusCode >= http.StatusMultipleChoices {
+		h.logOpenAIImageAsyncUpstreamFailure(c, taskID, statusCode)
 		_ = h.imageAsyncTaskStore.MarkFailed(ctx, taskID, openAIImageAsyncErrorMessage(bodyBytes, statusCode))
 		return
 	}
@@ -251,11 +254,37 @@ func openAIImageTaskLocation(current *url.URL, taskID string) string {
 	return strings.TrimRight(prefix, "/") + "/images/tasks/" + taskID
 }
 
+func (h *OpenAIGatewayHandler) logOpenAIImageAsyncUpstreamFailure(c *gin.Context, taskID string, statusCode int) {
+	upstreamMessage := openAIImageAsyncUpstreamErrorMessage(c)
+	upstreamStatus := openAIImageAsyncUpstreamStatusCode(c)
+	if upstreamMessage == "" && upstreamStatus <= 0 {
+		return
+	}
+	logger.L().Warn("openai.images.async_task_failed_with_upstream_context",
+		zap.String("task_id", taskID),
+		zap.Int("client_status_code", statusCode),
+		zap.Int("upstream_status_code", upstreamStatus),
+		zap.String("upstream_message", upstreamMessage),
+	)
+}
+
 func openAIImageAsyncErrorMessage(body []byte, statusCode int) string {
+	if statusCode == http.StatusTooManyRequests {
+		return "图片生成请求过于频繁，请稍后重试"
+	}
+	if statusCode == http.StatusRequestEntityTooLarge {
+		return "图片或请求内容过大，请压缩后重试"
+	}
+	if statusCode >= http.StatusInternalServerError {
+		return "图片生成失败，请稍后重试"
+	}
 	if len(body) > 0 && gjson.ValidBytes(body) {
 		for _, path := range []string{"error.message", "message"} {
-			if message := strings.TrimSpace(gjson.GetBytes(body, path).String()); message != "" {
-				return message
+			if extracted := strings.TrimSpace(gjson.GetBytes(body, path).String()); extracted != "" {
+				if isOpenAIImageAsyncInternalErrorMessage(extracted) {
+					return "图片生成失败，请稍后重试"
+				}
+				return extracted
 			}
 		}
 	}
@@ -263,6 +292,67 @@ func openAIImageAsyncErrorMessage(body []byte, statusCode int) string {
 		return http.StatusText(statusCode)
 	}
 	return "图片任务执行失败"
+}
+
+func isOpenAIImageAsyncInternalErrorMessage(message string) bool {
+	message = strings.TrimSpace(message)
+	if message == "" {
+		return false
+	}
+	lower := strings.ToLower(message)
+	internalMarkers := []string{
+		"upstream",
+		"temporarily unavailable",
+		"bad gateway",
+		"gateway timeout",
+		"service unavailable",
+		"failed to fetch",
+		"fetch failed",
+		"networkerror",
+		"cors",
+		"proxy",
+		"nginx",
+		"cloudflare",
+		"multipart/form-data",
+		"/v1/images/",
+		"/images/",
+	}
+	for _, marker := range internalMarkers {
+		if strings.Contains(lower, marker) {
+			return true
+		}
+	}
+	return strings.Contains(message, "跨域") ||
+		strings.Contains(message, "反向代理") ||
+		strings.Contains(message, "网关") ||
+		strings.Contains(message, "上游")
+}
+
+func openAIImageAsyncUpstreamErrorMessage(c *gin.Context) string {
+	if c == nil {
+		return ""
+	}
+	if v, ok := c.Get(service.OpsUpstreamErrorMessageKey); ok {
+		if message, ok := v.(string); ok {
+			return strings.TrimSpace(message)
+		}
+	}
+	return ""
+}
+
+func openAIImageAsyncUpstreamStatusCode(c *gin.Context) int {
+	if c == nil {
+		return 0
+	}
+	if v, ok := c.Get(service.OpsUpstreamStatusCodeKey); ok {
+		switch value := v.(type) {
+		case int:
+			return value
+		case int64:
+			return int(value)
+		}
+	}
+	return 0
 }
 
 func (h *OpenAIGatewayHandler) ImageTask(c *gin.Context) {

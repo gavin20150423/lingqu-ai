@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, useRef, useCallback, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import type { AgentConversation, AgentMessage, AgentRound, ResponsesOutputItem, TaskRecord } from '../types'
-import { deleteAgentRoundFromConversation, editOutputs, getActiveAgentRounds, getAgentBranchLeafId, getAgentSiblingRounds, getCachedImage, ensureImageCached, regenerateAgentAssistantMessage, remapAgentRoundMentionsForPathChange, removeMultipleTasks, removeTask, reuseConfig, useStore } from '../store'
+import { deleteAgentRoundFromConversation, editOutputs, getActiveAgentRounds, getAgentBranchLeafId, getAgentSiblingRounds, getCachedImage, ensureImageCached, regenerateAgentAssistantMessage, remapAgentRoundMentionsForPathChange, removeMultipleTasks, removeTask, reuseConfig, useStore, getCustomerSafeErrorMessage } from '../store'
 import { getPromptMentionParts } from '../lib/promptImageMentions'
 import { copyTextToClipboard, getClipboardFailureMessage } from '../lib/clipboard'
 import { collectWebSearchCalls, getAgentRoundOutputItems, getWebSearchStatusForCalls, type AgentWebSearchStatus } from '../lib/agentWebSearch'
@@ -311,6 +311,11 @@ const MOBILE_HEADER_EDGE_GUARD = 24
 
 function getPageScrollTop() {
   return window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0
+}
+
+function getAgentVisibleErrorMessage(content: string): string {
+  const raw = content.replace(/^请求失败：/, '')
+  return getCustomerSafeErrorMessage(raw, '请稍后重试')
 }
 
 export default function AgentWorkspace() {
@@ -1060,11 +1065,10 @@ export default function AgentWorkspace() {
                         className="-m-2 flex cursor-copy select-text flex-col rounded-xl p-2 transition-colors hover:bg-red-50/60 dark:hover:bg-red-500/5"
                         title="点击复制完整报错"
                         onPointerDown={handleErrorCopyPointerDown}
-                        onClick={(e) => handleErrorCopyClick(e, message.content)}
+                        onClick={(e) => handleErrorCopyClick(e, `请求失败：${getAgentVisibleErrorMessage(message.content)}`)}
                       >
                         {(() => {
-                          const content = message.content.replace(/^请求失败：/, '');
-                          const [mainErr, ...hints] = content.split('\n提示：');
+                          const mainErr = getAgentVisibleErrorMessage(message.content);
                           return (
                             <>
                               <div className="flex items-start gap-2 text-red-500 dark:text-red-400">
@@ -1075,11 +1079,6 @@ export default function AgentWorkspace() {
                                   {mainErr}
                                 </div>
                               </div>
-                              {hints.length > 0 && (
-                                <div className="pl-[26px] mt-1.5 whitespace-pre-wrap text-[13px] leading-relaxed text-gray-500 dark:text-gray-400 break-words opacity-90">
-                                  <span className="font-medium">提示：</span>{hints.join('\n提示：')}
-                                </div>
-                              )}
                             </>
                           );
                         })()}

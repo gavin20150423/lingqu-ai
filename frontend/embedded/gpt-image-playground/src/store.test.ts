@@ -4,6 +4,7 @@ import { DEFAULT_PARAMS } from './types'
 import { createDefaultFalProfile, createDefaultOpenAIProfile, DEFAULT_RESPONSES_MODEL, DEFAULT_SETTINGS, normalizeSettings } from './lib/apiProfiles'
 import type { AgentConversation, ExportData, StoredImage, StoredImageThumbnail, TaskRecord } from './types'
 import { getSelectedImageMentionLabel } from './lib/promptImageMentions'
+import { LINGQU_ASYNC_PROVIDER_ID } from './lib/lingquBridge'
 vi.mock('./lib/db', () => {
   const tasks = new Map<string, TaskRecord>()
   const images = new Map<string, StoredImage>()
@@ -135,10 +136,11 @@ vi.mock('./lib/agentApi', () => ({
 }))
 import { clearAgentConversations, clearImages, clearTasks, getAllAgentConversations, getAllTasks, getImage, putAgentConversation, putImage, putTask as putDbTask } from './lib/db'
 import { callAgentResponsesApi, callBatchImageSingle } from './lib/agentApi'
+import { callImageApi } from './lib/api'
 import { getFalQueuedImageResult } from './lib/falAiImageApi'
 import { getOpenAICompatibleQueuedImageResult } from './lib/openaiCompatibleImageApi'
 import { removeKeyedBackgroundFromDataUrl } from './lib/transparentImage'
-import { cleanStaleAgentInputDrafts, clearFailedTasks, deleteAgentRoundFromConversation, deleteFavoriteCollection, editOutputs, getActiveAgentRounds, getErrorToastMessage, getPersistedState, getTaskApiProfile, importData, initStore, markInterruptedOpenAIRunningTasks, migratePersistedState, regenerateAgentAssistantMessage, remapAgentRoundMentionsForPathChange, removeTask, reuseConfig, submitAgentMessage, submitTask, useStore } from './store'
+import { cleanStaleAgentInputDrafts, clearFailedTasks, deleteAgentRoundFromConversation, deleteFavoriteCollection, editOutputs, getActiveAgentRounds, getCustomerSafeErrorMessage, getErrorToastMessage, getPersistedState, getTaskApiProfile, importData, initStore, markInterruptedOpenAIRunningTasks, migratePersistedState, regenerateAgentAssistantMessage, remapAgentRoundMentionsForPathChange, removeTask, reuseConfig, submitAgentMessage, submitTask, useStore } from './store'
 
 const imageA = { id: 'image-a', dataUrl: 'data:image/png;base64,a' }
 const imageB = { id: 'image-b', dataUrl: 'data:image/png;base64,b' }
@@ -150,6 +152,12 @@ describe('error toast messages', () => {
 
   it('uses a generic message for long raw errors without a title', () => {
     expect(getErrorToastMessage(`invalid request ${'x'.repeat(90)}`)).toBe('操作失败，请查看详情')
+  })
+
+  it('hides internal upstream diagnostics from customer-visible errors', () => {
+    expect(getCustomerSafeErrorMessage('Upstream service temporarily unavailable')).toBe('生成失败，请稍后重试')
+    expect(getCustomerSafeErrorMessage('HTTP 503: /v1/images/edits failed with multipart/form-data')).toBe('生成失败，请稍后重试')
+    expect(getCustomerSafeErrorMessage('输入图片已不存在')).toBe('输入图片已不存在')
   })
 })
 
@@ -300,6 +308,108 @@ describe('mask draft lifecycle in store actions', () => {
     const state = useStore.getState()
     expect(state.tasks).toHaveLength(1)
     expect(state.showToast).toHaveBeenCalledWith('任务已提交', 'success')
+  })
+
+  it('hides image edit diagnostics when a reference image request fails before receiving a response', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.mocked(callImageApi).mockRejectedValueOnce(new TypeError('Failed to fetch'))
+    await putImage({ ...imageA, source: 'upload', createdAt: 1 })
+    useStore.setState({ inputImages: [imageA] })
+
+    await submitTask()
+    for (let i = 0; i < 5; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    }
+
+    const [task] = useStore.getState().tasks
+    expect(task).toMatchObject({
+      status: 'error',
+      error: '生成失败，请稍后重试',
+    })
+    expect(task.error).not.toContain('/v1/images/edits')
+    expect(task.error).not.toContain('multipart/form-data')
+    expect(task.error).not.toContain('API URL')
+    expect(task.error).not.toContain('跨域')
+    expect(task.error).not.toContain('Docker')
+    expect(task.error).not.toContain('API 代理')
+    expect(warnSpy).toHaveBeenCalledWith(
+      'Image generation failed with internal diagnostics hidden from the customer UI.',
+      expect.objectContaining({
+        error: expect.any(TypeError),
+        hint: expect.stringContaining('/v1/images/edits?async=true'),
+      }),
+    )
+    warnSpy.mockRestore()
+  })
+
+  it('hides upstream unavailable errors in customer-visible task details', async () => {
+    vi.mocked(callImageApi).mockRejectedValueOnce(new Error('Upstream service temporarily unavailable'))
+
+    await submitTask()
+    for (let i = 0; i < 5; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    }
+
+    const [task] = useStore.getState().tasks
+    expect(task).toMatchObject({
+      status: 'error',
+      error: '生成失败，请稍后重试',
+    })
+  })
+
+  it('does not expose internal raw response payloads on failed tasks', async () => {
+    const err = new Error('接口请求失败') as Error & { rawResponsePayload?: string }
+    err.rawResponsePayload = JSON.stringify({ error: { message: 'Upstream service temporarily unavailable' } }, null, 2)
+    vi.mocked(callImageApi).mockRejectedValueOnce(err)
+
+    await submitTask()
+    for (let i = 0; i < 5; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    }
+
+    const [task] = useStore.getState().tasks
+    expect(task).toMatchObject({
+      status: 'error',
+      error: '接口请求失败',
+    })
+    expect(task.rawResponsePayload).toBeUndefined()
+  })
+
+  it('rejects overly long OpenAI image prompts before submitting', async () => {
+    vi.mocked(callImageApi).mockClear()
+    useStore.setState({ prompt: 'x'.repeat(32_001) })
+
+    await submitTask()
+
+    const state = useStore.getState()
+    expect(state.tasks).toHaveLength(0)
+    expect(state.showToast).toHaveBeenCalledWith(expect.stringContaining('提示词过长'), 'error')
+    expect(callImageApi).not.toHaveBeenCalled()
+  })
+
+  it('rejects overly long Lingqu bridge image prompts before submitting', async () => {
+    vi.mocked(callImageApi).mockClear()
+    const profile = createDefaultOpenAIProfile({
+      id: 'lingqu-profile',
+      provider: LINGQU_ASYNC_PROVIDER_ID,
+      model: 'gpt-image-2',
+      apiKey: 'lingqu-key',
+    })
+    useStore.setState({
+      settings: normalizeSettings({
+        ...DEFAULT_SETTINGS,
+        profiles: [profile],
+        activeProfileId: profile.id,
+      }),
+      prompt: 'x'.repeat(32_001),
+    })
+
+    await submitTask()
+
+    const state = useStore.getState()
+    expect(state.tasks).toHaveLength(0)
+    expect(state.showToast).toHaveBeenCalledWith(expect.stringContaining('提示词过长'), 'error')
+    expect(callImageApi).not.toHaveBeenCalled()
   })
 
   it('stores transparent background output after local post-processing', async () => {
@@ -1860,6 +1970,30 @@ describe('agent batch reference resolution', () => {
       agentEditingRoundId: null,
       showToast: vi.fn(),
     })
+  })
+
+  it('rejects overly long OpenAI image prompts before starting an agent round', async () => {
+    const imageResponsesProfile = createDefaultOpenAIProfile({
+      id: 'image-responses-profile',
+      apiKey: 'test-key',
+      apiMode: 'responses',
+      model: 'gpt-image-2',
+    })
+    useStore.setState({
+      settings: normalizeSettings({
+        ...DEFAULT_SETTINGS,
+        profiles: [imageResponsesProfile],
+        activeProfileId: imageResponsesProfile.id,
+      }),
+      prompt: 'x'.repeat(32_001),
+    })
+
+    await submitAgentMessage()
+
+    const state = useStore.getState()
+    expect(state.showToast).toHaveBeenCalledWith(expect.stringContaining('提示词过长'), 'error')
+    expect(callAgentResponsesApi).not.toHaveBeenCalled()
+    expect(state.agentConversations[0].rounds).toHaveLength(3)
   })
 
   it('resolves batch references from the active branch path only', async () => {

@@ -47,24 +47,34 @@ onUnmounted(() => {
 /* 桌面端：Flexbox 布局 */
 .table-page-layout {
   @apply flex flex-col gap-6;
+  width: 100%;
+  min-width: 0;
   height: calc(100vh - 64px - 4rem); /* 减去 header + lg:p-8 的上下padding */
 }
 
 .layout-section-fixed {
   @apply flex-shrink-0;
+  min-width: 0;
 }
 
 .layout-section-scrollable {
   @apply flex-1 min-h-0 flex flex-col;
+  min-width: 0;
 }
 
 /* 表格滚动容器 - 增强版表体滚动方案 */
 .table-scroll-container {
   @apply flex flex-col overflow-hidden h-full bg-white dark:bg-dark-800 rounded-2xl border border-gray-200 dark:border-dark-700 shadow-sm;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .table-scroll-container :deep(.table-wrapper) {
   @apply flex-1 overflow-x-auto overflow-y-auto;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   /* 确保横向滚动条显示在最底部 */
   scrollbar-gutter: stable;
 }
@@ -93,20 +103,21 @@ onUnmounted(() => {
 
 /* 移动端：恢复正常滚动 */
 .table-page-layout.mobile-mode .table-scroll-container {
-  @apply h-auto overflow-visible border-none shadow-none bg-transparent;
+  @apply h-auto overflow-hidden border-none shadow-none bg-transparent;
 }
 
 .table-page-layout.mobile-mode .layout-section-scrollable {
   @apply flex-none min-h-fit;
+  min-width: 0;
 }
 
 .table-page-layout.mobile-mode .table-scroll-container :deep(.table-wrapper) {
-  @apply overflow-visible;
+  @apply overflow-x-auto overflow-y-visible;
 }
 
 .table-page-layout.mobile-mode .table-scroll-container :deep(table) {
   @apply flex-none;
   display: table;
-  min-width: 100%;
+  min-width: max-content;
 }
 </style>

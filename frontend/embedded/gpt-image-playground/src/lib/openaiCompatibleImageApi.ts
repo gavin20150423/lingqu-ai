@@ -39,12 +39,12 @@ function createOpenAICompatiblePaths(customProvider?: CustomProviderDefinition |
 }
 
 function appendImageEditGatewayHint(message: string, status: number, isEdit: boolean): string {
-  if (!isEdit || (status !== 502 && status !== 504 && status !== 524)) return message
+  if (!isEdit || (status !== 502 && status !== 503 && status !== 504 && status !== 524)) return message
   return `${message}\n提示：当前任务带参考图，会走 /v1/images/edits 图像编辑接口。已尝试 multipart 与 JSON 图生图格式；如果仍然很快返回 ${status}，通常需要检查中转站的图片生成分组、gpt-image-2 通道和上游账号能力。`
 }
 
 function appendResponsesImageGatewayHint(message: string, status: number): string {
-  if (status !== 502 && status !== 504 && status !== 524) return message
+  if (status !== 502 && status !== 503 && status !== 504 && status !== 524) return message
   return `${message}\n提示：当前系统走 /v1/responses + image_generation 工具。Sub2API 返回 ${status} 时，通常需要检查分组是否启用图片生成、通道是否放行 gpt-image-2，以及上游账号是否具备图片生成能力。`
 }
 

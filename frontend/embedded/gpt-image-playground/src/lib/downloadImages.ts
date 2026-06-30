@@ -34,8 +34,9 @@ export async function downloadImageIds(imageIds: string[], fileNameBase = 'image
   const multiple = imageIds.length > 1
 
   for (let index = 0; index < imageIds.length; index++) {
+    const imageId = imageIds[index]
     try {
-      const blob = await getImageBlob(imageIds[index])
+      const blob = await getImageBlob(imageId)
       const order = String(index + 1).padStart(2, '0')
       const fileName = multiple
         ? `${fileNameBase}-${order}.${getBlobExtension(blob)}`
@@ -45,7 +46,12 @@ export async function downloadImageIds(imageIds: string[], fileNameBase = 'image
       if (multiple) await delay(100)
     } catch (err) {
       console.error(err)
-      failCount++
+      if (!multiple && isHttpUrl(imageId)) {
+        triggerDirectUrlDownload(imageId, `${fileNameBase}.${getUrlExtension(imageId)}`)
+        successCount++
+      } else {
+        failCount++
+      }
     }
   }
 
@@ -111,9 +117,33 @@ async function getImageBlob(imageIdOrUrl: string): Promise<Blob> {
     src = await ensureImageCached(imageIdOrUrl) ?? imageIdOrUrl
   }
 
+  if (src.startsWith('data:')) {
+    return dataUrlToBlob(src)
+  }
+
   const res = await fetch(src)
   if (!res.ok && !src.startsWith('data:')) throw new Error(`读取图片失败：${imageIdOrUrl}`)
   return await res.blob()
+}
+
+function dataUrlToBlob(dataUrl: string): Blob {
+  const match = dataUrl.match(/^data:([^;,]+)?(;base64)?,(.*)$/)
+  if (!match) throw new Error('图片数据格式不正确')
+
+  const mime = match[1] || 'image/png'
+  const isBase64 = Boolean(match[2])
+  const payload = match[3] || ''
+
+  if (!isBase64) {
+    return new Blob([decodeURIComponent(payload)], { type: mime })
+  }
+
+  const binary = atob(payload)
+  const bytes = new Uint8Array(binary.length)
+  for (let index = 0; index < binary.length; index++) {
+    bytes[index] = binary.charCodeAt(index)
+  }
+  return new Blob([bytes], { type: mime })
 }
 
 function triggerDownload(blob: Blob, fileName: string) {
@@ -127,8 +157,33 @@ function triggerDownload(blob: Blob, fileName: string) {
   window.setTimeout(() => URL.revokeObjectURL(url), 0)
 }
 
+function triggerDirectUrlDownload(url: string, fileName: string) {
+  const a = document.createElement('a')
+  a.href = url
+  a.download = fileName
+  a.target = '_blank'
+  a.rel = 'noopener noreferrer'
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+}
+
 function getBlobExtension(blob: Blob): string {
   return MIME_EXTENSIONS[blob.type.toLowerCase()] ?? blob.type.split('/')[1] ?? 'png'
+}
+
+function getUrlExtension(url: string): string {
+  try {
+    const pathname = new URL(url).pathname
+    const extension = pathname.split('.').pop()?.toLowerCase() || ''
+    return extension && /^[a-z0-9]{1,8}$/.test(extension) ? extension : 'png'
+  } catch {
+    return 'png'
+  }
+}
+
+function isHttpUrl(value: string): boolean {
+  return value.startsWith('http://') || value.startsWith('https://')
 }
 
 function sanitizeFileNamePart(value: string): string {
@@ -138,4 +193,3 @@ function sanitizeFileNamePart(value: string): string {
 function delay(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms))
 }
-

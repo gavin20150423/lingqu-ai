@@ -1128,28 +1128,38 @@ onMounted(() => {
 .lingqu-console-page {
   display: grid;
   gap: 0.9rem;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .lingqu-console-page :deep(.table-page-layout) {
   gap: 0.82rem;
   height: auto;
   min-height: 0;
-  overflow: visible;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .lingqu-console-page :deep(.layout-section-fixed) {
   position: relative;
   z-index: 18;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .lingqu-console-page :deep(.layout-section-scrollable) {
   min-height: 28rem;
+  min-width: 0;
+  max-width: 100%;
   position: relative;
   z-index: 1;
 }
 
 .lingqu-console-page :deep(.table-scroll-container) {
   min-height: 28rem;
+  min-width: 0;
+  max-width: 100%;
   border-radius: 18px;
   border-color: rgba(33, 31, 28, 0.12);
   box-shadow: 0 14px 32px rgba(33, 31, 28, 0.06);
@@ -1157,6 +1167,8 @@ onMounted(() => {
 
 .lingqu-console-hero {
   display: flex;
+  min-width: 0;
+  max-width: 100%;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
@@ -1207,6 +1219,7 @@ onMounted(() => {
 .lingqu-console-actions {
   display: flex;
   flex: 0 0 auto;
+  min-width: 0;
   align-items: center;
   gap: 0.55rem;
 }
@@ -1244,9 +1257,12 @@ onMounted(() => {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.7rem;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .lingqu-console-stat {
+  min-width: 0;
   min-height: 4.6rem;
   border: 1px solid rgba(33, 31, 28, 0.12);
   border-radius: 16px;
@@ -1269,6 +1285,7 @@ onMounted(() => {
 
 .lingqu-console-filter-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: end;
   gap: 0.72rem;
   max-width: 100%;

@@ -412,10 +412,6 @@ describe('callImageApi', () => {
 
   it('retries image edits as JSON when multipart returns a gateway error', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch')
-      .mockResolvedValueOnce(new Response('img', {
-        status: 200,
-        headers: { 'Content-Type': 'image/png' },
-      }))
       .mockResolvedValueOnce(new Response(JSON.stringify({
         error: { message: 'bad gateway' },
       }), {
@@ -454,10 +450,6 @@ describe('callImageApi', () => {
 
   it('falls back to Responses image_generation when image edits keep returning gateway errors', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch')
-      .mockResolvedValueOnce(new Response('img', {
-        status: 200,
-        headers: { 'Content-Type': 'image/png' },
-      }))
       .mockResolvedValueOnce(new Response(JSON.stringify({
         error: { message: 'multipart bad gateway' },
       }), {

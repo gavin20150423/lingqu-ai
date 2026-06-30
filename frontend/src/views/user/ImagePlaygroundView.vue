@@ -86,6 +86,7 @@ import type { ApiKey } from '@/types'
 
 const LINGQU_BRIDGE_STORAGE_KEY = 'lingqu:image-playground:bridge'
 const LINGQU_SELECTED_KEY_STORAGE_KEY = 'lingqu:image-playground:selected-key-id'
+const IMAGE_PLAYGROUND_ENTRY_PATH = import.meta.env.DEV ? '/image-playground/index.html' : '/image-playground/'
 
 const route = useRoute()
 const appStore = useAppStore()
@@ -186,7 +187,7 @@ async function launchWorkspace(openInNewWindow = false, silent = false) {
     window.sessionStorage.setItem(LINGQU_BRIDGE_STORAGE_KEY, payload)
     window.localStorage.setItem(LINGQU_BRIDGE_STORAGE_KEY, payload)
     await resetImagePlaygroundRuntime()
-    const url = `/image-playground/?lingqu=${Date.now()}`
+    const url = `${IMAGE_PLAYGROUND_ENTRY_PATH}?lingqu=${Date.now()}`
     if (openInNewWindow) {
       window.open(url, '_blank', 'noopener,noreferrer')
     } else {

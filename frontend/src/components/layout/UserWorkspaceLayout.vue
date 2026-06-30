@@ -793,6 +793,8 @@ onBeforeUnmount(() => {
 .user-workspace__main {
   z-index: 1;
   width: min(86rem, calc(100vw - 2rem));
+  max-width: calc(100vw - 2rem);
+  min-width: 0;
   margin: 0 auto;
   padding: 1.15rem 0 4rem;
 }
@@ -927,6 +929,8 @@ onBeforeUnmount(() => {
 
 .user-workspace__main :deep(.lingqu-console-page) {
   display: grid;
+  min-width: 0;
+  max-width: 100%;
   gap: 1rem;
 }
 
