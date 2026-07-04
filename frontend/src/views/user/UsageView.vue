@@ -124,7 +124,7 @@
         <div class="lingqu-console-filter-card">
           <div class="lingqu-console-filter-row">
             <!-- API Key Filter -->
-            <div class="lingqu-console-filter-field">
+            <div v-if="activeTab !== 'errors'" class="lingqu-console-filter-field">
               <label class="input-label">{{ t('usage.apiKeyFilter') }}</label>
               <Select
                 v-model="filters.api_key_id"
@@ -133,6 +133,33 @@
                 @change="applyFilters"
               />
             </div>
+
+            <template v-else>
+              <div class="lingqu-console-filter-field">
+                <label class="input-label">{{ t('usage.errors.keyName') }}</label>
+                <Select v-model="errorFilter.api_key_id" :options="errorKeyOptions" @change="applyErrorFilters" />
+              </div>
+              <div class="lingqu-console-filter-field">
+                <label class="input-label">{{ t('usage.errors.model') }}</label>
+                <Select
+                  v-model="errorFilter.model"
+                  :options="errorModelOptions"
+                  searchable
+                  creatable
+                  clearable
+                  :placeholder="t('usage.errors.modelPlaceholder')"
+                  @change="applyErrorFilters"
+                />
+              </div>
+              <div class="lingqu-console-filter-field">
+                <label class="input-label">{{ t('usage.errors.category') }}</label>
+                <Select v-model="errorFilter.category" :options="errorCategoryOptions" @change="applyErrorFilters" />
+              </div>
+              <div class="lingqu-console-filter-field">
+                <label class="input-label">{{ t('usage.errors.status') }}</label>
+                <Select v-model="errorFilter.status_code" :options="errorStatusOptions" @change="applyErrorFilters" />
+              </div>
+            </template>
 
             <!-- Date Range Filter -->
             <div class="lingqu-console-filter-field lingqu-console-filter-field--date">
@@ -370,10 +397,11 @@
             :loading="errorLoading"
             :page="errorPage"
             :page-size="errorPageSize"
-            :api-keys="apiKeys"
-            @filter="onErrorFilter"
+            :visible-column-keys="errVisibleColumnKeys"
+            @sort="onErrorSort"
             @update:page="onErrorPage"
             @update:pageSize="onErrorPageSize"
+            @ipGeoBatchFailed="handleIpGeoBatchFailed"
           />
         </div>
         </template>
@@ -609,7 +637,7 @@ import TablePageLayout from '@/components/layout/TablePageLayout.vue'
 import DataTable from '@/components/common/DataTable.vue'
 import Pagination from '@/components/common/Pagination.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
-import Select from '@/components/common/Select.vue'
+import Select, { type SelectOption } from '@/components/common/Select.vue'
 import DateRangePicker from '@/components/common/DateRangePicker.vue'
 import Icon from '@/components/icons/Icon.vue'
 import UserErrorRequestsTable from '@/components/user/UserErrorRequestsTable.vue'
@@ -639,6 +667,7 @@ import {
   textOutputTokens,
   hasImageOutputCost,
 } from '@/utils/imageUsage'
+import { COMMON_ERROR_STATUS_CODES } from '@/utils/errorBadges'
 
 const { t } = useI18n()
 const appStore = useAppStore()
@@ -1079,8 +1108,85 @@ const errorRows = ref<UserErrorRequest[]>([])
 const errorLoading = ref(false)
 const errorPage = ref(1)
 const errorPageSize = ref(20)
+const errorSortBy = ref('created_at')
+const errorSortOrder = ref<'asc' | 'desc'>('desc')
 const errorTotal = ref(0)
-const errorFilter = ref<{ model: string; category: string; api_key_id: number | null }>({ model: '', category: '', api_key_id: null })
+const errorFilter = ref<{ model: string | null; category: string; api_key_id: number | null; status_code: number | null }>({
+  model: '',
+  category: '',
+  api_key_id: null,
+  status_code: null,
+})
+
+const errorKeyOptions = computed<SelectOption[]>(() => [
+  { value: null, label: t('usage.errors.allKeys') },
+  ...apiKeys.value.map((k) => ({ value: k.id, label: k.name })),
+])
+
+const errorModelOptions = computed<SelectOption[]>(() => {
+  const seen = new Set<string>()
+  const opts: SelectOption[] = []
+  for (const row of errorRows.value) {
+    if (row.model && !seen.has(row.model)) {
+      seen.add(row.model)
+      opts.push({ value: row.model, label: row.model })
+    }
+  }
+  return opts
+})
+
+const errorCategoryCodes = ['auth', 'rate_limit', 'quota', 'invalid_request', 'service_unavailable', 'upstream', 'internal', 'cyber']
+
+const errorCategoryOptions = computed<SelectOption[]>(() => [
+  { value: '', label: t('usage.errors.allCategories') },
+  ...errorCategoryCodes.map((category) => ({ value: category, label: t('usage.errors.categories.' + category) })),
+])
+
+const errorStatusOptions = computed<SelectOption[]>(() => [
+  { value: null, label: t('usage.errors.allStatuses') },
+  ...COMMON_ERROR_STATUS_CODES.map((status) => ({ value: status, label: String(status) })),
+])
+
+const ERR_ALWAYS_VISIBLE = ['status', 'created_at']
+const ERR_DEFAULT_HIDDEN_COLUMNS = ['user_agent']
+const ERR_HIDDEN_COLUMNS_KEY = 'user-usage-error-hidden-columns'
+
+const errAllColumns = computed<Column[]>(() => [
+  { key: 'key_name', label: t('usage.errors.keyName') },
+  { key: 'model', label: t('usage.errors.model') },
+  { key: 'endpoint', label: t('usage.errors.endpoint') },
+  { key: 'client_ip', label: 'IP' },
+  { key: 'group', label: t('admin.usage.group') },
+  { key: 'type', label: t('usage.type') },
+  { key: 'platform', label: t('usage.errors.platform') },
+  { key: 'category', label: t('usage.errors.category') },
+  { key: 'status', label: t('usage.errors.status') },
+  { key: 'message', label: t('usage.errors.message') },
+  { key: 'created_at', label: t('usage.errors.time') },
+  { key: 'user_agent', label: t('usage.userAgent') },
+])
+
+const errHiddenColumns = reactive<Set<string>>(new Set())
+const errVisibleColumnKeys = computed(() =>
+  errAllColumns.value
+    .filter((col) => ERR_ALWAYS_VISIBLE.includes(col.key) || !errHiddenColumns.has(col.key))
+    .map((col) => col.key)
+)
+
+const loadSavedErrColumns = () => {
+  try {
+    const saved = localStorage.getItem(ERR_HIDDEN_COLUMNS_KEY)
+    const values = saved ? (JSON.parse(saved) as string[]) : ERR_DEFAULT_HIDDEN_COLUMNS
+    values.forEach((key) => errHiddenColumns.add(key))
+  } catch {
+    ERR_DEFAULT_HIDDEN_COLUMNS.forEach((key) => errHiddenColumns.add(key))
+  }
+}
+
+const applyErrorFilters = () => {
+  errorPage.value = 1
+  void loadErrors()
+}
 
 const loadErrors = async () => {
   errorLoading.value = true
@@ -1093,6 +1199,9 @@ const loadErrors = async () => {
       model: errorFilter.value.model || undefined,
       category: errorFilter.value.category || undefined,
       api_key_id: errorFilter.value.api_key_id ?? undefined,
+      status_code: errorFilter.value.status_code ?? undefined,
+      sort_by: errorSortBy.value,
+      sort_order: errorSortOrder.value,
     })
     errorRows.value = resp.items
     errorTotal.value = resp.total
@@ -1104,13 +1213,17 @@ const loadErrors = async () => {
   }
 }
 
-const onErrorFilter = (f: { model: string; category: string; api_key_id: number | null }) => {
-  errorFilter.value = f
+const onErrorSort = (sortBy: string, sortOrder: 'asc' | 'desc') => {
+  errorSortBy.value = sortBy
+  errorSortOrder.value = sortOrder
   errorPage.value = 1
   loadErrors()
 }
 const onErrorPage = (p: number) => { errorPage.value = p; loadErrors() }
 const onErrorPageSize = (s: number) => { errorPageSize.value = s; errorPage.value = 1; loadErrors() }
+const handleIpGeoBatchFailed = () => {
+  appStore.showError(t('usage.ipGeo.batchFailed'))
+}
 
 const switchToErrors = () => {
   activeTab.value = 'errors'
@@ -1118,6 +1231,7 @@ const switchToErrors = () => {
 }
 
 onMounted(() => {
+  loadSavedErrColumns()
   loadApiKeys()
   loadUsageLogs()
   loadUsageStats()
