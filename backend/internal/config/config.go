@@ -688,6 +688,14 @@ type ImageConcurrencyConfig struct {
 	MaxWaitingRequests int `mapstructure:"max_waiting_requests"`
 }
 
+type SubPilotConfig struct {
+	Enabled     bool   `mapstructure:"enabled"`
+	BaseURL     string `mapstructure:"base_url"`
+	TimeoutMS   int    `mapstructure:"timeout_ms"`
+	FailOpen    bool   `mapstructure:"fail_open"`
+	ProbeSecret string `mapstructure:"probe_secret"`
+}
+
 const (
 	ImageConcurrencyOverflowModeReject = "reject"
 	ImageConcurrencyOverflowModeWait   = "wait"
@@ -737,6 +745,8 @@ type GatewayConfig struct {
 	OpenAIHTTP2 GatewayOpenAIHTTP2Config `mapstructure:"openai_http2"`
 	// ImageConcurrency: 图片生成独立并发限制配置（默认关闭）
 	ImageConcurrency ImageConcurrencyConfig `mapstructure:"image_concurrency"`
+	// SubPilot: 外置智能分流 sidecar 接入配置（默认关闭，fail-open）。
+	SubPilot SubPilotConfig `mapstructure:"subpilot"`
 
 	// HTTP 上游连接池配置（性能优化：支持高并发场景调优）
 	// MaxIdleConns: 所有主机的最大空闲连接总数
@@ -1912,6 +1922,11 @@ func setDefaults() {
 	viper.SetDefault("gateway.image_concurrency.overflow_mode", ImageConcurrencyOverflowModeReject)
 	viper.SetDefault("gateway.image_concurrency.wait_timeout_seconds", 30)
 	viper.SetDefault("gateway.image_concurrency.max_waiting_requests", 100)
+	viper.SetDefault("gateway.subpilot.enabled", false)
+	viper.SetDefault("gateway.subpilot.base_url", "")
+	viper.SetDefault("gateway.subpilot.timeout_ms", 80)
+	viper.SetDefault("gateway.subpilot.fail_open", true)
+	viper.SetDefault("gateway.subpilot.probe_secret", "")
 	viper.SetDefault("gateway.antigravity_fallback_cooldown_minutes", 1)
 	viper.SetDefault("gateway.antigravity_extra_retries", 10)
 	viper.SetDefault("gateway.max_body_size", int64(256*1024*1024))
@@ -2516,6 +2531,12 @@ func (c *Config) Validate() error {
 	}
 	if c.Gateway.ImageConcurrency.MaxWaitingRequests < 0 {
 		return fmt.Errorf("gateway.image_concurrency.max_waiting_requests must be non-negative")
+	}
+	if c.Gateway.SubPilot.TimeoutMS < 0 {
+		return fmt.Errorf("gateway.subpilot.timeout_ms must be non-negative")
+	}
+	if c.Gateway.SubPilot.Enabled && strings.TrimSpace(c.Gateway.SubPilot.BaseURL) == "" {
+		return fmt.Errorf("gateway.subpilot.base_url is required when gateway.subpilot.enabled=true")
 	}
 	if c.Gateway.MaxIdleConns <= 0 {
 		return fmt.Errorf("gateway.max_idle_conns must be positive")

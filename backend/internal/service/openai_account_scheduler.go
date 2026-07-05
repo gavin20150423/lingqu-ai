@@ -1372,6 +1372,31 @@ func (s *OpenAIGatewayService) selectAccountWithScheduler(
 		return nil, decision, fmt.Errorf("%w supporting model: %s (channel pricing restriction)", ErrNoAvailableAccounts, requestedModel)
 	}
 
+	effectiveExcludedIDs := cloneExcludedAccountIDs(excludedIDs)
+	if accounts, listErr := s.listSchedulableAccounts(ctx, groupID, platform); listErr == nil && len(accounts) > 0 {
+		if selection, err := s.trySubPilotRecommend(ctx, groupID, platform, sessionHash, requestedModel, effectiveExcludedIDs, requireCompact, requiredCapability, accounts); err != nil {
+			return nil, decision, err
+		} else if selection != nil {
+			if s.isOpenAIAccountTransportCompatible(selection.Account, requiredTransport) &&
+				accountSupportsOpenAICapabilities(selection.Account, requiredCapability, requiredImageCapability) {
+				decision.Layer = "subpilot"
+				decision.SelectedAccountID = selection.Account.ID
+				decision.SelectedAccountType = selection.Account.Type
+				decision.CandidateCount = len(accounts)
+				return selection, decision, nil
+			}
+			if selection.ReleaseFunc != nil {
+				selection.ReleaseFunc()
+			}
+			if effectiveExcludedIDs == nil {
+				effectiveExcludedIDs = make(map[int64]struct{})
+			}
+			if selection.Account != nil {
+				effectiveExcludedIDs[selection.Account.ID] = struct{}{}
+			}
+		}
+	}
+
 	var stickyAccountID int64
 	if sessionHash != "" && s.cache != nil {
 		if accountID, err := s.getStickySessionAccountID(ctx, groupID, sessionHash); err == nil && accountID > 0 {
@@ -1390,7 +1415,7 @@ func (s *OpenAIGatewayService) selectAccountWithScheduler(
 		RequiredCapability:      requiredCapability,
 		RequiredImageCapability: requiredImageCapability,
 		RequireCompact:          requireCompact,
-		ExcludedIDs:             excludedIDs,
+		ExcludedIDs:             effectiveExcludedIDs,
 	})
 }
 
