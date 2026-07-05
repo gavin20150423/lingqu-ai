@@ -246,6 +246,7 @@ func (h *OpenAIGatewayHandler) handleGrokMedia(c *gin.Context, endpoint service.
 		if err != nil {
 			var failoverErr *service.UpstreamFailoverError
 			if errors.As(err, &failoverErr) {
+				h.reportSubPilotForwardFailure(c, apiKey, account, selection, requestModel, sessionHash, false, failoverErr, err)
 				h.gatewayService.ReportOpenAIAccountScheduleResult(account.ID, false, nil)
 				if c.Writer.Size() != writerSizeBeforeForward {
 					h.handleFailoverExhausted(c, failoverErr, true)
@@ -285,6 +286,7 @@ func (h *OpenAIGatewayHandler) handleGrokMedia(c *gin.Context, endpoint service.
 				)
 				continue
 			}
+			h.reportSubPilotForwardFailure(c, apiKey, account, selection, requestModel, sessionHash, false, nil, err)
 			h.gatewayService.ReportOpenAIAccountScheduleResult(account.ID, false, nil)
 			if c.Writer.Size() == writerSizeBeforeForward {
 				h.errorResponse(c, http.StatusBadGateway, "upstream_error", "Upstream request failed")
@@ -307,7 +309,7 @@ func (h *OpenAIGatewayHandler) handleGrokMedia(c *gin.Context, endpoint service.
 			}
 		}
 		if shouldRecordGrokMediaUsage(endpoint, requestModel) {
-			recordGrokMediaUsage(c, h, reqLog, apiKey, subject, subscription, account, result, requestModel, body, requestID)
+			recordGrokMediaUsage(c, h, reqLog, apiKey, subject, subscription, account, selection, result, requestModel, sessionHash, body, requestID)
 		}
 		reqLog.Debug("grok_media.request_completed",
 			zap.Int64("account_id", account.ID),
@@ -329,8 +331,10 @@ func recordGrokMediaUsage(
 	subject middleware2.AuthSubject,
 	subscription *service.UserSubscription,
 	account *service.Account,
+	selection *service.AccountSelectionResult,
 	result *service.OpenAIForwardResult,
 	requestModel string,
+	sessionHash string,
 	body []byte,
 	requestID string,
 ) {
@@ -359,6 +363,8 @@ func recordGrokMediaUsage(
 			UserAgent:          userAgent,
 			IPAddress:          clientIP,
 			RequestPayloadHash: service.HashUsageRequestPayload(payloadForHash),
+			SubPilotLeaseID:    subPilotLeaseID(selection),
+			SubPilotSessionKey: sessionHash,
 			APIKeyService:      h.apiKeyService,
 			QuotaPlatform:      quotaPlatform,
 			ChannelUsageFields: channelUsageFields,

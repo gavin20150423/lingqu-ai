@@ -18,6 +18,7 @@ type RequestMetadata struct {
 	PrefetchedStickyGroupID    *int64
 	SingleAccountRetry         *bool
 	AccountSwitchCount         *int
+	SubPilotDisabled           *bool
 }
 
 var (
@@ -114,6 +115,13 @@ func WithAccountSwitchCount(ctx context.Context, value int, bridgeOldKeys bool) 
 	}, func(base context.Context) context.Context {
 		return context.WithValue(base, ctxkey.AccountSwitchCount, value)
 	})
+}
+
+func WithSubPilotDisabled(ctx context.Context, value bool) context.Context {
+	return updateRequestMetadata(ctx, false, func(md *RequestMetadata) {
+		v := value
+		md.SubPilotDisabled = &v
+	}, nil)
 }
 
 func IsMaxTokensOneHaikuRequestFromContext(ctx context.Context) (bool, bool) {
@@ -213,4 +221,9 @@ func AccountSwitchCountFromContext(ctx context.Context) (int, bool) {
 		return int(t), true
 	}
 	return 0, false
+}
+
+func SubPilotDisabledFromContext(ctx context.Context) bool {
+	md := metadataFromContext(ctx)
+	return md != nil && md.SubPilotDisabled != nil && *md.SubPilotDisabled
 }

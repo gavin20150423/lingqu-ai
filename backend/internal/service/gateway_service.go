@@ -535,11 +535,12 @@ type AccountWaitPlan struct {
 }
 
 type AccountSelectionResult struct {
-	Account         *Account
-	Acquired        bool
-	ReleaseFunc     func()
-	WaitPlan        *AccountWaitPlan // nil means no wait allowed
-	SubPilotLeaseID string
+	Account           *Account
+	Acquired          bool
+	ReleaseFunc       func()
+	WaitPlan          *AccountWaitPlan // nil means no wait allowed
+	SubPilotLeaseID   string
+	SubPilotRequestID string
 }
 
 // ClaudeUsage 表示Claude API返回的usage信息
@@ -9005,6 +9006,7 @@ type RecordUsageInput struct {
 	IPAddress          string             // 请求的客户端 IP 地址
 	RequestPayloadHash string             // 请求体语义哈希，用于降低 request_id 误复用时的静默误去重风险
 	SubPilotLeaseID    string             // SubPilot select 返回的 lease，用于成功回报并释放 sidecar lease
+	SubPilotSessionKey string             // SubPilot select 使用的 session_key，用于成功/失败回报保持 sticky 语义一致
 	ForceCacheBilling  bool               // 强制缓存计费：将 input_tokens 转为 cache_read 计费（用于粘性会话切换）
 	APIKeyService      APIKeyQuotaUpdater // 可选：用于更新API Key配额
 	QuotaPlatform      string             // user×platform 配额计量平台：handler 在请求 ctx 内经 QuotaPlatform() 算定后传入（后扣运行在 worker 池 background ctx 上，取不到 ForcePlatform）
@@ -9523,6 +9525,7 @@ func (s *GatewayService) RecordUsage(ctx context.Context, input *RecordUsageInpu
 		IPAddress:          input.IPAddress,
 		RequestPayloadHash: input.RequestPayloadHash,
 		SubPilotLeaseID:    input.SubPilotLeaseID,
+		SubPilotSessionKey: input.SubPilotSessionKey,
 		ForceCacheBilling:  input.ForceCacheBilling,
 		APIKeyService:      input.APIKeyService,
 		QuotaPlatform:      input.QuotaPlatform,
@@ -9543,6 +9546,7 @@ type RecordUsageLongContextInput struct {
 	IPAddress             string             // 请求的客户端 IP 地址
 	RequestPayloadHash    string             // 请求体语义哈希，用于降低 request_id 误复用时的静默误去重风险
 	SubPilotLeaseID       string             // SubPilot select 返回的 lease，用于成功回报并释放 sidecar lease
+	SubPilotSessionKey    string             // SubPilot select 使用的 session_key，用于成功/失败回报保持 sticky 语义一致
 	LongContextThreshold  int                // 长上下文阈值（如 200000）
 	LongContextMultiplier float64            // 超出阈值部分的倍率（如 2.0）
 	ForceCacheBilling     bool               // 强制缓存计费：将 input_tokens 转为 cache_read 计费（用于粘性会话切换）
@@ -9566,6 +9570,7 @@ func (s *GatewayService) RecordUsageWithLongContext(ctx context.Context, input *
 		IPAddress:          input.IPAddress,
 		RequestPayloadHash: input.RequestPayloadHash,
 		SubPilotLeaseID:    input.SubPilotLeaseID,
+		SubPilotSessionKey: input.SubPilotSessionKey,
 		ForceCacheBilling:  input.ForceCacheBilling,
 		APIKeyService:      input.APIKeyService,
 		QuotaPlatform:      input.QuotaPlatform,
@@ -9589,6 +9594,7 @@ type recordUsageCoreInput struct {
 	IPAddress          string
 	RequestPayloadHash string
 	SubPilotLeaseID    string
+	SubPilotSessionKey string
 	ForceCacheBilling  bool
 	APIKeyService      APIKeyQuotaUpdater
 	QuotaPlatform      string

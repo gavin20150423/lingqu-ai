@@ -49,6 +49,7 @@ type subPilotSelectResponse struct {
 type subPilotSelectResult struct {
 	AccountID int64
 	LeaseID   string
+	RequestID string
 }
 
 type subPilotReportSuccessRequest struct {
@@ -65,6 +66,7 @@ type subPilotReportSuccessRequest struct {
 	RequestType     string  `json:"request_type,omitempty"`
 	Stream          *bool   `json:"stream,omitempty"`
 	OfficialUSDUsed float64 `json:"official_usd_used,omitempty"`
+	StickyTTLMS     int64   `json:"sticky_ttl_ms,omitempty"`
 }
 
 type subPilotReportFailureRequest struct {
@@ -121,7 +123,7 @@ func (c *subPilotClient) recommendAccount(ctx context.Context, req subPilotSelec
 	if err != nil || accountID <= 0 || strings.TrimSpace(resp.Lease.ID) == "" {
 		return nil, c.handleError("subpilot select returned invalid account", err)
 	}
-	return &subPilotSelectResult{AccountID: accountID, LeaseID: strings.TrimSpace(resp.Lease.ID)}, nil
+	return &subPilotSelectResult{AccountID: accountID, LeaseID: strings.TrimSpace(resp.Lease.ID), RequestID: req.RequestID}, nil
 }
 
 func (c *subPilotClient) reportSuccess(ctx context.Context, req subPilotReportSuccessRequest) {

@@ -449,6 +449,7 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 			} else {
 				var failoverErr *service.UpstreamFailoverError
 				if errors.As(err, &failoverErr) {
+					h.reportSubPilotForwardFailure(c, apiKey, account, selection, reqModel, sessionHash, reqStream, failoverErr, err)
 					if c.Writer.Size() != writerSizeBeforeForward {
 						h.handleFailoverExhausted(c, failoverErr, true)
 						return
@@ -493,6 +494,7 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 					)
 					continue
 				}
+				h.reportSubPilotForwardFailure(c, apiKey, account, selection, reqModel, sessionHash, reqStream, nil, err)
 				h.gatewayService.ReportOpenAIAccountScheduleResult(account.ID, false, nil)
 				upstreamErrorAlreadyCommunicated := openAIForwardErrorAlreadyCommunicated(c, writerSizeBeforeForward, err)
 				wroteFallback := false
@@ -546,6 +548,7 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 				IPAddress:          clientIP,
 				RequestPayloadHash: requestPayloadHash,
 				SubPilotLeaseID:    selection.SubPilotLeaseID,
+				SubPilotSessionKey: sessionHash,
 				APIKeyService:      h.apiKeyService,
 				QuotaPlatform:      quotaPlatform,
 				ChannelUsageFields: channelMapping.ToUsageFields(reqModel, result.UpstreamModel),
@@ -873,6 +876,7 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 			} else {
 				var failoverErr *service.UpstreamFailoverError
 				if errors.As(err, &failoverErr) {
+					h.reportSubPilotForwardFailure(c, apiKey, account, selection, reqModel, sessionHash, reqStream, failoverErr, err)
 					if c.Writer.Size() != writerSizeBeforeForward {
 						h.handleAnthropicFailoverExhausted(c, failoverErr, true)
 						return
@@ -917,6 +921,7 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 					)
 					continue
 				}
+				h.reportSubPilotForwardFailure(c, apiKey, account, selection, reqModel, sessionHash, reqStream, nil, err)
 				if result != nil && result.ClientDisconnect {
 					reqLog.Info("openai_messages.client_disconnected",
 						zap.Int64("account_id", account.ID),
@@ -961,6 +966,7 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 				IPAddress:          clientIP,
 				RequestPayloadHash: requestPayloadHash,
 				SubPilotLeaseID:    selection.SubPilotLeaseID,
+				SubPilotSessionKey: sessionHash,
 				APIKeyService:      h.apiKeyService,
 				QuotaPlatform:      quotaPlatform,
 				ChannelUsageFields: channelMappingMsg.ToUsageFields(reqModel, result.UpstreamModel),
@@ -1458,6 +1464,13 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 		)
 
 		var requestPayloadHash string
+		subPilotLeaseID := selection.SubPilotLeaseID
+		subPilotRequestID := selection.SubPilotRequestID
+		consumeSubPilotLeaseID := func() string {
+			leaseID := subPilotLeaseID
+			subPilotLeaseID = ""
+			return leaseID
+		}
 		hooks := &service.OpenAIWSIngressHooks{
 			InitialRequestModel: reqModel,
 			BeforeRequest: func(turn int, payload []byte, originalModel string) error {
@@ -1552,6 +1565,10 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 				upstreamEndpoint := resolveOpenAIUpstreamEndpoint(c, account)
 				quotaPlatform := service.QuotaPlatform(c.Request.Context(), apiKey)
 				cyberBlocked := service.GetOpsCyberPolicy(c) != nil
+				subPilotUsageLeaseID := ""
+				if turn == 1 {
+					subPilotUsageLeaseID = consumeSubPilotLeaseID()
+				}
 				h.submitOpenAIUsageRecordTask(ctx, result, func(taskCtx context.Context) {
 					if err := h.gatewayService.RecordUsage(taskCtx, &service.OpenAIRecordUsageInput{
 						Result:             result,
@@ -1564,7 +1581,8 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 						UserAgent:          userAgent,
 						IPAddress:          clientIP,
 						RequestPayloadHash: requestPayloadHash,
-						SubPilotLeaseID:    selection.SubPilotLeaseID,
+						SubPilotLeaseID:    subPilotUsageLeaseID,
+						SubPilotSessionKey: sessionHash,
 						APIKeyService:      h.apiKeyService,
 						QuotaPlatform:      quotaPlatform,
 						ChannelUsageFields: channelMappingWS.ToUsageFields(reqModel, result.UpstreamModel),
@@ -1604,6 +1622,20 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 		if err := h.gatewayService.ProxyResponsesWebSocketFromClient(ctx, c, wsConn, account, token, wsFirstMessage, hooks); err != nil {
 			var failoverErr *service.UpstreamFailoverError
 			if errors.As(err, &failoverErr) {
+				h.gatewayService.ReportSubPilotFailure(ctx, service.SubPilotFailureInput{
+					LeaseID:       consumeSubPilotLeaseID(),
+					APIKey:        apiKey,
+					Account:       account,
+					RequestID:     subPilotRequestID,
+					Model:         reqModel,
+					SessionKey:    sessionHash,
+					StatusCode:    failoverErr.StatusCode,
+					ErrorMessage:  service.ExtractUpstreamErrorMessage(failoverErr.ResponseBody),
+					RequestType:   "ws_v2",
+					Stream:        true,
+					OpenAIWSMode:  true,
+					QuotaPlatform: service.QuotaPlatform(c.Request.Context(), apiKey),
+				})
 				h.gatewayService.ReportOpenAIAccountScheduleResult(account.ID, false, nil)
 				releaseAccountSlot()
 				failedAccountIDs[account.ID] = struct{}{}
@@ -1630,6 +1662,19 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 				continue
 			}
 
+			h.gatewayService.ReportSubPilotFailure(ctx, service.SubPilotFailureInput{
+				LeaseID:       consumeSubPilotLeaseID(),
+				APIKey:        apiKey,
+				Account:       account,
+				RequestID:     subPilotRequestID,
+				Model:         reqModel,
+				SessionKey:    sessionHash,
+				ErrorMessage:  err.Error(),
+				RequestType:   "ws_v2",
+				Stream:        true,
+				OpenAIWSMode:  true,
+				QuotaPlatform: service.QuotaPlatform(c.Request.Context(), apiKey),
+			})
 			h.gatewayService.ReportOpenAIAccountScheduleResult(account.ID, false, nil)
 			closeStatus, closeReason := summarizeWSCloseErrorForLog(err)
 			reqLog.Warn("openai.websocket_proxy_failed",
@@ -1947,6 +1992,40 @@ func (h *OpenAIGatewayHandler) ensureForwardErrorResponse(c *gin.Context, stream
 	}
 	h.handleStreamingAwareError(c, http.StatusBadGateway, "upstream_error", "Upstream request failed", streamStarted)
 	return true
+}
+
+func (h *OpenAIGatewayHandler) reportSubPilotForwardFailure(c *gin.Context, apiKey *service.APIKey, account *service.Account, selection *service.AccountSelectionResult, model string, sessionKey string, stream bool, failoverErr *service.UpstreamFailoverError, err error) {
+	if h == nil || h.gatewayService == nil || selection == nil || selection.SubPilotLeaseID == "" || account == nil {
+		return
+	}
+	statusCode := 0
+	errorMessage := ""
+	if failoverErr != nil {
+		statusCode = failoverErr.StatusCode
+		errorMessage = service.ExtractUpstreamErrorMessage(failoverErr.ResponseBody)
+	}
+	if errorMessage == "" && err != nil {
+		errorMessage = err.Error()
+	}
+	h.gatewayService.ReportSubPilotFailure(c.Request.Context(), service.SubPilotFailureInput{
+		LeaseID:       selection.SubPilotLeaseID,
+		APIKey:        apiKey,
+		Account:       account,
+		RequestID:     selection.SubPilotRequestID,
+		Model:         model,
+		SessionKey:    sessionKey,
+		StatusCode:    statusCode,
+		ErrorMessage:  errorMessage,
+		Stream:        stream,
+		QuotaPlatform: service.QuotaPlatform(c.Request.Context(), apiKey),
+	})
+}
+
+func subPilotLeaseID(selection *service.AccountSelectionResult) string {
+	if selection == nil {
+		return ""
+	}
+	return selection.SubPilotLeaseID
 }
 
 func shouldLogOpenAIForwardFailureAsWarn(c *gin.Context, wroteFallback bool) bool {

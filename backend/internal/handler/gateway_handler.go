@@ -443,6 +443,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 			if err != nil {
 				var failoverErr *service.UpstreamFailoverError
 				if errors.As(err, &failoverErr) {
+					h.reportSubPilotForwardFailure(c, apiKey, account, selection, reqModel, sessionKey, reqStream, failoverErr, err)
 					// 流式内容已写入客户端，无法撤销，禁止 failover 以防止流拼接腐化
 					if c.Writer.Size() != writerSizeBeforeForward {
 						h.handleFailoverExhausted(c, failoverErr, service.PlatformGemini, true)
@@ -459,6 +460,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 						return
 					}
 				}
+				h.reportSubPilotForwardFailure(c, apiKey, account, selection, reqModel, sessionKey, reqStream, nil, err)
 				upstreamErrorAlreadyCommunicated := gatewayForwardErrorAlreadyCommunicated(c, writerSizeBeforeForward, err)
 				wroteFallback := false
 				if !upstreamErrorAlreadyCommunicated {
@@ -534,6 +536,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 					IPAddress:          clientIP,
 					RequestPayloadHash: requestPayloadHash,
 					SubPilotLeaseID:    selection.SubPilotLeaseID,
+					SubPilotSessionKey: sessionKey,
 					ForceCacheBilling:  forceCacheBilling,
 					APIKeyService:      h.apiKeyService,
 					ChannelUsageFields: channelMapping.ToUsageFields(reqModel, result.UpstreamModel),
@@ -864,6 +867,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 				}
 				var failoverErr *service.UpstreamFailoverError
 				if errors.As(err, &failoverErr) {
+					h.reportSubPilotForwardFailure(c, currentAPIKey, account, selection, reqModel, sessionKey, reqStream, failoverErr, err)
 					// 流式内容已写入客户端，无法撤销，禁止 failover 以防止流拼接腐化
 					if c.Writer.Size() != writerSizeBeforeForward {
 						h.handleFailoverExhausted(c, failoverErr, account.Platform, true)
@@ -880,6 +884,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 						return
 					}
 				}
+				h.reportSubPilotForwardFailure(c, currentAPIKey, account, selection, reqModel, sessionKey, reqStream, nil, err)
 				upstreamErrorAlreadyCommunicated := gatewayForwardErrorAlreadyCommunicated(c, writerSizeBeforeForward, err)
 				wroteFallback := false
 				if !upstreamErrorAlreadyCommunicated {
@@ -965,6 +970,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 					IPAddress:          clientIP,
 					RequestPayloadHash: requestPayloadHash,
 					SubPilotLeaseID:    selection.SubPilotLeaseID,
+					SubPilotSessionKey: sessionKey,
 					ForceCacheBilling:  forceCacheBilling,
 					APIKeyService:      h.apiKeyService,
 					ChannelUsageFields: channelMapping.ToUsageFields(reqModel, result.UpstreamModel),
@@ -1635,6 +1641,33 @@ func (h *GatewayHandler) ensureForwardErrorResponse(c *gin.Context, streamStarte
 	}
 	h.handleStreamingAwareError(c, http.StatusBadGateway, "upstream_error", "Upstream request failed", streamStarted)
 	return true
+}
+
+func (h *GatewayHandler) reportSubPilotForwardFailure(c *gin.Context, apiKey *service.APIKey, account *service.Account, selection *service.AccountSelectionResult, model string, sessionKey string, stream bool, failoverErr *service.UpstreamFailoverError, err error) {
+	if h == nil || h.gatewayService == nil || selection == nil || selection.SubPilotLeaseID == "" || account == nil {
+		return
+	}
+	statusCode := 0
+	errorMessage := ""
+	if failoverErr != nil {
+		statusCode = failoverErr.StatusCode
+		errorMessage = service.ExtractUpstreamErrorMessage(failoverErr.ResponseBody)
+	}
+	if errorMessage == "" && err != nil {
+		errorMessage = err.Error()
+	}
+	h.gatewayService.ReportSubPilotFailure(c.Request.Context(), service.SubPilotFailureInput{
+		LeaseID:       selection.SubPilotLeaseID,
+		APIKey:        apiKey,
+		Account:       account,
+		RequestID:     selection.SubPilotRequestID,
+		Model:         model,
+		SessionKey:    sessionKey,
+		StatusCode:    statusCode,
+		ErrorMessage:  errorMessage,
+		Stream:        stream,
+		QuotaPlatform: service.QuotaPlatform(c.Request.Context(), apiKey),
+	})
 }
 
 // gatewayForwardErrorAlreadyCommunicated reports whether a Forward implementation

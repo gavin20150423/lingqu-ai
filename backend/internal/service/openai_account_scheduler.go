@@ -1385,6 +1385,7 @@ func (s *OpenAIGatewayService) selectAccountWithScheduler(
 				decision.CandidateCount = len(accounts)
 				return selection, decision, nil
 			}
+			s.reportSubPilotSelectionFailure(ctx, selection, platform, groupID, requestedModel, sessionHash, "capability_mismatch", "Sub2API rejected SubPilot recommendation because the selected account does not satisfy the requested transport or endpoint capability")
 			if selection.ReleaseFunc != nil {
 				selection.ReleaseFunc()
 			}
