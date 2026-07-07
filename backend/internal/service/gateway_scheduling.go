@@ -213,6 +213,12 @@ func (s *GatewayService) SelectAccountWithLoadAwareness(ctx context.Context, gro
 	ctx = s.withWindowCostPrefetch(ctx, accounts)
 	ctx = s.withRPMPrefetch(ctx, accounts)
 
+	if selection, err := s.trySubPilotRecommend(ctx, groupID, platform, sessionHash, requestedModel, excludedIDs, accounts, useMixed); err != nil {
+		return nil, err
+	} else if selection != nil {
+		return selection, nil
+	}
+
 	// 提前构建 accountByID（供 Layer 1 和 Layer 1.5 使用）
 	accountByID := make(map[int64]*Account, len(accounts))
 	for i := range accounts {

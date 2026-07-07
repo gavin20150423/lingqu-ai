@@ -22,6 +22,20 @@ const showWarning = vi.hoisted(() => vi.fn())
 const getCheckoutInfo = vi.hoisted(() => vi.fn())
 const bridgeInvoke = vi.hoisted(() => vi.fn())
 
+const paymentViewStubs = {
+  AppLayout: {
+    template: '<div><slot /></div>',
+  },
+  UserWorkspaceLayout: {
+    template: '<div><slot /></div>',
+  },
+  RouterLink: {
+    template: '<a><slot /></a>',
+  },
+  Teleport: true,
+  Transition: false,
+}
+
 vi.mock('vue-router', async () => {
   const actual = await vi.importActual<typeof import('vue-router')>('vue-router')
   return {
@@ -70,6 +84,10 @@ vi.mock('@/stores/subscriptions', () => ({
 
 vi.mock('@/stores', () => ({
   useAppStore: () => ({
+    cachedPublicSettings: {
+      payment_enabled: true,
+      server_utc_offset: '+00:00',
+    },
     showError,
     showInfo,
     showWarning,
@@ -223,11 +241,7 @@ async function mountSubscriptionConfirm(options: Parameters<typeof checkoutInfoW
   const wrapper = shallowMount(PaymentView, {
     global: {
       stubs: {
-        AppLayout: {
-          template: '<div><slot /></div>',
-        },
-        Teleport: true,
-        Transition: false,
+        ...paymentViewStubs,
       },
     },
   })
@@ -384,9 +398,7 @@ describe('PaymentView payment recovery', () => {
     const wrapper = shallowMount(PaymentView, {
       global: {
         stubs: {
-          AppLayout: {
-            template: '<div><slot /></div>',
-          },
+          ...paymentViewStubs,
           PaymentStatusPanel: {
             template: '<button data-test="payment-done" @click="$emit(\'done\')" />',
           },
@@ -441,8 +453,7 @@ describe('PaymentView WeChat JSAPI flow', () => {
     shallowMount(PaymentView, {
       global: {
         stubs: {
-          Teleport: true,
-          Transition: false,
+          ...paymentViewStubs,
         },
       },
     })
@@ -470,8 +481,7 @@ describe('PaymentView WeChat JSAPI flow', () => {
     shallowMount(PaymentView, {
       global: {
         stubs: {
-          Teleport: true,
-          Transition: false,
+          ...paymentViewStubs,
         },
       },
     })
@@ -491,8 +501,7 @@ describe('PaymentView WeChat JSAPI flow', () => {
     const wrapper = shallowMount(PaymentView, {
       global: {
         stubs: {
-          Teleport: true,
-          Transition: false,
+          ...paymentViewStubs,
         },
       },
     })
@@ -535,8 +544,7 @@ describe('PaymentView WeChat JSAPI flow', () => {
     shallowMount(PaymentView, {
       global: {
         stubs: {
-          Teleport: true,
-          Transition: false,
+          ...paymentViewStubs,
         },
       },
     })
@@ -573,8 +581,7 @@ describe('PaymentView WeChat JSAPI flow', () => {
     shallowMount(PaymentView, {
       global: {
         stubs: {
-          Teleport: true,
-          Transition: false,
+          ...paymentViewStubs,
         },
       },
     })
@@ -621,8 +628,7 @@ describe('PaymentView WeChat JSAPI flow', () => {
     shallowMount(PaymentView, {
       global: {
         stubs: {
-          Teleport: true,
-          Transition: false,
+          ...paymentViewStubs,
         },
       },
     })

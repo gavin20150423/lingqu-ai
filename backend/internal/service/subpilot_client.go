@@ -181,7 +181,11 @@ func (c *subPilotClient) postJSON(ctx context.Context, path string, in any, out 
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			slog.Debug("subpilot response close failed", "error", closeErr)
+		}
+	}()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		limited, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
 		return fmt.Errorf("subpilot status %d: %s", resp.StatusCode, strings.TrimSpace(string(limited)))
