@@ -191,6 +191,7 @@ import VersionBadge from '@/components/common/VersionBadge.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { sanitizeSvg } from '@/utils/sanitize'
 import { FeatureFlags, makeSidebarFlag } from '@/utils/featureFlags'
+import { useBatchImageAccess } from '@/composables/useBatchImageAccess'
 
 type IconName =
   | 'badge'
@@ -285,6 +286,8 @@ const flagAffiliate = makeSidebarFlag(FeatureFlags.affiliate)
 const flagRiskControl = makeSidebarFlag(FeatureFlags.riskControl)
 const flagOpsMonitoring = () => adminSettingsStore.opsMonitoringEnabled
 const flagAdminPayment = () => adminSettingsStore.paymentEnabled
+const { canUseBatchImage, refreshBatchImageAccess } = useBatchImageAccess()
+const flagBatchImageAccess = () => canUseBatchImage.value
 
 const customMenuItemsForUser = computed(() => {
   const items = appStore.cachedPublicSettings?.custom_menu_items ?? []
@@ -306,6 +309,7 @@ function buildSelfNavItems(withDashboard: boolean): NavItem[] {
   }
   items.push(
     { path: '/keys', label: t('nav.apiKeys'), icon: 'key' },
+    { path: '/batch-image', label: t('nav.batchImage'), icon: 'grid', hideInSimpleMode: true, featureFlag: flagBatchImageAccess },
     { path: '/usage', label: t('nav.usage'), icon: 'chart', hideInSimpleMode: true },
     { path: '/available-channels', label: t('nav.availableChannels'), icon: 'server', hideInSimpleMode: true, featureFlag: flagAvailableChannels },
     { path: '/monitor', label: t('nav.channelStatus'), icon: 'sync', featureFlag: flagChannelMonitor },
@@ -480,6 +484,7 @@ onMounted(() => {
   if (isAdmin.value) {
     adminSettingsStore.fetch()
   }
+  void refreshBatchImageAccess()
 })
 </script>
 
