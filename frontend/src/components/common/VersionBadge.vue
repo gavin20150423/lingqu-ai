@@ -1,5 +1,5 @@
 <template>
-  <div class="relative">
+  <div class="version-badge-root">
     <!-- Admin: Full version badge with dropdown -->
     <template v-if="isAdmin">
       <button
@@ -12,7 +12,7 @@
         ]"
         :title="hasUpdate ? t('version.updateAvailable') : t('version.upToDate')"
       >
-        <span v-if="currentVersion" class="font-medium">v{{ currentVersion }}</span>
+        <span v-if="currentVersion" class="font-medium">v{{ displayCurrentVersion }}</span>
         <span
           v-else
           class="h-3 w-12 animate-pulse rounded bg-gray-200 font-medium dark:bg-dark-600"
@@ -31,7 +31,7 @@
         <div
           v-if="dropdownOpen"
           ref="dropdownRef"
-          class="absolute left-0 z-50 mt-2 w-64 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg dark:border-dark-700 dark:bg-dark-800"
+          class="version-popover"
         >
           <!-- Header with refresh button -->
           <div
@@ -55,7 +55,7 @@
             </button>
           </div>
 
-          <div class="p-4">
+          <div class="version-popover__body">
             <!-- Loading state -->
             <div v-if="loading" class="flex items-center justify-center py-6">
               <svg class="h-6 w-6 animate-spin text-primary-500" fill="none" viewBox="0 0 24 24">
@@ -78,18 +78,18 @@
             <!-- Content -->
             <template v-else>
               <!-- Version display - centered and prominent -->
-              <div class="mb-4 text-center">
-                <div class="inline-flex items-center gap-2">
+              <div class="version-current">
+                <div class="version-current__line">
                   <span
                     v-if="currentVersion"
-                    class="text-2xl font-bold text-gray-900 dark:text-white"
-                    >v{{ currentVersion }}</span
+                    class="version-current__number"
+                    >v{{ displayCurrentVersion }}</span
                   >
-                  <span v-else class="text-2xl font-bold text-gray-400 dark:text-dark-500">--</span>
+                  <span v-else class="version-current__number version-current__number--empty">--</span>
                   <!-- Show check mark when up to date -->
                   <span
                     v-if="!hasUpdate"
-                    class="flex h-5 w-5 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30"
+                    class="version-current__check"
                   >
                     <svg
                       class="h-3 w-3 text-green-600 dark:text-green-400"
@@ -104,10 +104,10 @@
                     </svg>
                   </span>
                 </div>
-                <p class="mt-1 text-xs text-gray-500 dark:text-dark-400">
+                <p class="version-current__status">
                   {{
                     hasUpdate
-                      ? t('version.latestVersion') + ': v' + latestVersion
+                      ? t('version.latestVersion') + ': v' + displayLatestVersion
                       : t('version.upToDate')
                   }}
                 </p>
@@ -229,10 +229,10 @@
               <!-- Priority 3: Built-in update disabled for Docker/tag deployments -->
               <div v-else-if="!updateEnabled" class="space-y-2">
                 <div
-                  class="flex items-center gap-3 rounded-lg border border-blue-200 bg-blue-50 p-3 dark:border-blue-800/50 dark:bg-blue-900/20"
+                  class="version-update-card"
                 >
                   <div
-                    class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900/50"
+                    class="version-update-card__icon"
                   >
                     <Icon
                       name="infoCircle"
@@ -241,11 +241,11 @@
                       class="text-blue-600 dark:text-blue-400"
                     />
                   </div>
-                  <div class="min-w-0 flex-1">
-                    <p class="text-sm font-medium text-blue-700 dark:text-blue-300">
+                  <div class="version-update-card__copy">
+                    <p class="version-update-card__title">
                       {{ t('version.dockerMode') }}
                     </p>
-                    <p class="text-xs text-blue-600/70 dark:text-blue-400/70">
+                    <p class="version-update-card__hint">
                       {{ t('version.dockerModeHint') }}
                     </p>
                   </div>
@@ -276,7 +276,7 @@
                       {{ t('version.updateAvailable') }}
                     </p>
                     <p class="text-xs text-amber-600/70 dark:text-amber-400/70">
-                      v{{ latestVersion }}
+                      v{{ displayLatestVersion }}
                     </p>
                   </div>
                   <svg
@@ -333,7 +333,7 @@
                       {{ t('version.updateAvailable') }}
                     </p>
                     <p class="text-xs text-amber-600/70 dark:text-amber-400/70">
-                      v{{ latestVersion }}
+                      v{{ displayLatestVersion }}
                     </p>
                   </div>
                 </div>
@@ -401,7 +401,7 @@
 
     <!-- Non-admin: Simple static version text -->
     <span v-else-if="version" class="text-xs text-gray-500 dark:text-dark-400">
-      v{{ version }}
+      v{{ formatDisplayVersion(version) }}
     </span>
   </div>
 </template>
@@ -431,6 +431,8 @@ const dropdownRef = ref<HTMLElement | null>(null)
 const loading = computed(() => appStore.versionLoading)
 const currentVersion = computed(() => appStore.currentVersion || props.version || '')
 const latestVersion = computed(() => appStore.latestVersion)
+const displayCurrentVersion = computed(() => formatDisplayVersion(currentVersion.value))
+const displayLatestVersion = computed(() => formatDisplayVersion(latestVersion.value))
 const hasUpdate = computed(() => appStore.hasUpdate)
 const releaseInfo = computed(() => appStore.releaseInfo)
 const buildType = computed(() => appStore.buildType)
@@ -446,6 +448,12 @@ const restartCountdown = ref(0)
 
 // Only show update check for release builds (binary/docker deployment)
 const isReleaseBuild = computed(() => buildType.value === 'release')
+
+function formatDisplayVersion(value: string | undefined | null): string {
+  const raw = (value || '').trim()
+  if (!raw) return ''
+  return raw.replace(/^v/i, '').replace(/-lingqu(?:\.\d+)?$/i, '')
+}
 
 function toggleDropdown() {
   dropdownOpen.value = !dropdownOpen.value
@@ -562,6 +570,153 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+.version-badge-root {
+  position: relative;
+  min-width: 0;
+}
+
+.version-popover {
+  position: absolute;
+  left: 0;
+  z-index: 120;
+  margin-top: 0.5rem;
+  width: min(20rem, calc(100vw - 1.25rem));
+  overflow: hidden;
+  border: 1px solid rgb(226 232 240);
+  border-radius: 1rem;
+  background: rgb(255 255 255);
+  box-shadow: 0 20px 48px rgba(15, 23, 42, 0.16);
+}
+
+.version-popover__body {
+  padding: 1rem;
+}
+
+.version-current {
+  margin-bottom: 1rem;
+  text-align: center;
+}
+
+.version-current__line {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+}
+
+.version-current__number {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: rgb(15 23 42);
+  font-size: 1.55rem;
+  font-weight: 800;
+  line-height: 1.15;
+}
+
+.version-current__number--empty {
+  color: rgb(148 163 184);
+}
+
+.version-current__check {
+  display: inline-flex;
+  height: 1.35rem;
+  width: 1.35rem;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: rgb(220 252 231);
+}
+
+.version-current__status {
+  margin-top: 0.35rem;
+  color: rgb(100 116 139);
+  font-size: 0.75rem;
+}
+
+.version-update-card {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 0.75rem;
+  border: 1px solid rgb(191 219 254);
+  border-radius: 0.8rem;
+  background: rgb(239 246 255);
+  padding: 0.85rem;
+}
+
+.version-update-card__icon {
+  display: inline-flex;
+  height: 2.25rem;
+  width: 2.25rem;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: rgb(219 234 254);
+}
+
+.version-update-card__copy {
+  min-width: 0;
+  flex: 1 1 auto;
+  text-align: left;
+}
+
+.version-update-card__title {
+  color: rgb(29 78 216);
+  font-size: 0.875rem;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.version-update-card__hint {
+  margin-top: 0.15rem;
+  color: rgb(37 99 235 / 0.72);
+  font-size: 0.75rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+:global(.dark) .version-popover {
+  border-color: rgb(51 65 85);
+  background: rgb(30 41 59);
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.34);
+}
+
+:global(.dark) .version-current__number {
+  color: rgb(248 250 252);
+}
+
+:global(.dark) .version-current__number--empty {
+  color: rgb(100 116 139);
+}
+
+:global(.dark) .version-current__check {
+  background: rgb(20 83 45 / 0.45);
+}
+
+:global(.dark) .version-current__status {
+  color: rgb(148 163 184);
+}
+
+:global(.dark) .version-update-card {
+  border-color: rgb(30 64 175 / 0.5);
+  background: rgb(30 58 138 / 0.22);
+}
+
+:global(.dark) .version-update-card__icon {
+  background: rgb(30 64 175 / 0.45);
+}
+
+:global(.dark) .version-update-card__title {
+  color: rgb(147 197 253);
+}
+
+:global(.dark) .version-update-card__hint {
+  color: rgb(96 165 250 / 0.75);
+}
+
 .dropdown-enter-active,
 .dropdown-leave-active {
   transition: all 0.2s ease;
