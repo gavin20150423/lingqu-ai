@@ -129,7 +129,12 @@ const overallDotClass = computed(() => {
 <style scoped>
 .monitor-hero {
   margin-bottom: 0.8rem;
-  padding: 0.9rem 1rem;
+  border-color: rgba(33, 31, 28, 0.1);
+  background:
+    radial-gradient(circle at 92% 12%, rgba(69, 213, 209, 0.13), transparent 28%),
+    rgba(255, 255, 255, 0.84);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.9) inset, 0 14px 34px rgba(33, 31, 28, 0.045);
+  padding: 1.05rem 1.15rem;
 }
 
 .monitor-hero__copy {
@@ -148,14 +153,14 @@ const overallDotClass = computed(() => {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  border: 2px solid #211f1c;
+  border: 1px solid rgba(33, 31, 28, 0.12);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.82);
-  box-shadow: 3px 3px 0 rgba(33, 31, 28, 0.72);
-  color: #211f1c;
+  background: rgba(255, 255, 255, 0.76);
+  box-shadow: none;
+  color: rgba(33, 31, 28, 0.78);
   padding: 0.28rem 0.62rem;
   font-size: 0.74rem;
-  font-weight: 950;
+  font-weight: 850;
 }
 
 .monitor-hero__panel {
@@ -189,28 +194,28 @@ const overallDotClass = computed(() => {
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 0.35rem;
-  border: 3px solid #211f1c;
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.86);
-  box-shadow: 4px 4px 0 rgba(33, 31, 28, 0.78);
-  padding: 0.28rem;
+  border: 1px solid rgba(33, 31, 28, 0.1);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.9) inset;
+  padding: 0.24rem;
 }
 
 .monitor-hero__tabs button {
   min-height: 1.85rem;
   border-radius: 12px;
-  color: rgba(33, 31, 28, 0.62);
+  color: rgba(33, 31, 28, 0.58);
   padding: 0 0.68rem;
   font-size: 0.8rem;
-  font-weight: 950;
-  transition: transform 150ms ease, background 150ms ease, color 150ms ease;
+  font-weight: 850;
+  transition: background 150ms ease, color 150ms ease, box-shadow 150ms ease;
 }
 
 .monitor-hero__tabs button:hover,
 .monitor-hero__tab--active {
   background: #fff0bd;
   color: #211f1c;
-  transform: translateY(-1px);
+  box-shadow: inset 0 0 0 1px rgba(33, 31, 28, 0.06);
 }
 
 .monitor-hero__actions {
@@ -225,17 +230,17 @@ const overallDotClass = computed(() => {
   height: 2.15rem;
   display: grid;
   place-items: center;
-  border: 3px solid #211f1c;
+  border: 1px solid rgba(33, 31, 28, 0.12);
   border-radius: 14px;
-  background: #fff;
-  box-shadow: 4px 4px 0 rgba(33, 31, 28, 0.78);
-  color: #211f1c;
+  background: rgba(255, 255, 255, 0.8);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.9) inset;
+  color: rgba(33, 31, 28, 0.76);
   transition: transform 150ms ease, box-shadow 150ms ease;
 }
 
 .monitor-hero__refresh:hover:not(:disabled) {
-  transform: translate(-1px, -2px) rotate(-2deg);
-  box-shadow: 6px 6px 0 rgba(33, 31, 28, 0.86);
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px rgba(33, 31, 28, 0.075);
 }
 
 .monitor-hero__refresh:disabled {
@@ -244,18 +249,18 @@ const overallDotClass = computed(() => {
 
 .monitor-hero :deep(.relative > button) {
   min-height: 2.15rem;
-  border: 3px solid #211f1c;
+  border: 1px solid rgba(33, 31, 28, 0.12);
   border-radius: 14px;
   background: #fff7d0;
-  box-shadow: 4px 4px 0 rgba(33, 31, 28, 0.78);
-  color: #211f1c;
-  font-weight: 950;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.9) inset;
+  color: rgba(33, 31, 28, 0.78);
+  font-weight: 850;
 }
 
 .monitor-hero :deep(.absolute) {
-  border: 3px solid #211f1c;
+  border: 1px solid rgba(33, 31, 28, 0.12);
   border-radius: 16px;
-  box-shadow: 5px 5px 0 rgba(33, 31, 28, 0.82);
+  box-shadow: 0 14px 32px rgba(33, 31, 28, 0.11);
 }
 
 @media (max-width: 900px) {

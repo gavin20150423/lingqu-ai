@@ -1,29 +1,29 @@
 <template>
   <button
     type="button"
-    class="group text-left p-5 rounded-2xl min-h-[280px] w-full bg-white/70 backdrop-blur-xl border border-gray-200/80 shadow-card dark:bg-dark-800/60 dark:border-dark-700/70 hover:-translate-y-1 hover:shadow-card-hover dark:hover:border-primary-500/30 hover:border-gray-300 transition-all duration-300 ease-out flex flex-col"
+    class="monitor-card group"
     @click="emit('click')"
   >
     <!-- Header: icon + name/model + status chip -->
-    <div class="flex items-start gap-3">
+    <div class="monitor-card__header">
       <span
-        class="w-9 h-9 rounded-xl ring-1 ring-black/5 dark:ring-white/10 grid place-items-center flex-shrink-0"
+        class="monitor-card__provider"
         :class="[providerGradient(item.provider), providerTintClass]"
       >
         <ProviderIcon :provider="item.provider" :size="20" />
       </span>
-      <div class="flex-1 min-w-0">
-        <div class="text-base font-semibold truncate text-gray-900 dark:text-gray-100">
+      <div class="monitor-card__title-wrap">
+        <div class="monitor-card__title">
           {{ item.name }}
         </div>
-        <div class="mt-0.5 flex items-center gap-1.5 min-w-0">
+        <div class="monitor-card__meta">
           <span
             class="inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-medium flex-shrink-0"
             :class="providerBadgeClass(item.provider)"
           >
             {{ providerLabel(item.provider) }}
           </span>
-          <span class="font-mono text-xs truncate text-gray-500 dark:text-gray-400">
+          <span class="monitor-card__model">
             {{ item.primary_model }}
           </span>
           <span
@@ -35,7 +35,7 @@
         </div>
       </div>
       <span
-        class="px-2.5 py-1 rounded-full text-xs font-semibold flex-shrink-0"
+        class="monitor-card__status"
         :class="statusBadgeClass(item.primary_status)"
       >
         {{ statusLabel(item.primary_status) }}
@@ -55,7 +55,7 @@
     />
 
     <!-- Divider -->
-    <div class="mt-4 border-t border-gray-100 dark:border-dark-700/60"></div>
+    <div class="monitor-card__divider"></div>
 
     <!-- Availability row -->
     <MonitorAvailabilityRow
@@ -126,3 +126,116 @@ const extraModelsCountLabel = computed(() => {
   return t('monitorCommon.extraModelsCount', { n: count })
 })
 </script>
+
+<style scoped>
+.monitor-card {
+  display: flex;
+  min-height: 17.5rem;
+  width: 100%;
+  flex-direction: column;
+  border: 1px solid rgba(33, 31, 28, 0.1);
+  border-radius: 1.05rem;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(255, 255, 255, 0.76));
+  padding: 1.2rem;
+  text-align: left;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.88) inset, 0 10px 26px rgba(33, 31, 28, 0.045);
+  backdrop-filter: blur(18px);
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.monitor-card:hover {
+  border-color: rgba(33, 31, 28, 0.16);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.9) inset, 0 14px 32px rgba(33, 31, 28, 0.065);
+  transform: translateY(-1px);
+}
+
+.monitor-card__header {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.72rem;
+}
+
+.monitor-card__provider {
+  display: grid;
+  width: 2.32rem;
+  height: 2.32rem;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid rgba(33, 31, 28, 0.07);
+  border-radius: 0.8rem;
+}
+
+.monitor-card__title-wrap {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.monitor-card__title {
+  overflow: hidden;
+  color: #1f2937;
+  font-size: 0.98rem;
+  font-weight: 760;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.monitor-card__meta {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.38rem;
+  margin-top: 0.28rem;
+}
+
+.monitor-card__model {
+  min-width: 0;
+  overflow: hidden;
+  color: rgba(75, 85, 99, 0.76);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.75rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.monitor-card__status {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  padding: 0.24rem 0.58rem;
+  font-size: 0.72rem;
+  font-weight: 750;
+}
+
+.monitor-card__divider {
+  margin-top: 1rem;
+  border-top: 1px solid rgba(148, 163, 184, 0.14);
+}
+
+:global(.dark) .monitor-card {
+  border-color: rgb(51 65 85 / 0.7);
+  background: rgb(30 41 59 / 0.62);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.18);
+}
+
+:global(.dark) .monitor-card:hover {
+  border-color: rgb(148 163 184 / 0.35);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.24);
+}
+
+:global(.dark) .monitor-card__provider {
+  border-color: rgb(255 255 255 / 0.08);
+}
+
+:global(.dark) .monitor-card__title {
+  color: rgb(243 244 246);
+}
+
+:global(.dark) .monitor-card__model {
+  color: rgb(156 163 175);
+}
+
+:global(.dark) .monitor-card__divider {
+  border-color: rgb(51 65 85 / 0.55);
+}
+</style>

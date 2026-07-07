@@ -2,12 +2,12 @@
   <div>
     <div
       v-if="loading && items.length === 0"
-      class="grid gap-5 grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
+      class="monitor-card-grid"
     >
       <div
         v-for="i in 6"
         :key="i"
-        class="p-5 rounded-2xl min-h-[280px] bg-white/70 dark:bg-dark-800/60 border border-gray-200/80 dark:border-dark-700/70 animate-pulse"
+        class="monitor-card-skeleton animate-pulse"
       >
         <div class="flex items-start gap-3">
           <div class="w-9 h-9 rounded-xl bg-gray-200 dark:bg-dark-700"></div>
@@ -33,7 +33,7 @@
 
     <div
       v-else
-      class="grid gap-5 grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
+      class="monitor-card-grid"
     >
       <MonitorCard
         v-for="item in items"
@@ -79,3 +79,43 @@ function resolveAvailability(item: UserMonitorView): number | null {
   return props.window === '15d' ? primary.availability_15d ?? null : primary.availability_30d ?? null
 }
 </script>
+
+<style scoped>
+.monitor-card-grid {
+  display: grid;
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.monitor-card-skeleton {
+  min-height: 17.5rem;
+  border: 1px solid rgba(33, 31, 28, 0.1);
+  border-radius: 1.05rem;
+  background: rgba(255, 255, 255, 0.72);
+  padding: 1.2rem;
+  box-shadow: 0 10px 26px rgba(33, 31, 28, 0.04);
+}
+
+:global(.dark) .monitor-card-skeleton {
+  border-color: rgb(51 65 85 / 0.7);
+  background: rgb(30 41 59 / 0.62);
+}
+
+@media (min-width: 768px) {
+  .monitor-card-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1280px) {
+  .monitor-card-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1536px) {
+  .monitor-card-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+</style>

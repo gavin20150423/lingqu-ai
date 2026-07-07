@@ -1,23 +1,21 @@
 <template>
-  <div class="mt-4 pt-3 border-t border-gray-100 dark:border-dark-700/60">
-    <div
-      class="flex justify-between text-[10px] font-semibold uppercase tracking-widest text-gray-400 mb-2"
-    >
+  <div class="monitor-timeline">
+    <div class="monitor-timeline__meta">
       <span>{{ t('monitorCommon.history60pts', { n: length }) }}</span>
       <span class="tabular-nums">{{ t('monitorCommon.nextUpdateIn', { n: countdownSeconds }) }}</span>
     </div>
 
     <div
       v-if="maintenance"
-      class="flex h-5 w-full items-center justify-center rounded border border-dashed border-gray-300 dark:border-dark-600 text-[10px] uppercase tracking-widest text-gray-400"
+      class="monitor-timeline__maintenance"
     >
       {{ t('monitorCommon.maintenancePaused') }}
     </div>
-    <div v-else class="flex items-end gap-[2px] h-5 w-full">
+    <div v-else class="monitor-timeline__bars">
       <div
         v-for="(bar, idx) in displayBars"
         :key="idx"
-        class="flex-1 min-w-[3px] rounded-sm"
+        class="monitor-timeline__bar"
         :class="bar.colorClass"
         :style="{ height: bar.heightPct + '%' }"
         :title="bar.title"
@@ -25,7 +23,7 @@
     </div>
 
     <div
-      class="mt-1 flex justify-between text-[9px] uppercase tracking-widest text-gray-400"
+      class="monitor-timeline__range"
     >
       <span>{{ t('monitorCommon.past') }}</span>
       <span>{{ t('monitorCommon.now') }}</span>
@@ -70,10 +68,10 @@ const STATUS_HEIGHT: Record<string, number> = {
 }
 
 const STATUS_COLOR: Record<string, string> = {
-  operational: 'bg-emerald-500',
-  degraded: 'bg-amber-500',
-  failed: 'bg-red-500',
-  error: 'bg-red-500',
+  operational: 'monitor-timeline__bar--ok',
+  degraded: 'monitor-timeline__bar--warn',
+  failed: 'monitor-timeline__bar--bad',
+  error: 'monitor-timeline__bar--bad',
   empty: 'bg-gray-300 dark:bg-dark-600',
 }
 
@@ -113,3 +111,82 @@ const displayBars = computed<Bar[]>(() => {
   return bars
 })
 </script>
+
+<style scoped>
+.monitor-timeline {
+  margin-top: 0.98rem;
+  border-top: 1px solid rgba(148, 163, 184, 0.14);
+  padding-top: 0.72rem;
+}
+
+.monitor-timeline__meta {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+  color: rgba(107, 114, 128, 0.64);
+  font-size: 0.62rem;
+  font-weight: 680;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.monitor-timeline__maintenance {
+  display: flex;
+  width: 100%;
+  height: 1.25rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed rgba(148, 163, 184, 0.56);
+  border-radius: 0.45rem;
+  color: rgba(107, 114, 128, 0.66);
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.monitor-timeline__bars {
+  display: flex;
+  width: 100%;
+  height: 1.25rem;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.monitor-timeline__bar {
+  min-width: 3px;
+  flex: 1 1 0;
+  border-radius: 999px;
+}
+
+.monitor-timeline__bar--ok {
+  background: #10b981;
+}
+
+.monitor-timeline__bar--warn {
+  background: #f5b74a;
+}
+
+.monitor-timeline__bar--bad {
+  background: #ef6b64;
+}
+
+.monitor-timeline__range {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 0.28rem;
+  color: rgba(107, 114, 128, 0.5);
+  font-size: 0.56rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+:global(.dark) .monitor-timeline {
+  border-color: rgb(51 65 85 / 0.55);
+}
+
+:global(.dark) .monitor-timeline__meta,
+:global(.dark) .monitor-timeline__range,
+:global(.dark) .monitor-timeline__maintenance {
+  color: rgb(156 163 175 / 0.72);
+}
+</style>
