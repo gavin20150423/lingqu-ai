@@ -244,8 +244,12 @@ func (h *OpenAIGatewayHandler) Images(c *gin.Context) {
 			} else {
 				var imageUpstreamErr *service.OpenAIImagesUpstreamError
 				if errors.As(err, &imageUpstreamErr) {
-					h.reportSubPilotForwardFailure(c, apiKey, account, selection, requestModel, sessionHash, parsed.Stream, nil, err)
 					retryableServerError := service.IsOpenAIImagesRetryableUpstreamError(imageUpstreamErr)
+					if retryableServerError {
+						h.reportSubPilotForwardFailure(c, apiKey, account, selection, requestModel, sessionHash, parsed.Stream, nil, err)
+					} else {
+						h.reportSubPilotForwardFailureWithCode(c, apiKey, account, selection, requestModel, sessionHash, parsed.Stream, nil, err, "model_error")
+					}
 					h.gatewayService.ReportOpenAIAccountScheduleResult(account.ID, !retryableServerError, nil)
 					logEvent := "openai.images.upstream_user_error"
 					if retryableServerError {

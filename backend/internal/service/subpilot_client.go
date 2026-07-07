@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
@@ -18,6 +19,8 @@ import (
 )
 
 const subPilotDefaultTimeout = 80 * time.Millisecond
+
+var subPilotClientCache sync.Map
 
 type subPilotClient struct {
 	baseURL  string
@@ -93,12 +96,27 @@ func newSubPilotClient(cfg config.SubPilotConfig) *subPilotClient {
 	if timeout <= 0 {
 		timeout = subPilotDefaultTimeout
 	}
-	return &subPilotClient{
+	key := strings.Join([]string{
+		strings.TrimRight(strings.TrimSpace(cfg.BaseURL), "/"),
+		timeout.String(),
+		strconv.FormatBool(cfg.FailOpen),
+	}, "\x00")
+	if cached, ok := subPilotClientCache.Load(key); ok {
+		if client, ok := cached.(*subPilotClient); ok {
+			return client
+		}
+	}
+	client := &subPilotClient{
 		baseURL:  strings.TrimRight(strings.TrimSpace(cfg.BaseURL), "/"),
 		timeout:  timeout,
 		failOpen: cfg.FailOpen,
 		client:   &http.Client{Timeout: timeout},
 	}
+	actual, _ := subPilotClientCache.LoadOrStore(key, client)
+	if cached, ok := actual.(*subPilotClient); ok {
+		return cached
+	}
+	return client
 }
 
 func subPilotConfigFrom(cfg *config.Config) config.SubPilotConfig {
@@ -130,7 +148,7 @@ func (c *subPilotClient) reportSuccess(ctx context.Context, req subPilotReportSu
 	if c == nil {
 		return
 	}
-	if err := c.postJSON(ctx, "/v1/dispatch/report-success", req, nil); err != nil {
+	if err := c.postJSON(subPilotReportContext(ctx), "/v1/dispatch/report-success", req, nil); err != nil {
 		slog.Warn("subpilot report success failed", "error", err)
 	}
 }
@@ -139,7 +157,7 @@ func (c *subPilotClient) reportFailure(ctx context.Context, req subPilotReportFa
 	if c == nil {
 		return
 	}
-	if err := c.postJSON(ctx, "/v1/dispatch/report-failure", req, nil); err != nil {
+	if err := c.postJSON(subPilotReportContext(ctx), "/v1/dispatch/report-failure", req, nil); err != nil {
 		slog.Warn("subpilot report failure failed", "error", err)
 	}
 }
@@ -199,6 +217,20 @@ func subPilotRequestID(ctx context.Context) string {
 		}
 	}
 	return generateRequestID()
+}
+
+func subPilotReportContext(parent context.Context) context.Context {
+	base := context.Background()
+	if parent == nil {
+		return base
+	}
+	if v, _ := parent.Value(ctxkey.ClientRequestID).(string); strings.TrimSpace(v) != "" {
+		base = context.WithValue(base, ctxkey.ClientRequestID, strings.TrimSpace(v))
+	}
+	if v, _ := parent.Value(ctxkey.RequestID).(string); strings.TrimSpace(v) != "" {
+		base = context.WithValue(base, ctxkey.RequestID, strings.TrimSpace(v))
+	}
+	return base
 }
 
 func subPilotRequestType(stream bool, openAIWSMode bool) string {

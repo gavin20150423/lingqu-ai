@@ -921,7 +921,6 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 					)
 					continue
 				}
-				h.reportSubPilotForwardFailure(c, apiKey, account, selection, reqModel, sessionHash, reqStream, nil, err)
 				if result != nil && result.ClientDisconnect {
 					reqLog.Info("openai_messages.client_disconnected",
 						zap.Int64("account_id", account.ID),
@@ -929,6 +928,7 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 					)
 					return
 				}
+				h.reportSubPilotForwardFailure(c, apiKey, account, selection, reqModel, sessionHash, reqStream, nil, err)
 				h.gatewayService.ReportOpenAIAccountScheduleResult(account.ID, false, nil)
 				wroteFallback := h.ensureAnthropicErrorResponse(c, streamStarted)
 				reqLog.Warn("openai_messages.forward_failed",
@@ -1451,6 +1451,20 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 
 		token, _, err := h.gatewayService.GetAccessToken(ctx, account)
 		if err != nil {
+			h.gatewayService.ReportSubPilotFailure(ctx, service.SubPilotFailureInput{
+				LeaseID:       selection.SubPilotLeaseID,
+				APIKey:        apiKey,
+				Account:       account,
+				RequestID:     selection.SubPilotRequestID,
+				Model:         reqModel,
+				SessionKey:    sessionHash,
+				ErrorCode:     "access_token_error",
+				ErrorMessage:  err.Error(),
+				RequestType:   "selection",
+				Stream:        true,
+				OpenAIWSMode:  true,
+				QuotaPlatform: service.QuotaPlatform(c.Request.Context(), apiKey),
+			})
 			reqLog.Warn("openai.websocket_get_access_token_failed", zap.Int64("account_id", account.ID), zap.Error(err))
 			closeOpenAIClientWS(wsConn, coderws.StatusInternalError, "failed to get access token")
 			return
@@ -1995,6 +2009,10 @@ func (h *OpenAIGatewayHandler) ensureForwardErrorResponse(c *gin.Context, stream
 }
 
 func (h *OpenAIGatewayHandler) reportSubPilotForwardFailure(c *gin.Context, apiKey *service.APIKey, account *service.Account, selection *service.AccountSelectionResult, model string, sessionKey string, stream bool, failoverErr *service.UpstreamFailoverError, err error) {
+	h.reportSubPilotForwardFailureWithCode(c, apiKey, account, selection, model, sessionKey, stream, failoverErr, err, "")
+}
+
+func (h *OpenAIGatewayHandler) reportSubPilotForwardFailureWithCode(c *gin.Context, apiKey *service.APIKey, account *service.Account, selection *service.AccountSelectionResult, model string, sessionKey string, stream bool, failoverErr *service.UpstreamFailoverError, err error, errorCode string) {
 	if h == nil || h.gatewayService == nil || selection == nil || selection.SubPilotLeaseID == "" || account == nil {
 		return
 	}
@@ -2015,6 +2033,7 @@ func (h *OpenAIGatewayHandler) reportSubPilotForwardFailure(c *gin.Context, apiK
 		Model:         model,
 		SessionKey:    sessionKey,
 		StatusCode:    statusCode,
+		ErrorCode:     errorCode,
 		ErrorMessage:  errorMessage,
 		Stream:        stream,
 		QuotaPlatform: service.QuotaPlatform(c.Request.Context(), apiKey),
