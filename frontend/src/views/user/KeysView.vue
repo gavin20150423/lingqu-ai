@@ -133,6 +133,10 @@
                     :subscription-type="key.group.subscription_type"
                     :rate-multiplier="key.group.rate_multiplier"
                     :user-rate-multiplier="userGroupRates[key.group.id]"
+                    :peak-rate-enabled="key.group.peak_rate_enabled"
+                    :peak-start="key.group.peak_start"
+                    :peak-end="key.group.peak_end"
+                    :peak-rate-multiplier="key.group.peak_rate_multiplier"
                   />
                   <span v-else>{{ t('keys.noGroup') }}</span>
                   <Icon name="chevronDown" size="xs" />
@@ -182,6 +186,14 @@
             <span>
               <Icon name="bolt" size="sm" />
               {{ formatRateLimit(key) }}
+            </span>
+            <span>
+              <Icon name="users" size="sm" />
+              {{ t('keys.currentConcurrency') }}: {{ key.current_concurrency ?? 0 }}
+            </span>
+            <span v-if="key.last_used_ip">
+              <Icon name="globe" size="sm" />
+              {{ t('keys.lastUsedIP') }}: {{ key.last_used_ip }}
             </span>
           </div>
 

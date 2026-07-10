@@ -251,13 +251,20 @@ import { useAuthStore, useAppStore } from '@/stores'
 import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { DEFAULT_SITE_LOGO, resolveBrandLogo, resolveBrandName } from '@/constants/brand'
+import { sanitizeUrl } from '@/utils/url'
 
 const authStore = useAuthStore()
 const appStore = useAppStore()
 
 const siteName = computed(() => resolveBrandName(appStore.cachedPublicSettings?.site_name || appStore.siteName))
-const siteLogo = computed(() => resolveBrandLogo(appStore.cachedPublicSettings?.site_logo || appStore.siteLogo) || DEFAULT_SITE_LOGO)
-const docUrl = computed(() => appStore.cachedPublicSettings?.doc_url || appStore.docUrl || '')
+const siteLogo = computed(() =>
+  sanitizeUrl(
+    resolveBrandLogo(appStore.cachedPublicSettings?.site_logo || appStore.siteLogo) ||
+      DEFAULT_SITE_LOGO,
+    { allowRelative: true, allowDataUrl: true }
+  )
+)
+const docUrl = computed(() => sanitizeUrl(appStore.cachedPublicSettings?.doc_url || appStore.docUrl || ''))
 const homeContent = computed(() => appStore.cachedPublicSettings?.home_content || '')
 const isHomeContentUrl = computed(() => {
   const content = homeContent.value.trim()
