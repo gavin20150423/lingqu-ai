@@ -968,6 +968,7 @@ onBeforeUnmount(() => {
   margin-top: 0.5rem;
   width: min(20rem, calc(100vw - 1.25rem));
   overflow: hidden;
+  white-space: normal;
   border: 1px solid rgb(226 232 240);
   border-radius: 1rem;
   background: rgb(255 255 255);
@@ -1047,6 +1048,7 @@ onBeforeUnmount(() => {
   min-width: 0;
   flex: 1 1 auto;
   text-align: left;
+  white-space: normal;
 }
 
 .version-update-card__title {
@@ -1062,6 +1064,7 @@ onBeforeUnmount(() => {
   font-size: 0.75rem;
   line-height: 1.35;
   overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 :global(.dark) .version-popover {
