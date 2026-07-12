@@ -12,15 +12,18 @@ import (
 )
 
 var (
-	ErrAffiliateProfileNotFound = infraerrors.NotFound("AFFILIATE_PROFILE_NOT_FOUND", "affiliate profile not found")
-	ErrAffiliateCodeInvalid     = infraerrors.BadRequest("AFFILIATE_CODE_INVALID", "invalid affiliate code")
-	ErrAffiliateCodeTaken       = infraerrors.Conflict("AFFILIATE_CODE_TAKEN", "affiliate code already in use")
-	ErrAffiliateAlreadyBound    = infraerrors.Conflict("AFFILIATE_ALREADY_BOUND", "affiliate inviter already bound")
-	ErrAffiliateQuotaEmpty      = infraerrors.BadRequest("AFFILIATE_QUOTA_EMPTY", "no affiliate quota available to transfer")
+	ErrAffiliateProfileNotFound             = infraerrors.NotFound("AFFILIATE_PROFILE_NOT_FOUND", "affiliate profile not found")
+	ErrAffiliateCodeInvalid                 = infraerrors.BadRequest("AFFILIATE_CODE_INVALID", "invalid affiliate code")
+	ErrAffiliateCodeTaken                   = infraerrors.Conflict("AFFILIATE_CODE_TAKEN", "affiliate code already in use")
+	ErrAffiliateAlreadyBound                = infraerrors.Conflict("AFFILIATE_ALREADY_BOUND", "affiliate inviter already bound")
+	ErrAffiliateQuotaEmpty                  = infraerrors.BadRequest("AFFILIATE_QUOTA_EMPTY", "no affiliate quota available to transfer")
+	ErrAffiliateTransferDisabled            = infraerrors.Forbidden("AFFILIATE_TRANSFER_DISABLED", "affiliate quota transfer is disabled for this user")
+	ErrAffiliateOfflineSettlementNotEnabled = infraerrors.Conflict("AFFILIATE_OFFLINE_SETTLEMENT_NOT_ENABLED", "offline affiliate settlement is not enabled for this user")
 )
 
 const (
-	affiliateInviteesLimit = 100
+	affiliateInviteesLimit           = 100
+	AffiliateOfflineSettlementReason = "已线下结算"
 	// AffiliateCodeMinLength / AffiliateCodeMaxLength bound both system-generated
 	// 12-char codes and admin-customized codes (e.g. "VIP2026").
 	AffiliateCodeMinLength = 4
@@ -67,6 +70,7 @@ type AffiliateSummary struct {
 	AffQuota             float64   `json:"aff_quota"`
 	AffFrozenQuota       float64   `json:"aff_frozen_quota"`
 	AffHistoryQuota      float64   `json:"aff_history_quota"`
+	TransferDisabled     bool      `json:"transfer_disabled"`
 	CreatedAt            time.Time `json:"created_at"`
 	UpdatedAt            time.Time `json:"updated_at"`
 }
@@ -80,13 +84,14 @@ type AffiliateInvitee struct {
 }
 
 type AffiliateDetail struct {
-	UserID          int64   `json:"user_id"`
-	AffCode         string  `json:"aff_code"`
-	InviterID       *int64  `json:"inviter_id,omitempty"`
-	AffCount        int     `json:"aff_count"`
-	AffQuota        float64 `json:"aff_quota"`
-	AffFrozenQuota  float64 `json:"aff_frozen_quota"`
-	AffHistoryQuota float64 `json:"aff_history_quota"`
+	UserID           int64   `json:"user_id"`
+	AffCode          string  `json:"aff_code"`
+	InviterID        *int64  `json:"inviter_id,omitempty"`
+	AffCount         int     `json:"aff_count"`
+	AffQuota         float64 `json:"aff_quota"`
+	AffFrozenQuota   float64 `json:"aff_frozen_quota"`
+	AffHistoryQuota  float64 `json:"aff_history_quota"`
+	TransferDisabled bool    `json:"transfer_disabled"`
 	// EffectiveRebateRatePercent 是当前用户作为邀请人时实际生效的返利比例：
 	// 优先用户自己的专属比例（aff_rebate_rate_percent），否则回退到全局比例。
 	// 用于在用户的 /affiliate 页面直观展示「分享后能拿到多少」。
@@ -109,6 +114,8 @@ type AffiliateRepository interface {
 	ResetUserAffCode(ctx context.Context, userID int64) (string, error)
 	SetUserRebateRate(ctx context.Context, userID int64, ratePercent *float64) error
 	BatchSetUserRebateRate(ctx context.Context, userIDs []int64, ratePercent *float64) error
+	SetUserTransferDisabled(ctx context.Context, userID int64, disabled bool) error
+	ClearAvailableQuotaOfflineSettlement(ctx context.Context, userID int64, reason string) (float64, error)
 	ListUsersWithCustomSettings(ctx context.Context, filter AffiliateAdminFilter) ([]AffiliateAdminEntry, int64, error)
 	ListAffiliateInviteRecords(ctx context.Context, filter AffiliateRecordFilter) ([]AffiliateInviteRecord, int64, error)
 	ListAffiliateRebateRecords(ctx context.Context, filter AffiliateRecordFilter) ([]AffiliateRebateRecord, int64, error)
@@ -132,6 +139,8 @@ type AffiliateAdminEntry struct {
 	AffCodeCustom        bool     `json:"aff_code_custom"`
 	AffRebateRatePercent *float64 `json:"aff_rebate_rate_percent,omitempty"`
 	AffCount             int      `json:"aff_count"`
+	AvailableQuota       float64  `json:"available_quota"`
+	TransferDisabled     bool     `json:"transfer_disabled"`
 }
 
 type AffiliateRecordFilter struct {
@@ -179,6 +188,8 @@ type AffiliateTransferRecord struct {
 	UserEmail           string    `json:"user_email"`
 	Username            string    `json:"username"`
 	Amount              float64   `json:"amount"`
+	Action              string    `json:"action"`
+	Reason              string    `json:"reason,omitempty"`
 	BalanceAfter        *float64  `json:"balance_after,omitempty"`
 	AvailableQuotaAfter *float64  `json:"available_quota_after,omitempty"`
 	FrozenQuotaAfter    *float64  `json:"frozen_quota_after,omitempty"`
@@ -202,6 +213,7 @@ type AffiliateUserOverview struct {
 	RebatedInviteeCount int     `json:"rebated_invitee_count"`
 	AvailableQuota      float64 `json:"available_quota"`
 	HistoryQuota        float64 `json:"history_quota"`
+	TransferDisabled    bool    `json:"transfer_disabled"`
 }
 
 type AffiliateService struct {
@@ -261,6 +273,7 @@ func (s *AffiliateService) GetAffiliateDetail(ctx context.Context, userID int64)
 		AffQuota:                   summary.AffQuota,
 		AffFrozenQuota:             summary.AffFrozenQuota,
 		AffHistoryQuota:            summary.AffHistoryQuota,
+		TransferDisabled:           summary.TransferDisabled,
 		EffectiveRebateRatePercent: s.resolveRebateRatePercent(ctx, summary),
 		Invitees:                   invitees,
 	}, nil
@@ -557,6 +570,33 @@ func (s *AffiliateService) AdminBatchSetUserRebateRate(ctx context.Context, user
 		return nil
 	}
 	return s.repo.BatchSetUserRebateRate(ctx, cleaned, ratePercent)
+}
+
+func (s *AffiliateService) AdminSetUserTransferDisabled(ctx context.Context, userID int64, disabled bool) error {
+	if userID <= 0 {
+		return infraerrors.BadRequest("INVALID_USER", "invalid user")
+	}
+	if s == nil || s.repo == nil {
+		return infraerrors.ServiceUnavailable("SERVICE_UNAVAILABLE", "affiliate service unavailable")
+	}
+	return s.repo.SetUserTransferDisabled(ctx, userID, disabled)
+}
+
+func (s *AffiliateService) AdminClearAvailableQuotaOfflineSettlement(ctx context.Context, userID int64) (float64, error) {
+	if userID <= 0 {
+		return 0, infraerrors.BadRequest("INVALID_USER", "invalid user")
+	}
+	if s == nil || s.repo == nil {
+		return 0, infraerrors.ServiceUnavailable("SERVICE_UNAVAILABLE", "affiliate service unavailable")
+	}
+	cleared, err := s.repo.ClearAvailableQuotaOfflineSettlement(ctx, userID, AffiliateOfflineSettlementReason)
+	if err != nil {
+		return 0, err
+	}
+	if cleared > 0 {
+		s.invalidateAffiliateCaches(ctx, userID)
+	}
+	return cleared, nil
 }
 
 // AdminListCustomUsers 列出有专属配置的用户。

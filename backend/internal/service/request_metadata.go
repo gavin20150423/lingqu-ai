@@ -18,6 +18,8 @@ type RequestMetadata struct {
 	PrefetchedStickyGroupID    *int64
 	SingleAccountRetry         *bool
 	AccountSwitchCount         *int
+	SubPilotDisabled           *bool
+	SubPilotAPIKeyID           *int64
 }
 
 var (
@@ -114,6 +116,27 @@ func WithAccountSwitchCount(ctx context.Context, value int, bridgeOldKeys bool) 
 	}, func(base context.Context) context.Context {
 		return context.WithValue(base, ctxkey.AccountSwitchCount, value)
 	})
+}
+
+func WithSubPilotDisabled(ctx context.Context, value bool) context.Context {
+	return updateRequestMetadata(ctx, false, func(md *RequestMetadata) {
+		v := value
+		md.SubPilotDisabled = &v
+	}, nil)
+}
+
+func WithSubPilotAPIKeyID(ctx context.Context, value int64) context.Context {
+	return updateRequestMetadata(ctx, false, func(md *RequestMetadata) {
+		v := value
+		md.SubPilotAPIKeyID = &v
+	}, nil)
+}
+
+func SubPilotAPIKeyIDFromContext(ctx context.Context) (int64, bool) {
+	if md := metadataFromContext(ctx); md != nil && md.SubPilotAPIKeyID != nil {
+		return *md.SubPilotAPIKeyID, true
+	}
+	return 0, false
 }
 
 func IsMaxTokensOneHaikuRequestFromContext(ctx context.Context) (bool, bool) {
@@ -213,4 +236,9 @@ func AccountSwitchCountFromContext(ctx context.Context) (int, bool) {
 		return int(t), true
 	}
 	return 0, false
+}
+
+func SubPilotDisabledFromContext(ctx context.Context) bool {
+	md := metadataFromContext(ctx)
+	return md != nil && md.SubPilotDisabled != nil && *md.SubPilotDisabled
 }

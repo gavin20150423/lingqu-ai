@@ -60,6 +60,7 @@ func (h *OpenAIGatewayHandler) Embeddings(c *gin.Context) {
 		return
 	}
 	if !gjson.ValidBytes(body) {
+		logRequestBodyParseFailure(reqLog, body, nil)
 		h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "Failed to parse request body")
 		return
 	}
@@ -116,6 +117,7 @@ func (h *OpenAIGatewayHandler) Embeddings(c *gin.Context) {
 			failedAccountIDs,
 			service.OpenAIUpstreamTransportHTTPSSE,
 			service.OpenAIEndpointCapabilityEmbeddings,
+			false,
 			false,
 		)
 		if err != nil {
@@ -182,6 +184,7 @@ func (h *OpenAIGatewayHandler) Embeddings(c *gin.Context) {
 		if err != nil {
 			var failoverErr *service.UpstreamFailoverError
 			if errors.As(err, &failoverErr) {
+				h.reportSubPilotForwardFailure(c, apiKey, account, selection, reqModel, "", false, failoverErr, err)
 				if c.Writer.Size() != writerSizeBeforeForward {
 					h.handleFailoverExhausted(c, failoverErr, true)
 					return
@@ -203,6 +206,7 @@ func (h *OpenAIGatewayHandler) Embeddings(c *gin.Context) {
 				)
 				continue
 			}
+			h.reportSubPilotForwardFailure(c, apiKey, account, selection, reqModel, "", false, nil, err)
 			h.gatewayService.ReportOpenAIAccountScheduleResult(account.ID, false, nil)
 			if c.Writer.Size() == writerSizeBeforeForward {
 				h.errorResponse(c, http.StatusBadGateway, "upstream_error", "Upstream request failed")
@@ -232,6 +236,8 @@ func (h *OpenAIGatewayHandler) Embeddings(c *gin.Context) {
 				UpstreamEndpoint:   upstreamEndpoint,
 				UserAgent:          userAgent,
 				IPAddress:          clientIP,
+				SubPilotLeaseID:    selection.SubPilotLeaseID,
+				SubPilotSessionKey: "",
 				APIKeyService:      h.apiKeyService,
 				QuotaPlatform:      quotaPlatform,
 				ChannelUsageFields: channelMapping.ToUsageFields(reqModel, result.UpstreamModel),

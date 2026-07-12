@@ -46,7 +46,9 @@
 
         <div class="card p-6">
           <h3 class="text-base font-semibold text-gray-900 dark:text-white">{{ t('affiliate.title') }}</h3>
-          <p class="mt-1 text-sm text-gray-500 dark:text-dark-400">{{ t('affiliate.description') }}</p>
+          <p class="mt-1 text-sm text-gray-500 dark:text-dark-400">
+            {{ t(detail.transfer_disabled ? 'affiliate.offlineDescription' : 'affiliate.description') }}
+          </p>
 
           <div class="mt-5 grid gap-4 md:grid-cols-2">
             <div class="space-y-2">
@@ -77,7 +79,10 @@
             <ul class="mt-2 space-y-1 text-sm text-primary-700 dark:text-primary-300">
               <li>1. {{ t('affiliate.tips.line1') }}</li>
               <li>2. {{ t('affiliate.tips.line2', { rate: `${formattedRebateRate}%` }) }}</li>
-              <li>3. {{ t('affiliate.tips.line3') }}</li>
+              <li>
+                3.
+                {{ t(detail.transfer_disabled ? 'affiliate.tips.line3Offline' : 'affiliate.tips.line3') }}
+              </li>
               <li v-if="detail.aff_frozen_quota > 0">4. {{ t('affiliate.tips.line4') }}</li>
             </ul>
           </div>
@@ -86,12 +91,16 @@
         <div class="card p-6">
           <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h3 class="text-base font-semibold text-gray-900 dark:text-white">{{ t('affiliate.transfer.title') }}</h3>
-              <p class="mt-1 text-sm text-gray-500 dark:text-dark-400">{{ t('affiliate.transfer.description') }}</p>
+              <h3 class="text-base font-semibold text-gray-900 dark:text-white">
+                {{ t(detail.transfer_disabled ? 'affiliate.transfer.offlineTitle' : 'affiliate.transfer.title') }}
+              </h3>
+              <p class="mt-1 text-sm text-gray-500 dark:text-dark-400">
+                {{ t(detail.transfer_disabled ? 'affiliate.transfer.offlineDescription' : 'affiliate.transfer.description') }}
+              </p>
             </div>
             <button
               class="btn btn-primary"
-              :disabled="transferring || detail.aff_quota <= 0"
+              :disabled="transferring || detail.aff_quota <= 0 || detail.transfer_disabled"
               @click="transferQuota"
             >
               <Icon v-if="transferring" name="refresh" size="sm" class="animate-spin" />
@@ -99,7 +108,10 @@
               <span>{{ transferring ? t('affiliate.transfer.transferring') : t('affiliate.transfer.button') }}</span>
             </button>
           </div>
-          <p v-if="detail.aff_quota <= 0" class="mt-3 text-sm text-amber-600 dark:text-amber-400">
+          <p v-if="detail.transfer_disabled" class="mt-3 text-sm text-amber-600 dark:text-amber-400">
+            {{ t('affiliate.transfer.disabled') }}
+          </p>
+          <p v-else-if="detail.aff_quota <= 0" class="mt-3 text-sm text-amber-600 dark:text-amber-400">
             {{ t('affiliate.transfer.empty') }}
           </p>
         </div>
@@ -205,7 +217,7 @@ async function copyInviteLink(): Promise<void> {
 }
 
 async function transferQuota(): Promise<void> {
-  if (!detail.value || detail.value.aff_quota <= 0 || transferring.value) return
+  if (!detail.value || detail.value.aff_quota <= 0 || detail.value.transfer_disabled || transferring.value) return
   transferring.value = true
   try {
     const resp = await userAPI.transferAffiliateQuota()

@@ -53,6 +53,7 @@ func (h *AffiliateHandler) ListUsers(c *gin.Context) {
 type UpdateAffiliateUserRequest struct {
 	AffCode              *string  `json:"aff_code"`
 	AffRebateRatePercent *float64 `json:"aff_rebate_rate_percent"`
+	TransferDisabled     *bool    `json:"transfer_disabled"`
 	// ClearRebateRate explicitly clears the per-user rate (sets it to NULL).
 	// Used to disambiguate from "field not provided".
 	ClearRebateRate bool `json:"clear_rebate_rate"`
@@ -90,6 +91,13 @@ func (h *AffiliateHandler) UpdateUserSettings(c *gin.Context) {
 		}
 	}
 
+	if req.TransferDisabled != nil {
+		if err := h.affiliateService.AdminSetUserTransferDisabled(c.Request.Context(), userID, *req.TransferDisabled); err != nil {
+			response.ErrorFrom(c, err)
+			return
+		}
+	}
+
 	response.Success(c, gin.H{"user_id": userID})
 }
 
@@ -114,7 +122,32 @@ func (h *AffiliateHandler) ClearUserSettings(c *gin.Context) {
 		response.ErrorFrom(c, err)
 		return
 	}
+	if err := h.affiliateService.AdminSetUserTransferDisabled(c.Request.Context(), userID, false); err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
 	response.Success(c, gin.H{"user_id": userID})
+}
+
+// OfflineSettleUser clears the user's currently transferable affiliate quota.
+// The account balance is not credited; the ledger records the fixed reason 已线下结算.
+// POST /api/v1/admin/affiliates/users/:user_id/offline-settlement
+func (h *AffiliateHandler) OfflineSettleUser(c *gin.Context) {
+	userID, err := strconv.ParseInt(c.Param("user_id"), 10, 64)
+	if err != nil || userID <= 0 {
+		response.BadRequest(c, "Invalid user_id")
+		return
+	}
+	cleared, err := h.affiliateService.AdminClearAvailableQuotaOfflineSettlement(c.Request.Context(), userID)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, gin.H{
+		"user_id":       userID,
+		"cleared_quota": cleared,
+		"reason":        service.AffiliateOfflineSettlementReason,
+	})
 }
 
 // BatchSetRate applies the same rebate rate (or clears it) to multiple users.

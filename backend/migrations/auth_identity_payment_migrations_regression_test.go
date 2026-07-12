@@ -143,6 +143,17 @@ func TestMigration134AddsAffiliateLedgerAuditFieldsWithoutJSONCast(t *testing.T)
 	require.NotContains(t, sql, "detail::jsonb")
 }
 
+func TestMigration174AddsAffiliateOfflineSettlementControls(t *testing.T) {
+	content, err := FS.ReadFile("174_affiliate_offline_settlement.sql")
+	require.NoError(t, err)
+
+	sql := string(content)
+	require.Contains(t, sql, "ADD COLUMN IF NOT EXISTS transfer_disabled BOOLEAN NOT NULL DEFAULT FALSE")
+	require.Contains(t, sql, "ADD COLUMN IF NOT EXISTS reason TEXT NULL")
+	require.Contains(t, sql, "action = 'offline_settlement'")
+	require.Contains(t, sql, "已线下结算")
+}
+
 func TestMigration135AllowsGitHubAndGoogleAuthProviders(t *testing.T) {
 	content, err := FS.ReadFile("135_allow_email_oauth_provider_types.sql")
 	require.NoError(t, err)
@@ -212,4 +223,31 @@ func TestMigration154aAddsSparkShadowIndexesConcurrently(t *testing.T) {
 	require.Contains(t, sql, "WHERE parent_account_id IS NOT NULL")
 	require.Contains(t, sql, "quota_dimension = 'spark'")
 	require.Contains(t, sql, "deleted_at IS NULL")
+}
+
+func TestMigration173AllowsCyberBlockedUsageRequestType(t *testing.T) {
+	entries, err := FS.ReadDir(".")
+	require.NoError(t, err)
+
+	previousIndex := -1
+	currentIndex := -1
+	for i, entry := range entries {
+		switch entry.Name() {
+		case "172_video_per_second_billing_metadata.sql":
+			previousIndex = i
+		case "173_allow_cyber_blocked_usage_request_type.sql":
+			currentIndex = i
+		}
+	}
+	require.NotEqual(t, -1, previousIndex)
+	require.NotEqual(t, -1, currentIndex)
+	require.Less(t, previousIndex, currentIndex)
+
+	content, err := FS.ReadFile("173_allow_cyber_blocked_usage_request_type.sql")
+	require.NoError(t, err)
+
+	sql := string(content)
+	require.Contains(t, sql, "DROP CONSTRAINT IF EXISTS usage_logs_request_type_check")
+	require.Contains(t, sql, "ADD CONSTRAINT usage_logs_request_type_check")
+	require.Contains(t, sql, "CHECK (request_type IN (0, 1, 2, 3, 4)) NOT VALID")
 }

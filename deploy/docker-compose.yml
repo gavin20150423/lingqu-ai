@@ -135,10 +135,10 @@ services:
       # =======================================================================
       # Enable URL allowlist validation (false to skip allowlist checks)
       - SECURITY_URL_ALLOWLIST_ENABLED=${SECURITY_URL_ALLOWLIST_ENABLED:-false}
-      # Allow insecure HTTP URLs when allowlist is disabled (default: false, requires https)
-      - SECURITY_URL_ALLOWLIST_ALLOW_INSECURE_HTTP=${SECURITY_URL_ALLOWLIST_ALLOW_INSECURE_HTTP:-false}
-      # Allow private IP addresses for upstream/pricing/CRS (for internal deployments)
-      - SECURITY_URL_ALLOWLIST_ALLOW_PRIVATE_HOSTS=${SECURITY_URL_ALLOWLIST_ALLOW_PRIVATE_HOSTS:-false}
+      # Allow insecure HTTP URLs when allowlist is disabled (default: true; set to false to require https)
+      - SECURITY_URL_ALLOWLIST_ALLOW_INSECURE_HTTP=${SECURITY_URL_ALLOWLIST_ALLOW_INSECURE_HTTP:-true}
+      # Allow private IP addresses for upstream/pricing/CRS (default: true; set to false to block private hosts)
+      - SECURITY_URL_ALLOWLIST_ALLOW_PRIVATE_HOSTS=${SECURITY_URL_ALLOWLIST_ALLOW_PRIVATE_HOSTS:-true}
       # Upstream hosts whitelist (comma-separated, only used when enabled=true)
       - SECURITY_URL_ALLOWLIST_UPSTREAM_HOSTS=${SECURITY_URL_ALLOWLIST_UPSTREAM_HOSTS:-}
 
@@ -169,6 +169,15 @@ services:
       - GATEWAY_IMAGE_CONCURRENCY_OVERFLOW_MODE=${GATEWAY_IMAGE_CONCURRENCY_OVERFLOW_MODE:-reject}
       - GATEWAY_IMAGE_CONCURRENCY_WAIT_TIMEOUT_SECONDS=${GATEWAY_IMAGE_CONCURRENCY_WAIT_TIMEOUT_SECONDS:-30}
       - GATEWAY_IMAGE_CONCURRENCY_MAX_WAITING_REQUESTS=${GATEWAY_IMAGE_CONCURRENCY_MAX_WAITING_REQUESTS:-100}
+
+      # =======================================================================
+      # SubPilot Dispatch Integration
+      # =======================================================================
+      - GATEWAY_SUBPILOT_ENABLED=${GATEWAY_SUBPILOT_ENABLED:-false}
+      - GATEWAY_SUBPILOT_BASE_URL=${GATEWAY_SUBPILOT_BASE_URL:-}
+      - GATEWAY_SUBPILOT_TIMEOUT_MS=${GATEWAY_SUBPILOT_TIMEOUT_MS:-80}
+      - GATEWAY_SUBPILOT_FAIL_OPEN=${GATEWAY_SUBPILOT_FAIL_OPEN:-true}
+      - GATEWAY_SUBPILOT_PROBE_SECRET=${GATEWAY_SUBPILOT_PROBE_SECRET:-}
     depends_on:
       postgres:
         condition: service_healthy

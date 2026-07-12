@@ -1,24 +1,24 @@
 <template>
-  <div class="mt-3 flex items-end justify-between">
-    <div class="text-[11px] uppercase tracking-widest text-gray-400">
+  <div class="monitor-availability">
+    <div class="monitor-availability__label">
       {{ windowLabel }}
     </div>
-    <div class="flex items-baseline gap-0.5">
+    <div class="monitor-availability__value">
       <span
-        class="text-3xl font-bold tabular-nums leading-none"
+        class="monitor-availability__number"
         :style="colorStyle"
       >
         {{ displayValue }}
       </span>
       <span
-        class="text-base font-semibold leading-none"
+        class="monitor-availability__unit"
         :style="colorStyle"
       >%</span>
     </div>
   </div>
   <div
     v-if="samplesLabel"
-    class="mt-1 text-[11px] text-gray-400 text-right"
+    class="monitor-availability__samples"
   >
     {{ samplesLabel }}
   </div>
@@ -47,3 +47,51 @@ const colorStyle = computed(() => {
   return colour ? { color: colour } : { color: 'rgb(156 163 175)' }
 })
 </script>
+
+<style scoped>
+.monitor-availability {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  margin-top: 0.95rem;
+}
+
+.monitor-availability__label {
+  color: rgba(107, 114, 128, 0.64);
+  font-size: 0.68rem;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.monitor-availability__value {
+  display: flex;
+  align-items: baseline;
+  gap: 0.08rem;
+}
+
+.monitor-availability__number {
+  font-size: 1.85rem;
+  font-weight: 780;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.monitor-availability__unit {
+  font-size: 0.94rem;
+  font-weight: 680;
+  line-height: 1;
+}
+
+.monitor-availability__samples {
+  margin-top: 0.35rem;
+  color: rgba(107, 114, 128, 0.62);
+  font-size: 0.7rem;
+  text-align: right;
+}
+
+:global(.dark) .monitor-availability__label,
+:global(.dark) .monitor-availability__samples {
+  color: rgb(156 163 175 / 0.74);
+}
+</style>

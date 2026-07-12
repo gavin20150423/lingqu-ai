@@ -245,6 +245,11 @@ func (h *OpenAIGatewayHandler) Images(c *gin.Context) {
 				var imageUpstreamErr *service.OpenAIImagesUpstreamError
 				if errors.As(err, &imageUpstreamErr) {
 					retryableServerError := service.IsOpenAIImagesRetryableUpstreamError(imageUpstreamErr)
+					if retryableServerError {
+						h.reportSubPilotForwardFailure(c, apiKey, account, selection, requestModel, sessionHash, parsed.Stream, nil, err)
+					} else {
+						h.reportSubPilotForwardFailureWithCode(c, apiKey, account, selection, requestModel, sessionHash, parsed.Stream, nil, err, "model_error")
+					}
 					h.gatewayService.ReportOpenAIAccountScheduleResult(account.ID, !retryableServerError, nil)
 					logEvent := "openai.images.upstream_user_error"
 					if retryableServerError {
@@ -261,6 +266,7 @@ func (h *OpenAIGatewayHandler) Images(c *gin.Context) {
 				}
 				var failoverErr *service.UpstreamFailoverError
 				if errors.As(err, &failoverErr) {
+					h.reportSubPilotForwardFailure(c, apiKey, account, selection, requestModel, sessionHash, parsed.Stream, failoverErr, err)
 					h.gatewayService.ReportOpenAIAccountScheduleResult(account.ID, false, nil)
 					if c.Writer.Size() != writerSizeBeforeForward {
 						reqLog.Warn("openai.images.upstream_failover_skipped_after_flush",
@@ -308,6 +314,7 @@ func (h *OpenAIGatewayHandler) Images(c *gin.Context) {
 					)
 					continue
 				}
+				h.reportSubPilotForwardFailure(c, apiKey, account, selection, requestModel, sessionHash, parsed.Stream, nil, err)
 				h.gatewayService.ReportOpenAIAccountScheduleResult(account.ID, false, nil)
 				upstreamErrorAlreadyCommunicated := openAIForwardErrorAlreadyCommunicated(c, writerSizeBeforeForward, err)
 				wroteFallback := false
@@ -364,6 +371,8 @@ func (h *OpenAIGatewayHandler) Images(c *gin.Context) {
 				UserAgent:          userAgent,
 				IPAddress:          clientIP,
 				RequestPayloadHash: requestPayloadHash,
+				SubPilotLeaseID:    selection.SubPilotLeaseID,
+				SubPilotSessionKey: sessionHash,
 				APIKeyService:      h.apiKeyService,
 				QuotaPlatform:      quotaPlatform,
 				ChannelUsageFields: channelMapping.ToUsageFields(requestModel, upstreamModel),

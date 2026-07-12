@@ -545,6 +545,7 @@ func registerSystemRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	{
 		system.GET("/version", h.Admin.System.GetVersion)
 		system.GET("/check-updates", h.Admin.System.CheckUpdates)
+		system.GET("/rollback-versions", h.Admin.System.GetRollbackVersions)
 		system.POST("/update", h.Admin.System.PerformUpdate)
 		system.POST("/rollback", h.Admin.System.Rollback)
 		system.POST("/restart", h.Admin.System.RestartService)
@@ -684,6 +685,7 @@ func registerAffiliateRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 			users.POST("/batch-rate", h.Admin.Affiliate.BatchSetRate)
 			users.GET("/:user_id/overview", h.Admin.Affiliate.GetUserOverview)
 			users.PUT("/:user_id", h.Admin.Affiliate.UpdateUserSettings)
+			users.POST("/:user_id/offline-settlement", h.Admin.Affiliate.OfflineSettleUser)
 			users.DELETE("/:user_id", h.Admin.Affiliate.ClearUserSettings)
 		}
 	}

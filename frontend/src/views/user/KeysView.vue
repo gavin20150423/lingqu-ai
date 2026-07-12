@@ -133,6 +133,10 @@
                     :subscription-type="key.group.subscription_type"
                     :rate-multiplier="key.group.rate_multiplier"
                     :user-rate-multiplier="userGroupRates[key.group.id]"
+                    :peak-rate-enabled="key.group.peak_rate_enabled"
+                    :peak-start="key.group.peak_start"
+                    :peak-end="key.group.peak_end"
+                    :peak-rate-multiplier="key.group.peak_rate_multiplier"
                   />
                   <span v-else>{{ t('keys.noGroup') }}</span>
                   <Icon name="chevronDown" size="xs" />
@@ -140,19 +144,31 @@
                 <span>{{ t('keys.created') }} {{ formatDateTime(key.created_at) }}</span>
               </div>
             </div>
-            <button
-              type="button"
-              class="lingqu-key-card__copy"
-              :title="copiedKeyId === key.id ? t('keys.copied') : t('keys.copyToClipboard')"
-              @click="copyToClipboard(key.key, key.id)"
-            >
-              <Icon :name="copiedKeyId === key.id ? 'check' : 'copy'" size="sm" />
-            </button>
+            <div class="lingqu-key-card__tools">
+              <button
+                type="button"
+                class="lingqu-key-card__visibility"
+                :title="revealedKeyIds.has(key.id) ? t('keys.hideFullKey') : t('keys.showFullKey')"
+                :aria-label="revealedKeyIds.has(key.id) ? t('keys.hideFullKey') : t('keys.showFullKey')"
+                :aria-pressed="revealedKeyIds.has(key.id)"
+                @click="toggleKeyVisibility(key.id)"
+              >
+                <Icon :name="revealedKeyIds.has(key.id) ? 'eyeOff' : 'eye'" size="sm" />
+              </button>
+              <button
+                type="button"
+                class="lingqu-key-card__copy"
+                :title="copiedKeyId === key.id ? t('keys.copied') : t('keys.copyToClipboard')"
+                @click="copyToClipboard(key.key, key.id)"
+              >
+                <Icon :name="copiedKeyId === key.id ? 'check' : 'copy'" size="sm" />
+              </button>
+            </div>
           </div>
 
           <div class="lingqu-key-card__secret">
             <small>API Key</small>
-            <code>{{ maskApiKey(key.key) }}</code>
+            <code>{{ revealedKeyIds.has(key.id) ? key.key : maskApiKey(key.key) }}</code>
           </div>
 
           <div class="lingqu-key-card__metrics">
@@ -182,6 +198,14 @@
             <span>
               <Icon name="bolt" size="sm" />
               {{ formatRateLimit(key) }}
+            </span>
+            <span>
+              <Icon name="users" size="sm" />
+              {{ t('keys.currentConcurrency') }}: {{ key.current_concurrency ?? 0 }}
+            </span>
+            <span v-if="key.last_used_ip">
+              <Icon name="globe" size="sm" />
+              {{ t('keys.lastUsedIP') }}: {{ key.last_used_ip }}
             </span>
           </div>
 
@@ -220,6 +244,7 @@
 
       <Pagination
         v-if="pagination.total > 0"
+        class="lingqu-keys__pagination"
         :page="pagination.page"
         :total="pagination.total"
         :page-size="pagination.page_size"
@@ -994,6 +1019,7 @@ const showAdvancedCreateOptions = ref(false)
 const pendingCcsRow = ref<ApiKey | null>(null)
 const selectedKey = ref<ApiKey | null>(null)
 const copiedKeyId = ref<number | null>(null)
+const revealedKeyIds = ref<Set<number>>(new Set())
 const baseUrlCopied = ref(false)
 const groupSelectorKeyId = ref<number | null>(null)
 const publicSettings = ref<PublicSettings | null>(null)
@@ -1151,6 +1177,16 @@ const copyToClipboard = async (text: string, keyId: number) => {
       copiedKeyId.value = null
     }, 800)
   }
+}
+
+const toggleKeyVisibility = (keyId: number) => {
+  const nextRevealedKeyIds = new Set(revealedKeyIds.value)
+  if (nextRevealedKeyIds.has(keyId)) {
+    nextRevealedKeyIds.delete(keyId)
+  } else {
+    nextRevealedKeyIds.add(keyId)
+  }
+  revealedKeyIds.value = nextRevealedKeyIds
 }
 
 const copyBaseUrl = async () => {
@@ -1763,6 +1799,7 @@ onUnmounted(() => {
 .lingqu-keys__usage-entry,
 .lingqu-key-card__actions a,
 .lingqu-key-card__actions button,
+.lingqu-key-card__visibility,
 .lingqu-key-card__copy {
   display: inline-flex;
   min-height: 2.12rem;
@@ -1793,6 +1830,7 @@ onUnmounted(() => {
 .lingqu-keys__usage-entry,
 .lingqu-key-card__actions a,
 .lingqu-key-card__actions button,
+.lingqu-key-card__visibility,
 .lingqu-key-card__copy {
   background: rgba(255, 255, 255, 0.72);
   padding: 0 0.66rem;
@@ -1839,6 +1877,7 @@ onUnmounted(() => {
 .lingqu-keys__usage-entry:hover,
 .lingqu-key-card__actions a:hover,
 .lingqu-key-card__actions button:hover,
+.lingqu-key-card__visibility:hover,
 .lingqu-key-card__copy:hover {
   transform: translateY(-2px);
   box-shadow: 0 12px 24px rgba(29, 42, 42, 0.1);
@@ -2001,6 +2040,15 @@ onUnmounted(() => {
   font-weight: 900;
 }
 
+.lingqu-key-card__tools {
+  width: fit-content;
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.38rem;
+}
+
+.lingqu-key-card__visibility,
 .lingqu-key-card__copy {
   width: 2.34rem;
   min-height: 2.34rem;

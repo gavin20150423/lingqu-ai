@@ -83,6 +83,21 @@
           <template #cell-amount="{ row }">
             <AmountText :value="row.amount" strong />
           </template>
+          <template #cell-action="{ row }">
+            <div class="space-y-1">
+              <span
+                :class="row.action === 'offline_settlement'
+                  ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
+                  : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'"
+                class="inline-flex rounded px-2 py-1 text-xs font-medium"
+              >
+                {{ row.action === 'offline_settlement'
+                  ? t('admin.affiliates.records.offlineSettlement')
+                  : t('admin.affiliates.records.balanceTransfer') }}
+              </span>
+              <p v-if="row.reason" class="text-xs text-gray-500 dark:text-dark-400">{{ row.reason }}</p>
+            </div>
+          </template>
           <template #cell-balance_after="{ row }">
             <NullableAmountText :value="row.balance_after" />
           </template>
@@ -135,6 +150,12 @@
           <OverviewStat :label="t('admin.affiliates.overview.rebatedInviteeCount')" :value="String(selectedOverview.rebated_invitee_count)" />
           <OverviewStat :label="t('admin.affiliates.overview.availableQuota')" :value="'$' + formatAmount(selectedOverview.available_quota)" />
           <OverviewStat :label="t('admin.affiliates.overview.historyQuota')" :value="'$' + formatAmount(selectedOverview.history_quota)" />
+          <OverviewStat
+            :label="t('admin.affiliates.overview.settlementMode')"
+            :value="selectedOverview.transfer_disabled
+              ? t('admin.affiliates.records.offlineSettlement')
+              : t('admin.affiliates.records.balanceTransfer')"
+          />
         </div>
       </div>
     </BaseDialog>
@@ -201,6 +222,7 @@ const columns = computed<Column[]>(() => {
   }
   return [
     { key: 'user', label: t('admin.affiliates.records.user'), sortable: true },
+    { key: 'action', label: t('admin.affiliates.records.action'), sortable: true },
     { key: 'amount', label: t('admin.affiliates.records.transferAmount'), sortable: true },
     { key: 'balance_after', label: t('admin.affiliates.records.balanceAfter'), sortable: true },
     { key: 'available_quota_after', label: t('admin.affiliates.records.availableQuotaAfter'), sortable: true },

@@ -27,7 +27,9 @@
       </div>
     </div>
 
-    <nav class="sidebar-nav scrollbar-hide">
+    <!-- Navigation -->
+    <nav ref="sidebarNavRef" class="sidebar-nav scrollbar-hide">
+      <!-- Admin View: Admin menu first, then personal menu -->
       <template v-if="isAdmin">
         <div class="sidebar-section">
           <template v-for="item in adminNavItems" :key="item.path">
@@ -107,20 +109,19 @@
 
         <router-link
           v-if="!authStore.isSimpleMode"
-          to="/keys"
+          to="/dashboard"
           class="sidebar-link mx-3 mb-4 mt-2"
-          :class="{ 'sidebar-link-active': isActive('/keys'), 'sidebar-link-collapsed': sidebarCollapsed }"
-          :title="sidebarCollapsed ? t('nav.apiKeys') : undefined"
-          data-tour="sidebar-my-keys"
-          @click="handleMenuItemClick('/keys')"
+          :class="{ 'sidebar-link-collapsed': sidebarCollapsed }"
+          :title="sidebarCollapsed ? t('nav.userPortal') : undefined"
+          @click="handleMenuItemClick('/dashboard')"
         >
-          <SidebarItemIcon :item="{ path: '/keys', label: t('nav.apiKeys'), icon: 'key' }" />
+          <SidebarItemIcon :item="{ path: '/dashboard', label: t('nav.userPortal'), icon: 'user' }" />
           <span
             class="sidebar-label"
             :class="{ 'sidebar-label-collapsed': sidebarCollapsed }"
             :aria-hidden="sidebarCollapsed ? 'true' : 'false'"
           >
-            {{ t('nav.apiKeys') }}
+            {{ t('nav.userPortal') }}
           </span>
         </router-link>
       </template>
@@ -183,14 +184,25 @@
 </template>
 
 <script setup lang="ts">
-import { computed, defineComponent, h, onMounted, ref, watch } from 'vue'
+import {
+  computed,
+  defineComponent,
+  h,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  watch
+} from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAdminSettingsStore, useAppStore, useAuthStore, useOnboardingStore } from '@/stores'
 import VersionBadge from '@/components/common/VersionBadge.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { sanitizeSvg } from '@/utils/sanitize'
+import { sanitizeUrl } from '@/utils/url'
 import { FeatureFlags, makeSidebarFlag } from '@/utils/featureFlags'
+import { useBatchImageAccess } from '@/composables/useBatchImageAccess'
 
 type IconName =
   | 'badge'
@@ -271,10 +283,13 @@ const adminSettingsStore = useAdminSettingsStore()
 const sidebarCollapsed = computed(() => appStore.sidebarCollapsed)
 const mobileOpen = computed(() => appStore.mobileOpen)
 const isAdmin = computed(() => authStore.isAdmin)
+const sidebarNavRef = ref<HTMLElement | null>(null)
+
+// Track which parent nav groups are expanded
 const expandedGroups = ref<Set<string>>(new Set())
 
 const siteName = computed(() => appStore.siteName)
-const siteLogo = computed(() => appStore.siteLogo)
+const siteLogo = computed(() => sanitizeUrl(appStore.siteLogo || '', { allowRelative: true, allowDataUrl: true }))
 const siteVersion = computed(() => appStore.siteVersion)
 const settingsLoaded = computed(() => appStore.publicSettingsLoaded)
 
@@ -285,6 +300,8 @@ const flagAffiliate = makeSidebarFlag(FeatureFlags.affiliate)
 const flagRiskControl = makeSidebarFlag(FeatureFlags.riskControl)
 const flagOpsMonitoring = () => adminSettingsStore.opsMonitoringEnabled
 const flagAdminPayment = () => adminSettingsStore.paymentEnabled
+const { canUseBatchImage, refreshBatchImageAccess } = useBatchImageAccess()
+const flagBatchImageAccess = () => canUseBatchImage.value
 
 const customMenuItemsForUser = computed(() => {
   const items = appStore.cachedPublicSettings?.custom_menu_items ?? []
@@ -306,6 +323,7 @@ function buildSelfNavItems(withDashboard: boolean): NavItem[] {
   }
   items.push(
     { path: '/keys', label: t('nav.apiKeys'), icon: 'key' },
+    { path: '/batch-image', label: t('nav.batchImage'), icon: 'grid', hideInSimpleMode: true, featureFlag: flagBatchImageAccess },
     { path: '/usage', label: t('nav.usage'), icon: 'chart', hideInSimpleMode: true },
     { path: '/available-channels', label: t('nav.availableChannels'), icon: 'server', hideInSimpleMode: true, featureFlag: flagAvailableChannels },
     { path: '/monitor', label: t('nav.channelStatus'), icon: 'sync', featureFlag: flagChannelMonitor },
@@ -389,7 +407,7 @@ const adminNavItems = computed((): NavItem[] => {
 
   if (authStore.isSimpleMode) {
     const filtered = visible.filter(item => !item.hideInSimpleMode)
-    filtered.push({ path: '/keys', label: t('nav.apiKeys'), icon: 'key' })
+    filtered.push({ path: '/dashboard', label: t('nav.userPortal'), icon: 'user' })
     filtered.push({ path: '/admin/settings', label: t('nav.settings'), icon: 'cog' })
     for (const cm of customMenuItemsForAdmin.value) {
       filtered.push({ path: `/custom/${cm.id}`, label: cm.label, icon: 'grid', iconSvg: cm.icon_svg })
@@ -479,6 +497,21 @@ watch(
 onMounted(() => {
   if (isAdmin.value) {
     adminSettingsStore.fetch()
+  }
+  void refreshBatchImageAccess()
+  // Restore sidebar scroll position after route change re-mounts the component
+  if (appStore.sidebarScrollTop > 0 && sidebarNavRef.value) {
+    void nextTick(() => {
+      if (sidebarNavRef.value) {
+        sidebarNavRef.value.scrollTop = appStore.sidebarScrollTop
+      }
+    })
+  }
+})
+
+onBeforeUnmount(() => {
+  if (sidebarNavRef.value) {
+    appStore.sidebarScrollTop = sidebarNavRef.value.scrollTop
   }
 })
 </script>

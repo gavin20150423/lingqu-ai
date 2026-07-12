@@ -15,6 +15,8 @@ export interface AffiliateAdminEntry {
   aff_code_custom: boolean
   aff_rebate_rate_percent?: number | null
   aff_count: number
+  available_quota: number
+  transfer_disabled: boolean
 }
 
 export interface ListAffiliateUsersParams {
@@ -69,6 +71,8 @@ export interface AffiliateTransferRecord {
   user_email: string
   username: string
   amount: number
+  action: 'transfer' | 'offline_settlement'
+  reason?: string
   balance_after?: number | null
   available_quota_after?: number | null
   frozen_quota_after?: number | null
@@ -87,6 +91,7 @@ export interface AffiliateUserOverview {
   rebated_invitee_count: number
   available_quota: number
   history_quota: number
+  transfer_disabled: boolean
 }
 
 export interface UpdateAffiliateUserRequest {
@@ -94,6 +99,7 @@ export interface UpdateAffiliateUserRequest {
   aff_rebate_rate_percent?: number | null
   /** Set true to explicitly clear the per-user rate (sets it to NULL). */
   clear_rebate_rate?: boolean
+  transfer_disabled?: boolean
 }
 
 export interface BatchSetRateRequest {
@@ -150,6 +156,17 @@ export async function clearUserSettings(
   const { data } = await apiClient.delete<{ user_id: number }>(
     `/admin/affiliates/users/${userId}`,
   )
+  return data
+}
+
+export async function offlineSettleUser(
+  userId: number,
+): Promise<{ user_id: number; cleared_quota: number; reason: string }> {
+  const { data } = await apiClient.post<{
+    user_id: number
+    cleared_quota: number
+    reason: string
+  }>(`/admin/affiliates/users/${userId}/offline-settlement`)
   return data
 }
 
@@ -220,6 +237,7 @@ export const affiliatesAPI = {
   lookupUsers,
   updateUserSettings,
   clearUserSettings,
+  offlineSettleUser,
   batchSetRate,
   listInviteRecords,
   listRebateRecords,

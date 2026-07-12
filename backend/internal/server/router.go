@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"log"
 	"sync/atomic"
 	"time"
 
@@ -63,19 +62,13 @@ func SetupRouter(
 
 	// Serve embedded frontend with settings injection if available
 	if web.HasEmbeddedFrontend() {
-		frontendServer, err := web.NewFrontendServer(settingService)
-		if err != nil {
-			log.Printf("Warning: Failed to create frontend server with settings injection: %v, using legacy mode", err)
-			r.Use(web.ServeEmbeddedFrontend())
-			settingService.SetOnUpdateCallback(refreshFrameOrigins)
-		} else {
-			// Register combined callback: invalidate HTML cache + refresh frame origins
-			settingService.SetOnUpdateCallback(func() {
-				frontendServer.InvalidateCache()
-				refreshFrameOrigins()
-			})
-			r.Use(frontendServer.Middleware())
-		}
+		frontendServer, _ := web.NewFrontendServer(settingService)
+		// Register combined callback: invalidate HTML cache + refresh frame origins
+		settingService.SetOnUpdateCallback(func() {
+			frontendServer.InvalidateCache()
+			refreshFrameOrigins()
+		})
+		r.Use(frontendServer.Middleware())
 	} else {
 		settingService.SetOnUpdateCallback(refreshFrameOrigins)
 	}
@@ -112,6 +105,10 @@ func registerRoutes(
 	routes.RegisterAdminRoutes(v1, h, adminAuth, settingService)
 	routes.RegisterGatewayRoutes(r, h, apiKeyAuth, apiKeyService, subscriptionService, opsService, settingService, cfg)
 	routes.RegisterPaymentRoutes(v1, h.Payment, h.PaymentWebhook, h.Admin.Payment, jwtAuth, adminAuth, settingService)
+	if h.SubPilotInternal != nil {
+		internal := v1.Group("/internal/subpilot")
+		internal.POST("/probe/:id", h.SubPilotInternal.ProbeAccount)
+	}
 
 	handler.RegisterPageRoutes(v1, cfg.Pricing.DataDir, gin.HandlerFunc(jwtAuth), gin.HandlerFunc(adminAuth), settingService)
 }
