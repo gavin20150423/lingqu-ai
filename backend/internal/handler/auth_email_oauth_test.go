@@ -423,6 +423,14 @@ func (r *oauthEmailAffiliateRepoStub) SetUserRebateRate(context.Context, int64, 
 	panic("unexpected SetUserRebateRate call")
 }
 
+func (r *oauthEmailAffiliateRepoStub) SetUserTransferDisabled(context.Context, int64, bool) error {
+	panic("unexpected SetUserTransferDisabled call")
+}
+
+func (r *oauthEmailAffiliateRepoStub) ClearAvailableQuotaOfflineSettlement(context.Context, int64, string) (float64, error) {
+	panic("unexpected ClearAvailableQuotaOfflineSettlement call")
+}
+
 func (r *oauthEmailAffiliateRepoStub) BatchSetUserRebateRate(context.Context, []int64, *float64) error {
 	panic("unexpected BatchSetUserRebateRate call")
 }
