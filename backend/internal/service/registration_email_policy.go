@@ -20,6 +20,12 @@ func RegistrationEmailSuffix(email string) string {
 	return "@" + domain
 }
 
+// IsRegistrationEmailAlias reports whether an email uses +tag subaddressing.
+func IsRegistrationEmailAlias(email string) bool {
+	local, _, ok := splitEmailForPolicy(email)
+	return ok && strings.Contains(local, "+")
+}
+
 // IsRegistrationEmailSuffixAllowed checks whether an email is allowed by suffix whitelist.
 // Empty whitelist means allow all.
 func IsRegistrationEmailSuffixAllowed(email string, whitelist []string) bool {

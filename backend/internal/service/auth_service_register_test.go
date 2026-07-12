@@ -385,6 +385,34 @@ func TestAuthService_Register_ReservedEmail(t *testing.T) {
 	require.ErrorIs(t, err, ErrEmailReserved)
 }
 
+func TestAuthService_Register_EmailAliasNotAllowed(t *testing.T) {
+	repo := &userRepoStub{}
+	service := newAuthService(repo, map[string]string{
+		SettingKeyRegistrationEnabled:          "true",
+		SettingKeyEmailAliasRestrictionEnabled: "true",
+	}, nil, nil)
+
+	_, _, err := service.Register(context.Background(), "user+promo@test.com", "password")
+	require.ErrorIs(t, err, ErrEmailAliasNotAllowed)
+	require.Empty(t, repo.created)
+
+	appErr := infraerrors.FromError(err)
+	require.Equal(t, "EMAIL_ALIAS_NOT_ALLOWED", appErr.Reason)
+}
+
+func TestAuthService_Register_EmailAliasAllowedWhenRestrictionDisabled(t *testing.T) {
+	repo := &userRepoStub{nextID: 9}
+	service := newAuthService(repo, map[string]string{
+		SettingKeyRegistrationEnabled:          "true",
+		SettingKeyEmailAliasRestrictionEnabled: "false",
+	}, nil, nil)
+
+	_, user, err := service.Register(context.Background(), "user+promo@test.com", "password")
+	require.NoError(t, err)
+	require.NotNil(t, user)
+	require.Equal(t, int64(9), user.ID)
+}
+
 func TestAuthService_Register_EmailSuffixNotAllowed(t *testing.T) {
 	repo := &userRepoStub{}
 	service := newAuthService(repo, map[string]string{
@@ -746,6 +774,41 @@ func TestAuthService_LoginOrRegisterOAuthWithTokenPair_ExistingUserDoesNotGrantA
 	require.Equal(t, 1, user.Concurrency)
 	require.Empty(t, repo.created)
 	require.Empty(t, assigner.calls)
+}
+
+func TestAuthService_LoginOrRegisterOAuth_EmailAliasRestrictionOnlyBlocksNewUsers(t *testing.T) {
+	settings := map[string]string{
+		SettingKeyRegistrationEnabled:          "true",
+		SettingKeyEmailAliasRestrictionEnabled: "true",
+	}
+
+	newUserService := newAuthService(&userRepoStub{}, settings, nil, nil)
+	_, _, err := newUserService.LoginOrRegisterOAuth(
+		context.Background(),
+		"user+oauth@example.com",
+		"new-user",
+	)
+	require.ErrorIs(t, err, ErrEmailAliasNotAllowed)
+
+	existing := &User{
+		ID:           91,
+		Email:        "user+oauth@example.com",
+		Username:     "existing-user",
+		Role:         RoleUser,
+		Status:       StatusActive,
+		TokenVersion: 1,
+	}
+	existingRepo := &userRepoStub{user: existing}
+	existingUserService := newAuthService(existingRepo, settings, nil, nil)
+	token, user, err := existingUserService.LoginOrRegisterOAuth(
+		context.Background(),
+		existing.Email,
+		existing.Username,
+	)
+	require.NoError(t, err)
+	require.NotEmpty(t, token)
+	require.Equal(t, existing.ID, user.ID)
+	require.Empty(t, existingRepo.created)
 }
 
 // newAuthServiceWithDingTalkCfg 构建一个含完整 DingTalk config 的 AuthService，

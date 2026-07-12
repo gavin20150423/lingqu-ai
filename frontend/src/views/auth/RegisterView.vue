@@ -319,6 +319,7 @@ import {
 import { buildAuthErrorMessage } from '@/utils/authError'
 import {
   formatRegistrationEmailSuffixWhitelistForMessage,
+  isRegistrationEmailAlias,
   isRegistrationEmailSuffixAllowed,
   normalizeRegistrationEmailSuffixWhitelist
 } from '@/utils/registrationEmailPolicy'
@@ -361,6 +362,7 @@ const oidcOAuthEnabled = ref<boolean>(false)
 const oidcOAuthProviderName = ref<string>('OIDC')
 const githubOAuthEnabled = ref<boolean>(false)
 const googleOAuthEnabled = ref<boolean>(false)
+const registrationEmailAliasRestrictionEnabled = ref<boolean>(true)
 const registrationEmailSuffixWhitelist = ref<string[]>([])
 const loginAgreementEnabled = ref<boolean>(false)
 const loginAgreementMode = ref<'modal' | 'checkbox' | string>('modal')
@@ -469,6 +471,8 @@ onMounted(async () => {
     oidcOAuthProviderName.value = settings.oidc_oauth_provider_name || 'OIDC'
     githubOAuthEnabled.value = settings.github_oauth_enabled
     googleOAuthEnabled.value = settings.google_oauth_enabled
+    registrationEmailAliasRestrictionEnabled.value =
+      settings.registration_email_alias_restriction_enabled !== false
     registrationEmailSuffixWhitelist.value = normalizeRegistrationEmailSuffixWhitelist(
       settings.registration_email_suffix_whitelist || []
     )
@@ -771,6 +775,12 @@ function validateForm(): boolean {
     isValid = false
   } else if (!validateEmail(formData.email)) {
     errors.email = t('auth.invalidEmail')
+    isValid = false
+  } else if (
+    registrationEmailAliasRestrictionEnabled.value &&
+    isRegistrationEmailAlias(formData.email)
+  ) {
+    errors.email = t('auth.emailAliasNotAllowed')
     isValid = false
   } else if (
     !isRegistrationEmailSuffixAllowed(formData.email, registrationEmailSuffixWhitelist.value)

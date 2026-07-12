@@ -7,6 +7,15 @@ const EMAIL_SUFFIX_MESSAGE_VISIBLE_LIMIT = 5
 const EMAIL_SUFFIX_DOMAIN_PATTERN =
   /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/
 
+export function isRegistrationEmailAlias(email: string): boolean {
+  const raw = String(email || '').trim().toLowerCase()
+  const atIndex = raw.indexOf('@')
+  if (atIndex <= 0 || raw.indexOf('@', atIndex + 1) !== -1) {
+    return false
+  }
+  return raw.slice(0, atIndex).includes('+')
+}
+
 // normalizeRegistrationEmailSuffixDomain converts raw input into a canonical domain token.
 // Exact domains are returned without "@"; wildcard domains keep the "*." prefix.
 export function normalizeRegistrationEmailSuffixDomain(raw: string): string {

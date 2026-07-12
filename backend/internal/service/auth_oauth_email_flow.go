@@ -118,6 +118,10 @@ func (s *AuthService) RegisterOAuthEmailAccount(
 	if isReservedEmail(email) {
 		return nil, nil, ErrEmailReserved
 	}
+	if err := s.validateRegistrationEmailAliasPolicy(ctx, email); err != nil {
+		slog.Error("oauth email register: alias rejected", "email", email, "error", err.Error())
+		return nil, nil, err
+	}
 	if err := s.validateRegistrationEmailPolicy(ctx, email); err != nil {
 		slog.Error("oauth email register: policy rejected", "email", email, "error", err.Error())
 		return nil, nil, err
@@ -200,6 +204,9 @@ func (s *AuthService) RegisterVerifiedOAuthEmailAccount(
 	}
 	if isReservedEmail(email) {
 		return nil, nil, ErrEmailReserved
+	}
+	if err := s.validateRegistrationEmailAliasPolicy(ctx, email); err != nil {
+		return nil, nil, err
 	}
 	if err := s.validateRegistrationEmailPolicy(ctx, email); err != nil {
 		return nil, nil, err

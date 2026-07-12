@@ -38,6 +38,9 @@ func diffSettings(before *service.SystemSettings, after *service.SystemSettings,
 	if before.EmailVerifyEnabled != after.EmailVerifyEnabled {
 		changed = append(changed, "email_verify_enabled")
 	}
+	if before.EmailAliasRestrictionEnabled != after.EmailAliasRestrictionEnabled {
+		changed = append(changed, "registration_email_alias_restriction_enabled")
+	}
 	if !equalStringSlice(before.RegistrationEmailSuffixWhitelist, after.RegistrationEmailSuffixWhitelist) {
 		changed = append(changed, "registration_email_suffix_whitelist")
 	}

@@ -20,6 +20,7 @@ function createPublicSettings(overrides: Partial<PublicSettings> = {}): PublicSe
     registration_enabled: false,
     email_verify_enabled: false,
     force_email_on_third_party_signup: false,
+    registration_email_alias_restriction_enabled: true,
     registration_email_suffix_whitelist: [],
     promo_code_enabled: true,
     password_reset_enabled: false,
