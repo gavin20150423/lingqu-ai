@@ -124,6 +124,10 @@ const WeChatConnectSyntheticEmailDomain = "@wechat-connect.invalid"
 const DingTalkConnectSyntheticEmailDomain = "@dingtalk-connect.invalid"
 
 // Setting keys
+// SettingKeyEmailAliasRestrictionEnabled controls whether +tag email aliases
+// are rejected for new self-service registrations.
+const SettingKeyEmailAliasRestrictionEnabled = "registration_email_alias_restriction_enabled"
+
 const (
 	// 注册设置
 	SettingKeyRegistrationEnabled              = "registration_enabled"                // 是否开放注册

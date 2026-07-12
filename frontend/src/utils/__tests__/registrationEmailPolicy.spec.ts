@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   formatRegistrationEmailSuffixWhitelistForMessage,
+  isRegistrationEmailAlias,
   isRegistrationEmailSuffixAllowed,
   isRegistrationEmailSuffixDomainValid,
   normalizeRegistrationEmailSuffixDomain,
@@ -10,6 +11,13 @@ import {
 } from '@/utils/registrationEmailPolicy'
 
 describe('registrationEmailPolicy utils', () => {
+  it('isRegistrationEmailAlias detects +tag subaddressing only in the local part', () => {
+    expect(isRegistrationEmailAlias('user+promo@example.com')).toBe(true)
+    expect(isRegistrationEmailAlias('user.name@example.com')).toBe(false)
+    expect(isRegistrationEmailAlias('user@plus+domain.example')).toBe(false)
+    expect(isRegistrationEmailAlias('invalid-email')).toBe(false)
+  })
+
   it('normalizeRegistrationEmailSuffixDomain lowercases, strips @, and ignores invalid chars', () => {
     expect(normalizeRegistrationEmailSuffixDomain(' @Exa!mple.COM ')).toBe('example.com')
     expect(normalizeRegistrationEmailSuffixDomain(' *.EDU!.CN ')).toBe('*.edu.cn')

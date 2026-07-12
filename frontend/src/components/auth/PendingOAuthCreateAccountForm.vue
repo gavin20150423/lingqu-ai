@@ -93,6 +93,7 @@ import { useI18n } from 'vue-i18n'
 import TurnstileWidget from '@/components/TurnstileWidget.vue'
 import { getPublicSettings, sendPendingOAuthVerifyCode } from '@/api/auth'
 import { useAppStore } from '@/stores'
+import { isRegistrationEmailAlias } from '@/utils/registrationEmailPolicy'
 
 export type PendingOAuthCreateAccountPayload = {
   email: string
@@ -126,6 +127,7 @@ const sendCodeSuccess = ref(false)
 const countdown = ref(0)
 const invitationCodeEnabled = ref(false)
 const emailVerifyEnabled = ref(true)
+const registrationEmailAliasRestrictionEnabled = ref(true)
 const turnstileEnabled = ref(false)
 const turnstileSiteKey = ref('')
 const turnstileToken = ref('')
@@ -212,6 +214,13 @@ async function handleSendCode() {
   if (!trimmedEmail) {
     return
   }
+  if (
+    registrationEmailAliasRestrictionEnabled.value &&
+    isRegistrationEmailAlias(trimmedEmail)
+  ) {
+    sendCodeError.value = t('auth.emailAliasNotAllowed')
+    return
+  }
 
   if (turnstileEnabled.value && !turnstileToken.value) {
     sendCodeError.value = t('auth.completeVerification')
@@ -244,6 +253,13 @@ function handleSubmit() {
   if (!trimmedEmail || password.value.length < 6) {
     return
   }
+  if (
+    registrationEmailAliasRestrictionEnabled.value &&
+    isRegistrationEmailAlias(trimmedEmail)
+  ) {
+    sendCodeError.value = t('auth.emailAliasNotAllowed')
+    return
+  }
 
   emit('submit', {
     email: trimmedEmail,
@@ -262,6 +278,8 @@ onMounted(async () => {
     const settings = await getPublicSettings()
     invitationCodeEnabled.value = settings.invitation_code_enabled === true
     emailVerifyEnabled.value = settings.email_verify_enabled !== false
+    registrationEmailAliasRestrictionEnabled.value =
+      settings.registration_email_alias_restriction_enabled !== false
     turnstileEnabled.value = settings.turnstile_enabled === true
     turnstileSiteKey.value = settings.turnstile_site_key || ''
   } catch {

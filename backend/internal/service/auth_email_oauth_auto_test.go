@@ -86,3 +86,27 @@ func TestEmailOAuthAuto_SnapshotsPlatformQuotaDefaults(t *testing.T) {
 	require.NotNil(t, geminiRecord.MonthlyLimitUSD)
 	require.InDelta(t, 100.0, *geminiRecord.MonthlyLimitUSD, 0.0001)
 }
+
+func TestEmailOAuthAuto_RejectsAliasForNewUser(t *testing.T) {
+	userRepo := &userRepoStub{}
+	svc := newEmailOAuthAutoAuthService(
+		userRepo,
+		map[string]string{
+			SettingKeyRegistrationEnabled:          "true",
+			SettingKeyEmailAliasRestrictionEnabled: "true",
+		},
+		nil,
+	)
+
+	user, err := svc.createEmailOAuthUser(
+		context.Background(),
+		"new+github@example.com",
+		"new-oauth",
+		"github",
+		"",
+		"",
+	)
+	require.Nil(t, user)
+	require.ErrorIs(t, err, ErrEmailAliasNotAllowed)
+	require.Empty(t, userRepo.created)
+}

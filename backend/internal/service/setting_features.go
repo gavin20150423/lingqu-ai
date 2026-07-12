@@ -32,6 +32,16 @@ func (s *SettingService) IsEmailVerifyEnabled(ctx context.Context) bool {
 	return value == "true"
 }
 
+// IsRegistrationEmailAliasRestrictionEnabled reports whether +tag subaddress
+// aliases are forbidden when creating new self-service accounts.
+func (s *SettingService) IsRegistrationEmailAliasRestrictionEnabled(ctx context.Context) bool {
+	value, err := s.settingRepo.GetValue(ctx, SettingKeyEmailAliasRestrictionEnabled)
+	if err != nil {
+		return true
+	}
+	return value != "false"
+}
+
 // GetRegistrationEmailSuffixWhitelist returns normalized registration email suffix whitelist.
 func (s *SettingService) GetRegistrationEmailSuffixWhitelist(ctx context.Context) []string {
 	value, err := s.settingRepo.GetValue(ctx, SettingKeyRegistrationEmailSuffixWhitelist)

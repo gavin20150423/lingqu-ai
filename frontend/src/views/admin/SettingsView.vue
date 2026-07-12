@@ -1467,6 +1467,26 @@
                 <Toggle v-model="form.email_verify_enabled" />
               </div>
 
+              <!-- Email Alias Restriction -->
+              <div
+                class="flex items-center justify-between gap-6 border-t border-gray-100 pt-4 dark:border-dark-700"
+              >
+                <div>
+                  <label class="font-medium text-gray-900 dark:text-white">{{
+                    t("admin.settings.registration.emailAliasRestriction")
+                  }}</label>
+                  <p class="text-sm text-gray-500 dark:text-gray-400">
+                    {{
+                      t("admin.settings.registration.emailAliasRestrictionHint")
+                    }}
+                  </p>
+                </div>
+                <Toggle
+                  v-model="form.registration_email_alias_restriction_enabled"
+                  class="shrink-0"
+                />
+              </div>
+
               <!-- Email Suffix Whitelist -->
               <div class="border-t border-gray-100 pt-4 dark:border-dark-700">
                 <label class="font-medium text-gray-900 dark:text-white">{{
@@ -8134,6 +8154,7 @@ type SettingsForm = Omit<
 const form = reactive<SettingsForm>({
   registration_enabled: true,
   email_verify_enabled: false,
+  registration_email_alias_restriction_enabled: true,
   registration_email_suffix_whitelist: [],
   promo_code_enabled: true,
   invitation_code_enabled: false,
@@ -9485,6 +9506,8 @@ async function saveSettings() {
     const payload: UpdateSettingsRequest = {
       registration_enabled: form.registration_enabled,
       email_verify_enabled: form.email_verify_enabled,
+      registration_email_alias_restriction_enabled:
+        form.registration_email_alias_restriction_enabled,
       registration_email_suffix_whitelist:
         registrationEmailSuffixWhitelistTags.value.map((suffix) =>
           suffix.startsWith("*.") ? suffix : `@${suffix}`,

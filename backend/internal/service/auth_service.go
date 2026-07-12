@@ -37,6 +37,7 @@ var (
 	ErrRefreshTokenExpired     = infraerrors.Unauthorized("REFRESH_TOKEN_EXPIRED", "refresh token has expired")
 	ErrRefreshTokenReused      = infraerrors.Unauthorized("REFRESH_TOKEN_REUSED", "refresh token has been reused")
 	ErrEmailVerifyRequired     = infraerrors.BadRequest("EMAIL_VERIFY_REQUIRED", "email verification is required")
+	ErrEmailAliasNotAllowed    = infraerrors.BadRequest("EMAIL_ALIAS_NOT_ALLOWED", "email aliases are not allowed for registration")
 	ErrEmailSuffixNotAllowed   = infraerrors.BadRequest("EMAIL_SUFFIX_NOT_ALLOWED", "email suffix is not allowed")
 	ErrRegDisabled             = infraerrors.Forbidden("REGISTRATION_DISABLED", "registration is currently disabled")
 	ErrServiceUnavailable      = infraerrors.ServiceUnavailable("SERVICE_UNAVAILABLE", "service temporarily unavailable")
@@ -143,6 +144,9 @@ func (s *AuthService) RegisterWithVerification(ctx context.Context, email, passw
 	// 防止用户注册 LinuxDo OAuth 合成邮箱，避免第三方登录与本地账号发生碰撞。
 	if isReservedEmail(email) {
 		return "", nil, ErrEmailReserved
+	}
+	if err := s.validateRegistrationEmailAliasPolicy(ctx, email); err != nil {
+		return "", nil, err
 	}
 	if err := s.validateRegistrationEmailPolicy(ctx, email); err != nil {
 		return "", nil, err
@@ -288,6 +292,9 @@ func (s *AuthService) SendVerifyCode(ctx context.Context, email string, locale .
 	if isReservedEmail(email) {
 		return ErrEmailReserved
 	}
+	if err := s.validateRegistrationEmailAliasPolicy(ctx, email); err != nil {
+		return err
+	}
 	if err := s.validateRegistrationEmailPolicy(ctx, email); err != nil {
 		return err
 	}
@@ -328,6 +335,9 @@ func (s *AuthService) SendVerifyCodeAsync(ctx context.Context, email string, loc
 
 	if isReservedEmail(email) {
 		return nil, ErrEmailReserved
+	}
+	if err := s.validateRegistrationEmailAliasPolicy(ctx, email); err != nil {
+		return nil, err
 	}
 	if err := s.validateRegistrationEmailPolicy(ctx, email); err != nil {
 		return nil, err
@@ -495,6 +505,9 @@ func (s *AuthService) LoginOrRegisterOAuth(ctx context.Context, email, username 
 			if s.settingService == nil || !s.settingService.IsRegistrationEnabled(ctx) {
 				return "", nil, ErrRegDisabled
 			}
+			if err := s.validateRegistrationEmailAliasPolicy(ctx, email); err != nil {
+				return "", nil, err
+			}
 
 			randomPassword, err := randomHexString(32)
 			if err != nil {
@@ -623,6 +636,9 @@ func (s *AuthService) loginOrRegisterOAuthWithTokenPair(ctx context.Context, ema
 			// OAuth 首次登录视为注册
 			if s.settingService == nil || (!s.settingService.IsRegistrationEnabled(ctx) && !s.canBypassRegistrationDisabledForOAuth(ctx, signupSource)) {
 				return nil, nil, ErrRegDisabled
+			}
+			if err := s.validateRegistrationEmailAliasPolicy(ctx, email); err != nil {
+				return nil, nil, err
 			}
 
 			// 检查是否需要邀请码
@@ -1104,6 +1120,16 @@ func (s *AuthService) validateRegistrationEmailPolicy(ctx context.Context, email
 	whitelist := s.settingService.GetRegistrationEmailSuffixWhitelist(ctx)
 	if !IsRegistrationEmailSuffixAllowed(email, whitelist) {
 		return buildEmailSuffixNotAllowedError(whitelist)
+	}
+	return nil
+}
+
+func (s *AuthService) validateRegistrationEmailAliasPolicy(ctx context.Context, email string) error {
+	if s.settingService == nil || !s.settingService.IsRegistrationEmailAliasRestrictionEnabled(ctx) {
+		return nil
+	}
+	if IsRegistrationEmailAlias(email) {
+		return ErrEmailAliasNotAllowed
 	}
 	return nil
 }

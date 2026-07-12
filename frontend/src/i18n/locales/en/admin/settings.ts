@@ -116,6 +116,8 @@ export default {
         enableRegistrationHint: 'Allow new users to register',
         emailVerification: 'Email Verification',
         emailVerificationHint: 'Require email verification for new registrations',
+        emailAliasRestriction: 'Block Email Alias Registration',
+        emailAliasRestrictionHint: "Prevent new accounts from using +tag aliases such as user+tag{'@'}example.com",
         emailSuffixWhitelist: 'Email Domain Whitelist',
         emailSuffixWhitelistHint:
           "Only email addresses from the specified domains can register (for example, {'@'}qq.com, {'@'}gmail.com, *.edu.cn)",

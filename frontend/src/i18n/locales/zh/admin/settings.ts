@@ -116,6 +116,8 @@ export default {
         enableRegistrationHint: '允许新用户注册',
         emailVerification: '邮箱验证',
         emailVerificationHint: '新用户注册时需要验证邮箱',
+        emailAliasRestriction: '禁止邮箱别名注册',
+        emailAliasRestrictionHint: "阻止使用 user+tag{'@'}example.com 这类 +tag 邮箱别名创建新账号",
         emailSuffixWhitelist: '邮箱域名白名单',
         emailSuffixWhitelistHint:
           "仅允许使用指定域名的邮箱注册账号（例如 {'@'}qq.com, {'@'}gmail.com, *.edu.cn）",

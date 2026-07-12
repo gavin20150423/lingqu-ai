@@ -165,6 +165,7 @@ import { apiClient } from '@/api/client'
 import { buildAuthErrorMessage } from '@/utils/authError'
 import {
   formatRegistrationEmailSuffixWhitelistForMessage,
+  isRegistrationEmailAlias,
   isRegistrationEmailSuffixAllowed,
   normalizeRegistrationEmailSuffixWhitelist
 } from '@/utils/registrationEmailPolicy'
@@ -231,6 +232,7 @@ const hasRegisterData = ref<boolean>(false)
 const turnstileEnabled = ref<boolean>(false)
 const turnstileSiteKey = ref<string>('')
 const siteName = ref<string>(resolveBrandName())
+const registrationEmailAliasRestrictionEnabled = ref<boolean>(true)
 const registrationEmailSuffixWhitelist = ref<string[]>([])
 
 // Turnstile for resend
@@ -296,6 +298,8 @@ onMounted(async () => {
     turnstileEnabled.value = settings.turnstile_enabled
     turnstileSiteKey.value = settings.turnstile_site_key || ''
     siteName.value = resolveBrandName(settings.site_name)
+    registrationEmailAliasRestrictionEnabled.value =
+      settings.registration_email_alias_restriction_enabled !== false
     registrationEmailSuffixWhitelist.value = normalizeRegistrationEmailSuffixWhitelist(
       settings.registration_email_suffix_whitelist || []
     )
@@ -401,6 +405,14 @@ async function sendCode(): Promise<void> {
   errorMessage.value = ''
 
   try {
+    if (
+      registrationEmailAliasRestrictionEnabled.value &&
+      isRegistrationEmailAlias(email.value)
+    ) {
+      errorMessage.value = t('auth.emailAliasNotAllowed')
+      appStore.showError(errorMessage.value)
+      return
+    }
     if (!shouldBypassRegistrationEmailPolicy() && !isRegistrationEmailSuffixAllowed(email.value, registrationEmailSuffixWhitelist.value)) {
       errorMessage.value = buildEmailSuffixNotAllowedMessage()
       appStore.showError(errorMessage.value)
@@ -494,6 +506,14 @@ async function handleVerify(): Promise<void> {
   isLoading.value = true
 
   try {
+    if (
+      registrationEmailAliasRestrictionEnabled.value &&
+      isRegistrationEmailAlias(email.value)
+    ) {
+      errorMessage.value = t('auth.emailAliasNotAllowed')
+      appStore.showError(errorMessage.value)
+      return
+    }
     if (!shouldBypassRegistrationEmailPolicy() && !isRegistrationEmailSuffixAllowed(email.value, registrationEmailSuffixWhitelist.value)) {
       errorMessage.value = buildEmailSuffixNotAllowedMessage()
       appStore.showError(errorMessage.value)
