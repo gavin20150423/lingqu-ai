@@ -30,18 +30,14 @@
           </label>
 
           <div class="image-bridge-actions">
-            <button type="button" class="image-bridge-primary" :disabled="!selectedKey || launching" @click="launchWorkspace()">
-              <Icon name="sparkles" size="md" />
-              {{ launching ? '载入中' : '打开图工坊' }}
-            </button>
             <button
               type="button"
               class="image-bridge-secondary"
-              :disabled="!selectedKey"
+              :disabled="!selectedKey || launching"
               @click="launchWorkspace(true)"
             >
               <Icon name="externalLink" size="sm" />
-              新窗口
+              <span>新窗口</span>
             </button>
           </div>
 
@@ -126,6 +122,7 @@ function buildBridgePayload(key: ApiKey) {
     model: 'gpt-image-2',
     apiMode: 'images',
     userEmail: authStore.user?.email || '',
+    userTheme: window.localStorage.getItem('user-workspace-theme') || 'cartoon',
     launchedAt: Date.now(),
   }
 }
@@ -242,12 +239,9 @@ watch(imageKeys, (keys) => {
 watch(selectedKeyId, () => {
   if (selectedKey.value) {
     writeStoredSelectedKeyId(selectedKeyId.value)
+    launchWorkspace(false, true)
   } else if (!selectedKeyId.value) {
     writeStoredSelectedKeyId('')
-  }
-
-  if (selectedKey.value && !frameSrc.value) {
-    launchWorkspace(false, true)
   }
 })
 

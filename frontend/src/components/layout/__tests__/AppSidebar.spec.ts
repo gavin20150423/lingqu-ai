@@ -53,3 +53,17 @@ describe('AppSidebar header styles', () => {
     expect(sidebarBrandBlockMatch?.[0]).not.toContain('overflow: hidden;')
   })
 })
+
+describe('AppSidebar user portal entry', () => {
+  it('links administrators to the user workspace with the dedicated label', () => {
+    const adminPortalLink = componentSource.match(
+      /<router-link\s+v-if="!authStore\.isSimpleMode"[\s\S]*?<\/router-link>/
+    )?.[0]
+
+    expect(adminPortalLink).toBeDefined()
+    expect(adminPortalLink).toContain('to="/dashboard"')
+    expect(adminPortalLink).toContain("t('nav.userPortal')")
+    expect(adminPortalLink).toContain("label: t('nav.userPortal'), icon: 'user'")
+    expect(adminPortalLink).not.toContain("t('nav.apiKeys')")
+  })
+})

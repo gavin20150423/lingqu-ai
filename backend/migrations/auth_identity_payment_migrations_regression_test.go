@@ -143,6 +143,17 @@ func TestMigration134AddsAffiliateLedgerAuditFieldsWithoutJSONCast(t *testing.T)
 	require.NotContains(t, sql, "detail::jsonb")
 }
 
+func TestMigration174AddsAffiliateOfflineSettlementControls(t *testing.T) {
+	content, err := FS.ReadFile("174_affiliate_offline_settlement.sql")
+	require.NoError(t, err)
+
+	sql := string(content)
+	require.Contains(t, sql, "ADD COLUMN IF NOT EXISTS transfer_disabled BOOLEAN NOT NULL DEFAULT FALSE")
+	require.Contains(t, sql, "ADD COLUMN IF NOT EXISTS reason TEXT NULL")
+	require.Contains(t, sql, "action = 'offline_settlement'")
+	require.Contains(t, sql, "已线下结算")
+}
+
 func TestMigration135AllowsGitHubAndGoogleAuthProviders(t *testing.T) {
 	content, err := FS.ReadFile("135_allow_email_oauth_provider_types.sql")
 	require.NoError(t, err)

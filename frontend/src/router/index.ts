@@ -317,7 +317,7 @@ const routes: RouteRecordRaw[] = [
     meta: {
       requiresAuth: true,
       requiresAdmin: false,
-      title: 'Purchase Subscription',
+      title: '充值与订阅',
       titleKey: 'nav.buySubscription',
       descriptionKey: 'purchase.description',
       requiresPayment: true

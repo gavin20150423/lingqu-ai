@@ -27,13 +27,7 @@ func (s *GatewayService) trySubPilotRecommend(ctx context.Context, groupID *int6
 	if client == nil || groupID == nil || requestedModel == "" {
 		return nil, nil
 	}
-	rec, err := client.recommendAccount(ctx, subPilotSelectRequest{
-		RequestID:  subPilotRequestID(ctx),
-		Platform:   platform,
-		GroupID:    strconv.FormatInt(*groupID, 10),
-		Model:      requestedModel,
-		SessionKey: sessionKey,
-	})
+	rec, err := client.recommendAccount(ctx, newSubPilotSelectRequest(ctx, platform, *groupID, requestedModel, sessionKey))
 	if err != nil || rec == nil {
 		return nil, err
 	}
@@ -108,13 +102,7 @@ func (s *OpenAIGatewayService) trySubPilotRecommend(ctx context.Context, groupID
 	if client == nil || groupID == nil || requestedModel == "" {
 		return nil, nil
 	}
-	rec, err := client.recommendAccount(ctx, subPilotSelectRequest{
-		RequestID:  subPilotRequestID(ctx),
-		Platform:   normalizeOpenAICompatiblePlatform(platform),
-		GroupID:    strconv.FormatInt(*groupID, 10),
-		Model:      requestedModel,
-		SessionKey: sessionKey,
-	})
+	rec, err := client.recommendAccount(ctx, newSubPilotSelectRequest(ctx, normalizeOpenAICompatiblePlatform(platform), *groupID, requestedModel, sessionKey))
 	if err != nil || rec == nil {
 		return nil, err
 	}
@@ -177,6 +165,32 @@ func subPilotAPIKeyIDString(apiKey *APIKey) string {
 	return strconv.FormatInt(apiKey.ID, 10)
 }
 
+func subPilotAPIKeyIDFromRequestContext(ctx context.Context) string {
+	apiKeyID, ok := SubPilotAPIKeyIDFromContext(ctx)
+	if !ok || apiKeyID <= 0 {
+		return ""
+	}
+	return strconv.FormatInt(apiKeyID, 10)
+}
+
+func newSubPilotSelectRequest(ctx context.Context, platform string, groupID int64, model string, sessionKey string) subPilotSelectRequest {
+	return subPilotSelectRequest{
+		RequestID:  subPilotRequestID(ctx),
+		APIKeyID:   subPilotAPIKeyIDFromRequestContext(ctx),
+		Platform:   platform,
+		GroupID:    strconv.FormatInt(groupID, 10),
+		Model:      model,
+		SessionKey: sessionKey,
+	}
+}
+
+func subPilotReportAPIKeyID(ctx context.Context, apiKey *APIKey) string {
+	if apiKeyID := subPilotAPIKeyIDString(apiKey); apiKeyID != "" {
+		return apiKeyID
+	}
+	return subPilotAPIKeyIDFromRequestContext(ctx)
+}
+
 func subPilotPlatformFromAPIKey(apiKey *APIKey, fallback string) string {
 	if apiKey != nil && apiKey.Group != nil && apiKey.Group.Platform != "" {
 		return apiKey.Group.Platform
@@ -233,6 +247,7 @@ func (s *GatewayService) reportSubPilotRecommendationFailure(ctx context.Context
 	client.reportFailure(ctx, subPilotReportFailureRequest{
 		RequestID:    subPilotReportRequestID(ctx, rec.RequestID),
 		LeaseID:      rec.LeaseID,
+		APIKeyID:     subPilotAPIKeyIDFromRequestContext(ctx),
 		AccountID:    strconv.FormatInt(accountID, 10),
 		Platform:     platform,
 		GroupID:      strconv.FormatInt(groupID, 10),
@@ -259,6 +274,7 @@ func (s *OpenAIGatewayService) reportSubPilotRecommendationFailure(ctx context.C
 	client.reportFailure(ctx, subPilotReportFailureRequest{
 		RequestID:    subPilotReportRequestID(ctx, rec.RequestID),
 		LeaseID:      rec.LeaseID,
+		APIKeyID:     subPilotAPIKeyIDFromRequestContext(ctx),
 		AccountID:    strconv.FormatInt(accountID, 10),
 		Platform:     platform,
 		GroupID:      strconv.FormatInt(groupID, 10),

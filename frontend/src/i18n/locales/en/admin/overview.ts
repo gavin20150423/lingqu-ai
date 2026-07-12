@@ -373,7 +373,7 @@ export default {
     affiliates: {
       invitesDescription: 'View site-wide inviter and invitee relationships',
       rebatesDescription: 'View recharge orders that generated affiliate rebates',
-      transfersDescription: 'View affiliate quota transfers into account balance',
+      transfersDescription: 'View affiliate balance transfers and offline settlements',
       errors: {
         loadFailed: 'Failed to load affiliate records'
       },
@@ -385,6 +385,9 @@ export default {
         inviter: 'Inviter',
         invitee: 'Invitee',
         user: 'User',
+        action: 'Action',
+        balanceTransfer: 'Balance transfer',
+        offlineSettlement: 'Offline settlement',
         affCode: 'Invite Code',
         order: 'Order',
         totalRebate: 'Total Rebate',
@@ -400,7 +403,7 @@ export default {
         historyQuotaAfter: 'Historical Rebate After',
         invitedAt: 'Invited At',
         rebatedAt: 'Rebated At',
-        transferredAt: 'Transferred At'
+        transferredAt: 'Processed At'
       },
       overview: {
         title: 'Affiliate User Overview',
@@ -409,7 +412,8 @@ export default {
         invitedCount: 'Invited Users',
         rebatedInviteeCount: 'Rebated Invitees',
         availableQuota: 'Available Quota',
-        historyQuota: 'Historical Rebate'
+        historyQuota: 'Historical Rebate',
+        settlementMode: 'Settlement Mode'
       }
     },
 

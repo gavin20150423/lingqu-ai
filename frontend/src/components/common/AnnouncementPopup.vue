@@ -3,80 +3,59 @@
     <Transition name="popup-fade">
       <div
         v-if="announcementStore.currentPopup"
-        class="fixed inset-0 z-[120] flex items-start justify-center overflow-y-auto bg-gradient-to-br from-black/70 via-black/60 to-black/70 p-4 pt-[8vh] backdrop-blur-md"
+        class="announcement-popup"
+        :data-user-theme="theme"
       >
         <div
-          class="w-full max-w-[680px] overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-black/5 dark:bg-dark-800 dark:ring-white/10"
+          class="announcement-popup__dialog"
+          role="dialog"
+          aria-modal="true"
+          :aria-labelledby="`announcement-popup-title-${announcementStore.currentPopup.id}`"
           @click.stop
         >
-          <!-- Header with warm gradient -->
-          <div class="relative overflow-hidden border-b border-amber-100/80 bg-gradient-to-br from-amber-50/80 via-orange-50/50 to-yellow-50/30 px-8 py-6 dark:border-dark-700/50 dark:from-amber-900/20 dark:via-orange-900/10 dark:to-yellow-900/5">
-            <!-- Decorative background -->
-            <div class="absolute right-0 top-0 h-full w-64 bg-gradient-to-l from-orange-100/30 to-transparent dark:from-orange-900/20"></div>
-            <div class="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-gradient-to-br from-amber-400/20 to-orange-500/20 blur-3xl"></div>
-            <div class="absolute -left-4 -bottom-4 h-24 w-24 rounded-full bg-gradient-to-tr from-yellow-400/20 to-amber-500/20 blur-2xl"></div>
-
-            <div class="relative z-10">
-              <!-- Icon and badge -->
-              <div class="mb-3 flex items-center gap-2">
-                <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 text-white shadow-lg shadow-amber-500/30">
-                  <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-                  </svg>
-                </div>
-                <span class="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-amber-500 to-orange-600 px-2.5 py-1 text-xs font-medium text-white shadow-lg shadow-amber-500/30">
-                  <span class="relative flex h-2 w-2">
-                    <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-white opacity-75"></span>
-                    <span class="relative inline-flex h-2 w-2 rounded-full bg-white"></span>
-                  </span>
-                  {{ t('announcements.unread') }}
+          <header class="announcement-popup__header">
+            <div class="announcement-popup__heading">
+              <span class="announcement-popup__icon" aria-hidden="true">
+                <Icon name="bell" size="md" />
+              </span>
+              <div class="announcement-popup__heading-copy">
+                <span
+                  class="announcement-popup__status"
+                  :class="{ 'announcement-popup__status--read': !isUnread }"
+                >
+                  <i v-if="isUnread" aria-hidden="true"></i>
+                  {{ isUnread ? t('announcements.unread') : t('announcements.read') }}
                 </span>
-              </div>
-
-              <!-- Title -->
-              <h2 class="mb-2 text-2xl font-bold leading-tight text-gray-900 dark:text-white">
-                {{ announcementStore.currentPopup.title }}
-              </h2>
-
-              <!-- Time -->
-              <div class="flex items-center gap-1.5 text-sm text-gray-600 dark:text-gray-400">
-                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <time>{{ formatRelativeWithDateTime(announcementStore.currentPopup.created_at) }}</time>
+                <h2 :id="`announcement-popup-title-${announcementStore.currentPopup.id}`">
+                  {{ announcementStore.currentPopup.title }}
+                </h2>
               </div>
             </div>
-          </div>
-
-          <!-- Body -->
-          <div class="max-h-[50vh] overflow-y-auto bg-white px-8 py-8 dark:bg-dark-800">
-            <div class="relative">
-              <div class="absolute left-0 top-0 bottom-0 w-1 rounded-full bg-gradient-to-b from-amber-500 via-orange-500 to-yellow-500"></div>
-              <div class="pl-6">
-                <div
-                  class="markdown-body prose prose-sm max-w-none dark:prose-invert"
-                  v-html="renderedContent"
-                ></div>
-              </div>
+            <div class="announcement-popup__time">
+              <Icon name="clock" size="sm" />
+              <time>{{ formatRelativeWithDateTime(announcementStore.currentPopup.created_at) }}</time>
             </div>
-          </div>
+          </header>
 
-          <!-- Footer -->
-          <div class="border-t border-gray-100 bg-gray-50/50 px-8 py-5 dark:border-dark-700 dark:bg-dark-900/30">
-            <div class="flex items-center justify-end">
-              <button
-                @click="handleDismiss"
-                class="rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 px-6 py-2.5 text-sm font-medium text-white shadow-lg shadow-amber-500/30 transition-all hover:shadow-xl hover:scale-105"
-              >
-                <span class="flex items-center gap-2">
-                  <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
-                  </svg>
-                  {{ t('announcements.markRead') }}
-                </span>
-              </button>
+          <main class="announcement-popup__body">
+            <div class="announcement-popup__content">
+              <div
+                class="markdown-body prose prose-sm max-w-none dark:prose-invert"
+                v-html="renderedContent"
+              ></div>
             </div>
-          </div>
+          </main>
+
+          <footer class="announcement-popup__footer">
+            <span class="announcement-popup__footer-note">
+              <Icon name="bell" size="sm" />
+              {{ isUnread ? '关闭后将标记为已读' : '可随时从顶部公告栏再次查看' }}
+            </span>
+            <button type="button" class="announcement-popup__action" @click="handleDismiss">
+              <Icon :name="isUnread ? 'check' : 'x'" size="sm" />
+              {{ isUnread ? t('announcements.markRead') : t('common.close') }}
+            </button>
+          </footer>
         </div>
       </div>
     </Transition>
@@ -85,14 +64,19 @@
 
 <script setup lang="ts">
 import { computed, watch } from 'vue'
+import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
+import Icon from '@/components/icons/Icon.vue'
 import { useAnnouncementStore } from '@/stores/announcements'
+import { useUserThemeStore } from '@/stores/userTheme'
 import { formatRelativeWithDateTime } from '@/utils/format'
 
 const { t } = useI18n()
 const announcementStore = useAnnouncementStore()
+const userThemeStore = useUserThemeStore()
+const { theme } = storeToRefs(userThemeStore)
 
 marked.setOptions({
   breaks: true,
@@ -105,6 +89,8 @@ const renderedContent = computed(() => {
   const html = marked.parse(content) as string
   return DOMPurify.sanitize(html)
 })
+
+const isUnread = computed(() => !announcementStore.currentPopup?.read_at)
 
 function handleDismiss() {
   announcementStore.dismissPopup()
@@ -122,12 +108,277 @@ watch(
 </script>
 
 <style scoped>
+.announcement-popup {
+  --popup-accent: #e9849b;
+  --popup-accent-strong: #c85c78;
+  --popup-accent-soft: #fff0f4;
+  --popup-ink: #272421;
+  --popup-muted: #746d66;
+  --popup-line: rgba(39, 36, 33, 0.13);
+  --popup-surface: #fffefb;
+  --popup-subtle: #faf8f3;
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow-y: auto;
+  background: rgba(29, 31, 34, 0.58);
+  padding: 1.25rem;
+  backdrop-filter: blur(8px);
+}
+
+.announcement-popup[data-user-theme='business'] {
+  --popup-accent: #2456a6;
+  --popup-accent-strong: #173f7b;
+  --popup-accent-soft: #eef4fc;
+  --popup-ink: #202a33;
+  --popup-muted: #66727d;
+  --popup-line: #d8e0e6;
+  --popup-surface: #ffffff;
+  --popup-subtle: #f7f9fb;
+  background: rgba(28, 36, 43, 0.48);
+  backdrop-filter: blur(6px);
+}
+
+.announcement-popup__dialog {
+  width: min(100%, 40rem);
+  overflow: hidden;
+  border: 1px solid var(--popup-line);
+  border-radius: 18px;
+  background: var(--popup-surface);
+  box-shadow: 0 28px 70px rgba(24, 28, 31, 0.24);
+  color: var(--popup-ink);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.announcement-popup[data-user-theme='business'] .announcement-popup__dialog {
+  border-radius: 8px;
+  box-shadow: 0 24px 60px rgba(24, 34, 42, 0.22);
+}
+
+.announcement-popup__header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 1rem;
+  border-bottom: 1px solid var(--popup-line);
+  background: var(--popup-subtle);
+  padding: 1.3rem 1.4rem;
+}
+
+.announcement-popup__heading {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 2.65rem minmax(0, 1fr);
+  align-items: start;
+  gap: 0.85rem;
+}
+
+.announcement-popup__icon {
+  width: 2.65rem;
+  height: 2.65rem;
+  display: grid;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--popup-accent) 28%, transparent);
+  border-radius: 10px;
+  background: var(--popup-accent-soft);
+  color: var(--popup-accent);
+}
+
+.announcement-popup[data-user-theme='business'] .announcement-popup__icon {
+  border-radius: 6px;
+}
+
+.announcement-popup__heading-copy {
+  min-width: 0;
+}
+
+.announcement-popup__status {
+  display: inline-flex;
+  min-height: 1.45rem;
+  align-items: center;
+  gap: 0.38rem;
+  border-radius: 999px;
+  background: var(--popup-accent-soft);
+  color: var(--popup-accent-strong);
+  padding: 0 0.52rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+.announcement-popup[data-user-theme='business'] .announcement-popup__status {
+  border-radius: 4px;
+}
+
+.announcement-popup__status--read {
+  background: color-mix(in srgb, var(--popup-muted) 10%, transparent);
+  color: var(--popup-muted);
+}
+
+.announcement-popup__status i {
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 999px;
+  background: var(--popup-accent);
+}
+
+.announcement-popup__header h2 {
+  margin-top: 0.48rem;
+  overflow-wrap: anywhere;
+  color: var(--popup-ink);
+  font-size: 1.24rem;
+  font-weight: 750;
+  line-height: 1.3;
+}
+
+.announcement-popup[data-user-theme='business'] .announcement-popup__header h2 {
+  font-family: 'Avenir Next', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  font-size: 1.12rem;
+  font-weight: 700;
+}
+
+.announcement-popup__time {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.38rem;
+  color: var(--popup-muted);
+  font-size: 0.74rem;
+  white-space: nowrap;
+}
+
+.announcement-popup__body {
+  max-height: min(50vh, 25rem);
+  overflow-y: auto;
+  background: var(--popup-surface);
+  padding: 1.35rem 1.4rem;
+}
+
+.announcement-popup__content {
+  min-height: 5rem;
+  border-left: 3px solid var(--popup-accent);
+  padding: 0.15rem 0 0.15rem 1rem;
+  color: var(--popup-ink);
+  line-height: 1.7;
+}
+
+.announcement-popup__content :deep(h1),
+.announcement-popup__content :deep(h2),
+.announcement-popup__content :deep(h3),
+.announcement-popup__content :deep(h4) {
+  margin: 0 0 0.65rem;
+  color: var(--popup-ink);
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.announcement-popup__content :deep(p) {
+  margin: 0 0 0.75rem;
+}
+
+.announcement-popup__content :deep(p:last-child),
+.announcement-popup__content :deep(ul:last-child),
+.announcement-popup__content :deep(ol:last-child) {
+  margin-bottom: 0;
+}
+
+.announcement-popup__content :deep(ul),
+.announcement-popup__content :deep(ol) {
+  margin: 0.25rem 0 0.75rem;
+  padding-left: 1.2rem;
+}
+
+.announcement-popup__content :deep(ul) {
+  list-style: disc;
+}
+
+.announcement-popup__content :deep(ol) {
+  list-style: decimal;
+}
+
+.announcement-popup__content :deep(li) {
+  margin: 0.2rem 0;
+  padding-left: 0.15rem;
+}
+
+.announcement-popup__content :deep(a) {
+  color: var(--popup-accent);
+  font-weight: 650;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.announcement-popup__content :deep(strong) {
+  color: var(--popup-ink);
+  font-weight: 750;
+}
+
+.announcement-popup[data-user-theme='business'] .announcement-popup__content {
+  border-left-width: 2px;
+}
+
+.announcement-popup__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border-top: 1px solid var(--popup-line);
+  background: var(--popup-subtle);
+  padding: 0.85rem 1.4rem;
+}
+
+.announcement-popup__footer-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.38rem;
+  color: var(--popup-muted);
+  font-size: 0.72rem;
+}
+
+.announcement-popup__action {
+  min-height: 2.35rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.42rem;
+  border-radius: 9px;
+  background: var(--popup-accent);
+  color: #ffffff;
+  padding: 0 0.9rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  box-shadow: 0 8px 18px color-mix(in srgb, var(--popup-accent) 24%, transparent);
+  transition: background 150ms ease, box-shadow 150ms ease, transform 150ms ease;
+}
+
+.announcement-popup[data-user-theme='business'] .announcement-popup__action {
+  border-radius: 6px;
+  box-shadow: none;
+}
+
+.announcement-popup__action:hover {
+  background: var(--popup-accent-strong);
+  box-shadow: 0 10px 22px color-mix(in srgb, var(--popup-accent) 28%, transparent);
+  transform: translateY(-1px);
+}
+
+.announcement-popup__action:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--popup-accent) 24%, transparent);
+  outline-offset: 2px;
+}
+
+.announcement-popup[data-user-theme='business'] .announcement-popup__action:hover {
+  box-shadow: 0 4px 12px rgba(36, 86, 166, 0.2);
+}
+
 .popup-fade-enter-active {
-  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: opacity 0.22s ease;
 }
 
 .popup-fade-leave-active {
-  transition: all 0.2s cubic-bezier(0.4, 0, 1, 1);
+  transition: opacity 0.16s ease;
 }
 
 .popup-fade-enter-from,
@@ -136,30 +387,59 @@ watch(
 }
 
 .popup-fade-enter-from > div {
-  transform: scale(0.94) translateY(-12px);
+  transform: translateY(-8px);
   opacity: 0;
 }
 
 .popup-fade-leave-to > div {
-  transform: scale(0.96) translateY(-8px);
+  transform: translateY(-5px);
   opacity: 0;
 }
 
-/* Scrollbar Styling */
-.overflow-y-auto::-webkit-scrollbar {
-  width: 8px;
+.announcement-popup__body::-webkit-scrollbar {
+  width: 6px;
 }
 
-.overflow-y-auto::-webkit-scrollbar-track {
+.announcement-popup__body::-webkit-scrollbar-track {
   background: transparent;
 }
 
-.overflow-y-auto::-webkit-scrollbar-thumb {
-  background: linear-gradient(to bottom, #cbd5e1, #94a3b8);
-  border-radius: 4px;
+.announcement-popup__body::-webkit-scrollbar-thumb {
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--popup-muted) 45%, transparent);
 }
 
-.dark .overflow-y-auto::-webkit-scrollbar-thumb {
-  background: linear-gradient(to bottom, #4b5563, #374151);
+@media (max-width: 640px) {
+  .announcement-popup {
+    align-items: flex-start;
+    padding: 1rem;
+  }
+
+  .announcement-popup__header {
+    grid-template-columns: 1fr;
+    align-items: start;
+    gap: 0.7rem;
+    padding: 1rem;
+  }
+
+  .announcement-popup__time {
+    padding-left: 3.5rem;
+    white-space: normal;
+  }
+
+  .announcement-popup__body {
+    max-height: 55vh;
+    padding: 1rem;
+  }
+
+  .announcement-popup__footer {
+    align-items: stretch;
+    flex-direction: column;
+    padding: 0.85rem 1rem 1rem;
+  }
+
+  .announcement-popup__action {
+    width: 100%;
+  }
 }
 </style>

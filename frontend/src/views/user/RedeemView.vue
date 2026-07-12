@@ -1,6 +1,6 @@
 <template>
   <UserWorkspaceLayout>
-    <div class="lingqu-console-page lingqu-console-page--redeem">
+    <div class="lingqu-console-page lingqu-console-page--redeem lingqu-billing-page">
       <section class="lingqu-console-hero">
         <div>
           <span class="lingqu-console-eyebrow">兑换礼盒</span>

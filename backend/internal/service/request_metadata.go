@@ -19,6 +19,7 @@ type RequestMetadata struct {
 	SingleAccountRetry         *bool
 	AccountSwitchCount         *int
 	SubPilotDisabled           *bool
+	SubPilotAPIKeyID           *int64
 }
 
 var (
@@ -122,6 +123,20 @@ func WithSubPilotDisabled(ctx context.Context, value bool) context.Context {
 		v := value
 		md.SubPilotDisabled = &v
 	}, nil)
+}
+
+func WithSubPilotAPIKeyID(ctx context.Context, value int64) context.Context {
+	return updateRequestMetadata(ctx, false, func(md *RequestMetadata) {
+		v := value
+		md.SubPilotAPIKeyID = &v
+	}, nil)
+}
+
+func SubPilotAPIKeyIDFromContext(ctx context.Context) (int64, bool) {
+	if md := metadataFromContext(ctx); md != nil && md.SubPilotAPIKeyID != nil {
+		return *md.SubPilotAPIKeyID, true
+	}
+	return 0, false
 }
 
 func IsMaxTokensOneHaikuRequestFromContext(ctx context.Context) (bool, bool) {

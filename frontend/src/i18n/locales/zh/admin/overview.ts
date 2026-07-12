@@ -367,7 +367,7 @@ export default {
     affiliates: {
       invitesDescription: '查看全站邀请关系和被邀请用户累计返利',
       rebatesDescription: '查看每一笔产生返利的充值订单',
-      transfersDescription: '查看返利额度转入账户余额的提取流水',
+      transfersDescription: '查看返利转入账户余额及线下结算清零流水',
       errors: {
         loadFailed: '加载邀请返利记录失败'
       },
@@ -379,6 +379,9 @@ export default {
         inviter: '邀请人',
         invitee: '被邀请人',
         user: '用户',
+        action: '处理方式',
+        balanceTransfer: '转入余额',
+        offlineSettlement: '线下结算',
         affCode: '邀请码',
         order: '订单',
         totalRebate: '累计返利',
@@ -394,7 +397,7 @@ export default {
         historyQuotaAfter: '提取后历史返利',
         invitedAt: '邀请时间',
         rebatedAt: '返利时间',
-        transferredAt: '提取时间'
+        transferredAt: '处理时间'
       },
       overview: {
         title: '用户返利概览',
@@ -403,7 +406,8 @@ export default {
         invitedCount: '邀请人数',
         rebatedInviteeCount: '已产生返利人数',
         availableQuota: '可提余额',
-        historyQuota: '历史返利'
+        historyQuota: '历史返利',
+        settlementMode: '结算方式'
       }
     },
 

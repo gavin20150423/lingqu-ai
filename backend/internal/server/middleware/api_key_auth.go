@@ -127,6 +127,7 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 			return
 		}
 		ctx := context.WithValue(c.Request.Context(), ctxkey.UserID, apiKey.User.ID)
+		ctx = service.WithSubPilotAPIKeyID(ctx, apiKey.ID)
 		c.Request = c.Request.WithContext(ctx)
 
 		// ── 4. SimpleMode → early return ─────────────────────────────

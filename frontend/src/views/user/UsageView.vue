@@ -177,6 +177,21 @@
                 {{ t('common.reset') }}
               </button>
             </div>
+
+            <div class="lingqu-console-filter-actions lingqu-console-filter-actions--business">
+              <button @click="applyFilters" :disabled="loading" class="lingqu-console-button">
+                <Icon name="refresh" size="sm" :class="loading ? 'animate-spin' : ''" />
+                {{ t('common.refresh') }}
+              </button>
+              <button
+                @click="exportToCSV"
+                :disabled="exporting"
+                class="lingqu-console-button lingqu-console-button--primary"
+              >
+                <Icon :name="exporting ? 'refresh' : 'download'" size="sm" :class="{ 'animate-spin': exporting }" />
+                {{ exporting ? t('usage.exporting') : t('usage.exportCsv') }}
+              </button>
+            </div>
           </div>
         </div>
         </template>
@@ -1417,6 +1432,11 @@ onMounted(() => {
 .lingqu-console-filter-actions {
   display: flex;
   align-items: center;
+}
+
+.lingqu-console-filter-actions--business {
+  display: none;
+  gap: 0.55rem;
 }
 
 .lingqu-console-page :deep(.date-picker-dropdown) {

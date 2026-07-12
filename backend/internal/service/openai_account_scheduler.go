@@ -1707,61 +1707,7 @@ func (s *OpenAIGatewayService) selectAccountWithScheduler(
 	platform = normalizeOpenAICompatiblePlatform(platform)
 	decision := OpenAIAccountScheduleDecision{}
 	scheduler := s.getOpenAIAccountScheduler(ctx)
-	if scheduler == nil {
-		decision.Layer = openAIAccountScheduleLayerLoadBalance
-		if requiredTransport == OpenAIUpstreamTransportAny || requiredTransport == OpenAIUpstreamTransportHTTPSSE {
-			effectiveExcludedIDs := cloneExcludedAccountIDs(excludedIDs)
-			for {
-				selection, err := s.selectAccountWithLoadAwareness(ctx, groupID, platform, sessionHash, requestedModel, effectiveExcludedIDs, requireCompact, requiredCapability)
-				if err != nil {
-					return nil, decision, err
-				}
-				if selection == nil || selection.Account == nil {
-					return selection, decision, nil
-				}
-				if accountSupportsOpenAICapabilities(selection.Account, requiredCapability, requiredImageCapability) {
-					return selection, decision, nil
-				}
-				if selection.ReleaseFunc != nil {
-					selection.ReleaseFunc()
-				}
-				if effectiveExcludedIDs == nil {
-					effectiveExcludedIDs = make(map[int64]struct{})
-				}
-				if _, exists := effectiveExcludedIDs[selection.Account.ID]; exists {
-					return nil, decision, ErrNoAvailableAccounts
-				}
-				effectiveExcludedIDs[selection.Account.ID] = struct{}{}
-			}
-		}
-
-		effectiveExcludedIDs := cloneExcludedAccountIDs(excludedIDs)
-		for {
-			selection, err := s.selectAccountWithLoadAwareness(ctx, groupID, platform, sessionHash, requestedModel, effectiveExcludedIDs, requireCompact, requiredCapability)
-			if err != nil {
-				return nil, decision, err
-			}
-			if selection == nil || selection.Account == nil {
-				return selection, decision, nil
-			}
-			if s.isOpenAIAccountTransportCompatible(selection.Account, requiredTransport) &&
-				accountSupportsOpenAICapabilities(selection.Account, requiredCapability, requiredImageCapability) {
-				return selection, decision, nil
-			}
-			if selection.ReleaseFunc != nil {
-				selection.ReleaseFunc()
-			}
-			if effectiveExcludedIDs == nil {
-				effectiveExcludedIDs = make(map[int64]struct{})
-			}
-			if _, exists := effectiveExcludedIDs[selection.Account.ID]; exists {
-				return nil, decision, ErrNoAvailableAccounts
-			}
-			effectiveExcludedIDs[selection.Account.ID] = struct{}{}
-		}
-	}
-
-	if s.checkChannelPricingRestriction(ctx, groupID, requestedModel) {
+	if scheduler != nil && s.checkChannelPricingRestriction(ctx, groupID, requestedModel) {
 		slog.Warn("channel pricing restriction blocked request",
 			"group_id", derefGroupID(groupID),
 			"model", requestedModel)
@@ -1791,6 +1737,58 @@ func (s *OpenAIGatewayService) selectAccountWithScheduler(
 			if selection.Account != nil {
 				effectiveExcludedIDs[selection.Account.ID] = struct{}{}
 			}
+		}
+	}
+
+	if scheduler == nil {
+		decision.Layer = openAIAccountScheduleLayerLoadBalance
+		if requiredTransport == OpenAIUpstreamTransportAny || requiredTransport == OpenAIUpstreamTransportHTTPSSE {
+			for {
+				selection, err := s.selectAccountWithLoadAwareness(ctx, groupID, platform, sessionHash, requestedModel, effectiveExcludedIDs, requireCompact, requiredCapability)
+				if err != nil {
+					return nil, decision, err
+				}
+				if selection == nil || selection.Account == nil {
+					return selection, decision, nil
+				}
+				if accountSupportsOpenAICapabilities(selection.Account, requiredCapability, requiredImageCapability) {
+					return selection, decision, nil
+				}
+				if selection.ReleaseFunc != nil {
+					selection.ReleaseFunc()
+				}
+				if effectiveExcludedIDs == nil {
+					effectiveExcludedIDs = make(map[int64]struct{})
+				}
+				if _, exists := effectiveExcludedIDs[selection.Account.ID]; exists {
+					return nil, decision, ErrNoAvailableAccounts
+				}
+				effectiveExcludedIDs[selection.Account.ID] = struct{}{}
+			}
+		}
+
+		for {
+			selection, err := s.selectAccountWithLoadAwareness(ctx, groupID, platform, sessionHash, requestedModel, effectiveExcludedIDs, requireCompact, requiredCapability)
+			if err != nil {
+				return nil, decision, err
+			}
+			if selection == nil || selection.Account == nil {
+				return selection, decision, nil
+			}
+			if s.isOpenAIAccountTransportCompatible(selection.Account, requiredTransport) &&
+				accountSupportsOpenAICapabilities(selection.Account, requiredCapability, requiredImageCapability) {
+				return selection, decision, nil
+			}
+			if selection.ReleaseFunc != nil {
+				selection.ReleaseFunc()
+			}
+			if effectiveExcludedIDs == nil {
+				effectiveExcludedIDs = make(map[int64]struct{})
+			}
+			if _, exists := effectiveExcludedIDs[selection.Account.ID]; exists {
+				return nil, decision, ErrNoAvailableAccounts
+			}
+			effectiveExcludedIDs[selection.Account.ID] = struct{}{}
 		}
 	}
 

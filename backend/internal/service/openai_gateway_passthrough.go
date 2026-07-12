@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"sort"
 	"strings"
@@ -189,9 +190,10 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode >= 400 {
-		// 透传模式默认保持原样代理；但 429/529 属于网关必须兜底的
-		// 上游容量类错误，应先触发多账号 failover 以维持基础 SLA。
-		if shouldFailoverOpenAIPassthroughResponse(resp.StatusCode) {
+		// 透传模式默认保持原样代理；429/529 以及可明确识别为账号侧或
+		// 瞬时处理故障的 400，先触发多账号 failover。未知 400 仍原样
+		// 返回，避免把客户端参数错误放大成无意义的多账号重试。
+		if s.shouldFailoverOpenAIPassthroughResponse(resp) {
 			return nil, s.handleFailoverErrorResponsePassthrough(ctx, resp, c, account, body)
 		}
 		return nil, s.handleErrorResponsePassthrough(ctx, resp, c, account, body)
@@ -417,10 +419,22 @@ func (s *OpenAIGatewayService) buildUpstreamRequestOpenAIPassthrough(
 	return req, nil
 }
 
-func shouldFailoverOpenAIPassthroughResponse(statusCode int) bool {
-	switch statusCode {
+func (s *OpenAIGatewayService) shouldFailoverOpenAIPassthroughResponse(resp *http.Response) bool {
+	if resp == nil {
+		return false
+	}
+	switch resp.StatusCode {
 	case http.StatusTooManyRequests, 529:
 		return true
+	case http.StatusBadRequest:
+		originalBody := resp.Body
+		body := s.readUpstreamErrorBody(resp)
+		if originalBody != nil {
+			_ = originalBody.Close()
+		}
+		resp.Body = io.NopCloser(bytes.NewReader(body))
+		upstreamMsg := strings.TrimSpace(extractUpstreamErrorMessage(body))
+		return s.shouldFailoverOpenAIUpstreamResponse(resp.StatusCode, upstreamMsg, body)
 	default:
 		return false
 	}

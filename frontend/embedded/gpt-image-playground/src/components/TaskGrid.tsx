@@ -259,7 +259,7 @@ export default function TaskGrid() {
 
   if (!filteredTasks.length) {
     return (
-      <div className="lingqu-empty-state mx-auto mt-8 grid max-w-lg justify-items-center rounded-[24px] border border-[rgba(33,31,28,0.14)] bg-white/70 px-6 py-14 text-center text-gray-400 shadow-[0_14px_30px_rgba(33,31,28,0.07)] backdrop-blur">
+      <div data-image-empty-state className="lingqu-empty-state mx-auto mt-8 grid max-w-lg justify-items-center rounded-[24px] border border-[rgba(33,31,28,0.14)] bg-white/70 px-6 py-14 text-center text-gray-400 shadow-[0_14px_30px_rgba(33,31,28,0.07)] backdrop-blur">
         {searchQuery || filterFavorite ? (
           <p className="text-sm font-black text-[#211f1c]">没有找到匹配的作品</p>
         ) : (

@@ -6112,17 +6112,19 @@
                         <th class="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">{{ t('admin.settings.features.affiliate.customUsers.col.username') }}</th>
                         <th class="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">{{ t('admin.settings.features.affiliate.customUsers.col.code') }}</th>
                         <th class="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">{{ t('admin.settings.features.affiliate.customUsers.col.rate') }}</th>
+                        <th class="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">{{ t('admin.settings.features.affiliate.customUsers.col.availableQuota') }}</th>
+                        <th class="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">{{ t('admin.settings.features.affiliate.customUsers.col.settlementMode') }}</th>
                         <th class="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">{{ t('admin.settings.features.affiliate.customUsers.col.actions') }}</th>
                       </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-200 bg-white dark:divide-dark-700 dark:bg-dark-900">
                       <tr v-if="affiliateState.loading">
-                        <td colspan="6" class="px-3 py-6 text-center text-sm text-gray-500">
+                        <td colspan="8" class="px-3 py-6 text-center text-sm text-gray-500">
                           {{ t('common.loading') }}
                         </td>
                       </tr>
                       <tr v-else-if="affiliateState.entries.length === 0">
-                        <td colspan="6" class="px-3 py-6 text-center text-sm text-gray-500">
+                        <td colspan="8" class="px-3 py-6 text-center text-sm text-gray-500">
                           {{ t('admin.settings.features.affiliate.customUsers.empty') }}
                         </td>
                       </tr>
@@ -6147,10 +6149,33 @@
                           <span v-if="entry.aff_rebate_rate_percent != null">{{ entry.aff_rebate_rate_percent }}%</span>
                           <span v-else class="text-gray-400">{{ t('admin.settings.features.affiliate.customUsers.useGlobal') }}</span>
                         </td>
+                        <td class="px-3 py-2 text-sm font-medium text-gray-900 dark:text-white">
+                          {{ formatCurrency(entry.available_quota) }}
+                        </td>
                         <td class="px-3 py-2 text-sm">
-                          <div class="flex items-center gap-2">
+                          <span
+                            :class="entry.transfer_disabled
+                              ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
+                              : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'"
+                            class="inline-flex rounded px-2 py-1 text-xs font-medium"
+                          >
+                            {{ entry.transfer_disabled
+                              ? t('admin.settings.features.affiliate.customUsers.offlineSettlement')
+                              : t('admin.settings.features.affiliate.customUsers.balanceTransfer') }}
+                          </span>
+                        </td>
+                        <td class="px-3 py-2 text-sm">
+                          <div class="flex flex-wrap items-center gap-2">
                             <button type="button" class="text-primary-600 hover:underline" @click="openAffiliateModal(entry)">
                               {{ t('common.edit') }}
+                            </button>
+                            <button
+                              v-if="entry.transfer_disabled && entry.available_quota > 0"
+                              type="button"
+                              class="text-amber-600 hover:underline dark:text-amber-400"
+                              @click="askOfflineSettleAffiliateUser(entry)"
+                            >
+                              {{ t('admin.settings.features.affiliate.customUsers.offlineSettleAction') }}
                             </button>
                             <button
                               type="button"
@@ -6292,6 +6317,18 @@
                 <p class="mt-1 text-xs text-gray-400">
                   {{ t('admin.settings.features.affiliate.modal.rateHint') }}
                 </p>
+              </div>
+
+              <div class="flex items-center justify-between gap-4 rounded-lg border border-gray-200 px-4 py-3 dark:border-dark-700">
+                <div>
+                  <p class="text-sm font-medium text-gray-900 dark:text-white">
+                    {{ t('admin.settings.features.affiliate.modal.transferDisabledLabel') }}
+                  </p>
+                  <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    {{ t('admin.settings.features.affiliate.modal.transferDisabledHint') }}
+                  </p>
+                </div>
+                <Toggle v-model="affiliateModal.transferDisabled" />
               </div>
             </div>
 
@@ -7434,6 +7471,7 @@ import EmailTemplateEditor from "@/views/admin/settings/EmailTemplateEditor.vue"
 import { useClipboard } from "@/composables/useClipboard";
 import { affiliatesAPI, type AffiliateAdminEntry, type SimpleUser as AffiliateSimpleUser } from "@/api/admin/affiliates";
 import { extractApiErrorMessage, extractI18nErrorMessage } from "@/utils/apiError";
+import { formatCurrency } from "@/utils/format";
 import { useAppStore } from "@/stores";
 import { useAdminSettingsStore } from "@/stores/adminSettings";
 import { normalizeVisibleMethod } from "@/components/payment/paymentFlow";
@@ -10697,6 +10735,7 @@ interface AffiliateModalState {
   editingEntry: AffiliateAdminEntry | null;
   code: string;
   rate: string | number;
+  transferDisabled: boolean;
   searchTimer: number | null;
 }
 
@@ -10710,6 +10749,7 @@ const affiliateModal = reactive<AffiliateModalState>({
   editingEntry: null,
   code: "",
   rate: "",
+  transferDisabled: false,
   searchTimer: null,
 });
 
@@ -10855,6 +10895,7 @@ function openAffiliateModal(entry: AffiliateAdminEntry | null) {
   affiliateModal.code = entry?.aff_code_custom ? entry.aff_code : "";
   affiliateModal.rate =
     entry?.aff_rebate_rate_percent != null ? String(entry.aff_rebate_rate_percent) : "";
+  affiliateModal.transferDisabled = entry?.transfer_disabled ?? false;
 }
 
 function closeAffiliateModal() {
@@ -10904,7 +10945,11 @@ const affiliateModalCanSubmit = computed(() => {
   }
   const codeFilled = affiliateModal.code.trim() !== "";
   const rateFilled = String(affiliateModal.rate ?? "").trim() !== "";
-  if (codeFilled || rateFilled) return true;
+  const transferSettingChanged =
+    affiliateModal.mode === "add"
+      ? affiliateModal.transferDisabled
+      : affiliateModal.transferDisabled !== affiliateModal.editingEntry?.transfer_disabled;
+  if (codeFilled || rateFilled || transferSettingChanged) return true;
   // Edit mode + empty rate input is a meaningful "clear" only if the user
   // currently has an exclusive rate to clear.
   return (
@@ -10940,6 +10985,13 @@ async function submitAffiliateModal() {
   } else {
     payload.aff_rebate_rate_percent = rateInput;
   }
+  if (
+    affiliateModal.mode === "add"
+      ? affiliateModal.transferDisabled
+      : affiliateModal.transferDisabled !== affiliateModal.editingEntry?.transfer_disabled
+  ) {
+    payload.transfer_disabled = affiliateModal.transferDisabled;
+  }
 
   affiliateModal.saving = true;
   try {
@@ -10966,6 +11018,19 @@ function askResetAffiliateUser(entry: AffiliateAdminEntry) {
     }),
     t("common.delete"),
     () => affiliatesAPI.clearUserSettings(entry.user_id),
+  );
+}
+
+function askOfflineSettleAffiliateUser(entry: AffiliateAdminEntry) {
+  openAffiliateConfirm(
+    t("admin.settings.features.affiliate.customUsers.offlineSettleTitle"),
+    t("admin.settings.features.affiliate.customUsers.offlineSettleMessage", {
+      email: entry.email || `#${entry.user_id}`,
+      amount: formatCurrency(entry.available_quota),
+      reason: t("admin.settings.features.affiliate.customUsers.offlineSettleReason"),
+    }),
+    t("admin.settings.features.affiliate.customUsers.offlineSettleConfirm"),
+    () => affiliatesAPI.offlineSettleUser(entry.user_id),
   );
 }
 

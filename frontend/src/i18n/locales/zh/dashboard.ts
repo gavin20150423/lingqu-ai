@@ -94,6 +94,8 @@ export default {
     created: '创建时间',
     copyToClipboard: '复制到剪贴板',
     copied: '已复制！',
+    showFullKey: '显示完整密钥',
+    hideFullKey: '隐藏完整密钥',
     importToCcSwitch: '导入到 CCS',
     enable: '启用',
     disable: '禁用',
@@ -502,6 +504,7 @@ export default {
   affiliate: {
     title: '邀请返利',
     description: '邀请新用户注册，并将返利额度转入账户余额',
+    offlineDescription: '邀请新用户注册，获得的返利额度由管理员进行线下结算',
     yourCode: '我的邀请码',
     inviteLink: '邀请链接',
     copyCode: '复制邀请码',
@@ -522,8 +525,11 @@ export default {
     transfer: {
       title: '返利额度转余额',
       description: '将当前可用返利额度一键转入账户余额',
+      offlineTitle: '返利额度线下结算',
+      offlineDescription: '当前可用返利额度由管理员线下结算，不会转入账户余额',
       button: '转入余额',
       transferring: '转入中...',
+      disabled: '该账户的返利由线下结算，无法转入账户余额。',
       empty: '当前没有可转入额度',
       success: '已转入余额：{amount}'
     },
@@ -542,6 +548,7 @@ export default {
       line1: '将邀请码或邀请链接分享给新用户。',
       line2: '被邀请用户充值后，你可获得 {rate} 的返利额度。',
       line3: '返利额度可随时转入账户余额。',
+      line3Offline: '返利额度由管理员线下结算，无法转入账户余额。',
       line4: '新产生的返利需要经过冻结期后才能提现。'
     }
   },

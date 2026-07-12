@@ -2,6 +2,7 @@
   <div
     class="user-workspace"
     :class="{ 'user-workspace--subpage': parentNavigation }"
+    :data-user-theme="theme"
     @mousemove="handlePointerMove"
     @mouseleave="resetPointer"
   >
@@ -10,6 +11,77 @@
       <span class="user-workspace__spark user-workspace__spark--two"></span>
       <span class="user-workspace__comet"></span>
     </div>
+
+    <aside class="user-workspace__business-rail" aria-label="专业工作台导航">
+      <router-link to="/dashboard" class="user-workspace__rail-brand">
+        <span class="user-workspace__rail-logo">
+          <img :src="siteLogo || '/brand/lingqu-ai-logo.svg'" alt="" />
+        </span>
+        <span>
+          <strong>{{ siteName }}</strong>
+          <small>用户控制台</small>
+        </span>
+      </router-link>
+
+      <div class="user-workspace__rail-section">
+        <small>工作台</small>
+        <template
+          v-for="item in businessNavItems"
+          :key="`rail-${item.path}`"
+        >
+          <router-link
+            :to="item.path"
+            class="user-workspace__rail-link"
+            :class="{ 'user-workspace__rail-link--active': isNavActive(item) }"
+          >
+            <Icon :name="item.icon" size="sm" />
+            <span>{{ item.label }}</span>
+            <Icon
+              :name="item.path === '/billing' && isNavActive(item) ? 'chevronDown' : 'chevronRight'"
+              size="xs"
+            />
+          </router-link>
+          <nav
+            v-if="item.path === '/billing' && isNavActive(item)"
+            class="user-workspace__rail-subnav"
+            aria-label="账单导航"
+          >
+            <router-link
+              v-for="child in billingNavItems"
+              :key="`rail-billing-${child.path}`"
+              :to="child.path"
+              :class="{ 'user-workspace__rail-sublink--active': isBillingNavActive(child) }"
+              class="user-workspace__rail-sublink"
+            >
+              <span>{{ child.label }}</span>
+            </router-link>
+          </nav>
+        </template>
+      </div>
+
+      <div class="user-workspace__rail-footer">
+        <router-link to="/profile" class="user-workspace__rail-account">
+          <span class="user-workspace__rail-avatar">{{ userInitials }}</span>
+          <span class="user-workspace__rail-account-copy">
+            <strong>{{ displayName }}</strong>
+            <small>{{ user?.email }}</small>
+          </span>
+          <Icon name="chevronRight" size="xs" />
+        </router-link>
+        <div class="user-workspace__rail-balance">
+          <span>账户余额</span>
+          <strong>${{ balanceText }}</strong>
+          <router-link to="/billing">查看账单</router-link>
+        </div>
+        <div class="user-workspace__rail-theme">
+          <UserThemeSwitcher />
+        </div>
+        <router-link v-if="isAdmin" to="/admin/dashboard" class="user-workspace__rail-admin">
+          <Icon name="shield" size="sm" />
+          系统管理
+        </router-link>
+      </div>
+    </aside>
 
     <header class="user-workspace__header">
       <nav class="user-workspace__nav" aria-label="用户控制台导航">
@@ -22,6 +94,11 @@
             <small>One Key</small>
           </span>
         </router-link>
+
+        <div class="user-workspace__context">
+          <span>{{ currentSection.kicker }}</span>
+          <strong>{{ currentSection.title }}</strong>
+        </div>
 
         <button
           type="button"
@@ -36,20 +113,46 @@
           class="user-workspace__links"
           :class="{ 'user-workspace__links--open': mobileMenuOpen }"
         >
-          <router-link
-            v-for="item in navItems"
+          <template
+            v-for="item in theme === 'business' ? businessNavItems : navItems"
             :key="item.path"
-            :to="item.path"
-            class="user-workspace__link"
-            :class="{ 'user-workspace__link--active': isNavActive(item) }"
-            @click="mobileMenuOpen = false"
           >
-            <Icon :name="item.icon" size="sm" />
-            <span>{{ item.label }}</span>
-          </router-link>
+            <router-link
+              :to="item.path"
+              class="user-workspace__link"
+              :class="{ 'user-workspace__link--active': isNavActive(item) }"
+              @click="mobileMenuOpen = false"
+            >
+              <Icon :name="item.icon" size="sm" />
+              <span>{{ item.label }}</span>
+            </router-link>
+            <div
+              v-if="theme === 'business' && item.path === '/billing' && isNavActive(item)"
+              class="user-workspace__mobile-subnav"
+            >
+              <router-link
+                v-for="child in billingNavItems"
+                :key="`mobile-billing-${child.path}`"
+                :to="child.path"
+                :class="{ 'user-workspace__mobile-sublink--active': isBillingNavActive(child) }"
+                @click="mobileMenuOpen = false"
+              >
+                {{ child.label }}
+              </router-link>
+            </div>
+          </template>
         </div>
 
         <div class="user-workspace__account">
+          <div class="user-workspace__header-theme">
+            <UserThemeSwitcher />
+          </div>
+
+          <router-link to="/keys?create=1" class="user-workspace__business-create">
+            <Icon name="plus" size="sm" />
+            <span>创建 Key</span>
+          </router-link>
+
           <router-link to="/billing" class="user-workspace__balance" title="账单中心">
             <Icon name="dollar" size="sm" />
             <span>${{ balanceText }}</span>
@@ -125,17 +228,22 @@
               :key="loop"
               class="user-workspace__announcement-sequence"
             >
-              <div
+              <button
                 v-for="item in tickerAnnouncements"
                 :key="`${loop}-${item.id}`"
+                type="button"
                 class="user-workspace__announcement-item"
                 :class="{ 'user-workspace__announcement-item--unread': !item.read_at }"
+                :tabindex="loop === 1 ? 0 : -1"
+                :aria-hidden="loop > 1 ? 'true' : undefined"
+                :aria-label="`查看公告：${item.title}`"
+                @click="announcementStore.openPopup(item)"
               >
                 <span class="user-workspace__announcement-dot" aria-hidden="true"></span>
                 <span class="user-workspace__announcement-title" :title="item.title">
                   {{ formatAnnouncementTickerText(item) }}
                 </span>
-              </div>
+              </button>
             </div>
           </div>
 
@@ -165,22 +273,26 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useRoute, useRouter } from 'vue-router'
 import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
 import { useAnnouncementStore } from '@/stores'
 import Icon from '@/components/icons/Icon.vue'
+import UserThemeSwitcher from '@/components/layout/UserThemeSwitcher.vue'
 import { DEFAULT_SITE_LOGO, resolveBrandLogo, resolveBrandName } from '@/constants/brand'
 import type { UserAnnouncement } from '@/types'
+import { useUserThemeStore } from '@/stores/userTheme'
 
 const route = useRoute()
 const router = useRouter()
 const appStore = useAppStore()
 const authStore = useAuthStore()
 const announcementStore = useAnnouncementStore()
+const userThemeStore = useUserThemeStore()
 const { announcements, loading: announcementLoading } = storeToRefs(announcementStore)
+const { theme } = storeToRefs(userThemeStore)
 
 const dropdownOpen = ref(false)
 const mobileMenuOpen = ref(false)
@@ -197,6 +309,7 @@ const balanceText = computed(() => Number(user.value?.balance || 0).toFixed(2))
 const parentNavigation = computed(() => {
   const path = route.path
   if (['/purchase', '/subscriptions', '/orders', '/redeem'].includes(path)) {
+    if (theme.value === 'business') return null
     return { to: '/billing', label: '账单中心', group: '账单' }
   }
   if (path.startsWith('/payment/')) {
@@ -206,6 +319,7 @@ const parentNavigation = computed(() => {
     return { to: '/monitor', label: '渠道状态', group: '状态' }
   }
   if (path === '/usage') {
+    if (theme.value === 'business') return null
     return { to: '/keys', label: 'Key 管理', group: 'Key' }
   }
   return null
@@ -216,12 +330,100 @@ const currentPageTitle = computed(() => {
   return typeof title === 'string' ? title : ''
 })
 
-const navItems = [
+const currentSection = computed(() => {
+  const sections = [
+    {
+      match: (path: string) => path === '/dashboard',
+      kicker: 'Workspace',
+      title: '今日工作台',
+      description: '管理接入、查看状态，并继续你正在进行的工作。'
+    },
+    {
+      match: (path: string) => path === '/keys' || path === '/usage',
+      kicker: 'Credentials',
+      title: route.path === '/usage' ? '使用记录' : '访问密钥',
+      description: '集中管理 API Key、额度限制与调用记录。'
+    },
+    {
+      match: (path: string) => path === '/images' || path === '/batch-image',
+      kicker: 'Image workspace',
+      title: route.path === '/batch-image' ? '批量生图' : '图像工作台',
+      description: '创建、管理并追踪你的图像生成任务。'
+    },
+    {
+      match: (path: string) => path === '/monitor' || path === '/available-channels',
+      kicker: 'Service health',
+      title: '服务状态',
+      description: '查看模型渠道、可用性与当前服务状态。'
+    },
+    {
+      match: (path: string) => path === '/affiliate',
+      kicker: 'Affiliate',
+      title: '邀请返利',
+      description: '分享邀请链接，查看返利额度与邀请记录。'
+    },
+    {
+      match: (path: string) => ['/billing', '/purchase', '/subscriptions', '/orders', '/redeem'].includes(path) || path.startsWith('/payment/'),
+      kicker: 'Billing',
+      title: '账单与订阅',
+      description: '管理余额、订阅套餐、充值和订单。'
+    },
+    {
+      match: (path: string) => path === '/profile',
+      kicker: 'Account',
+      title: '账户与安全',
+      description: '维护个人资料、通知方式和登录安全。'
+    }
+  ]
+
+  return sections.find(section => section.match(route.path)) ?? {
+    kicker: 'Workspace',
+    title: currentPageTitle.value || '用户工作台',
+    description: '查看并管理你的用户端资源。'
+  }
+})
+
+const affiliateEnabled = computed(() => appStore.cachedPublicSettings?.affiliate_enabled === true)
+const affiliateNavItem = {
+  path: '/affiliate',
+  activePaths: ['/affiliate'],
+  label: '邀请返利',
+  icon: 'users'
+} as const
+
+const baseNavItems = [
   { path: '/dashboard', activePaths: ['/dashboard'], label: '首页', icon: 'home' },
   { path: '/keys', activePaths: ['/keys', '/usage'], label: 'Key', icon: 'key' },
   { path: '/images', activePaths: ['/images'], label: '图工坊', icon: 'image' },
   { path: '/monitor', activePaths: ['/monitor', '/available-channels'], label: '状态', icon: 'server' },
   { path: '/billing', activePaths: ['/billing', '/purchase', '/payment', '/subscriptions', '/orders', '/redeem'], label: '账单', icon: 'creditCard' }
+] as const
+
+const baseBusinessNavItems = [
+  { path: '/dashboard', activePaths: ['/dashboard'], label: '首页', icon: 'home' },
+  { path: '/keys', activePaths: ['/keys'], label: 'Key', icon: 'key' },
+  { path: '/usage', activePaths: ['/usage'], label: '使用记录', icon: 'chart' },
+  { path: '/images', activePaths: ['/images'], label: '图工坊', icon: 'image' },
+  { path: '/monitor', activePaths: ['/monitor', '/available-channels'], label: '状态', icon: 'server' },
+  { path: '/billing', activePaths: ['/billing', '/purchase', '/payment', '/subscriptions', '/orders', '/redeem'], label: '账单', icon: 'creditCard' }
+] as const
+
+const navItems = computed(() => {
+  if (!affiliateEnabled.value) return [...baseNavItems]
+  return [...baseNavItems.slice(0, 4), affiliateNavItem, baseNavItems[4]]
+})
+
+const businessNavItems = computed(() => {
+  if (!affiliateEnabled.value) return [...baseBusinessNavItems]
+  return [...baseBusinessNavItems.slice(0, 5), affiliateNavItem, baseBusinessNavItems[5]]
+})
+
+const billingNavItems = [
+  { path: '/billing', label: '账单概览' },
+  { path: '/purchase', label: '充值与订阅' },
+  { path: '/subscriptions', label: '我的订阅' },
+  { path: '/orders', label: '订单记录' },
+  { path: '/redeem', label: '兑换码' }
 ] as const
 
 const displayName = computed(() => {
@@ -234,8 +436,15 @@ const userInitials = computed(() => {
   return source.slice(0, 2).toUpperCase()
 })
 
-function isNavActive(item: (typeof navItems)[number]): boolean {
+function isNavActive(item: { activePaths: readonly string[] }): boolean {
   return item.activePaths.some(path => route.path === path || route.path.startsWith(`${path}/`))
+}
+
+function isBillingNavActive(item: (typeof billingNavItems)[number]): boolean {
+  if (item.path === '/purchase') {
+    return route.path === item.path || route.path.startsWith('/payment/')
+  }
+  return route.path === item.path
 }
 
 function closeDropdown() {
@@ -290,6 +499,7 @@ function resetPointer(event: MouseEvent) {
 
 onMounted(() => {
   document.body.classList.add('user-workspace-active')
+  document.body.dataset.userTheme = theme.value
   document.addEventListener('click', handleClickOutside)
   if (!appStore.publicSettingsLoaded) {
     appStore.fetchPublicSettings()
@@ -301,7 +511,14 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   document.body.classList.remove('user-workspace-active')
+  delete document.body.dataset.userTheme
   document.removeEventListener('click', handleClickOutside)
+})
+
+watch(theme, (nextTheme) => {
+  if (document.body.classList.contains('user-workspace-active')) {
+    document.body.dataset.userTheme = nextTheme
+  }
 })
 </script>
 
@@ -749,12 +966,26 @@ onBeforeUnmount(() => {
   max-width: 34rem;
   align-items: center;
   gap: 0.48rem;
+  border: 0;
+  background: transparent;
   color: var(--ink);
   padding: 0 0.1rem;
   font-size: 0.88rem;
   font-weight: 950;
   line-height: 1;
   white-space: nowrap;
+  cursor: pointer;
+  transition: color 150ms ease;
+}
+
+.user-workspace__announcement-item:hover {
+  color: var(--cyan);
+}
+
+.user-workspace__announcement-item:focus-visible {
+  border-radius: 4px;
+  outline: 2px solid currentColor;
+  outline-offset: 4px;
 }
 
 .user-workspace__announcement-dot {

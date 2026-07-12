@@ -4,9 +4,16 @@ import { createRoot } from 'react-dom/client'
 import App from './App'
 import 'streamdown/styles.css'
 import './index.css'
+import { getLingquBridgePayload } from './lib/lingquBridge'
 import { installMobileViewportGuards } from './lib/viewport'
 
 installMobileViewportGuards()
+
+const bridgeTheme = getLingquBridgePayload()?.userTheme
+const storedTheme = window.localStorage.getItem('user-workspace-theme')
+const userTheme = bridgeTheme || storedTheme || 'cartoon'
+document.documentElement.dataset.userTheme = userTheme
+document.body.dataset.userTheme = userTheme
 
 if ('serviceWorker' in navigator) {
   if (import.meta.env.PROD) {

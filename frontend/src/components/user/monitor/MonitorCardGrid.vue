@@ -113,7 +113,7 @@ function resolveAvailability(item: UserMonitorView): number | null {
   }
 }
 
-@media (min-width: 1536px) {
+@media (min-width: 1440px) {
   .monitor-card-grid {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }

@@ -1,70 +1,63 @@
 <template>
   <button
     type="button"
-    class="monitor-card group"
+    class="monitor-card"
+    :class="statusClass"
     @click="emit('click')"
   >
-    <!-- Header: icon + name/model + status chip -->
     <div class="monitor-card__header">
-      <span
-        class="monitor-card__provider"
-        :class="[providerGradient(item.provider), providerTintClass]"
-      >
-        <ProviderIcon :provider="item.provider" :size="20" />
+      <span class="monitor-card__provider" :class="providerTintClass">
+        <ProviderIcon :provider="item.provider" :size="18" />
       </span>
       <div class="monitor-card__title-wrap">
-        <div class="monitor-card__title">
-          {{ item.name }}
-        </div>
-        <div class="monitor-card__meta">
-          <span
-            class="inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-medium flex-shrink-0"
-            :class="providerBadgeClass(item.provider)"
-          >
-            {{ providerLabel(item.provider) }}
-          </span>
-          <span class="monitor-card__model">
-            {{ item.primary_model }}
-          </span>
-          <span
-            v-if="item.group_name"
-            class="inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-medium bg-gray-100 text-gray-600 dark:bg-dark-700 dark:text-gray-300 flex-shrink-0"
-          >
-            {{ item.group_name }}
-          </span>
+        <div class="monitor-card__title">{{ item.name }}</div>
+        <div class="monitor-card__breadcrumb">
+          {{ providerLabel(item.provider) }}
+          <span>›</span>
+          {{ item.group_name || '默认组' }}
+          <span>›</span>
+          {{ item.primary_model }}
         </div>
       </div>
-      <span
-        class="monitor-card__status"
-        :class="statusBadgeClass(item.primary_status)"
-      >
-        {{ statusLabel(item.primary_status) }}
+      <span class="monitor-card__status" :class="statusClass">
+        <i></i>{{ statusLabel(item.primary_status) }}
       </span>
     </div>
 
-    <!-- Metrics -->
-    <MonitorMetricPair
-      primary-icon="bolt"
-      :primary-label="t('monitorCommon.dialogLatency')"
-      :primary-value="formatLatency(item.primary_latency_ms)"
-      primary-unit="ms"
-      secondary-icon="globe"
-      :secondary-label="t('monitorCommon.endpointPing')"
-      :secondary-value="formatLatency(item.primary_ping_latency_ms)"
-      secondary-unit="ms"
-    />
+    <div class="monitor-card__primary">
+      <div>
+        <span class="monitor-card__eyebrow">可用率 · {{ windowLabel }}</span>
+        <strong class="monitor-card__availability" :style="availabilityStyle">
+          {{ availabilityText }}<small v-if="availabilityValue !== null">%</small>
+        </strong>
+      </div>
+      <dl class="monitor-card__latencies">
+        <div>
+          <dt>延迟</dt>
+          <dd>{{ latencyText }}</dd>
+        </div>
+        <div>
+          <dt>首字</dt>
+          <dd>{{ pingText }}</dd>
+        </div>
+      </dl>
+    </div>
 
-    <!-- Divider -->
-    <div class="monitor-card__divider"></div>
+    <div class="monitor-card__metrics">
+      <div>
+        <span>模型数</span>
+        <strong>{{ modelCount }}</strong>
+      </div>
+      <div>
+        <span>响应延迟</span>
+        <strong>{{ latencyText }}</strong>
+      </div>
+      <div>
+        <span>端点 PING</span>
+        <strong>{{ pingText }}</strong>
+      </div>
+    </div>
 
-    <!-- Availability row -->
-    <MonitorAvailabilityRow
-      :window-label="availabilityLabel"
-      :value="availabilityValue"
-      :samples-label="extraModelsCountLabel"
-    />
-
-    <!-- Timeline -->
     <MonitorTimeline
       :buckets="item.timeline"
       :countdown-seconds="countdownSeconds"
@@ -74,22 +67,10 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useI18n } from 'vue-i18n'
 import type { UserMonitorView } from '@/api/channelMonitor'
-import {
-  useChannelMonitorFormat,
-  providerGradient,
-} from '@/composables/useChannelMonitorFormat'
+import { hslForPct, useChannelMonitorFormat } from '@/composables/useChannelMonitorFormat'
 import ProviderIcon from './ProviderIcon.vue'
-import MonitorMetricPair from './MonitorMetricPair.vue'
-import MonitorAvailabilityRow from './MonitorAvailabilityRow.vue'
 import MonitorTimeline from './MonitorTimeline.vue'
-
-const PROVIDER_TINT: Record<string, string> = {
-  openai: 'text-emerald-600 dark:text-emerald-300',
-  anthropic: 'text-orange-600 dark:text-orange-300',
-  gemini: 'text-sky-600 dark:text-sky-300',
-}
 
 const props = defineProps<{
   item: UserMonitorView
@@ -102,140 +83,253 @@ const emit = defineEmits<{
   (e: 'click'): void
 }>()
 
-const { t } = useI18n()
-const {
-  statusLabel,
-  statusBadgeClass,
-  providerLabel,
-  providerBadgeClass,
-  formatLatency,
-} = useChannelMonitorFormat()
+const { statusLabel, providerLabel, formatLatency } = useChannelMonitorFormat()
 
-const providerTintClass = computed(() =>
-  PROVIDER_TINT[props.item.provider] ?? 'text-gray-500 dark:text-gray-300'
-)
-
-const availabilityLabel = computed(() => {
-  const win = t(`channelStatus.windowTab.${props.window}`)
-  return `${t('monitorCommon.availabilityPrefix')} · ${win}`
+const providerTintClass = computed(() => `monitor-card__provider--${props.item.provider}`)
+const statusClass = computed(() => `monitor-card--${props.item.primary_status}`)
+const windowLabel = computed(() => ({ '7d': '7天', '15d': '15天', '30d': '30天' })[props.window])
+const modelCount = computed(() => 1 + (props.item.extra_models?.length ?? 0))
+const latencyText = computed(() => {
+  const value = formatLatency(props.item.primary_latency_ms)
+  return value === '-' ? value : `${value}ms`
 })
-
-const extraModelsCountLabel = computed(() => {
-  const count = props.item.extra_models?.length ?? 0
-  if (count === 0) return undefined
-  return t('monitorCommon.extraModelsCount', { n: count })
+const pingText = computed(() => {
+  const value = formatLatency(props.item.primary_ping_latency_ms)
+  return value === '-' ? value : `${value}ms`
+})
+const availabilityText = computed(() => {
+  if (props.availabilityValue === null || Number.isNaN(props.availabilityValue)) return '-'
+  return props.availabilityValue.toFixed(1)
+})
+const availabilityStyle = computed(() => {
+  if (props.item.primary_status === 'failed' || props.item.primary_status === 'error') {
+    return { color: '#bd4039' }
+  }
+  if (props.item.primary_status === 'degraded') {
+    return { color: '#b37913' }
+  }
+  const color = hslForPct(props.availabilityValue)
+  return color ? { color } : undefined
 })
 </script>
 
 <style scoped>
 .monitor-card {
+  position: relative;
   display: flex;
-  min-height: 17.5rem;
+  min-height: 14.2rem;
   width: 100%;
   flex-direction: column;
-  border: 1px solid rgba(33, 31, 28, 0.1);
-  border-radius: 1.05rem;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(255, 255, 255, 0.76));
-  padding: 1.2rem;
+  overflow: hidden;
+  border: 1px solid #e2ded7;
+  border-top: 3px solid #669173;
+  border-radius: 7px;
+  background: #fff;
+  padding: 0.78rem;
   text-align: left;
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.88) inset, 0 10px 26px rgba(33, 31, 28, 0.045);
-  backdrop-filter: blur(18px);
-  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+  box-shadow: 0 5px 14px rgba(58, 50, 41, 0.06);
+  transition: border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
 }
 
 .monitor-card:hover {
-  border-color: rgba(33, 31, 28, 0.16);
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.9) inset, 0 14px 32px rgba(33, 31, 28, 0.065);
+  box-shadow: 0 9px 22px rgba(58, 50, 41, 0.1);
   transform: translateY(-1px);
+}
+
+.monitor-card--degraded {
+  border-top-color: #bf8218;
+}
+
+.monitor-card--failed,
+.monitor-card--error {
+  border-top-color: #c64c43;
 }
 
 .monitor-card__header {
   display: flex;
+  min-width: 0;
   align-items: flex-start;
-  gap: 0.72rem;
+  gap: 0.56rem;
 }
 
 .monitor-card__provider {
   display: grid;
-  width: 2.32rem;
-  height: 2.32rem;
+  width: 1.75rem;
+  height: 1.75rem;
   flex: 0 0 auto;
   place-items: center;
-  border: 1px solid rgba(33, 31, 28, 0.07);
-  border-radius: 0.8rem;
+  border-radius: 6px;
+  background: #f5f3ee;
+  color: #4b4945;
+}
+
+.monitor-card__provider--openai {
+  color: #31755a;
+}
+
+.monitor-card__provider--anthropic {
+  color: #a85e39;
+}
+
+.monitor-card__provider--gemini {
+  color: #47789a;
 }
 
 .monitor-card__title-wrap {
   min-width: 0;
-  flex: 1 1 auto;
+  flex: 1;
 }
 
 .monitor-card__title {
   overflow: hidden;
-  color: #1f2937;
-  font-size: 0.98rem;
-  font-weight: 760;
+  color: #292723;
+  font-size: 0.78rem;
+  font-weight: 780;
   line-height: 1.35;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.monitor-card__meta {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 0.38rem;
-  margin-top: 0.28rem;
-}
-
-.monitor-card__model {
-  min-width: 0;
+.monitor-card__breadcrumb {
   overflow: hidden;
-  color: rgba(75, 85, 99, 0.76);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-  font-size: 0.75rem;
+  margin-top: 0.14rem;
+  color: #817b73;
+  font-size: 0.6rem;
+  line-height: 1.35;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.monitor-card__breadcrumb span {
+  margin: 0 0.18rem;
+  color: #b0aaa1;
+}
+
 .monitor-card__status {
+  display: inline-flex;
   flex: 0 0 auto;
+  align-items: center;
+  gap: 0.25rem;
   border-radius: 999px;
-  padding: 0.24rem 0.58rem;
-  font-size: 0.72rem;
+  background: #eef5ef;
+  color: #477a55;
+  padding: 0.18rem 0.42rem;
+  font-size: 0.6rem;
   font-weight: 750;
 }
 
-.monitor-card__divider {
-  margin-top: 1rem;
-  border-top: 1px solid rgba(148, 163, 184, 0.14);
+.monitor-card__status i {
+  width: 0.34rem;
+  height: 0.34rem;
+  border-radius: 50%;
+  background: currentColor;
 }
 
-:global(.dark) .monitor-card {
-  border-color: rgb(51 65 85 / 0.7);
-  background: rgb(30 41 59 / 0.62);
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.18);
+.monitor-card__status.monitor-card--degraded {
+  background: #fcf6e5;
+  color: #ad7817;
 }
 
-:global(.dark) .monitor-card:hover {
-  border-color: rgb(148 163 184 / 0.35);
-  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.24);
+.monitor-card__status.monitor-card--failed,
+.monitor-card__status.monitor-card--error {
+  background: #fbecea;
+  color: #bb443d;
 }
 
-:global(.dark) .monitor-card__provider {
-  border-color: rgb(255 255 255 / 0.08);
+.monitor-card__primary {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 0.78rem;
 }
 
-:global(.dark) .monitor-card__title {
-  color: rgb(243 244 246);
+.monitor-card__eyebrow {
+  display: block;
+  color: #817b73;
+  font-size: 0.6rem;
 }
 
-:global(.dark) .monitor-card__model {
-  color: rgb(156 163 175);
+.monitor-card__availability {
+  display: block;
+  margin-top: 0.08rem;
+  color: #3f8055;
+  font-size: 1.42rem;
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
 }
 
-:global(.dark) .monitor-card__divider {
-  border-color: rgb(51 65 85 / 0.55);
+.monitor-card__availability small {
+  margin-left: 0.04rem;
+  font-size: 0.72rem;
+}
+
+.monitor-card__latencies {
+  display: grid;
+  gap: 0.2rem;
+  margin: 0;
+}
+
+.monitor-card__latencies div {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.4rem;
+}
+
+.monitor-card__latencies dt {
+  color: #817b73;
+  font-size: 0.6rem;
+}
+
+.monitor-card__latencies dd {
+  min-width: 3.6rem;
+  margin: 0;
+  color: #4a4640;
+  font-size: 0.64rem;
+  font-weight: 700;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.monitor-card__metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 0.72rem;
+  border-radius: 6px;
+  background: #f8f6f2;
+  padding: 0.45rem 0;
+}
+
+.monitor-card__metrics div {
+  min-width: 0;
+  border-left: 1px solid #e7e2da;
+  text-align: center;
+}
+
+.monitor-card__metrics div:first-child {
+  border-left: 0;
+}
+
+.monitor-card__metrics span,
+.monitor-card__metrics strong {
+  display: block;
+  overflow: hidden;
+  padding: 0 0.2rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.monitor-card__metrics span {
+  color: #827c74;
+  font-size: 0.55rem;
+}
+
+.monitor-card__metrics strong {
+  margin-top: 0.08rem;
+  color: #34312d;
+  font-size: 0.68rem;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
 }
 </style>

@@ -1,6 +1,6 @@
 <template>
   <UserWorkspaceLayout>
-    <div class="lingqu-console-page lingqu-billing">
+    <div class="lingqu-console-page lingqu-billing lingqu-billing-page">
       <section class="lingqu-billing__actions" aria-label="账单功能">
         <router-link
           v-for="item in actionCards"

@@ -75,6 +75,7 @@ const props = defineProps<{
   show: boolean
   monitorId: number | null
   title: string
+  detailOverride?: UserMonitorDetail | null
 }>()
 
 defineEmits<{
@@ -105,6 +106,11 @@ watch(
   ([show, id]) => {
     if (!show) {
       detail.value = null
+      return
+    }
+    if (props.detailOverride) {
+      detail.value = props.detailOverride
+      loading.value = false
       return
     }
     if (id != null) void load(id)

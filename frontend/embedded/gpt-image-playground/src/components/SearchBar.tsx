@@ -104,7 +104,7 @@ export default function SearchBar({ onOpenInspirationLibrary }: SearchBarProps) 
   }
 
   return (
-    <div ref={rootRef} data-no-drag-select className="mt-4 mb-4 flex flex-wrap gap-3 rounded-[22px] border border-[rgba(33,31,28,0.14)] bg-white/75 p-3 shadow-[0_12px_28px_rgba(33,31,28,0.07)] backdrop-blur">
+    <div ref={rootRef} data-no-drag-select data-image-toolbar className="mt-4 mb-4 flex flex-wrap gap-3 rounded-[22px] border border-[rgba(33,31,28,0.14)] bg-white/75 p-3 shadow-[0_12px_28px_rgba(33,31,28,0.07)] backdrop-blur">
       <div className="flex gap-2 flex-shrink-0 z-20">
         {onOpenInspirationLibrary && !inCollectionOverview && (
           <button

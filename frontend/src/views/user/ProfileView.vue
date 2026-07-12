@@ -1,18 +1,6 @@
 <template>
   <UserWorkspaceLayout>
     <div data-testid="profile-shell" class="lingqu-profile">
-      <section class="lingqu-profile__hero">
-        <div>
-          <span class="lingqu-profile__eyebrow">我的账户</span>
-          <h1>账户资料</h1>
-          <p>邮箱、余额、并发和安全设置。</p>
-        </div>
-        <router-link to="/billing" class="lingqu-profile__recharge">
-          <Icon name="creditCard" size="md" />
-          账单中心
-        </router-link>
-      </section>
-
       <section class="lingqu-profile__grid" aria-label="账户概览">
         <article class="lingqu-profile__identity">
           <div class="lingqu-profile__avatar" aria-hidden="true">

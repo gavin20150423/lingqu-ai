@@ -32,7 +32,8 @@ SELECT ua.user_id,
        ua.aff_count,
        COALESCE(rebated.rebated_invitee_count, 0),
        (ua.aff_quota + COALESCE(matured.matured_frozen_quota, 0))::double precision,
-       ua.aff_history_quota::double precision
+       ua.aff_history_quota::double precision,
+       ua.transfer_disabled
 FROM user_affiliates ua
 JOIN users u ON u.id = ua.user_id
 LEFT JOIN (
@@ -241,6 +242,30 @@ func (r *affiliateRepository) TransferQuotaToBalance(ctx context.Context, userID
 			return err
 		}
 
+		settingsRows, err := txClient.QueryContext(txCtx, `
+SELECT transfer_disabled
+FROM user_affiliates
+WHERE user_id = $1
+FOR UPDATE`, userID)
+		if err != nil {
+			return fmt.Errorf("lock affiliate transfer settings: %w", err)
+		}
+		if !settingsRows.Next() {
+			_ = settingsRows.Close()
+			return service.ErrAffiliateProfileNotFound
+		}
+		var transferDisabled bool
+		if err := settingsRows.Scan(&transferDisabled); err != nil {
+			_ = settingsRows.Close()
+			return err
+		}
+		if err := settingsRows.Close(); err != nil {
+			return err
+		}
+		if transferDisabled {
+			return service.ErrAffiliateTransferDisabled
+		}
+
 		// Thaw any matured frozen quota before transfer.
 		if _, err := thawFrozenQuotaTx(txCtx, txClient, userID); err != nil {
 			return fmt.Errorf("thaw before transfer: %w", err)
@@ -339,6 +364,118 @@ VALUES ($1, 'transfer', $2, NULL, $3, $4, $5, $6, NOW(), NOW())`,
 	}
 
 	return transferred, newBalance, nil
+}
+
+func (r *affiliateRepository) ClearAvailableQuotaOfflineSettlement(ctx context.Context, userID int64, reason string) (float64, error) {
+	var cleared float64
+	err := r.withTx(ctx, func(txCtx context.Context, txClient *dbent.Client) error {
+		if _, err := ensureUserAffiliateWithClient(txCtx, txClient, userID); err != nil {
+			return err
+		}
+
+		settingsRows, err := txClient.QueryContext(txCtx, `
+SELECT transfer_disabled
+FROM user_affiliates
+WHERE user_id = $1
+FOR UPDATE`, userID)
+		if err != nil {
+			return fmt.Errorf("lock affiliate offline settlement settings: %w", err)
+		}
+		if !settingsRows.Next() {
+			_ = settingsRows.Close()
+			return service.ErrAffiliateProfileNotFound
+		}
+		var transferDisabled bool
+		if err := settingsRows.Scan(&transferDisabled); err != nil {
+			_ = settingsRows.Close()
+			return err
+		}
+		if err := settingsRows.Close(); err != nil {
+			return err
+		}
+		if !transferDisabled {
+			return service.ErrAffiliateOfflineSettlementNotEnabled
+		}
+
+		// Matured rebates are already transferable, so include them in this settlement.
+		if _, err := thawFrozenQuotaTx(txCtx, txClient, userID); err != nil {
+			return fmt.Errorf("thaw before offline settlement: %w", err)
+		}
+
+		rows, err := txClient.QueryContext(txCtx, `
+WITH claimed AS (
+    SELECT aff_quota::double precision AS amount
+    FROM user_affiliates
+    WHERE user_id = $1
+      AND aff_quota > 0
+    FOR UPDATE
+),
+cleared AS (
+    UPDATE user_affiliates ua
+    SET aff_quota = 0,
+        updated_at = NOW()
+    FROM claimed c
+    WHERE ua.user_id = $1
+    RETURNING c.amount
+)
+SELECT amount
+FROM cleared`, userID)
+		if err != nil {
+			return fmt.Errorf("clear affiliate quota for offline settlement: %w", err)
+		}
+		if !rows.Next() {
+			_ = rows.Close()
+			if err := rows.Err(); err != nil {
+				return err
+			}
+			return service.ErrAffiliateQuotaEmpty
+		}
+		if err := rows.Scan(&cleared); err != nil {
+			_ = rows.Close()
+			return err
+		}
+		if err := rows.Close(); err != nil {
+			return err
+		}
+		if cleared <= 0 {
+			return service.ErrAffiliateQuotaEmpty
+		}
+
+		snapshot, err := queryAffiliateTransferSnapshot(txCtx, txClient, userID)
+		if err != nil {
+			return err
+		}
+		if _, err = txClient.ExecContext(txCtx, `
+INSERT INTO user_affiliate_ledger (
+    user_id,
+    action,
+    amount,
+    source_user_id,
+    reason,
+    balance_after,
+    aff_quota_after,
+    aff_frozen_quota_after,
+    aff_history_quota_after,
+    created_at,
+    updated_at
+)
+VALUES ($1, 'offline_settlement', $2, NULL, $3, $4, $5, $6, $7, NOW(), NOW())`,
+			userID,
+			cleared,
+			reason,
+			snapshot.BalanceAfter,
+			snapshot.AvailableQuotaAfter,
+			snapshot.FrozenQuotaAfter,
+			snapshot.HistoryQuotaAfter,
+		); err != nil {
+			return fmt.Errorf("insert affiliate offline settlement ledger: %w", err)
+		}
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+	return cleared, nil
 }
 
 func (r *affiliateRepository) ListInvitees(ctx context.Context, inviterID int64, limit int) ([]service.AffiliateInvitee, error) {
@@ -554,7 +691,7 @@ func (r *affiliateRepository) ListAffiliateTransferRecords(ctx context.Context, 
 	baseJoin := `
 FROM user_affiliate_ledger ual
 JOIN users u ON u.id = ual.user_id
-WHERE ual.action = 'transfer'`
+WHERE ual.action IN ('transfer', 'offline_settlement')`
 	if where != "" {
 		where = strings.Replace(where, "WHERE ", " AND ", 1)
 	}
@@ -567,6 +704,7 @@ WHERE ual.action = 'transfer'`
 	orderBy := buildAffiliateRecordOrderBy(filter, map[string]string{
 		"user":                  "u.email",
 		"amount":                "ual.amount",
+		"action":                "ual.action",
 		"balance_after":         "ual.balance_after",
 		"available_quota_after": "ual.aff_quota_after",
 		"frozen_quota_after":    "ual.aff_frozen_quota_after",
@@ -580,6 +718,8 @@ SELECT ual.id,
        COALESCE(u.email, ''),
        COALESCE(u.username, ''),
        ual.amount::double precision,
+       ual.action,
+       COALESCE(ual.reason, ''),
        ual.balance_after::double precision,
        ual.aff_quota_after::double precision,
        ual.aff_frozen_quota_after::double precision,
@@ -606,6 +746,8 @@ LIMIT $`+fmt.Sprint(len(args)-1)+` OFFSET $`+fmt.Sprint(len(args)), args...)
 			&item.UserEmail,
 			&item.Username,
 			&item.Amount,
+			&item.Action,
+			&item.Reason,
 			&balanceAfter,
 			&availableQuotaAfter,
 			&frozenQuotaAfter,
@@ -662,6 +804,7 @@ func (r *affiliateRepository) GetAffiliateUserOverview(ctx context.Context, user
 		&overview.RebatedInviteeCount,
 		&overview.AvailableQuota,
 		&overview.HistoryQuota,
+		&overview.TransferDisabled,
 	); err != nil {
 		return nil, err
 	}
@@ -789,6 +932,7 @@ SELECT user_id,
        aff_quota::double precision,
        aff_frozen_quota::double precision,
        aff_history_quota::double precision,
+       transfer_disabled,
        created_at,
        updated_at
 FROM user_affiliates
@@ -817,6 +961,7 @@ WHERE user_id = $1`, userID)
 		&out.AffQuota,
 		&out.AffFrozenQuota,
 		&out.AffHistoryQuota,
+		&out.TransferDisabled,
 		&out.CreatedAt,
 		&out.UpdatedAt,
 	); err != nil {
@@ -843,6 +988,7 @@ SELECT user_id,
        aff_quota::double precision,
        aff_frozen_quota::double precision,
        aff_history_quota::double precision,
+       transfer_disabled,
        created_at,
        updated_at
 FROM user_affiliates
@@ -873,6 +1019,7 @@ LIMIT 1`, strings.ToUpper(strings.TrimSpace(code)))
 		&out.AffQuota,
 		&out.AffFrozenQuota,
 		&out.AffHistoryQuota,
+		&out.TransferDisabled,
 		&out.CreatedAt,
 		&out.UpdatedAt,
 	); err != nil {
@@ -1081,6 +1228,30 @@ WHERE user_id = $2`, nullableArg(ratePercent), userID)
 	})
 }
 
+func (r *affiliateRepository) SetUserTransferDisabled(ctx context.Context, userID int64, disabled bool) error {
+	if userID <= 0 {
+		return service.ErrUserNotFound
+	}
+	return r.withTx(ctx, func(txCtx context.Context, txClient *dbent.Client) error {
+		if _, err := ensureUserAffiliateWithClient(txCtx, txClient, userID); err != nil {
+			return err
+		}
+		res, err := txClient.ExecContext(txCtx, `
+UPDATE user_affiliates
+SET transfer_disabled = $1,
+    updated_at = NOW()
+WHERE user_id = $2`, disabled, userID)
+		if err != nil {
+			return fmt.Errorf("set affiliate transfer disabled: %w", err)
+		}
+		affected, _ := res.RowsAffected()
+		if affected == 0 {
+			return service.ErrUserNotFound
+		}
+		return nil
+	})
+}
+
 // BatchSetUserRebateRate 批量为多个用户设置专属比例（nil 清除）。
 func (r *affiliateRepository) BatchSetUserRebateRate(ctx context.Context, userIDs []int64, ratePercent *float64) error {
 	if len(userIDs) == 0 {
@@ -1143,7 +1314,13 @@ func (r *affiliateRepository) ListUsersWithCustomSettings(ctx context.Context, f
 	const baseFrom = `
 FROM user_affiliates ua
 JOIN users u ON u.id = ua.user_id
-WHERE (ua.aff_code_custom = true OR ua.aff_rebate_rate_percent IS NOT NULL)
+LEFT JOIN (
+    SELECT user_id, COALESCE(SUM(amount), 0)::double precision AS matured_frozen_quota
+    FROM user_affiliate_ledger
+    WHERE action = 'accrue' AND frozen_until IS NOT NULL AND frozen_until <= NOW()
+    GROUP BY user_id
+) matured ON matured.user_id = ua.user_id
+WHERE (ua.aff_code_custom = true OR ua.aff_rebate_rate_percent IS NOT NULL OR ua.transfer_disabled = true)
   AND (u.email ILIKE $1 OR u.username ILIKE $1)`
 
 	client := clientFromContext(ctx, r.client)
@@ -1160,7 +1337,9 @@ SELECT ua.user_id,
        ua.aff_code,
        ua.aff_code_custom,
        ua.aff_rebate_rate_percent,
-       ua.aff_count` + baseFrom + `
+       ua.aff_count,
+       (ua.aff_quota + COALESCE(matured.matured_frozen_quota, 0))::double precision,
+       ua.transfer_disabled` + baseFrom + `
 ORDER BY ua.updated_at DESC
 LIMIT $2 OFFSET $3`
 
@@ -1175,7 +1354,7 @@ LIMIT $2 OFFSET $3`
 		var e service.AffiliateAdminEntry
 		var rebate sql.NullFloat64
 		if err := rows.Scan(&e.UserID, &e.Email, &e.Username, &e.AffCode,
-			&e.AffCodeCustom, &rebate, &e.AffCount); err != nil {
+			&e.AffCodeCustom, &rebate, &e.AffCount, &e.AvailableQuota, &e.TransferDisabled); err != nil {
 			return nil, 0, err
 		}
 		if rebate.Valid {

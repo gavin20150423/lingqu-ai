@@ -73,11 +73,11 @@ describe('ProfileView', () => {
     })
   })
 
-  it('renders the simplified single-column profile shell without separate stat cards', async () => {
+  it('renders the current profile shell inside the user workspace', async () => {
     const wrapper = mount(ProfileView, {
       global: {
         stubs: {
-          AppLayout: { template: '<div><slot /></div>' },
+          UserWorkspaceLayout: { template: '<div><slot /></div>' },
           StatCard: { template: '<div class="stat-card" />' },
           ProfileInfoCard: { template: '<div data-testid="profile-info-card" />' },
           ProfileBalanceNotifyCard: { template: '<div data-testid="profile-balance-notify-card" />' },
@@ -92,8 +92,9 @@ describe('ProfileView', () => {
 
     expect(wrapper.findAll('.stat-card')).toHaveLength(0)
     expect(wrapper.get('[data-testid="profile-shell"]').exists()).toBe(true)
-    expect(wrapper.get('[data-testid="profile-shell"]').html()).toContain('profile-info-card')
+    expect(wrapper.find('.lingqu-profile__hero').exists()).toBe(false)
+    expect(wrapper.get('.lingqu-profile__identity').text()).toContain('alice@example.com')
+    expect(wrapper.get('.lingqu-profile__notify').exists()).toBe(true)
     expect(wrapper.get('[data-testid="profile-shell"]').html()).toContain('profile-password-form')
-    expect(wrapper.get('[data-testid="profile-shell"]').html()).toContain('profile-totp-card')
   })
 })

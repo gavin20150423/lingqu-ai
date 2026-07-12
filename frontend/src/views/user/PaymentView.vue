@@ -1,6 +1,6 @@
 <template>
   <UserWorkspaceLayout>
-    <div class="lingqu-console-page lingqu-console-page--purchase">
+    <div class="lingqu-console-page lingqu-console-page--purchase lingqu-billing-page">
       <section class="lingqu-console-hero">
         <div>
           <span class="lingqu-console-eyebrow">补给站</span>
@@ -32,21 +32,41 @@
       </section>
 
       <section class="lingqu-console-stats">
-        <article class="lingqu-console-stat">
-          <small>{{ t('payment.currentBalance') }}</small>
-          <strong>${{ user?.balance?.toFixed(2) || '0.00' }}</strong>
+        <article class="lingqu-console-stat payment-stat">
+          <span class="payment-stat__icon payment-stat__icon--balance">
+            <Icon name="dollar" size="md" />
+          </span>
+          <div>
+            <small>{{ t('payment.currentBalance') }}</small>
+            <strong>${{ user?.balance?.toFixed(2) || '0.00' }}</strong>
+          </div>
         </article>
-        <article class="lingqu-console-stat">
-          <small>可选套餐</small>
-          <strong>{{ checkout.plans.length }}</strong>
+        <article class="lingqu-console-stat payment-stat">
+          <span class="payment-stat__icon payment-stat__icon--plans">
+            <Icon name="cube" size="md" />
+          </span>
+          <div>
+            <small>可选套餐</small>
+            <strong>{{ checkout.plans.length }}</strong>
+          </div>
         </article>
-        <article class="lingqu-console-stat">
-          <small>当前订阅</small>
-          <strong>{{ activeSubscriptions.length }}</strong>
+        <article class="lingqu-console-stat payment-stat">
+          <span class="payment-stat__icon payment-stat__icon--subscription">
+            <Icon name="badge" size="md" />
+          </span>
+          <div>
+            <small>当前订阅</small>
+            <strong>{{ activeSubscriptions.length }}</strong>
+          </div>
         </article>
-        <article class="lingqu-console-stat">
-          <small>支付方式</small>
-          <strong>{{ enabledMethods.length }}</strong>
+        <article class="lingqu-console-stat payment-stat">
+          <span class="payment-stat__icon payment-stat__icon--methods">
+            <Icon name="creditCard" size="md" />
+          </span>
+          <div>
+            <small>支付方式</small>
+            <strong>{{ enabledMethods.length }}</strong>
+          </div>
         </article>
       </section>
 
@@ -105,14 +125,31 @@
             <!-- Top-up Tab -->
             <template v-if="activeTab === 'recharge'">
             <!-- Recharge Account Card -->
-            <div class="card p-5">
+            <div v-if="enabledMethods.length > 0" class="card p-5">
               <p class="text-xs font-medium text-gray-400 dark:text-gray-500">{{ t('payment.rechargeAccount') }}</p>
               <p class="mt-1 text-base font-semibold text-gray-900 dark:text-white">{{ user?.username || '' }}</p>
               <p class="mt-0.5 text-sm font-medium text-green-600 dark:text-green-400">{{ t('payment.currentBalance') }}: {{ user?.balance?.toFixed(2) || '0.00' }}</p>
             </div>
-            <div v-if="enabledMethods.length === 0" class="card py-16 text-center">
-              <p class="text-gray-500 dark:text-gray-400">{{ t('payment.notAvailable') }}</p>
-            </div>
+            <section v-if="enabledMethods.length === 0" class="payment-unavailable card">
+              <div class="payment-unavailable__icon" aria-hidden="true">
+                <Icon name="creditCard" size="lg" />
+              </div>
+              <div class="payment-unavailable__copy">
+                <small>在线充值</small>
+                <h2>当前未配置支付方式</h2>
+                <p>暂时无法在线充值。账户余额仍可正常使用，支付方式开放后可在这里直接完成充值。</p>
+              </div>
+              <dl class="payment-unavailable__account">
+                <div>
+                  <dt>充值账户</dt>
+                  <dd>{{ user?.username || user?.email || '-' }}</dd>
+                </div>
+                <div>
+                  <dt>当前余额</dt>
+                  <dd>${{ user?.balance?.toFixed(2) || '0.00' }}</dd>
+                </div>
+              </dl>
+            </section>
             <template v-else>
             <div class="card p-6">
               <AmountInput
@@ -1228,6 +1265,126 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+.payment-stat {
+  display: flex;
+  min-height: 5.4rem;
+  align-items: center;
+  gap: 0.8rem;
+}
+
+.payment-stat__icon {
+  display: grid;
+  width: 2.65rem;
+  height: 2.65rem;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 9px;
+}
+
+.payment-stat__icon--balance {
+  background: #e4f5ea;
+  color: #27845c;
+}
+
+.payment-stat__icon--plans {
+  background: #f8e7df;
+  color: #c96343;
+}
+
+.payment-stat__icon--subscription {
+  background: #e9eef9;
+  color: #526da5;
+}
+
+.payment-stat__icon--methods {
+  background: #f2ece5;
+  color: #74685c;
+}
+
+.payment-stat small,
+.payment-stat strong {
+  display: block;
+}
+
+.payment-stat strong {
+  margin-top: 0.2rem;
+  color: #292622;
+  font-size: 1.12rem;
+  line-height: 1.1;
+}
+
+.payment-stat:first-child strong {
+  color: #27845c;
+}
+
+.payment-unavailable {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) minmax(20rem, auto);
+  align-items: center;
+  gap: 1rem;
+  min-height: 8rem;
+  padding: 1.1rem 1.25rem;
+}
+
+.payment-unavailable__icon {
+  display: grid;
+  width: 3.5rem;
+  height: 3.5rem;
+  place-items: center;
+  border: 1px solid #e3b8a8;
+  border-radius: 8px;
+  background: #f8e7df;
+  color: #c96343;
+}
+
+.payment-unavailable__copy small,
+.payment-unavailable__account dt {
+  color: #8a8179;
+  font-size: 0.72rem;
+  font-weight: 650;
+}
+
+.payment-unavailable__copy h2 {
+  margin-top: 0.18rem;
+  color: #292622;
+  font-size: 1.08rem;
+  font-weight: 800;
+}
+
+.payment-unavailable__copy p {
+  max-width: 42rem;
+  margin-top: 0.28rem;
+  color: #756f68;
+  font-size: 0.84rem;
+  line-height: 1.5;
+}
+
+.payment-unavailable__account {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(8rem, 1fr));
+  gap: 0.65rem;
+}
+
+.payment-unavailable__account > div {
+  min-width: 0;
+  border-left: 1px solid #e2ddd4;
+  padding-left: 0.85rem;
+}
+
+.payment-unavailable__account dd {
+  margin-top: 0.25rem;
+  overflow: hidden;
+  color: #292622;
+  font-size: 0.9rem;
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.payment-unavailable__account > div:last-child dd {
+  color: #27845c;
+}
+
 .payment-closed {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
@@ -1274,12 +1431,38 @@ onMounted(async () => {
 }
 
 @media (max-width: 760px) {
+  .payment-unavailable {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .payment-unavailable__account {
+    grid-column: 1 / -1;
+  }
+
   .payment-closed {
     grid-template-columns: 1fr;
   }
 
   .payment-closed__actions {
     justify-content: flex-start;
+  }
+}
+
+@media (max-width: 520px) {
+  .payment-unavailable {
+    grid-template-columns: 1fr;
+  }
+
+  .payment-unavailable__account {
+    grid-column: auto;
+    grid-template-columns: 1fr;
+  }
+
+  .payment-unavailable__account > div {
+    border-left: 0;
+    border-top: 1px solid #e2ddd4;
+    padding-top: 0.65rem;
+    padding-left: 0;
   }
 }
 

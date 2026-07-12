@@ -18,7 +18,10 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 )
 
-const subPilotDefaultTimeout = 80 * time.Millisecond
+const (
+	subPilotDefaultTimeout       = 80 * time.Millisecond
+	subPilotDefaultReportTimeout = 500 * time.Millisecond
+)
 
 var subPilotClientCache sync.Map
 
@@ -96,6 +99,10 @@ func newSubPilotClient(cfg config.SubPilotConfig) *subPilotClient {
 	if timeout <= 0 {
 		timeout = subPilotDefaultTimeout
 	}
+	clientTimeout := timeout
+	if clientTimeout < subPilotDefaultReportTimeout {
+		clientTimeout = subPilotDefaultReportTimeout
+	}
 	key := strings.Join([]string{
 		strings.TrimRight(strings.TrimSpace(cfg.BaseURL), "/"),
 		timeout.String(),
@@ -110,7 +117,7 @@ func newSubPilotClient(cfg config.SubPilotConfig) *subPilotClient {
 		baseURL:  strings.TrimRight(strings.TrimSpace(cfg.BaseURL), "/"),
 		timeout:  timeout,
 		failOpen: cfg.FailOpen,
-		client:   &http.Client{Timeout: timeout},
+		client:   &http.Client{Timeout: clientTimeout},
 	}
 	actual, _ := subPilotClientCache.LoadOrStore(key, client)
 	if cached, ok := actual.(*subPilotClient); ok {
@@ -148,7 +155,7 @@ func (c *subPilotClient) reportSuccess(ctx context.Context, req subPilotReportSu
 	if c == nil {
 		return
 	}
-	if err := c.postJSON(subPilotReportContext(ctx), "/v1/dispatch/report-success", req, nil); err != nil {
+	if err := c.postJSONWithTimeout(subPilotReportContext(ctx), "/v1/dispatch/report-success", req, nil, c.reportTimeout()); err != nil {
 		slog.Warn("subpilot report success failed", "error", err)
 	}
 }
@@ -157,12 +164,16 @@ func (c *subPilotClient) reportFailure(ctx context.Context, req subPilotReportFa
 	if c == nil {
 		return
 	}
-	if err := c.postJSON(subPilotReportContext(ctx), "/v1/dispatch/report-failure", req, nil); err != nil {
+	if err := c.postJSONWithTimeout(subPilotReportContext(ctx), "/v1/dispatch/report-failure", req, nil, c.reportTimeout()); err != nil {
 		slog.Warn("subpilot report failure failed", "error", err)
 	}
 }
 
 func (c *subPilotClient) postJSON(ctx context.Context, path string, in any, out any) error {
+	return c.postJSONWithTimeout(ctx, path, in, out, c.timeout)
+}
+
+func (c *subPilotClient) postJSONWithTimeout(ctx context.Context, path string, in any, out any, timeout time.Duration) error {
 	if c == nil {
 		return nil
 	}
@@ -170,7 +181,7 @@ func (c *subPilotClient) postJSON(ctx context.Context, path string, in any, out 
 	if err != nil {
 		return err
 	}
-	reqCtx, cancel := context.WithTimeout(ctx, c.timeout)
+	reqCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	req, err := http.NewRequestWithContext(reqCtx, http.MethodPost, c.baseURL+path, bytes.NewReader(body))
 	if err != nil {
@@ -194,6 +205,13 @@ func (c *subPilotClient) postJSON(ctx context.Context, path string, in any, out 
 		return nil
 	}
 	return json.NewDecoder(resp.Body).Decode(out)
+}
+
+func (c *subPilotClient) reportTimeout() time.Duration {
+	if c != nil && c.timeout > subPilotDefaultReportTimeout {
+		return c.timeout
+	}
+	return subPilotDefaultReportTimeout
 }
 
 func (c *subPilotClient) handleError(message string, err error) error {

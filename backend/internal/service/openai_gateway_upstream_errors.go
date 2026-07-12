@@ -164,6 +164,42 @@ func isOpenAITransientProcessingError(upstreamStatusCode int, upstreamMsg string
 	return match(string(upstreamBody))
 }
 
+func isOpenAIAccountSpecificBadRequest(upstreamStatusCode int, upstreamMsg string, upstreamBody []byte) bool {
+	if upstreamStatusCode != http.StatusBadRequest {
+		return false
+	}
+
+	code := strings.ToLower(strings.TrimSpace(gjson.GetBytes(upstreamBody, "error.code").String()))
+	if code == "" {
+		code = strings.ToLower(strings.TrimSpace(gjson.GetBytes(upstreamBody, "response.error.code").String()))
+	}
+	switch code {
+	case "model_not_found", "model_not_available", "unsupported_model", "account_deactivated", "deactivated_workspace":
+		return true
+	}
+
+	message := strings.ToLower(strings.TrimSpace(upstreamMsg))
+	if message == "" {
+		message = strings.ToLower(strings.TrimSpace(extractUpstreamErrorMessage(upstreamBody)))
+	}
+	accountMarkers := []string{
+		"does not have access to model",
+		"model is not available for this account",
+		"model is not supported for this account",
+		"selected model is not supported",
+		"workspace has been deactivated",
+		"account has been deactivated",
+		"invalid chatgpt-account-id",
+		"invalid chatgpt account id",
+	}
+	for _, marker := range accountMarkers {
+		if strings.Contains(message, marker) {
+			return true
+		}
+	}
+	return false
+}
+
 func isOpenAIContextWindowError(upstreamMsg string, upstreamBody []byte) bool {
 	match := func(text string) bool {
 		lower := strings.ToLower(strings.TrimSpace(text))
@@ -225,7 +261,8 @@ func (s *OpenAIGatewayService) shouldFailoverOpenAIUpstreamResponse(statusCode i
 	if s.shouldFailoverUpstreamError(statusCode) {
 		return true
 	}
-	return isOpenAITransientProcessingError(statusCode, upstreamMsg, upstreamBody)
+	return isOpenAITransientProcessingError(statusCode, upstreamMsg, upstreamBody) ||
+		isOpenAIAccountSpecificBadRequest(statusCode, upstreamMsg, upstreamBody)
 }
 
 func marshalOpenAIUpstreamJSON(v any) ([]byte, error) {

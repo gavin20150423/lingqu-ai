@@ -109,20 +109,19 @@
 
         <router-link
           v-if="!authStore.isSimpleMode"
-          to="/keys"
+          to="/dashboard"
           class="sidebar-link mx-3 mb-4 mt-2"
-          :class="{ 'sidebar-link-active': isActive('/keys'), 'sidebar-link-collapsed': sidebarCollapsed }"
-          :title="sidebarCollapsed ? t('nav.apiKeys') : undefined"
-          data-tour="sidebar-my-keys"
-          @click="handleMenuItemClick('/keys')"
+          :class="{ 'sidebar-link-collapsed': sidebarCollapsed }"
+          :title="sidebarCollapsed ? t('nav.userPortal') : undefined"
+          @click="handleMenuItemClick('/dashboard')"
         >
-          <SidebarItemIcon :item="{ path: '/keys', label: t('nav.apiKeys'), icon: 'key' }" />
+          <SidebarItemIcon :item="{ path: '/dashboard', label: t('nav.userPortal'), icon: 'user' }" />
           <span
             class="sidebar-label"
             :class="{ 'sidebar-label-collapsed': sidebarCollapsed }"
             :aria-hidden="sidebarCollapsed ? 'true' : 'false'"
           >
-            {{ t('nav.apiKeys') }}
+            {{ t('nav.userPortal') }}
           </span>
         </router-link>
       </template>
@@ -408,7 +407,7 @@ const adminNavItems = computed((): NavItem[] => {
 
   if (authStore.isSimpleMode) {
     const filtered = visible.filter(item => !item.hideInSimpleMode)
-    filtered.push({ path: '/keys', label: t('nav.apiKeys'), icon: 'key' })
+    filtered.push({ path: '/dashboard', label: t('nav.userPortal'), icon: 'user' })
     filtered.push({ path: '/admin/settings', label: t('nav.settings'), icon: 'cog' })
     for (const cm of customMenuItemsForAdmin.value) {
       filtered.push({ path: `/custom/${cm.id}`, label: cm.label, icon: 'grid', iconSvg: cm.icon_svg })

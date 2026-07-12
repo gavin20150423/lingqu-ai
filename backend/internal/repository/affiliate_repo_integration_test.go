@@ -203,6 +203,167 @@ VALUES ($1, $2, 0, 0, NOW(), NOW())`, u.ID, affCode)
 	require.InDelta(t, 3.21, persistedBalance, 1e-9)
 }
 
+func TestAffiliateRepository_TransferQuotaToBalance_Disabled(t *testing.T) {
+	ctx := context.Background()
+	tx := testEntTx(t)
+	txCtx := dbent.NewTxContext(ctx, tx)
+	client := tx.Client()
+	repo := NewAffiliateRepository(client, integrationDB)
+
+	u := mustCreateUser(t, client, &service.User{
+		Email:        fmt.Sprintf("affiliate-transfer-disabled-%d@example.com", time.Now().UnixNano()),
+		PasswordHash: "hash",
+		Role:         service.RoleUser,
+		Status:       service.StatusActive,
+		Balance:      8.5,
+		Concurrency:  5,
+	})
+	affCode := fmt.Sprintf("AFD%09d", time.Now().UnixNano()%1_000_000_000)
+	_, err := client.ExecContext(txCtx, `
+INSERT INTO user_affiliates (
+    user_id, aff_code, aff_quota, aff_history_quota, transfer_disabled, created_at, updated_at
+)
+VALUES ($1, $2, 6.75, 6.75, TRUE, NOW(), NOW())`, u.ID, affCode)
+	require.NoError(t, err)
+
+	transferred, balance, err := repo.TransferQuotaToBalance(txCtx, u.ID)
+	require.ErrorIs(t, err, service.ErrAffiliateTransferDisabled)
+	require.Zero(t, transferred)
+	require.Zero(t, balance)
+	require.InDelta(t, 6.75, querySingleFloat(t, txCtx, client,
+		"SELECT aff_quota::double precision FROM user_affiliates WHERE user_id = $1", u.ID), 1e-9)
+	require.InDelta(t, 8.5, querySingleFloat(t, txCtx, client,
+		"SELECT balance::double precision FROM users WHERE id = $1", u.ID), 1e-9)
+	require.Equal(t, 0, querySingleInt(t, txCtx, client,
+		"SELECT COUNT(*) FROM user_affiliate_ledger WHERE user_id = $1 AND action = 'transfer'", u.ID))
+}
+
+func TestAffiliateRepository_ClearAvailableQuotaOfflineSettlement(t *testing.T) {
+	ctx := context.Background()
+	tx := testEntTx(t)
+	txCtx := dbent.NewTxContext(ctx, tx)
+	client := tx.Client()
+	repo := NewAffiliateRepository(client, integrationDB)
+
+	u := mustCreateUser(t, client, &service.User{
+		Email:        fmt.Sprintf("affiliate-offline-settlement-%d@example.com", time.Now().UnixNano()),
+		PasswordHash: "hash",
+		Role:         service.RoleUser,
+		Status:       service.StatusActive,
+		Balance:      11.25,
+		Concurrency:  5,
+	})
+	affCode := fmt.Sprintf("AOS%09d", time.Now().UnixNano()%1_000_000_000)
+	_, err := client.ExecContext(txCtx, `
+INSERT INTO user_affiliates (
+    user_id, aff_code, aff_quota, aff_frozen_quota, aff_history_quota, transfer_disabled, created_at, updated_at
+)
+VALUES ($1, $2, 9.5, 4.25, 13.75, TRUE, NOW(), NOW())`, u.ID, affCode)
+	require.NoError(t, err)
+	_, err = client.ExecContext(txCtx, `
+INSERT INTO user_affiliate_ledger (
+    user_id, action, amount, frozen_until, created_at, updated_at
+)
+VALUES ($1, 'accrue', 4.25, NOW() + INTERVAL '24 hours', NOW(), NOW())`, u.ID)
+	require.NoError(t, err)
+
+	cleared, err := repo.ClearAvailableQuotaOfflineSettlement(
+		txCtx, u.ID, service.AffiliateOfflineSettlementReason,
+	)
+	require.NoError(t, err)
+	require.InDelta(t, 9.5, cleared, 1e-9)
+	require.InDelta(t, 0, querySingleFloat(t, txCtx, client,
+		"SELECT aff_quota::double precision FROM user_affiliates WHERE user_id = $1", u.ID), 1e-9)
+	require.InDelta(t, 4.25, querySingleFloat(t, txCtx, client,
+		"SELECT aff_frozen_quota::double precision FROM user_affiliates WHERE user_id = $1", u.ID), 1e-9)
+	require.InDelta(t, 13.75, querySingleFloat(t, txCtx, client,
+		"SELECT aff_history_quota::double precision FROM user_affiliates WHERE user_id = $1", u.ID), 1e-9)
+	require.InDelta(t, 11.25, querySingleFloat(t, txCtx, client,
+		"SELECT balance::double precision FROM users WHERE id = $1", u.ID), 1e-9)
+
+	rows, err := client.QueryContext(txCtx, `
+SELECT amount::double precision,
+       reason,
+       balance_after::double precision,
+       aff_quota_after::double precision,
+       aff_frozen_quota_after::double precision,
+       aff_history_quota_after::double precision
+FROM user_affiliate_ledger
+WHERE user_id = $1 AND action = 'offline_settlement'
+LIMIT 1`, u.ID)
+	require.NoError(t, err)
+	defer func() { _ = rows.Close() }()
+	require.True(t, rows.Next(), "expected offline settlement ledger")
+	var amount, balanceAfter, quotaAfter, frozenAfter, historyAfter float64
+	var reason string
+	require.NoError(t, rows.Scan(
+		&amount, &reason, &balanceAfter, &quotaAfter, &frozenAfter, &historyAfter,
+	))
+	require.InDelta(t, 9.5, amount, 1e-9)
+	require.Equal(t, service.AffiliateOfflineSettlementReason, reason)
+	require.InDelta(t, 11.25, balanceAfter, 1e-9)
+	require.InDelta(t, 0, quotaAfter, 1e-9)
+	require.InDelta(t, 4.25, frozenAfter, 1e-9)
+	require.InDelta(t, 13.75, historyAfter, 1e-9)
+}
+
+func TestAffiliateRepository_ClearAvailableQuotaOfflineSettlement_Empty(t *testing.T) {
+	ctx := context.Background()
+	tx := testEntTx(t)
+	txCtx := dbent.NewTxContext(ctx, tx)
+	client := tx.Client()
+	repo := NewAffiliateRepository(client, integrationDB)
+
+	u := mustCreateUser(t, client, &service.User{
+		Email:        fmt.Sprintf("affiliate-offline-empty-%d@example.com", time.Now().UnixNano()),
+		PasswordHash: "hash",
+		Role:         service.RoleUser,
+		Status:       service.StatusActive,
+		Concurrency:  5,
+	})
+	_, err := repo.EnsureUserAffiliate(txCtx, u.ID)
+	require.NoError(t, err)
+	require.NoError(t, repo.SetUserTransferDisabled(txCtx, u.ID, true))
+
+	cleared, err := repo.ClearAvailableQuotaOfflineSettlement(
+		txCtx, u.ID, service.AffiliateOfflineSettlementReason,
+	)
+	require.ErrorIs(t, err, service.ErrAffiliateQuotaEmpty)
+	require.Zero(t, cleared)
+}
+
+func TestAffiliateRepository_ClearAvailableQuotaOfflineSettlement_NotEnabled(t *testing.T) {
+	ctx := context.Background()
+	tx := testEntTx(t)
+	txCtx := dbent.NewTxContext(ctx, tx)
+	client := tx.Client()
+	repo := NewAffiliateRepository(client, integrationDB)
+
+	u := mustCreateUser(t, client, &service.User{
+		Email:        fmt.Sprintf("affiliate-offline-not-enabled-%d@example.com", time.Now().UnixNano()),
+		PasswordHash: "hash",
+		Role:         service.RoleUser,
+		Status:       service.StatusActive,
+		Concurrency:  5,
+	})
+	summary, err := repo.EnsureUserAffiliate(txCtx, u.ID)
+	require.NoError(t, err)
+	_, err = client.ExecContext(txCtx,
+		"UPDATE user_affiliates SET aff_quota = 3, aff_history_quota = 3 WHERE user_id = $1",
+		u.ID,
+	)
+	require.NoError(t, err)
+	require.False(t, summary.TransferDisabled)
+
+	cleared, err := repo.ClearAvailableQuotaOfflineSettlement(
+		txCtx, u.ID, service.AffiliateOfflineSettlementReason,
+	)
+	require.ErrorIs(t, err, service.ErrAffiliateOfflineSettlementNotEnabled)
+	require.Zero(t, cleared)
+	require.InDelta(t, 3, querySingleFloat(t, txCtx, client,
+		"SELECT aff_quota::double precision FROM user_affiliates WHERE user_id = $1", u.ID), 1e-9)
+}
+
 // TestAffiliateRepository_AdminCustomCode covers the success path of admin
 // invite-code rewrite + reset within a shared test transaction:
 // - UpdateUserAffCode replaces aff_code, sets aff_code_custom=true, lookup works
@@ -390,6 +551,14 @@ func TestAffiliateRepository_ListUsersWithCustomSettings(t *testing.T) {
 	r := 33.3
 	require.NoError(t, repo.SetUserRebateRate(txCtx, uRate.ID, &r))
 
+	// User with only offline settlement enabled — should appear.
+	uOffline := mustCreateUser(t, client, &service.User{
+		Email:        fmt.Sprintf("affiliate-offlineonly-%d@example.com", time.Now().UnixNano()),
+		PasswordHash: "hash",
+		Role:         service.RoleUser, Status: service.StatusActive,
+	})
+	require.NoError(t, repo.SetUserTransferDisabled(txCtx, uOffline.ID, true))
+
 	entries, total, err := repo.ListUsersWithCustomSettings(txCtx, service.AffiliateAdminFilter{
 		Page: 1, PageSize: 100,
 	})
@@ -415,5 +584,9 @@ func TestAffiliateRepository_ListUsersWithCustomSettings(t *testing.T) {
 	require.NotNil(t, rateEntry.AffRebateRatePercent)
 	require.InDelta(t, 33.3, *rateEntry.AffRebateRatePercent, 1e-9)
 
-	require.GreaterOrEqual(t, total, int64(2), "total must include at least our 2 custom rows")
+	offlineEntry, ok := byUserID[uOffline.ID]
+	require.True(t, ok, "offline-settlement user missing from list")
+	require.True(t, offlineEntry.TransferDisabled)
+
+	require.GreaterOrEqual(t, total, int64(3), "total must include at least our 3 custom rows")
 }

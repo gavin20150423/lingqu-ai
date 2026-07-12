@@ -303,6 +303,11 @@ func extractUpstreamErrorMessage(body []byte) string {
 		return d
 	}
 
+	// Responses 事件/包装器风格：{"response":{"error":{"message":"..."}}}
+	if m := gjson.GetBytes(body, "response.error.message").String(); strings.TrimSpace(m) != "" {
+		return m
+	}
+
 	// 兜底：尝试顶层 message
 	return gjson.GetBytes(body, "message").String()
 }

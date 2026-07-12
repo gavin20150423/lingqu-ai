@@ -105,7 +105,7 @@ func (s *GatewayService) ReportSubPilotFailure(ctx context.Context, input SubPil
 	client.reportFailure(ctx, subPilotReportFailureRequest{
 		RequestID:    subPilotReportRequestID(ctx, input.RequestID),
 		LeaseID:      input.LeaseID,
-		APIKeyID:     subPilotAPIKeyIDString(input.APIKey),
+		APIKeyID:     subPilotReportAPIKeyID(ctx, input.APIKey),
 		AccountID:    strconv.FormatInt(input.Account.ID, 10),
 		Platform:     input.reportPlatform(),
 		GroupID:      input.reportGroupID(),
@@ -128,7 +128,7 @@ func (s *OpenAIGatewayService) ReportSubPilotFailure(ctx context.Context, input 
 	client.reportFailure(ctx, subPilotReportFailureRequest{
 		RequestID:    subPilotReportRequestID(ctx, input.RequestID),
 		LeaseID:      input.LeaseID,
-		APIKeyID:     subPilotAPIKeyIDString(input.APIKey),
+		APIKeyID:     subPilotReportAPIKeyID(ctx, input.APIKey),
 		AccountID:    strconv.FormatInt(input.Account.ID, 10),
 		Platform:     input.reportPlatform(),
 		GroupID:      input.reportGroupID(),

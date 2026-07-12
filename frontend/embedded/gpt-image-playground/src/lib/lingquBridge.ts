@@ -13,6 +13,7 @@ export interface LingquBridgePayload {
   model?: string
   apiMode?: 'images' | 'responses'
   userEmail?: string
+  userTheme?: 'cartoon' | 'business' | 'claude'
   launchedAt?: number
 }
 

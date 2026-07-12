@@ -851,7 +851,320 @@ header[data-no-drag-select] button {
   background: rgba(255, 95, 143, 0.68);
 }
 
+/* ===== Business workspace theme ===== */
+html[data-user-theme='business'] {
+  background: #f7f4ef;
+  scrollbar-color: #bdb5ab transparent;
+  --lingqu-ink: #292622;
+  --lingqu-paper: #f7f4ef;
+  --lingqu-card: #fffdfa;
+  --lingqu-border: #e2ddd4;
+  --lingqu-shadow: rgba(57, 48, 40, 0.08);
+  --lingqu-pink: #c96343;
+  --lingqu-orange: #c96343;
+  --lingqu-cyan: #2f8b68;
+  --lingqu-yellow: #f8e7df;
+}
+
+html[data-user-theme='business'] body {
+  background: #f7f4ef;
+  color: #292622;
+  scrollbar-color: #bdb5ab transparent;
+}
+
+html[data-user-theme='business'] * {
+  scrollbar-color: #bdb5ab transparent;
+}
+
+html[data-user-theme='business'] body::before,
+html[data-user-theme='business'] body::after,
+html[data-user-theme='business'] [data-home-main]::before,
+html[data-user-theme='business'] [data-home-main]::after {
+  display: none;
+}
+
+html[data-user-theme='business'] [data-home-main] {
+  animation: none;
+}
+
+html[data-user-theme='business'] button:not(:disabled):hover,
+html[data-user-theme='business'] a:hover,
+html[data-user-theme='business'] [role="button"]:hover {
+  transform: none;
+}
+
+html[data-user-theme='business'] button:focus-visible,
+html[data-user-theme='business'] a:focus-visible,
+html[data-user-theme='business'] input:focus-visible,
+html[data-user-theme='business'] select:focus-visible,
+html[data-user-theme='business'] [contenteditable="true"]:focus-visible {
+  outline: 2px solid rgba(201, 99, 67, 0.24);
+  outline-offset: 1px;
+}
+
+html[data-user-theme='business'] header[data-no-drag-select] {
+  border-bottom: 1px solid #e2ddd4 !important;
+  background: #fffdfa !important;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+html[data-user-theme='business'] .safe-header-inner {
+  min-height: 3.5rem;
+  max-width: none;
+  padding-left: 1.5rem;
+  padding-right: 1.5rem;
+}
+
+html[data-user-theme='business'] .lingqu-header-logo {
+  width: 2.1rem;
+  height: 2.1rem;
+  border: 0;
+  border-radius: 6px;
+  background: #c96343;
+  box-shadow: none;
+  color: #ffffff;
+  transform: none;
+}
+
+html[data-user-theme='business'] .lingqu-header-logo svg {
+  width: 1.15rem;
+  height: 1.15rem;
+}
+
+html[data-user-theme='business'] .lingqu-toolbar-button {
+  border-color: #d9d2c9 !important;
+  border-radius: 6px !important;
+  background: #fffdfa !important;
+  box-shadow: none;
+  color: #5d5751 !important;
+}
+
+html[data-user-theme='business'] .lingqu-toolbar-button:hover {
+  border-color: #bfb5aa !important;
+  background: #f8f2ec !important;
+  box-shadow: none;
+}
+
+html[data-user-theme='business'] [data-image-toolbar] {
+  gap: 0.5rem !important;
+  margin-top: 0.75rem !important;
+  margin-bottom: 0.75rem !important;
+  border: 1px solid #e2ddd4 !important;
+  border-radius: 8px !important;
+  background: #fffdfa !important;
+  padding: 0.8rem !important;
+  box-shadow: 0 2px 8px rgba(57, 48, 40, 0.05) !important;
+  backdrop-filter: none;
+}
+
+html[data-user-theme='business'] [data-home-main] > .safe-area-x {
+  width: 100%;
+  max-width: none;
+  padding-left: 1.5rem;
+  padding-right: 1.5rem;
+}
+
+html[data-user-theme='business'] [data-image-toolbar] button,
+html[data-user-theme='business'] [data-image-toolbar] select,
+html[data-user-theme='business'] [data-image-toolbar] input,
+html[data-user-theme='business'] [data-image-toolbar] a {
+  min-height: 2.75rem;
+  border-color: #d9d2c9 !important;
+  border-radius: 6px !important;
+  box-shadow: none !important;
+  font-weight: 600 !important;
+}
+
+html[data-user-theme='business'] [data-image-toolbar] input,
+html[data-user-theme='business'] [data-image-toolbar] select {
+  font-size: 0.9rem !important;
+}
+
+html[data-user-theme='business'] [data-image-toolbar] button:hover,
+html[data-user-theme='business'] [data-image-toolbar] a:hover {
+  background: #f8f2ec !important;
+}
+
+html[data-user-theme='business'] [data-image-toolbar] button:first-child {
+  border-color: #e3b8a8 !important;
+  background: #f8e7df !important;
+  color: #b95336 !important;
+}
+
+html[data-user-theme='business'] [data-image-toolbar] a[href*="/keys"] {
+  display: inline-flex;
+  min-height: 2.5rem;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+  border-color: #c96343 !important;
+  background: #c96343 !important;
+  color: #ffffff !important;
+  line-height: 1;
+}
+
+html[data-user-theme='business'] [data-image-empty-state] {
+  margin-top: 2rem;
+  width: min(50rem, calc(100% - 3rem));
+  max-width: none;
+  min-height: 18.5rem;
+  border: 1px solid #e2ddd4 !important;
+  border-radius: 8px !important;
+  background: #fffdfa !important;
+  padding-top: 3rem;
+  padding-bottom: 3rem;
+  box-shadow: 0 2px 8px rgba(57, 48, 40, 0.05) !important;
+  backdrop-filter: none;
+}
+
+html[data-user-theme='business'] [data-image-empty-state] svg {
+  width: 4.75rem !important;
+  height: 4.75rem !important;
+  border: 1px solid #e3b8a8 !important;
+  border-radius: 7px !important;
+  background: #f8e7df !important;
+  box-shadow: none !important;
+  color: #c96343 !important;
+}
+
+html[data-user-theme='business'] [data-image-empty-state] p {
+  color: #49443f !important;
+  font-weight: 700 !important;
+}
+
+html[data-user-theme='business'] [data-image-empty-state] p:first-of-type {
+  font-size: 1.05rem !important;
+}
+
+html[data-user-theme='business'] [data-image-empty-state] p:last-of-type {
+  font-size: 0.9rem !important;
+}
+
+html[data-user-theme='business'] [data-input-bar] {
+  bottom: 1rem;
+  max-width: none !important;
+  padding-left: 1.5rem;
+  padding-right: 1.5rem;
+}
+
+html[data-user-theme='business'] [data-image-input-panel] {
+  border: 1px solid #d9d2c9 !important;
+  border-radius: 8px !important;
+  background: #fffdfa !important;
+  padding: 1rem !important;
+  box-shadow: 0 8px 24px rgba(57, 48, 40, 0.11) !important;
+  backdrop-filter: none;
+}
+
+html[data-user-theme='business'] [data-input-bar] > div:last-child {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none;
+}
+
+html[data-user-theme='business'] [data-input-bar] [contenteditable="true"] {
+  min-height: 3.25rem;
+  border: 1px solid #d9d2c9 !important;
+  border-radius: 6px !important;
+  background: #fffdfa !important;
+  box-shadow: none !important;
+}
+
+html[data-user-theme='business'] [data-input-bar] [contenteditable="true"]:focus {
+  border-color: #c96343 !important;
+  box-shadow: 0 0 0 3px rgba(201, 99, 67, 0.12) !important;
+}
+
+html[data-user-theme='business'] [data-input-bar] .prompt-placeholder {
+  color: #9a9188 !important;
+  font-weight: 500;
+}
+
+html[data-user-theme='business'] [data-input-bar] label > span {
+  color: #756f68 !important;
+  font-weight: 600;
+}
+
+html[data-user-theme='business'] [data-input-bar] select,
+html[data-user-theme='business'] [data-input-bar] input[type="number"],
+html[data-user-theme='business'] [data-input-bar] button {
+  min-height: 2.6rem;
+  border-color: #d9d2c9 !important;
+  border-radius: 6px !important;
+  background: #fffdfa !important;
+  box-shadow: none !important;
+}
+
+html[data-user-theme='business'] [data-input-bar] button[aria-label="上传图片"],
+html[data-user-theme='business'] [data-input-bar] button[aria-label^="参考图"] {
+  color: #5d5751 !important;
+}
+
+html[data-user-theme='business'] [data-input-bar] button[aria-label="生成图像"],
+html[data-user-theme='business'] [data-input-bar] button[aria-label="遮罩编辑"] {
+  border-color: #c96343 !important;
+  background: #c96343 !important;
+  color: #ffffff !important;
+}
+
+html[data-user-theme='business'] [data-input-bar] button[aria-label="停止生成"] {
+  border-color: #b42318 !important;
+  background: #b42318 !important;
+  color: #ffffff !important;
+}
+
+html[data-user-theme='business'] .task-card-wrapper {
+  animation: none;
+}
+
+html[data-user-theme='business'] .task-card-wrapper > .relative > .relative {
+  border: 1px solid #e2ddd4 !important;
+  border-radius: 8px !important;
+  background: #fffdfa !important;
+  box-shadow: 0 2px 8px rgba(57, 48, 40, 0.05) !important;
+}
+
+html[data-user-theme='business'] .task-card-wrapper > .relative > .relative:hover {
+  border-color: #bfb5aa !important;
+  box-shadow: 0 8px 20px rgba(57, 48, 40, 0.09) !important;
+}
+
+html[data-user-theme='business'] .task-card-wrapper .bg-gray-100,
+html[data-user-theme='business'] .task-card-wrapper .dark\:bg-black\/20 {
+  background: #f3eee8 !important;
+}
+
+html[data-user-theme='business'] .task-card-wrapper [data-tag-scroll-area] span {
+  border-radius: 4px !important;
+  background: #f4eee8 !important;
+  color: #665f58 !important;
+}
+
+html[data-user-theme='business'] .custom-scrollbar::-webkit-scrollbar-thumb,
+html[data-user-theme='business'] ::-webkit-scrollbar-thumb {
+  background: #bdb5ab !important;
+}
+
 @media (max-width: 640px) {
+  html[data-user-theme='business'] .safe-header-inner,
+  html[data-user-theme='business'] [data-home-main] > .safe-area-x {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+  }
+
+  html[data-user-theme='business'] [data-input-bar] {
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+  }
+
+  html[data-user-theme='business'] [data-image-empty-state] {
+    width: 100%;
+    min-height: 14rem;
+  }
+
   body::after,
   [data-home-main]::before,
   [data-home-main]::after {

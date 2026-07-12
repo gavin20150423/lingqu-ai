@@ -146,6 +146,14 @@ security:
 # 网关配置
 # =============================================================================
 gateway:
+  # Optional SubPilot external dispatch integration.
+  subpilot:
+    enabled: false
+    base_url: ""
+    timeout_ms: 80
+    fail_open: true
+    # Must match SubPilot's SUB2API_PROBE_SECRET for delegated account probes.
+    probe_secret: ""
   # Timeout for waiting upstream response headers (seconds)
   # 等待上游响应头超时时间（秒）
   response_header_timeout: 600

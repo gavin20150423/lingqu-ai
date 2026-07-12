@@ -94,6 +94,8 @@ export default {
     created: 'Created',
     copyToClipboard: 'Copy to clipboard',
     copied: 'Copied!',
+    showFullKey: 'Show full key',
+    hideFullKey: 'Hide full key',
     importToCcSwitch: 'Import to CCS',
     enable: 'Enable',
     disable: 'Disable',
@@ -497,6 +499,7 @@ export default {
   affiliate: {
     title: 'Affiliate Rebates',
     description: 'Invite new users and convert your rebate quota into account balance',
+    offlineDescription: 'Invite new users and have your earned rebate quota settled offline by an administrator',
     yourCode: 'Your Affiliate Code',
     inviteLink: 'Invite Link',
     copyCode: 'Copy Code',
@@ -517,8 +520,11 @@ export default {
     transfer: {
       title: 'Transfer Rebate Quota',
       description: 'Move available rebate quota into your account balance',
+      offlineTitle: 'Offline Rebate Settlement',
+      offlineDescription: 'Available rebate quota is settled offline by an administrator and is not credited to account balance',
       button: 'Transfer to Balance',
       transferring: 'Transferring...',
+      disabled: 'Affiliate rebates for this account are settled offline and cannot be transferred to account balance.',
       empty: 'No available rebate quota',
       success: '{amount} has been transferred to your balance'
     },
@@ -537,6 +543,7 @@ export default {
       line1: 'Share your affiliate code or invite link with new users.',
       line2: 'When invitees recharge, you receive {rate} of the recharge as rebate quota.',
       line3: 'Transfer rebate quota to balance at any time.',
+      line3Offline: 'Rebate quota is settled offline by an administrator and cannot be transferred to account balance.',
       line4: 'Newly earned rebates may have a waiting period before they can be transferred.'
     }
   },

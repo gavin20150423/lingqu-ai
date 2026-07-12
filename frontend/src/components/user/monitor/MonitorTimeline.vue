@@ -1,8 +1,8 @@
 <template>
   <div class="monitor-timeline">
     <div class="monitor-timeline__meta">
-      <span>{{ t('monitorCommon.history60pts', { n: length }) }}</span>
-      <span class="tabular-nums">{{ t('monitorCommon.nextUpdateIn', { n: countdownSeconds }) }}</span>
+      <span>近 1 小时</span>
+      <span class="monitor-timeline__idle-key"><i></i>灰色为空闲</span>
     </div>
 
     <div
@@ -19,20 +19,24 @@
         :class="bar.colorClass"
         :style="{ height: bar.heightPct + '%' }"
         :title="bar.title"
+        @mouseenter="showTooltip(bar, idx)"
+        @mouseleave="hideTooltip"
       ></div>
     </div>
 
     <div
-      class="monitor-timeline__range"
+      v-if="hoveredBar"
+      class="monitor-timeline__tooltip"
+      :style="{ left: tooltipLeft }"
+      role="tooltip"
     >
-      <span>{{ t('monitorCommon.past') }}</span>
-      <span>{{ t('monitorCommon.now') }}</span>
+      {{ hoveredBar.title }}
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { MonitorTimelinePoint } from '@/api/channelMonitor'
 import { useChannelMonitorFormat } from '@/composables/useChannelMonitorFormat'
@@ -50,6 +54,8 @@ const props = withDefaults(defineProps<{
 
 const { t } = useI18n()
 const { statusLabel, formatLatency, formatRelativeTime } = useChannelMonitorFormat()
+const hoveredBar = ref<Bar | null>(null)
+const hoveredIndex = ref(0)
 
 interface Bar {
   colorClass: string
@@ -57,14 +63,13 @@ interface Bar {
   title: string
 }
 
-// 4 级高度 + 颜色双重编码：高=好+绿，短=坏+红，灰=未测试。
-// 长绿(正常) > 中黄(降级) > 短红(失败/系统错误) > 很短灰(未测试)。
+// Height and colour encode health. Missing traffic slots are rendered as idle.
 const STATUS_HEIGHT: Record<string, number> = {
   operational: 100,
   degraded: 65,
   failed: 35,
   error: 35,
-  empty: 15,
+  empty: 30,
 }
 
 const STATUS_COLOR: Record<string, string> = {
@@ -90,7 +95,7 @@ const displayBars = computed<Bar[]>(() => {
     bars.push({
       colorClass: STATUS_COLOR.empty,
       heightPct: STATUS_HEIGHT.empty,
-      title: '',
+      title: '空闲',
     })
   }
 
@@ -110,30 +115,56 @@ const displayBars = computed<Bar[]>(() => {
 
   return bars
 })
+
+const tooltipLeft = computed(() => {
+  const total = displayBars.value.length || 1
+  const percent = ((hoveredIndex.value + 0.5) / total) * 100
+  return `${Math.min(88, Math.max(12, percent))}%`
+})
+
+function showTooltip(bar: Bar, index: number) {
+  hoveredBar.value = bar
+  hoveredIndex.value = index
+}
+
+function hideTooltip() {
+  hoveredBar.value = null
+}
 </script>
 
 <style scoped>
 .monitor-timeline {
-  margin-top: 0.98rem;
-  border-top: 1px solid rgba(148, 163, 184, 0.14);
-  padding-top: 0.72rem;
+  position: relative;
+  margin-top: auto;
+  padding-top: 0.68rem;
 }
 
 .monitor-timeline__meta {
   display: flex;
   justify-content: space-between;
-  margin-bottom: 0.5rem;
-  color: rgba(107, 114, 128, 0.64);
-  font-size: 0.62rem;
-  font-weight: 680;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
+  margin-bottom: 0.42rem;
+  color: #7d776f;
+  font-size: 0.58rem;
+  font-weight: 650;
+  letter-spacing: 0;
+}
+
+.monitor-timeline__idle-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.24rem;
+}
+
+.monitor-timeline__idle-key i {
+  width: 0.42rem;
+  height: 0.42rem;
+  background: #d8d3ca;
 }
 
 .monitor-timeline__maintenance {
   display: flex;
   width: 100%;
-  height: 1.25rem;
+  height: 1rem;
   align-items: center;
   justify-content: center;
   border: 1px dashed rgba(148, 163, 184, 0.56);
@@ -147,15 +178,23 @@ const displayBars = computed<Bar[]>(() => {
 .monitor-timeline__bars {
   display: flex;
   width: 100%;
-  height: 1.25rem;
+  height: 1rem;
   align-items: flex-end;
   gap: 2px;
 }
 
 .monitor-timeline__bar {
-  min-width: 3px;
+  min-width: 2px;
   flex: 1 1 0;
-  border-radius: 999px;
+  border-radius: 1px;
+  cursor: help;
+  transition: filter 120ms ease, transform 120ms ease;
+}
+
+.monitor-timeline__bar:hover {
+  filter: saturate(1.18) brightness(0.9);
+  transform: scaleY(1.12);
+  transform-origin: bottom;
 }
 
 .monitor-timeline__bar--ok {
@@ -170,14 +209,34 @@ const displayBars = computed<Bar[]>(() => {
   background: #ef6b64;
 }
 
-.monitor-timeline__range {
-  display: flex;
-  justify-content: space-between;
-  margin-top: 0.28rem;
-  color: rgba(107, 114, 128, 0.5);
-  font-size: 0.56rem;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
+.monitor-timeline__tooltip {
+  position: absolute;
+  z-index: 12;
+  bottom: 1.28rem;
+  max-width: calc(100% - 0.5rem);
+  transform: translateX(-50%);
+  border: 1px solid #d9d4cb;
+  border-radius: 5px;
+  background: #2f2c28;
+  box-shadow: 0 5px 14px rgba(47, 44, 40, 0.18);
+  color: #fff;
+  padding: 0.3rem 0.45rem;
+  font-size: 0.58rem;
+  font-weight: 650;
+  line-height: 1.35;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.monitor-timeline__tooltip::after {
+  position: absolute;
+  bottom: -0.25rem;
+  left: 50%;
+  width: 0.45rem;
+  height: 0.45rem;
+  background: #2f2c28;
+  content: '';
+  transform: translateX(-50%) rotate(45deg);
 }
 
 :global(.dark) .monitor-timeline {
@@ -185,7 +244,6 @@ const displayBars = computed<Bar[]>(() => {
 }
 
 :global(.dark) .monitor-timeline__meta,
-:global(.dark) .monitor-timeline__range,
 :global(.dark) .monitor-timeline__maintenance {
   color: rgb(156 163 175 / 0.72);
 }

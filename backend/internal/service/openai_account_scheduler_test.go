@@ -2,9 +2,12 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
+	"net/http"
+	"net/http/httptest"
 	"sync"
 	"testing"
 	"time"
@@ -383,6 +386,84 @@ func TestOpenAIGatewayService_SelectAccountWithScheduler_DefaultDisabledUsesLega
 	require.Equal(t, int64(36002), selection.Account.ID)
 	require.Equal(t, openAIAccountScheduleLayerLoadBalance, decision.Layer)
 	require.False(t, decision.StickyPreviousHit)
+}
+
+func TestOpenAIGatewayService_SelectAccountWithScheduler_DefaultDisabledUsesSubPilot(t *testing.T) {
+	resetOpenAIAdvancedSchedulerSettingCacheForTest()
+
+	requests := make(chan subPilotSelectRequest, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, "/v1/dispatch/select", r.URL.Path)
+		var req subPilotSelectRequest
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
+		requests <- req
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"decision":"selected","group_id":"10107","account":{"id":"36003"},"lease":{"id":"lease-default-subpilot"}}`))
+	}))
+	defer server.Close()
+
+	ctx := WithSubPilotAPIKeyID(context.Background(), 910001)
+	groupID := int64(10107)
+	accounts := []Account{
+		{
+			ID:          36003,
+			Platform:    PlatformOpenAI,
+			Type:        AccountTypeAPIKey,
+			Status:      StatusActive,
+			Schedulable: true,
+			Concurrency: 1,
+			Priority:    5,
+		},
+		{
+			ID:          36004,
+			Platform:    PlatformOpenAI,
+			Type:        AccountTypeAPIKey,
+			Status:      StatusActive,
+			Schedulable: true,
+			Concurrency: 1,
+			Priority:    0,
+		},
+	}
+	cfg := &config.Config{}
+	cfg.Gateway.Scheduling.LoadBatchEnabled = false
+	cfg.Gateway.SubPilot = config.SubPilotConfig{
+		Enabled:   true,
+		BaseURL:   server.URL,
+		TimeoutMS: 500,
+	}
+	svc := &OpenAIGatewayService{
+		accountRepo:        schedulerTestOpenAIAccountRepo{accounts: accounts},
+		cache:              &schedulerTestGatewayCache{},
+		cfg:                cfg,
+		concurrencyService: NewConcurrencyService(schedulerTestConcurrencyCache{}),
+	}
+
+	require.False(t, svc.isOpenAIAdvancedSchedulerEnabled(ctx))
+	selection, decision, err := svc.SelectAccountWithScheduler(
+		ctx,
+		&groupID,
+		"",
+		"subpilot-default-session",
+		"gpt-5.4",
+		nil,
+		OpenAIUpstreamTransportAny,
+		false,
+	)
+	require.NoError(t, err)
+	require.NotNil(t, selection)
+	require.NotNil(t, selection.Account)
+	require.Equal(t, int64(36003), selection.Account.ID)
+	require.Equal(t, "subpilot", decision.Layer)
+	require.Equal(t, "lease-default-subpilot", selection.SubPilotLeaseID)
+
+	select {
+	case req := <-requests:
+		require.Equal(t, "910001", req.APIKeyID)
+		require.Equal(t, "10107", req.GroupID)
+		require.Equal(t, "subpilot-default-session", req.SessionKey)
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for SubPilot select request")
+	}
 }
 
 func TestOpenAIGatewayService_SelectAccountWithScheduler_DefaultDisabled_RequiredWSV2_SkipsHTTPOnlyAccount(t *testing.T) {

@@ -124,6 +124,14 @@ func (r *paymentFulfillmentAffiliateRepoStub) BatchSetUserRebateRate(context.Con
 	panic("unexpected BatchSetUserRebateRate call")
 }
 
+func (r *paymentFulfillmentAffiliateRepoStub) SetUserTransferDisabled(context.Context, int64, bool) error {
+	panic("unexpected SetUserTransferDisabled call")
+}
+
+func (r *paymentFulfillmentAffiliateRepoStub) ClearAvailableQuotaOfflineSettlement(context.Context, int64, string) (float64, error) {
+	panic("unexpected ClearAvailableQuotaOfflineSettlement call")
+}
+
 func (r *paymentFulfillmentAffiliateRepoStub) ListUsersWithCustomSettings(context.Context, AffiliateAdminFilter) ([]AffiliateAdminEntry, int64, error) {
 	panic("unexpected ListUsersWithCustomSettings call")
 }
