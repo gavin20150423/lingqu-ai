@@ -172,6 +172,7 @@ func (s *FrontendServer) serveStaticPath(c *gin.Context, cleanPath string) {
 		return
 	}
 
+	applyStaticAssetCacheHeaders(c.Writer.Header(), cleanPath)
 	requestCopy := c.Request.Clone(c.Request.Context())
 	requestCopy.URL.Path = "/" + cleanPath
 	s.fileServer.ServeHTTP(c.Writer, requestCopy)
@@ -207,6 +208,7 @@ func (s *FrontendServer) tryServeOverride(c *gin.Context, cleanPath string) bool
 	if err != nil || info.IsDir() {
 		return false
 	}
+	applyStaticAssetCacheHeaders(c.Writer.Header(), cleanPath)
 	c.File(filePath)
 	c.Abort()
 	return true
@@ -348,6 +350,7 @@ func ServeEmbeddedFrontend() gin.HandlerFunc {
 				serveEmbeddedStaticFile(c, distFS, staticPath)
 				return
 			}
+			applyStaticAssetCacheHeaders(c.Writer.Header(), staticPath)
 			requestCopy := c.Request.Clone(c.Request.Context())
 			requestCopy.URL.Path = "/" + staticPath
 			fileServer.ServeHTTP(c.Writer, requestCopy)
@@ -425,6 +428,7 @@ func tryServeOverrideFile(c *gin.Context, overrideDir, cleanPath string) bool {
 	if err != nil || info.IsDir() {
 		return false
 	}
+	applyStaticAssetCacheHeaders(c.Writer.Header(), cleanPath)
 	c.File(filePath)
 	c.Abort()
 	return true
@@ -441,7 +445,9 @@ func shouldBypassEmbeddedFrontend(path string) bool {
 		trimmed == "/health" ||
 		trimmed == "/responses" ||
 		strings.HasPrefix(trimmed, "/responses/") ||
-		strings.HasPrefix(trimmed, "/images/")
+		trimmed == "/alpha/search" ||
+		strings.HasPrefix(trimmed, "/images/") ||
+		strings.HasPrefix(trimmed, "/videos/")
 }
 
 func serveIndexHTML(c *gin.Context, fsys fs.FS) {

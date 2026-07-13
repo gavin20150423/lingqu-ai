@@ -231,6 +231,7 @@ import { usageAPI, type UserDashboardStats as UserStatsType } from '@/api/usage'
 import { channelMonitorUserAPI, type UserMonitorView } from '@/api/channelMonitor'
 import { useClipboard } from '@/composables/useClipboard'
 import type { ModelStat, TrendDataPoint, UsageLog } from '@/types'
+import { formatDateLocalInput } from '@/utils/format'
 
 ChartJS.register(
   ArcElement,
@@ -490,8 +491,8 @@ async function loadStats() {
     const startDate = new Date()
     startDate.setDate(endDate.getDate() - 6)
     const dateParams = {
-      start_date: startDate.toISOString().slice(0, 10),
-      end_date: endDate.toISOString().slice(0, 10),
+      start_date: formatDateLocalInput(startDate),
+      end_date: formatDateLocalInput(endDate),
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
     }
     const [dashboardResult, snapshotResult, usageResult, monitorResult] = await Promise.allSettled([
