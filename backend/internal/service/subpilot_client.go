@@ -171,9 +171,13 @@ func newSubPilotClient(cfg config.SubPilotConfig) *subPilotClient {
 }
 
 func newSubPilotSharedHTTPClient() *http.Client {
-	transport := http.DefaultTransport.(*http.Transport).Clone()
-	transport.MaxIdleConns = subPilotMaxIdleConns
-	transport.MaxIdleConnsPerHost = subPilotMaxIdleConns
+	transport := http.DefaultTransport
+	if defaultTransport, ok := http.DefaultTransport.(*http.Transport); ok {
+		clonedTransport := defaultTransport.Clone()
+		clonedTransport.MaxIdleConns = subPilotMaxIdleConns
+		clonedTransport.MaxIdleConnsPerHost = subPilotMaxIdleConns
+		transport = clonedTransport
+	}
 	return &http.Client{Transport: transport}
 }
 
@@ -332,10 +336,6 @@ func (c *subPilotClient) recordSuccess() {
 	c.state.bypassed.Store(false)
 }
 
-func (c *subPilotClient) postJSON(ctx context.Context, path string, in any, out any) error {
-	return c.postJSONWithTimeout(ctx, path, in, out, c.timeout)
-}
-
 func (c *subPilotClient) postJSONWithTimeout(ctx context.Context, path string, in any, out any, timeout time.Duration) error {
 	if c == nil {
 		return nil
@@ -388,7 +388,7 @@ func (c *subPilotClient) getJSONWithTimeout(ctx context.Context, path string, ou
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	raw, err := readSubPilotResponse(resp.Body)
 	if err != nil {
 		return err
