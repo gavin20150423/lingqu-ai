@@ -175,6 +175,10 @@ const availabilityStyle = computed(() => {
   color: #47789a;
 }
 
+.monitor-card__provider--grok {
+  color: #52525b;
+}
+
 .monitor-card__title-wrap {
   min-width: 0;
   flex: 1;
