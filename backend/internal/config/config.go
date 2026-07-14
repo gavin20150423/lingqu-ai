@@ -741,11 +741,12 @@ type ImageConcurrencyConfig struct {
 }
 
 type SubPilotConfig struct {
-	Enabled     bool   `mapstructure:"enabled"`
-	BaseURL     string `mapstructure:"base_url"`
-	TimeoutMS   int    `mapstructure:"timeout_ms"`
-	FailOpen    bool   `mapstructure:"fail_open"`
-	ProbeSecret string `mapstructure:"probe_secret"`
+	Enabled      bool   `mapstructure:"enabled"`
+	BaseURL      string `mapstructure:"base_url"`
+	TimeoutMS    int    `mapstructure:"timeout_ms"`
+	FailOpen     bool   `mapstructure:"fail_open"`
+	SharedSecret string `mapstructure:"shared_secret"`
+	ProbeSecret  string `mapstructure:"probe_secret"`
 }
 
 const (
@@ -1565,6 +1566,18 @@ func load(allowMissingJWTSecret bool) (*Config, error) {
 		}
 		cfg.Gateway.ForcedCodexInstructionsTemplate = string(content)
 	}
+	cfg.Gateway.SubPilot.BaseURL = strings.TrimRight(strings.TrimSpace(cfg.Gateway.SubPilot.BaseURL), "/")
+	cfg.Gateway.SubPilot.SharedSecret = strings.TrimSpace(cfg.Gateway.SubPilot.SharedSecret)
+	if cfg.Gateway.SubPilot.SharedSecret == "" {
+		cfg.Gateway.SubPilot.SharedSecret = strings.TrimSpace(os.Getenv("SUB2API_PROBE_SECRET"))
+	}
+	cfg.Gateway.SubPilot.ProbeSecret = strings.TrimSpace(cfg.Gateway.SubPilot.ProbeSecret)
+	if cfg.Gateway.SubPilot.SharedSecret == "" {
+		cfg.Gateway.SubPilot.SharedSecret = cfg.Gateway.SubPilot.ProbeSecret
+	}
+	if cfg.Gateway.SubPilot.ProbeSecret == "" {
+		cfg.Gateway.SubPilot.ProbeSecret = cfg.Gateway.SubPilot.SharedSecret
+	}
 
 	// 兼容旧键 gateway.openai_ws.sticky_previous_response_ttl_seconds。
 	// 新键未配置（<=0）时回退旧键；新键优先。
@@ -2044,6 +2057,7 @@ func setDefaults() {
 	viper.SetDefault("gateway.subpilot.base_url", "")
 	viper.SetDefault("gateway.subpilot.timeout_ms", 80)
 	viper.SetDefault("gateway.subpilot.fail_open", true)
+	viper.SetDefault("gateway.subpilot.shared_secret", "")
 	viper.SetDefault("gateway.subpilot.probe_secret", "")
 	viper.SetDefault("gateway.antigravity_fallback_cooldown_minutes", 1)
 	viper.SetDefault("gateway.antigravity_extra_retries", 10)

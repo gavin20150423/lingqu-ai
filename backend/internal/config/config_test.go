@@ -98,6 +98,42 @@ func TestLoadDefaultSchedulingConfig(t *testing.T) {
 	}
 }
 
+func TestLoadSubPilotSharedSecretAndProbeFallback(t *testing.T) {
+	resetViperWithJWTSecret(t)
+	t.Setenv("GATEWAY_SUBPILOT_SHARED_SECRET", "shared-secret")
+	t.Setenv("GATEWAY_SUBPILOT_PROBE_SECRET", "")
+	t.Setenv("SUB2API_PROBE_SECRET", "")
+
+	cfg, err := Load()
+	require.NoError(t, err)
+	require.Equal(t, "shared-secret", cfg.Gateway.SubPilot.SharedSecret)
+	require.Equal(t, "shared-secret", cfg.Gateway.SubPilot.ProbeSecret)
+}
+
+func TestLoadSubPilotSharedSecretSupportsUnifiedProbeAlias(t *testing.T) {
+	resetViperWithJWTSecret(t)
+	t.Setenv("GATEWAY_SUBPILOT_SHARED_SECRET", "")
+	t.Setenv("GATEWAY_SUBPILOT_PROBE_SECRET", "")
+	t.Setenv("SUB2API_PROBE_SECRET", "unified-secret")
+
+	cfg, err := Load()
+	require.NoError(t, err)
+	require.Equal(t, "unified-secret", cfg.Gateway.SubPilot.SharedSecret)
+	require.Equal(t, "unified-secret", cfg.Gateway.SubPilot.ProbeSecret)
+}
+
+func TestLoadSubPilotSharedSecretSupportsLegacyProbeSetting(t *testing.T) {
+	resetViperWithJWTSecret(t)
+	t.Setenv("GATEWAY_SUBPILOT_SHARED_SECRET", "")
+	t.Setenv("GATEWAY_SUBPILOT_PROBE_SECRET", "legacy-secret")
+	t.Setenv("SUB2API_PROBE_SECRET", "")
+
+	cfg, err := Load()
+	require.NoError(t, err)
+	require.Equal(t, "legacy-secret", cfg.Gateway.SubPilot.SharedSecret)
+	require.Equal(t, "legacy-secret", cfg.Gateway.SubPilot.ProbeSecret)
+}
+
 func TestLoadDefaultOpenAIWSConfig(t *testing.T) {
 	resetViperWithJWTSecret(t)
 

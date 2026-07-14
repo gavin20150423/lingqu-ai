@@ -155,7 +155,10 @@ gateway:
     base_url: ""
     timeout_ms: 80
     fail_open: true
+    # Used for runtime config and trusted SubPilot requests.
+    shared_secret: ""
     # Must match SubPilot's SUB2API_PROBE_SECRET for delegated account probes.
+    # Falls back to shared_secret when empty.
     probe_secret: ""
   # Timeout for waiting upstream response headers (seconds)
   # 等待上游响应头超时时间（秒）

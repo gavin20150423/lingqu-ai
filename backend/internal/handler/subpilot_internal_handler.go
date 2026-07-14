@@ -43,6 +43,9 @@ func (h *SubPilotInternalHandler) ProbeAccount(c *gin.Context) {
 	secret := ""
 	if h.cfg != nil {
 		secret = strings.TrimSpace(h.cfg.Gateway.SubPilot.ProbeSecret)
+		if secret == "" {
+			secret = strings.TrimSpace(h.cfg.Gateway.SubPilot.SharedSecret)
+		}
 	}
 	if secret == "" || c.GetHeader("X-SubPilot-Secret") != secret {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
