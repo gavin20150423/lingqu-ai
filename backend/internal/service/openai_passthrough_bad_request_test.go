@@ -15,16 +15,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type trackingReadCloser struct {
-	io.Reader
-	closed bool
-}
-
-func (r *trackingReadCloser) Close() error {
-	r.closed = true
-	return nil
-}
-
 func TestIsOpenAIAccountSpecificBadRequest(t *testing.T) {
 	tests := []struct {
 		name string
@@ -66,21 +56,10 @@ func TestIsOpenAIAccountSpecificBadRequest(t *testing.T) {
 	}
 }
 
-func TestShouldFailoverOpenAIPassthroughResponseRestoresBody(t *testing.T) {
-	body := `{"error":{"message":"This account does not have access to model gpt-5.5"}}`
-	originalBody := &trackingReadCloser{Reader: strings.NewReader(body)}
-	resp := &http.Response{
-		StatusCode: http.StatusBadRequest,
-		Body:       originalBody,
-	}
-
+func TestShouldFailoverOpenAIPassthroughResponseRecognizesAccountSpecificBadRequest(t *testing.T) {
+	body := []byte(`{"error":{"message":"This account does not have access to model gpt-5.5"}}`)
 	svc := &OpenAIGatewayService{}
-	require.True(t, svc.shouldFailoverOpenAIPassthroughResponse(resp))
-	require.True(t, originalBody.closed)
-
-	restored, err := io.ReadAll(resp.Body)
-	require.NoError(t, err)
-	require.JSONEq(t, body, string(restored))
+	require.True(t, svc.shouldFailoverOpenAIPassthroughResponse(nil, http.StatusBadRequest, body))
 }
 
 func TestOpenAIPassthroughRecognized400TriggersFailover(t *testing.T) {

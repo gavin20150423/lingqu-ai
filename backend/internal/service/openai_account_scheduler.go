@@ -1715,27 +1715,30 @@ func (s *OpenAIGatewayService) selectAccountWithScheduler(
 	}
 
 	effectiveExcludedIDs := cloneExcludedAccountIDs(excludedIDs)
-	if accounts, listErr := s.listSchedulableAccounts(ctx, groupID, platform); listErr == nil && len(accounts) > 0 {
-		if selection, err := s.trySubPilotRecommend(ctx, groupID, platform, sessionHash, requestedModel, effectiveExcludedIDs, requireCompact, requiredCapability, accounts); err != nil {
-			return nil, decision, err
-		} else if selection != nil {
-			if s.isOpenAIAccountTransportCompatible(selection.Account, requiredTransport) &&
-				accountSupportsOpenAICapabilities(selection.Account, requiredCapability, requiredImageCapability) {
-				decision.Layer = "subpilot"
-				decision.SelectedAccountID = selection.Account.ID
-				decision.SelectedAccountType = selection.Account.Type
-				decision.CandidateCount = len(accounts)
-				return selection, decision, nil
-			}
-			s.reportSubPilotSelectionFailure(ctx, selection, platform, groupID, requestedModel, sessionHash, "capability_mismatch", "Sub2API rejected SubPilot recommendation because the selected account does not satisfy the requested transport or endpoint capability")
-			if selection.ReleaseFunc != nil {
-				selection.ReleaseFunc()
-			}
-			if effectiveExcludedIDs == nil {
-				effectiveExcludedIDs = make(map[int64]struct{})
-			}
-			if selection.Account != nil {
-				effectiveExcludedIDs[selection.Account.ID] = struct{}{}
+	if !SubPilotDisabledFromContext(ctx) && groupID != nil && requestedModel != "" && s.subPilotClient() != nil {
+		accounts, listErr := s.listSchedulableAccounts(ctx, groupID, platform)
+		if listErr == nil && len(accounts) > 0 {
+			if selection, err := s.trySubPilotRecommend(ctx, groupID, platform, sessionHash, requestedModel, effectiveExcludedIDs, requireCompact, requiredCapability, accounts); err != nil {
+				return nil, decision, err
+			} else if selection != nil {
+				if s.isOpenAIAccountTransportCompatible(selection.Account, requiredTransport) &&
+					accountSupportsOpenAICapabilities(selection.Account, requiredCapability, requiredImageCapability) {
+					decision.Layer = "subpilot"
+					decision.SelectedAccountID = selection.Account.ID
+					decision.SelectedAccountType = selection.Account.Type
+					decision.CandidateCount = len(accounts)
+					return selection, decision, nil
+				}
+				s.reportSubPilotSelectionFailure(ctx, selection, platform, groupID, requestedModel, sessionHash, "capability_mismatch", "Sub2API rejected SubPilot recommendation because the selected account does not satisfy the requested transport or endpoint capability")
+				if selection.ReleaseFunc != nil {
+					selection.ReleaseFunc()
+				}
+				if effectiveExcludedIDs == nil {
+					effectiveExcludedIDs = make(map[int64]struct{})
+				}
+				if selection.Account != nil {
+					effectiveExcludedIDs[selection.Account.ID] = struct{}{}
+				}
 			}
 		}
 	}
