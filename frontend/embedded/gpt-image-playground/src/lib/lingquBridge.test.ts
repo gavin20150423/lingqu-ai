@@ -23,11 +23,12 @@ describe('Lingqu bridge settings', () => {
     expect(settings.customProviders[0]).toMatchObject({
       id: LINGQU_ASYNC_PROVIDER_ID,
       submit: expect.objectContaining({
-        query: { async: 'true' },
-        taskIdPath: 'data.task_id',
+        path: 'images/generations/async',
+        taskIdPath: 'task_id',
       }),
       poll: expect.objectContaining({
         path: 'images/tasks/{task_id}',
+        statusPath: 'status',
       }),
     })
   })

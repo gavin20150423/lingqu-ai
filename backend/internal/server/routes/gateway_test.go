@@ -28,6 +28,7 @@ func newGatewayRoutesTestRouter(platform ...string) *gin.Engine {
 		&handler.Handlers{
 			Gateway:       &handler.GatewayHandler{},
 			OpenAIGateway: &handler.OpenAIGatewayHandler{},
+			AsyncImage:    handler.NewAsyncImageHandler(nil, nil),
 		},
 		servermiddleware.APIKeyAuthMiddleware(func(c *gin.Context) {
 			groupID := int64(1)
@@ -110,6 +111,61 @@ func TestGatewayRoutesOpenAIImagesPathsAreRegistered(t *testing.T) {
 
 		router.ServeHTTP(w, req)
 		require.NotEqual(t, http.StatusNotFound, w.Code, "path=%s should hit OpenAI images handler", path)
+	}
+}
+
+func TestGatewayRoutesAsyncImagesPathsAreRegistered(t *testing.T) {
+	router := newGatewayRoutesTestRouter()
+	registered := make(map[string]bool)
+	for _, route := range router.Routes() {
+		registered[route.Method+" "+route.Path] = true
+	}
+
+	for _, route := range []string{
+		"POST /v1/images/generations/async",
+		"POST /v1/images/edits/async",
+		"GET /v1/images/tasks/:task_id",
+		"POST /images/generations/async",
+		"POST /images/edits/async",
+		"GET /images/tasks/:task_id",
+	} {
+		require.True(t, registered[route], "%s should be registered", route)
+	}
+}
+
+func TestGatewayRoutesAsyncImageTaskDispatchKeepsLegacyCompatibility(t *testing.T) {
+	router := newGatewayRoutesTestRouter()
+
+	tests := []struct {
+		name       string
+		taskID     string
+		wantStatus int
+		wantBody   string
+	}{
+		{
+			name:       "official object storage task",
+			taskID:     "imgtask_0123456789abcdef0123456789abcdef",
+			wantStatus: http.StatusNotFound,
+			wantBody:   "async image tasks are not enabled",
+		},
+		{
+			name:       "legacy Lingqu Redis queue task",
+			taskID:     "imgtask_01234567-89ab-cdef-0123-456789abcdef",
+			wantStatus: http.StatusServiceUnavailable,
+			wantBody:   "图片异步任务存储暂不可用",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/v1/images/tasks/"+tt.taskID, nil)
+			w := httptest.NewRecorder()
+
+			router.ServeHTTP(w, req)
+
+			require.Equal(t, tt.wantStatus, w.Code)
+			require.Contains(t, w.Body.String(), tt.wantBody)
+		})
 	}
 }
 

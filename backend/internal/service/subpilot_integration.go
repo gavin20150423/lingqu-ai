@@ -110,7 +110,7 @@ func (s *OpenAIGatewayService) trySubPilotRecommend(ctx context.Context, groupID
 		s.reportSubPilotRecommendationFailure(ctx, rec, nil, normalizeOpenAICompatiblePlatform(platform), *groupID, requestedModel, sessionKey, "excluded_account", "SubPilot recommended an excluded account")
 		return nil, nil
 	}
-	account := s.validateSubPilotOpenAIAccount(ctx, rec.AccountID, platform, requestedModel, requireCompact, requiredCapability, accounts)
+	account := s.validateSubPilotOpenAIAccount(ctx, rec.AccountID, groupID, platform, requestedModel, requireCompact, requiredCapability, accounts)
 	if account == nil {
 		s.reportSubPilotRecommendationFailure(ctx, rec, nil, normalizeOpenAICompatiblePlatform(platform), *groupID, requestedModel, sessionKey, "invalid_account", "SubPilot recommended an account that failed local validation")
 		return nil, nil
@@ -132,7 +132,7 @@ func (s *OpenAIGatewayService) trySubPilotRecommend(ctx context.Context, groupID
 	return selection, nil
 }
 
-func (s *OpenAIGatewayService) validateSubPilotOpenAIAccount(ctx context.Context, accountID int64, platform string, requestedModel string, requireCompact bool, requiredCapability OpenAIEndpointCapability, accounts []Account) *Account {
+func (s *OpenAIGatewayService) validateSubPilotOpenAIAccount(ctx context.Context, accountID int64, groupID *int64, platform string, requestedModel string, requireCompact bool, requiredCapability OpenAIEndpointCapability, accounts []Account) *Account {
 	for i := range accounts {
 		acc := &accounts[i]
 		if acc.ID != accountID {
@@ -142,7 +142,7 @@ func (s *OpenAIGatewayService) validateSubPilotOpenAIAccount(ctx context.Context
 		if fresh == nil {
 			return nil
 		}
-		fresh = s.recheckSelectedOpenAIAccountFromDB(ctx, fresh, platform, requestedModel, requireCompact, requiredCapability)
+		fresh = s.recheckSelectedOpenAIAccountFromDB(ctx, fresh, groupID, platform, requestedModel, requireCompact, requiredCapability)
 		if fresh == nil {
 			return nil
 		}

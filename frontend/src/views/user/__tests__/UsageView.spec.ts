@@ -5,7 +5,7 @@ import UsageView from '../UsageView.vue'
 
 const {
   query,
-  getStats,
+  getStatsByDateRange,
   getDashboardModels,
   getDashboardSnapshotV2,
   list,
@@ -16,7 +16,7 @@ const {
   showInfo,
 } = vi.hoisted(() => ({
   query: vi.fn(),
-  getStats: vi.fn(),
+  getStatsByDateRange: vi.fn(),
   getDashboardModels: vi.fn(),
   getDashboardSnapshotV2: vi.fn(),
   list: vi.fn(),
@@ -67,7 +67,7 @@ const messages: Record<string, string> = {
 vi.mock('@/api', () => ({
   usageAPI: {
     query,
-    getStats,
+    getStatsByDateRange,
     getDashboardModels,
     getDashboardSnapshotV2,
   },
@@ -82,6 +82,14 @@ vi.mock('@/api', () => ({
 vi.mock('@/stores/app', () => ({
   useAppStore: () => ({ showError, showWarning, showSuccess, showInfo }),
 }))
+
+vi.mock('vue-router', async () => {
+  const actual = await vi.importActual<typeof import('vue-router')>('vue-router')
+  return {
+    ...actual,
+    useRoute: () => ({ query: {} }),
+  }
+})
 
 vi.mock('vue-i18n', async () => {
   const actual = await vi.importActual<typeof import('vue-i18n')>('vue-i18n')
@@ -131,7 +139,7 @@ function mountUsageView() {
   return mount(UsageView, {
     global: {
       stubs: {
-        AppLayout: simpleStub,
+        UserWorkspaceLayout: simpleStub,
         Pagination: true,
         Select: true,
         DateRangePicker: true,
@@ -150,7 +158,7 @@ function mountUsageView() {
 describe('user UsageView', () => {
   beforeEach(() => {
     query.mockReset()
-    getStats.mockReset()
+    getStatsByDateRange.mockReset()
     getDashboardModels.mockReset()
     getDashboardSnapshotV2.mockReset()
     list.mockReset()
@@ -161,7 +169,7 @@ describe('user UsageView', () => {
     showInfo.mockReset()
 
     query.mockResolvedValue({ items: [usageLog], total: 1, pages: 1 })
-    getStats.mockResolvedValue({
+    getStatsByDateRange.mockResolvedValue({
       total_requests: 1,
       total_input_tokens: 10,
       total_output_tokens: 20,
@@ -191,20 +199,13 @@ describe('user UsageView', () => {
     getAvailable.mockResolvedValue([{ id: 1, name: 'default' }])
   })
 
-  it('loads logs, stats, model stats, and snapshot on first render', async () => {
+  it('loads logs, stats, and API keys on first render', async () => {
     mountUsageView()
     await flushPromises()
 
     expect(query).toHaveBeenCalled()
-    expect(getStats).toHaveBeenCalled()
-    expect(getDashboardModels).toHaveBeenCalled()
-    expect(getDashboardSnapshotV2).toHaveBeenCalledWith(expect.objectContaining({
-      include_trend: true,
-      include_model_stats: false,
-      include_group_stats: true,
-    }))
+    expect(getStatsByDateRange).toHaveBeenCalled()
     expect(list).toHaveBeenCalledWith(1, 100)
-    expect(getAvailable).toHaveBeenCalled()
   })
 
   it('exports csv with current filters and without admin-only fields', async () => {
@@ -237,15 +238,14 @@ describe('user UsageView', () => {
     }))
     expect(clickSpy).toHaveBeenCalled()
     expect(showSuccess).toHaveBeenCalled()
-    expect(csvContent.startsWith('\uFEFF')).toBe(true)
-    expect(csvContent.slice(1)).toBe([
-      'Time,API Key Name,Model,Reasoning Effort,Inbound Endpoint,IP Address,Type,Billing Mode,Input Tokens,Output Tokens,Cache Read Tokens,Cache Creation Tokens,Rate Multiplier,Billed Cost,Original Cost,First Token (ms),Duration (ms)',
-      '2026-03-08T00:00:00Z,demo-key,gpt-5.4,"\'-",,203.0.113.10,Sync,Token,4057,101,278272,4,1,0.09288300,0.09288300,12,345',
+    expect(csvContent).toBe([
+      'Time,API Key Name,Model,Reasoning Effort,Inbound Endpoint,Type,Billing Mode,Input Tokens,Output Tokens,Cache Read Tokens,Cache Creation Tokens,Rate Multiplier,Billed Cost,Original Cost,First Token (ms),Duration (ms)',
+      '2026-03-08T00:00:00Z,demo-key,gpt-5.4,"\'-",,Sync,Token,4057,101,278272,4,1,0.09288300,0.09288300,12,345',
     ].join('\n'))
-    expect(csvContent).toContain('IP Address')
-    expect(csvContent).toContain('203.0.113.10')
     expect(csvContent).toContain('Billed Cost')
     expect(csvContent).toContain('Original Cost')
+    expect(csvContent).not.toContain('IP Address')
+    expect(csvContent).not.toContain('203.0.113.10')
     expect(csvContent).not.toContain('Upstream Endpoint')
     expect(csvContent).not.toContain('account_cost')
     expect(csvContent).not.toContain('account_rate_multiplier')

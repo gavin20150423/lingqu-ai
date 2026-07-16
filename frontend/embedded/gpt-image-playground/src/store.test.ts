@@ -336,7 +336,7 @@ describe('mask draft lifecycle in store actions', () => {
       'Image generation failed with internal diagnostics hidden from the customer UI.',
       expect.objectContaining({
         error: expect.any(TypeError),
-        hint: expect.stringContaining('/v1/images/edits?async=true'),
+        hint: expect.stringContaining('/v1/images/edits/async'),
       }),
     )
     warnSpy.mockRestore()

@@ -1902,7 +1902,7 @@ function getApiRequestNetworkErrorHint(
 
   const elapsedSeconds = Math.max(0, (Date.now() - createdAt) / 1000)
   const imageEditHint = options.hasInputImages
-    ? '\n· 当前任务带参考图，会请求 /v1/images/edits?async=true，并上传 multipart/form-data。请重点检查该接口的 CORS OPTIONS 预检、Authorization 放行、反向代理 client_max_body_size/body 限制'
+    ? '\n· 当前任务带参考图，会请求 /v1/images/edits/async，并上传 multipart/form-data。请重点检查该接口的 CORS OPTIONS 预检、Authorization 放行、反向代理 client_max_body_size/body 限制'
     : ''
 
   if (elapsedSeconds <= 15) {

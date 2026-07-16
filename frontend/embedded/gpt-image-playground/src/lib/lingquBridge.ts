@@ -61,10 +61,9 @@ export function buildLingquSettings(currentSettings: AppSettings, payload: Lingq
     name: '灵渠AI 异步图工坊',
     template: 'http-image' as const,
     submit: {
-      path: 'images/generations',
+      path: 'images/generations/async',
       method: 'POST' as const,
       contentType: 'json' as const,
-      query: { async: 'true' },
       body: {
         model: '$profile.model',
         prompt: '$prompt',
@@ -75,17 +74,16 @@ export function buildLingquSettings(currentSettings: AppSettings, payload: Lingq
         output_compression: '$params.output_compression',
         n: '$params.n',
       },
-      taskIdPath: 'data.task_id',
+      taskIdPath: 'task_id',
       result: {
         imageUrlPaths: ['data.result.data.*.url'],
         b64JsonPaths: ['data.result.data.*.b64_json'],
       },
     },
     editSubmit: {
-      path: 'images/edits',
+      path: 'images/edits/async',
       method: 'POST' as const,
       contentType: 'multipart' as const,
-      query: { async: 'true' },
       body: {
         model: '$profile.model',
         prompt: '$prompt',
@@ -100,7 +98,7 @@ export function buildLingquSettings(currentSettings: AppSettings, payload: Lingq
         { field: 'image[]', source: 'inputImages', array: true },
         { field: 'mask', source: 'mask' },
       ],
-      taskIdPath: 'data.task_id',
+      taskIdPath: 'task_id',
       result: {
         imageUrlPaths: ['data.result.data.*.url'],
         b64JsonPaths: ['data.result.data.*.b64_json'],
@@ -110,13 +108,13 @@ export function buildLingquSettings(currentSettings: AppSettings, payload: Lingq
       path: 'images/tasks/{task_id}',
       method: 'GET' as const,
       intervalSeconds: 3,
-      statusPath: 'data.status',
+      statusPath: 'status',
       successValues: ['completed', 'succeeded', 'success'],
       failureValues: ['failed', 'cancelled', 'canceled'],
-      errorPath: 'data.error.message',
+      errorPath: 'error.message',
       result: {
-        imageUrlPaths: ['data.result.data.*.url'],
-        b64JsonPaths: ['data.result.data.*.b64_json'],
+        imageUrlPaths: ['result.data.*.url'],
+        b64JsonPaths: ['result.data.*.b64_json'],
       },
     },
   }
