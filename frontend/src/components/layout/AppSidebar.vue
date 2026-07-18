@@ -208,6 +208,7 @@ type IconName =
   | 'badge'
   | 'bell'
   | 'chart'
+  | 'chat'
   | 'creditCard'
   | 'cog'
   | 'document'
@@ -323,6 +324,10 @@ function buildSelfNavItems(withDashboard: boolean): NavItem[] {
   }
   items.push(
     { path: '/keys', label: t('nav.apiKeys'), icon: 'key' },
+    { path: '/store', label: '发卡商城', icon: 'gift', hideInSimpleMode: true },
+    { path: '/accounts', label: '我的账号', icon: 'globe', hideInSimpleMode: true },
+    { path: '/account-share', label: '账号广场', icon: 'users', hideInSimpleMode: true },
+    { path: '/conversations', label: '工单服务', icon: 'chat', hideInSimpleMode: true },
     { path: '/batch-image', label: t('nav.batchImage'), icon: 'grid', hideInSimpleMode: true, featureFlag: flagBatchImageAccess },
     { path: '/usage', label: t('nav.usage'), icon: 'chart', hideInSimpleMode: true },
     { path: '/available-channels', label: t('nav.availableChannels'), icon: 'server', hideInSimpleMode: true, featureFlag: flagAvailableChannels },
@@ -357,6 +362,7 @@ const adminNavItems = computed((): NavItem[] => {
     { path: '/admin/users', label: t('nav.users'), icon: 'users', hideInSimpleMode: true },
     { path: '/admin/groups', label: t('nav.groups'), icon: 'grid' },
     { path: '/admin/accounts', label: t('nav.accounts'), icon: 'globe' },
+    { path: '/admin/community', label: '共享与商城', icon: 'gift', hideInSimpleMode: true },
     {
       path: '/admin/channels',
       label: t('nav.channelManagement'),

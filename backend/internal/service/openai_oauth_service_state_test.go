@@ -34,7 +34,7 @@ func (s *openaiOAuthClientStateStub) RefreshTokenWithClientID(ctx context.Contex
 	return s.RefreshToken(ctx, refreshToken, proxyURL)
 }
 
-func TestOpenAIOAuthService_ExchangeCode_StateRequired(t *testing.T) {
+func TestOpenAIOAuthService_ExchangeCode_UsesSessionStateWhenCallbackOnlyProvidesCode(t *testing.T) {
 	client := &openaiOAuthClientStateStub{}
 	svc := NewOpenAIOAuthService(nil, client)
 	defer svc.Stop()
@@ -46,13 +46,13 @@ func TestOpenAIOAuthService_ExchangeCode_StateRequired(t *testing.T) {
 		CreatedAt:    time.Now(),
 	})
 
-	_, err := svc.ExchangeCode(context.Background(), &OpenAIExchangeCodeInput{
+	info, err := svc.ExchangeCode(context.Background(), &OpenAIExchangeCodeInput{
 		SessionID: "sid",
 		Code:      "auth-code",
 	})
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "oauth state is required")
-	require.Equal(t, int32(0), atomic.LoadInt32(&client.exchangeCalled))
+	require.NoError(t, err)
+	require.NotNil(t, info)
+	require.Equal(t, int32(1), atomic.LoadInt32(&client.exchangeCalled))
 }
 
 func TestOpenAIOAuthService_ExchangeCode_StateMismatch(t *testing.T) {

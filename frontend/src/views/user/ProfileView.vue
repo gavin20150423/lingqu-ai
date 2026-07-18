@@ -105,6 +105,7 @@
           </div>
           <ProfilePasswordForm embedded />
         </article>
+        <ProfileWalletPanel />
       </section>
     </div>
   </UserWorkspaceLayout>
@@ -116,6 +117,7 @@ import QRCode from 'qrcode'
 import UserWorkspaceLayout from '@/components/layout/UserWorkspaceLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
 import ProfilePasswordForm from '@/components/user/profile/ProfilePasswordForm.vue'
+import ProfileWalletPanel from '@/components/user/profile/ProfileWalletPanel.vue'
 import { userAPI } from '@/api'
 import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'

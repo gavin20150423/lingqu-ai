@@ -122,6 +122,7 @@ func ProvideHandlers(
 	subPilotInternalHandler *SubPilotInternalHandler,
 	asyncImageHandler *AsyncImageHandler,
 	batchImageHandler *BatchImageHandler,
+	communityHandler *CommunityHandler,
 	_ *service.IdempotencyCoordinator,
 	_ *service.IdempotencyCleanupService,
 ) *Handlers {
@@ -145,6 +146,7 @@ func ProvideHandlers(
 		SubPilotInternal: subPilotInternalHandler,
 		AsyncImage:       asyncImageHandler,
 		BatchImage:       batchImageHandler,
+		Community:        communityHandler,
 	}
 }
 
@@ -169,6 +171,7 @@ var ProviderSet = wire.NewSet(
 	NewSubPilotInternalHandler,
 	NewAsyncImageHandler,
 	NewBatchImageHandler,
+	NewCommunityHandler,
 
 	// Admin handlers
 	admin.NewDashboardHandler,

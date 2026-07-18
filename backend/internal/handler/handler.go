@@ -62,6 +62,7 @@ type Handlers struct {
 	SubPilotInternal *SubPilotInternalHandler
 	AsyncImage       *AsyncImageHandler
 	BatchImage       *BatchImageHandler
+	Community        *CommunityHandler
 }
 
 // BuildInfo contains build-time information

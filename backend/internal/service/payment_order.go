@@ -115,6 +115,15 @@ func (s *PaymentService) CreateOrder(ctx context.Context, req CreateOrderRequest
 }
 
 func (s *PaymentService) validateOrderInput(ctx context.Context, req CreateOrderRequest, cfg *PaymentConfig) (*dbent.SubscriptionPlan, error) {
+	switch req.OrderType {
+	case payment.OrderTypeBalance, payment.OrderTypeSubscription:
+	case payment.OrderTypeStore:
+		if req.StoreOrderID <= 0 {
+			return nil, infraerrors.BadRequest("INVALID_INPUT", "store order requires a store_order_id")
+		}
+	default:
+		return nil, infraerrors.BadRequest("INVALID_INPUT", "unsupported order type")
+	}
 	if req.OrderType == payment.OrderTypeBalance && cfg.BalanceDisabled {
 		return nil, infraerrors.Forbidden("BALANCE_PAYMENT_DISABLED", "balance recharge has been disabled")
 	}
@@ -261,6 +270,9 @@ func buildPaymentOrderProviderSnapshot(sel *payment.InstanceSelection, req Creat
 
 	snapshot := map[string]any{}
 	snapshot["schema_version"] = 2
+	if req.OrderType == payment.OrderTypeStore && req.StoreOrderID > 0 {
+		snapshot["community_store_order_id"] = req.StoreOrderID
+	}
 
 	instanceID := strings.TrimSpace(sel.InstanceID)
 	if instanceID != "" {

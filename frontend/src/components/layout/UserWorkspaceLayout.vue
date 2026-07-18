@@ -363,6 +363,19 @@ const currentSection = computed(() => {
       description: '分享邀请链接，查看返利额度与邀请记录。'
     },
     {
+      match: (path: string) => path === '/accounts' || path === '/account-share',
+      kicker: 'Account sharing', title: route.path === '/accounts' ? '我的账号' : '账号广场',
+      description: '管理 OAuth 账号资产与共享席位。'
+    },
+    {
+      match: (path: string) => path === '/store',
+      kicker: 'Digital store', title: '发卡商城', description: '购买并查看自动交付的数字商品。'
+    },
+    {
+      match: (path: string) => path === '/conversations',
+      kicker: 'Support', title: '工单服务', description: '在固定会话中持续跟进问题。'
+    },
+    {
       match: (path: string) => ['/billing', '/purchase', '/subscriptions', '/orders', '/redeem'].includes(path) || path.startsWith('/payment/'),
       kicker: 'Billing',
       title: '账单与订阅',
@@ -394,6 +407,10 @@ const affiliateNavItem = {
 const baseNavItems = [
   { path: '/dashboard', activePaths: ['/dashboard'], label: '首页', icon: 'home' },
   { path: '/keys', activePaths: ['/keys', '/usage'], label: 'Key', icon: 'key' },
+  { path: '/accounts', activePaths: ['/accounts'], label: '我的账号', icon: 'globe' },
+  { path: '/account-share', activePaths: ['/account-share'], label: '账号广场', icon: 'users' },
+  { path: '/store', activePaths: ['/store'], label: '商城', icon: 'gift' },
+  { path: '/conversations', activePaths: ['/conversations'], label: '工单', icon: 'chat' },
   { path: '/images', activePaths: ['/images'], label: '图工坊', icon: 'image' },
   { path: '/monitor', activePaths: ['/monitor', '/available-channels'], label: '状态', icon: 'server' },
   { path: '/billing', activePaths: ['/billing', '/purchase', '/payment', '/subscriptions', '/orders', '/redeem'], label: '账单', icon: 'creditCard' }
@@ -403,6 +420,10 @@ const baseBusinessNavItems = [
   { path: '/dashboard', activePaths: ['/dashboard'], label: '首页', icon: 'home' },
   { path: '/keys', activePaths: ['/keys'], label: 'Key', icon: 'key' },
   { path: '/usage', activePaths: ['/usage'], label: '使用记录', icon: 'chart' },
+  { path: '/accounts', activePaths: ['/accounts'], label: '我的账号', icon: 'globe' },
+  { path: '/account-share', activePaths: ['/account-share'], label: '账号广场', icon: 'users' },
+  { path: '/store', activePaths: ['/store'], label: '发卡商城', icon: 'gift' },
+  { path: '/conversations', activePaths: ['/conversations'], label: '工单服务', icon: 'chat' },
   { path: '/images', activePaths: ['/images'], label: '图工坊', icon: 'image' },
   { path: '/monitor', activePaths: ['/monitor', '/available-channels'], label: '状态', icon: 'server' },
   { path: '/billing', activePaths: ['/billing', '/purchase', '/payment', '/subscriptions', '/orders', '/redeem'], label: '账单', icon: 'creditCard' }
@@ -410,12 +431,12 @@ const baseBusinessNavItems = [
 
 const navItems = computed(() => {
   if (!affiliateEnabled.value) return [...baseNavItems]
-  return [...baseNavItems.slice(0, 4), affiliateNavItem, baseNavItems[4]]
+  return [...baseNavItems.slice(0, 5), affiliateNavItem, ...baseNavItems.slice(5)]
 })
 
 const businessNavItems = computed(() => {
   if (!affiliateEnabled.value) return [...baseBusinessNavItems]
-  return [...baseBusinessNavItems.slice(0, 5), affiliateNavItem, baseBusinessNavItems[5]]
+  return [...baseBusinessNavItems.slice(0, 6), affiliateNavItem, ...baseBusinessNavItems.slice(6)]
 })
 
 const billingNavItems = [
@@ -1022,7 +1043,7 @@ watch(theme, (nextTheme) => {
 }
 
 .user-workspace__main {
-  z-index: 1;
+  z-index: auto;
   width: min(86rem, calc(100vw - 2rem));
   max-width: calc(100vw - 2rem);
   min-width: 0;

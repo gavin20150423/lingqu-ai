@@ -299,6 +299,30 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/accounts',
+    name: 'CommunityAccounts',
+    component: () => import('@/views/user/CommunityAccountsView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: false, title: '我的账号' }
+  },
+  {
+    path: '/account-share',
+    name: 'AccountMarketplace',
+    component: () => import('@/views/user/AccountMarketplaceView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: false, title: '账号广场' }
+  },
+  {
+    path: '/conversations',
+    name: 'SupportTickets',
+    component: () => import('@/views/user/SupportTicketsView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: false, title: '工单服务' }
+  },
+  {
+    path: '/store',
+    name: 'CardStore',
+    component: () => import('@/views/user/CardStoreView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: false, title: '发卡商城' }
+  },
+  {
     path: '/subscriptions',
     name: 'Subscriptions',
     component: () => import('@/views/user/SubscriptionsView.vue'),
@@ -618,6 +642,12 @@ const routes: RouteRecordRaw[] = [
       titleKey: 'admin.usage.title',
       descriptionKey: 'admin.usage.description'
     }
+  },
+  {
+    path: '/admin/community',
+    name: 'AdminCommunity',
+    component: () => import('@/views/admin/AdminCommunityView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true, title: '共享与商城' }
   },
   {
     path: '/admin/affiliates',

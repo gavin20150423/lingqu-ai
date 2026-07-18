@@ -221,7 +221,57 @@ func (s *PaymentService) executeFulfillment(ctx context.Context, oid int64) erro
 	if o.OrderType == payment.OrderTypeSubscription {
 		return s.ExecuteSubscriptionFulfillment(ctx, oid)
 	}
+	if o.OrderType == payment.OrderTypeStore {
+		return s.ExecuteCommunityStoreFulfillment(ctx, oid)
+	}
 	return s.ExecuteBalanceFulfillment(ctx, oid)
+}
+
+func (s *PaymentService) ExecuteCommunityStoreFulfillment(ctx context.Context, oid int64) error {
+	o, err := s.entClient.PaymentOrder.Get(ctx, oid)
+	if err != nil {
+		return infraerrors.NotFound("NOT_FOUND", "order not found")
+	}
+	if o.Status == OrderStatusCompleted {
+		return nil
+	}
+	if s.communityStore == nil {
+		return errors.New("community store fulfiller is unavailable")
+	}
+	storeOrderID, ok := communityStoreOrderIDFromSnapshot(o.ProviderSnapshot)
+	if !ok {
+		return errors.New("community store order id is missing")
+	}
+	lease, err := s.acquirePaymentFulfillmentLease(ctx, o)
+	if err != nil {
+		return err
+	}
+	if lease == nil {
+		return nil
+	}
+	if err = s.communityStore.FulfillPlatformStoreOrder(ctx, storeOrderID, oid); err != nil {
+		s.markFailed(ctx, oid, lease, err)
+		return err
+	}
+	return s.markCompleted(ctx, o, lease, "COMMUNITY_STORE_FULFILLED")
+}
+
+func communityStoreOrderIDFromSnapshot(snapshot map[string]any) (int64, bool) {
+	value, ok := snapshot["community_store_order_id"]
+	if !ok {
+		return 0, false
+	}
+	switch current := value.(type) {
+	case float64:
+		return int64(current), current > 0
+	case int64:
+		return current, current > 0
+	case json.Number:
+		parsed, err := current.Int64()
+		return parsed, err == nil && parsed > 0
+	default:
+		return 0, false
+	}
 }
 
 func (s *PaymentService) ExecuteBalanceFulfillment(ctx context.Context, oid int64) error {

@@ -679,6 +679,11 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 		groupDefault := apiKey.Group.RateMultiplier
 		multiplier = s.ResolveUserGroupRateMultiplier(ctx, user.ID, *apiKey.GroupID, groupDefault)
 	}
+	if account != nil && account.Extra != nil {
+		if communityMultiplier, ok := account.Extra["community_usage_multiplier"].(float64); ok && communityMultiplier >= 0 {
+			multiplier = communityMultiplier
+		}
+	}
 	// token 倍率叠加高峰因子（token 计费含图片 token，图片按次倍率不受影响）。高峰因子按请求时刻现算，
 	// 不并入上面的 getUserGroupRateMultiplier，以免污染 user:group 倍率缓存。
 	multiplier, imageMultiplier := computePeakAwareMultipliers(apiKey, multiplier, timezone.Now())
@@ -761,6 +766,11 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 
 	if billingErr != nil {
 		return billingErr
+	}
+	if communityRepo, ok := s.accountRepo.(communityRoutingAccountRepository); ok && apiKey != nil && account != nil {
+		if _, settlementErr := communityRepo.RecordCommunityRequestSettlement(ctx, apiKey.ID, account.ID, requestID, cost.ActualCost); settlementErr != nil {
+			logger.LegacyPrintf("service.gateway", "community request settlement failed request=%s account=%d: %v", requestID, account.ID, settlementErr)
+		}
 	}
 	writeUsageLogBestEffort(ctx, s.usageLogRepo, usageLog, "service.gateway")
 

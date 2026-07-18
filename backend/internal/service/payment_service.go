@@ -85,6 +85,7 @@ type CreateOrderRequest struct {
 	OrderType       string
 	PlanID          int64
 	Locale          string
+	StoreOrderID    int64
 }
 
 type CreateOrderResponse struct {
@@ -189,6 +190,11 @@ type PaymentService struct {
 	resumeService            *PaymentResumeService
 	affiliateService         *AffiliateService
 	notificationEmailService *NotificationEmailService
+	communityStore           CommunityStorePlatformFulfiller
+}
+
+type CommunityStorePlatformFulfiller interface {
+	FulfillPlatformStoreOrder(ctx context.Context, storeOrderID, paymentOrderID int64) error
 }
 
 func NewPaymentService(entClient *dbent.Client, registry *payment.Registry, loadBalancer payment.LoadBalancer, redeemService *RedeemService, subscriptionSvc *SubscriptionService, configService *PaymentConfigService, userRepo UserRepository, groupRepo GroupRepository, affiliateService *AffiliateService) *PaymentService {
@@ -199,6 +205,10 @@ func NewPaymentService(entClient *dbent.Client, registry *payment.Registry, load
 
 func (s *PaymentService) SetNotificationEmailService(notificationEmailService *NotificationEmailService) {
 	s.notificationEmailService = notificationEmailService
+}
+
+func (s *PaymentService) SetCommunityStoreFulfiller(fulfiller CommunityStorePlatformFulfiller) {
+	s.communityStore = fulfiller
 }
 
 // --- Provider Registry ---

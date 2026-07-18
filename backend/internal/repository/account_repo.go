@@ -15,6 +15,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -233,6 +235,401 @@ func (r *accountRepository) GetByID(ctx context.Context, id int64) (*service.Acc
 		return nil, service.ErrAccountNotFound
 	}
 	return &accounts[0], nil
+}
+
+func (r *accountRepository) ResolveCommunityAccountID(ctx context.Context, apiKeyID int64, requestedModel string, excludedIDs map[int64]struct{}) (int64, bool, error) {
+	txBeginner, ok := r.sql.(interface {
+		BeginTx(context.Context, *sql.TxOptions) (*sql.Tx, error)
+	})
+	if !ok {
+		return 0, false, errors.New("community routing requires transactional SQL executor")
+	}
+	tx, err := txBeginner.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, false, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	if err = sweepCommunityBillingTx(ctx, tx, time.Now()); err != nil {
+		return 0, false, err
+	}
+
+	rows, err := tx.QueryContext(ctx, `SELECT ca.scheduler_account_id,m.id,m.status,m.listing_id,l.seat_limit,m.idle_timeout_minutes
+		FROM community_memberships m
+		JOIN community_listings l ON l.id=m.listing_id AND l.status='published'
+		JOIN community_accounts ca ON ca.id=l.account_id
+		JOIN accounts a ON a.id=ca.scheduler_account_id
+		WHERE m.api_key_id=$1 AND m.status IN ('active','reserved')
+		  AND ca.review_status='approved' AND ca.schedulable=TRUE AND ca.deleted_at IS NULL
+		  AND a.status='active' AND a.schedulable=TRUE AND a.deleted_at IS NULL
+		  AND (ca.provider<>'openai' OR ca.usage_5h_percent < CASE WHEN jsonb_typeof(ca.provider_options->'quota_5h_percent')='number' THEN (ca.provider_options->>'quota_5h_percent')::numeric ELSE 100 END)
+		  AND (ca.provider<>'openai' OR ca.usage_7d_percent < CASE WHEN jsonb_typeof(ca.provider_options->'quota_7d_percent')='number' THEN (ca.provider_options->>'quota_7d_percent')::numeric ELSE 100 END)
+		  AND ($2='' OR cardinality(ca.supported_models)=0 OR $2=ANY(ca.supported_models))
+		ORDER BY CASE WHEN m.status='active' THEN 0 ELSE 1 END,m.reservation_order,m.joined_at
+		LIMIT 5 FOR UPDATE OF m,l`, apiKeyID, requestedModel)
+	if err != nil {
+		return 0, false, err
+	}
+	var selectedAccountID, selectedMembershipID int64
+	var selectedStatus string
+	var selectedIdleMinutes int
+	type communityCandidate struct {
+		accountID, membershipID, listingID int64
+		status                             string
+		seatLimit, idleMinutes             int
+	}
+	candidates := make([]communityCandidate, 0, 5)
+	for rows.Next() {
+		var candidate communityCandidate
+		if err = rows.Scan(&candidate.accountID, &candidate.membershipID, &candidate.status, &candidate.listingID, &candidate.seatLimit, &candidate.idleMinutes); err != nil {
+			rows.Close()
+			return 0, false, err
+		}
+		candidates = append(candidates, candidate)
+	}
+	if err = rows.Err(); err != nil {
+		rows.Close()
+		return 0, false, err
+	}
+	if err = rows.Close(); err != nil {
+		return 0, false, err
+	}
+	for _, candidate := range candidates {
+		if _, excluded := excludedIDs[candidate.accountID]; excluded {
+			continue
+		}
+		if candidate.status == "reserved" {
+			var activeSeats int
+			if err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM community_memberships WHERE listing_id=$1 AND status='active' AND id<>$2`, candidate.listingID, candidate.membershipID).Scan(&activeSeats); err != nil {
+				return 0, false, err
+			}
+			if activeSeats >= candidate.seatLimit {
+				continue
+			}
+		}
+		selectedAccountID, selectedMembershipID = candidate.accountID, candidate.membershipID
+		selectedStatus, selectedIdleMinutes = candidate.status, candidate.idleMinutes
+		break
+	}
+	if selectedAccountID == 0 {
+		if err = tx.Commit(); err != nil {
+			return 0, false, err
+		}
+		return 0, false, nil
+	}
+	if selectedStatus == "reserved" {
+		if _, err = tx.ExecContext(ctx, `UPDATE community_memberships SET status='reserved',idle_expires_at=NULL WHERE api_key_id=$1 AND status='active' AND id<>$2`, apiKeyID, selectedMembershipID); err != nil {
+			return 0, false, err
+		}
+	}
+	if _, err = tx.ExecContext(ctx, `UPDATE community_memberships SET status='active',activated_at=COALESCE(activated_at,NOW()),last_used_at=NOW(),last_request_at=NOW(),idle_expires_at=NOW()+($2::text||' minutes')::interval WHERE id=$1`, selectedMembershipID, selectedIdleMinutes); err != nil {
+		return 0, false, err
+	}
+	if err = accrueCommunityHourlyFeeTx(ctx, tx, selectedMembershipID, time.Now().Add(time.Minute)); err != nil {
+		return 0, false, err
+	}
+	if err = tx.Commit(); err != nil {
+		return 0, false, err
+	}
+	return selectedAccountID, true, nil
+}
+
+func (r *accountRepository) CommunityUsageMultiplier(ctx context.Context, apiKeyID, accountID int64) (float64, bool, error) {
+	rows, err := r.sql.QueryContext(ctx, `SELECT l.usage_multiplier
+		FROM community_memberships m
+		JOIN community_listings l ON l.id=m.listing_id AND l.status='published'
+		JOIN community_accounts ca ON ca.id=l.account_id
+		WHERE m.api_key_id=$1 AND m.status='active' AND ca.scheduler_account_id=$2`, apiKeyID, accountID)
+	if err != nil {
+		return 0, false, err
+	}
+	defer rows.Close()
+	if !rows.Next() {
+		return 0, false, rows.Err()
+	}
+	var multiplier float64
+	if err = rows.Scan(&multiplier); err != nil {
+		return 0, false, err
+	}
+	if multiplier < 0 {
+		return 0, false, errors.New("invalid community usage multiplier")
+	}
+	return multiplier, true, nil
+}
+
+func (r *accountRepository) RecordCommunityRequestSettlement(ctx context.Context, apiKeyID, accountID int64, requestID string, amount float64) (bool, error) {
+	requestID = strings.TrimSpace(requestID)
+	if requestID == "" || amount < 0 {
+		return false, nil
+	}
+	txBeginner, ok := r.sql.(interface {
+		BeginTx(context.Context, *sql.TxOptions) (*sql.Tx, error)
+	})
+	if !ok {
+		return false, errors.New("community settlement requires transactional SQL executor")
+	}
+	tx, err := txBeginner.BeginTx(ctx, nil)
+	if err != nil {
+		return false, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var membershipID, listingID, payerUserID, ownerUserID int64
+	var commissionRate float64
+	err = tx.QueryRowContext(ctx, `SELECT m.id,l.id,m.member_user_id,l.owner_user_id,l.commission_rate
+		FROM community_memberships m
+		JOIN community_listings l ON l.id=m.listing_id
+		JOIN community_accounts ca ON ca.id=l.account_id
+		WHERE m.api_key_id=$1 AND m.status='active' AND ca.scheduler_account_id=$2
+		FOR UPDATE OF m,l`, apiKeyID, accountID).Scan(&membershipID, &listingID, &payerUserID, &ownerUserID, &commissionRate)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	if payerUserID == ownerUserID {
+		return false, tx.Commit()
+	}
+	platformFee := math.Round(amount*commissionRate/100*1e8) / 1e8
+	ownerAmount := amount - platformFee
+	var settlementID int64
+	err = tx.QueryRowContext(ctx, `INSERT INTO community_settlements
+		(listing_id,membership_id,payer_user_id,owner_user_id,gross_amount,usage_amount,commission_rate,platform_fee,owner_amount,settlement_type,request_id)
+		VALUES($1,$2,$3,$4,$5,$5,$6,$7,$8,'request_usage',$9)
+		ON CONFLICT(request_id) WHERE request_id IS NOT NULL DO NOTHING RETURNING id`, listingID, membershipID, payerUserID, ownerUserID, amount, commissionRate, platformFee, ownerAmount, requestID).Scan(&settlementID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, tx.Commit()
+	}
+	if err != nil {
+		return false, err
+	}
+	if ownerAmount > 0 {
+		if _, err = tx.ExecContext(ctx, `UPDATE users SET balance=balance+$1,updated_at=NOW() WHERE id=$2`, ownerAmount, ownerUserID); err != nil {
+			return false, err
+		}
+	}
+	if _, err = tx.ExecContext(ctx, `UPDATE community_billing_windows SET request_spend=request_spend+$1,updated_at=NOW() WHERE membership_id=$2 AND status='open'`, amount, membershipID); err != nil {
+		return false, err
+	}
+	if err = tx.Commit(); err != nil {
+		return false, err
+	}
+	return settlementID > 0, nil
+}
+
+func accrueCommunityHourlyFeeTx(ctx context.Context, tx *sql.Tx, membershipID int64, cutoff time.Time) error {
+	var payerUserID, ownerUserID int64
+	var hourlyRate, commissionRate float64
+	var activatedAt time.Time
+	var billedUntil *time.Time
+	err := tx.QueryRowContext(ctx, `SELECT m.member_user_id,l.owner_user_id,l.hourly_price,l.commission_rate,m.activated_at,m.billed_until
+		FROM community_memberships m JOIN community_listings l ON l.id=m.listing_id
+		WHERE m.id=$1 FOR UPDATE OF m,l`, membershipID).Scan(&payerUserID, &ownerUserID, &hourlyRate, &commissionRate, &activatedAt, &billedUntil)
+	if err != nil {
+		return err
+	}
+	if payerUserID == ownerUserID || hourlyRate <= 0 {
+		return nil
+	}
+	from := activatedAt
+	if billedUntil != nil && billedUntil.After(from) {
+		from = *billedUntil
+	}
+	if !cutoff.After(from) {
+		return nil
+	}
+
+	for from.Before(cutoff) {
+		windowStart := activatedAt.Add(time.Duration(int64(from.Sub(activatedAt)/time.Hour)) * time.Hour)
+		windowEnd := windowStart.Add(time.Hour)
+		to := cutoff
+		if to.After(windowEnd) {
+			to = windowEnd
+		}
+		seconds := int64(math.Ceil(to.Sub(from).Seconds()/60) * 60)
+		if seconds <= 0 {
+			break
+		}
+		to = from.Add(time.Duration(seconds) * time.Second)
+		if to.After(windowEnd) {
+			to = windowEnd
+			seconds = int64(to.Sub(from).Seconds())
+		}
+		fee := math.Round(hourlyRate*float64(seconds)/3600*1e8) / 1e8
+		if fee > 0 {
+			res, updateErr := tx.ExecContext(ctx, `UPDATE users SET balance=balance-$1,updated_at=NOW() WHERE id=$2 AND balance>=$1`, fee, payerUserID)
+			if updateErr != nil {
+				return updateErr
+			}
+			affected, _ := res.RowsAffected()
+			if affected == 0 {
+				return service.ErrCommunityInsufficient
+			}
+		}
+		if _, err = tx.ExecContext(ctx, `INSERT INTO community_billing_windows
+			(membership_id,listing_id,payer_user_id,owner_user_id,window_started_at,window_ends_at,active_seconds,hourly_fee_precharged,commission_rate)
+			SELECT m.id,m.listing_id,m.member_user_id,l.owner_user_id,$2,$3,$4,$5,l.commission_rate
+			FROM community_memberships m JOIN community_listings l ON l.id=m.listing_id WHERE m.id=$1
+			ON CONFLICT(membership_id,window_started_at) DO UPDATE SET active_seconds=community_billing_windows.active_seconds+EXCLUDED.active_seconds,hourly_fee_precharged=community_billing_windows.hourly_fee_precharged+EXCLUDED.hourly_fee_precharged,updated_at=NOW()`, membershipID, windowStart, windowEnd, seconds, fee); err != nil {
+			return err
+		}
+		from = to
+		if _, err = tx.ExecContext(ctx, `UPDATE community_memberships SET billed_until=$2,paid_until=$2 WHERE id=$1`, membershipID, from); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func sweepCommunityBillingTx(ctx context.Context, tx *sql.Tx, now time.Time) error {
+	rows, err := tx.QueryContext(ctx, `SELECT id,idle_expires_at FROM community_memberships WHERE status='active' AND idle_expires_at IS NOT NULL AND idle_expires_at<=$1 FOR UPDATE`, now)
+	if err != nil {
+		return err
+	}
+	type expiredMembership struct {
+		id     int64
+		cutoff time.Time
+	}
+	expired := make([]expiredMembership, 0)
+	for rows.Next() {
+		var item expiredMembership
+		if err = rows.Scan(&item.id, &item.cutoff); err != nil {
+			rows.Close()
+			return err
+		}
+		expired = append(expired, item)
+	}
+	if err = rows.Close(); err != nil {
+		return err
+	}
+	for _, item := range expired {
+		if err = accrueCommunityHourlyFeeTx(ctx, tx, item.id, item.cutoff); err != nil {
+			if errors.Is(err, service.ErrCommunityInsufficient) {
+				if _, err = tx.ExecContext(ctx, `UPDATE community_memberships SET status='expired',ended_at=COALESCE(billed_until,activated_at),idle_expires_at=NULL WHERE id=$1`, item.id); err != nil {
+					return err
+				}
+				continue
+			}
+			return err
+		}
+		if _, err = tx.ExecContext(ctx, `UPDATE community_memberships SET status='expired',ended_at=$2,idle_expires_at=NULL WHERE id=$1`, item.id, item.cutoff); err != nil {
+			return err
+		}
+	}
+
+	windows, err := tx.QueryContext(ctx, `SELECT w.id,w.membership_id,w.payer_user_id,w.owner_user_id,w.active_seconds,w.request_spend,w.hourly_fee_precharged,w.commission_rate,l.hourly_minimum_spend
+		FROM community_billing_windows w
+		JOIN community_memberships m ON m.id=w.membership_id
+		JOIN community_listings l ON l.id=w.listing_id
+		WHERE w.status='open' AND (w.window_ends_at<=$1 OR m.status<>'active') FOR UPDATE OF w`, now)
+	if err != nil {
+		return err
+	}
+	type billingWindow struct {
+		id, membershipID, payerUserID, ownerUserID   int64
+		activeSeconds                                int64
+		requestSpend, precharged, commission, waiver float64
+	}
+	items := make([]billingWindow, 0)
+	for windows.Next() {
+		var item billingWindow
+		if err = windows.Scan(&item.id, &item.membershipID, &item.payerUserID, &item.ownerUserID, &item.activeSeconds, &item.requestSpend, &item.precharged, &item.commission, &item.waiver); err != nil {
+			windows.Close()
+			return err
+		}
+		items = append(items, item)
+	}
+	if err = windows.Close(); err != nil {
+		return err
+	}
+	for _, item := range items {
+		requiredSpend := item.waiver * float64(item.activeSeconds) / 3600
+		refund := item.precharged > 0 && item.waiver > 0 && item.requestSpend >= requiredSpend
+		if refund {
+			if _, err = tx.ExecContext(ctx, `UPDATE users SET balance=balance+$1,updated_at=NOW() WHERE id=$2`, item.precharged, item.payerUserID); err != nil {
+				return err
+			}
+			if _, err = tx.ExecContext(ctx, `UPDATE community_billing_windows SET status='settled',hourly_fee_refunded=$2,settled_at=NOW(),updated_at=NOW() WHERE id=$1`, item.id, item.precharged); err != nil {
+				return err
+			}
+			continue
+		}
+		platformFee := math.Round(item.precharged*item.commission/100*1e8) / 1e8
+		ownerAmount := item.precharged - platformFee
+		if ownerAmount > 0 {
+			if _, err = tx.ExecContext(ctx, `UPDATE users SET balance=balance+$1,updated_at=NOW() WHERE id=$2`, ownerAmount, item.ownerUserID); err != nil {
+				return err
+			}
+		}
+		if _, err = tx.ExecContext(ctx, `INSERT INTO community_settlements(listing_id,membership_id,payer_user_id,owner_user_id,gross_amount,commission_rate,platform_fee,owner_amount,settlement_type,request_id)
+			SELECT listing_id,membership_id,payer_user_id,owner_user_id,hourly_fee_precharged,commission_rate,$2,$3,'hourly_window',$4 FROM community_billing_windows WHERE id=$1
+			ON CONFLICT(request_id) WHERE request_id IS NOT NULL DO NOTHING`, item.id, platformFee, ownerAmount, fmt.Sprintf("community-window:%d", item.id)); err != nil {
+			return err
+		}
+		if _, err = tx.ExecContext(ctx, `UPDATE community_billing_windows SET status='settled',settled_at=NOW(),updated_at=NOW() WHERE id=$1`, item.id); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// SweepCommunityBilling expires idle memberships and settles completed billing windows.
+func (r *accountRepository) SweepCommunityBilling(ctx context.Context, now time.Time) error {
+	txBeginner, ok := r.sql.(interface {
+		BeginTx(context.Context, *sql.TxOptions) (*sql.Tx, error)
+	})
+	if !ok {
+		return errors.New("community billing sweep requires transactional SQL executor")
+	}
+	tx, err := txBeginner.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if err = sweepCommunityBillingTx(ctx, tx, now); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func (r *accountRepository) SweepCommunityStoreReservations(ctx context.Context, now time.Time) error {
+	txBeginner, ok := r.sql.(interface {
+		BeginTx(context.Context, *sql.TxOptions) (*sql.Tx, error)
+	})
+	if !ok {
+		return errors.New("community store sweep requires transactional SQL executor")
+	}
+	tx, err := txBeginner.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	rows, err := tx.QueryContext(ctx, `SELECT id FROM store_orders WHERE payment_source='platform' AND status='pending' AND expires_at IS NOT NULL AND expires_at<=$1 FOR UPDATE SKIP LOCKED`, now)
+	if err != nil {
+		return err
+	}
+	ids := make([]int64, 0)
+	for rows.Next() {
+		var id int64
+		if err = rows.Scan(&id); err != nil {
+			rows.Close()
+			return err
+		}
+		ids = append(ids, id)
+	}
+	if err = rows.Close(); err != nil {
+		return err
+	}
+	if len(ids) > 0 {
+		if _, err = tx.ExecContext(ctx, `UPDATE store_inventory SET status='available',order_id=NULL WHERE order_id=ANY($1) AND status='reserved'`, pq.Array(ids)); err != nil {
+			return err
+		}
+		if _, err = tx.ExecContext(ctx, `UPDATE store_orders SET status='failed' WHERE id=ANY($1) AND status='pending'`, pq.Array(ids)); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
 }
 
 func (r *accountRepository) GetByIDs(ctx context.Context, ids []int64) ([]*service.Account, error) {

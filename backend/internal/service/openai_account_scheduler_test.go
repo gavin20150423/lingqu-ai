@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	"github.com/stretchr/testify/require"
 )
 
@@ -65,6 +66,27 @@ type schedulerGroupAwareOpenAIAccountRepo struct {
 	schedulerTestOpenAIAccountRepo
 }
 
+type schedulerCommunityRoutingRepo struct {
+	schedulerTestOpenAIAccountRepo
+	resolvedID int64
+	apiKeyID   int64
+	model      string
+}
+
+func (r *schedulerCommunityRoutingRepo) ResolveCommunityAccountID(_ context.Context, apiKeyID int64, requestedModel string, _ map[int64]struct{}) (int64, bool, error) {
+	r.apiKeyID = apiKeyID
+	r.model = requestedModel
+	return r.resolvedID, r.resolvedID > 0, nil
+}
+
+func (r *schedulerCommunityRoutingRepo) CommunityUsageMultiplier(_ context.Context, apiKeyID, accountID int64) (float64, bool, error) {
+	return 1.25, apiKeyID == r.apiKeyID && accountID == r.resolvedID, nil
+}
+
+func (r *schedulerCommunityRoutingRepo) RecordCommunityRequestSettlement(_ context.Context, _, _ int64, _ string, _ float64) (bool, error) {
+	return true, nil
+}
+
 func (r schedulerGroupAwareOpenAIAccountRepo) ListSchedulableByGroupIDAndPlatform(ctx context.Context, groupID int64, platform string) ([]Account, error) {
 	var result []Account
 	for _, acc := range r.accounts {
@@ -83,6 +105,42 @@ func (r schedulerGroupAwareOpenAIAccountRepo) ListSchedulableUngroupedByPlatform
 		}
 	}
 	return result, nil
+}
+
+func TestOpenAIGatewayServiceSelectsReservedCommunityAccountBeforeGroupScheduler(t *testing.T) {
+	account := Account{
+		ID:          901,
+		Platform:    PlatformOpenAI,
+		Type:        AccountTypeOAuth,
+		Status:      StatusActive,
+		Schedulable: true,
+		Concurrency: 2,
+		Credentials: map[string]any{"access_token": "test-token"},
+	}
+	repo := &schedulerCommunityRoutingRepo{
+		schedulerTestOpenAIAccountRepo: schedulerTestOpenAIAccountRepo{accounts: []Account{account}},
+		resolvedID:                     account.ID,
+	}
+	svc := &OpenAIGatewayService{accountRepo: repo, cfg: &config.Config{}}
+	ctx := context.WithValue(context.Background(), ctxkey.APIKeyID, int64(77))
+	require.True(t, isOpenAICompatibleAccountEligibleForRequest(ctx, &account, PlatformOpenAI, "gpt-5.2", false, OpenAIEndpointCapabilityChatCompletions))
+	require.True(t, svc.isOpenAIAccountTransportCompatible(&account, OpenAIUpstreamTransportAny))
+	require.True(t, accountSupportsOpenAICapabilities(&account, OpenAIEndpointCapabilityChatCompletions, ""))
+
+	selection, decision, err := svc.SelectAccountWithSchedulerForCapability(
+		ctx, nil, "", "", "gpt-5.2", nil,
+		OpenAIUpstreamTransportAny, OpenAIEndpointCapabilityChatCompletions,
+		false, false, true, PlatformOpenAI,
+	)
+
+	require.NoError(t, err)
+	require.NotNil(t, selection)
+	require.Equal(t, account.ID, selection.Account.ID)
+	require.True(t, selection.Acquired)
+	require.Equal(t, "community", decision.Layer)
+	require.Equal(t, int64(77), repo.apiKeyID)
+	require.Equal(t, "gpt-5.2", repo.model)
+	require.Equal(t, 1.25, selection.Account.Extra["community_usage_multiplier"])
 }
 
 type schedulerTestConcurrencyCache struct {

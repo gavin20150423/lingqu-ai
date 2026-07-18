@@ -19,6 +19,7 @@ import (
 	"unsafe"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/util/responseheaders"
 	"github.com/cespare/xxhash/v2"
@@ -698,6 +699,40 @@ type GatewayService struct {
 	tlsFPProfileService   *TLSFingerprintProfileService
 	balanceNotifyService  *BalanceNotifyService
 	userPlatformQuotaRepo UserPlatformQuotaRepository
+}
+
+type communityRoutingAccountRepository interface {
+	ResolveCommunityAccountID(ctx context.Context, apiKeyID int64, requestedModel string, excludedIDs map[int64]struct{}) (int64, bool, error)
+	CommunityUsageMultiplier(ctx context.Context, apiKeyID, accountID int64) (float64, bool, error)
+	RecordCommunityRequestSettlement(ctx context.Context, apiKeyID, accountID int64, requestID string, amount float64) (bool, error)
+}
+
+func (s *GatewayService) resolveCommunityAccount(ctx context.Context, requestedModel string, excludedIDs map[int64]struct{}) (*Account, bool, error) {
+	apiKeyID, _ := ctx.Value(ctxkey.APIKeyID).(int64)
+	resolver, ok := s.accountRepo.(communityRoutingAccountRepository)
+	if !ok || apiKeyID <= 0 {
+		return nil, false, nil
+	}
+	accountID, found, err := resolver.ResolveCommunityAccountID(ctx, apiKeyID, requestedModel, excludedIDs)
+	if err != nil || !found {
+		return nil, false, err
+	}
+	account, err := s.accountRepo.GetByID(ctx, accountID)
+	if err != nil {
+		return nil, false, err
+	}
+	if !account.IsSchedulable() {
+		return nil, false, nil
+	}
+	if multiplier, hasTerms, termsErr := resolver.CommunityUsageMultiplier(ctx, apiKeyID, accountID); termsErr != nil {
+		return nil, false, termsErr
+	} else if hasTerms {
+		if account.Extra == nil {
+			account.Extra = make(map[string]any)
+		}
+		account.Extra["community_usage_multiplier"] = multiplier
+	}
+	return account, true, nil
 }
 
 // NewGatewayService creates a new GatewayService

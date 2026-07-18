@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	"golang.org/x/sync/singleflight"
 )
 
@@ -1975,6 +1976,15 @@ func (s *OpenAIGatewayService) selectAccountWithScheduler(
 	ctx = s.withOpenAIQuotaAutoPauseContext(ctx)
 	platform = normalizeOpenAICompatiblePlatform(platform)
 	decision := OpenAIAccountScheduleDecision{}
+	if selection, found, err := s.selectCommunityOpenAIAccount(ctx, requestedModel, effectiveExcludedIDsOrNil(excludedIDs), requiredTransport, requiredCapability, requiredImageCapability, requireCompact, platform); err != nil {
+		return nil, decision, err
+	} else if found {
+		decision.Layer = "community"
+		decision.SelectedAccountID = selection.Account.ID
+		decision.SelectedAccountType = selection.Account.Type
+		decision.CandidateCount = 1
+		return selection, decision, nil
+	}
 	scheduler := s.getOpenAIAccountScheduler(ctx)
 	if scheduler != nil && s.checkChannelPricingRestriction(ctx, groupID, requestedModel) {
 		slog.Warn("channel pricing restriction blocked request",
@@ -2095,6 +2105,71 @@ func (s *OpenAIGatewayService) selectAccountWithScheduler(
 		RequireCompact:          requireCompact,
 		ExcludedIDs:             effectiveExcludedIDs,
 	})
+}
+
+func effectiveExcludedIDsOrNil(excludedIDs map[int64]struct{}) map[int64]struct{} {
+	if len(excludedIDs) == 0 {
+		return nil
+	}
+	return excludedIDs
+}
+
+func (s *OpenAIGatewayService) selectCommunityOpenAIAccount(
+	ctx context.Context,
+	requestedModel string,
+	excludedIDs map[int64]struct{},
+	requiredTransport OpenAIUpstreamTransport,
+	requiredCapability OpenAIEndpointCapability,
+	requiredImageCapability OpenAIImagesCapability,
+	requireCompact bool,
+	platform string,
+) (*AccountSelectionResult, bool, error) {
+	if platform != PlatformOpenAI || s.accountRepo == nil {
+		return nil, false, nil
+	}
+	apiKeyID, _ := ctx.Value(ctxkey.APIKeyID).(int64)
+	resolver, ok := s.accountRepo.(communityRoutingAccountRepository)
+	slog.Debug("community_openai_route_probe", "api_key_id", apiKeyID, "resolver_supported", ok, "model", requestedModel)
+	if !ok || apiKeyID <= 0 {
+		return nil, false, nil
+	}
+	accountID, found, err := resolver.ResolveCommunityAccountID(ctx, apiKeyID, requestedModel, excludedIDs)
+	slog.Debug("community_openai_route_result", "api_key_id", apiKeyID, "account_id", accountID, "found", found, "error", err)
+	if err != nil || !found {
+		return nil, false, err
+	}
+	account, err := s.accountRepo.GetByID(ctx, accountID)
+	if err != nil {
+		return nil, false, err
+	}
+	if !isOpenAICompatibleAccountEligibleForRequest(ctx, account, platform, requestedModel, requireCompact, requiredCapability) ||
+		!s.isOpenAIAccountTransportCompatible(account, requiredTransport) ||
+		!accountSupportsOpenAICapabilities(account, requiredCapability, requiredImageCapability) {
+		return nil, false, nil
+	}
+	if multiplier, hasTerms, termsErr := resolver.CommunityUsageMultiplier(ctx, apiKeyID, accountID); termsErr != nil {
+		return nil, false, termsErr
+	} else if hasTerms {
+		if account.Extra == nil {
+			account.Extra = make(map[string]any)
+		}
+		account.Extra["community_usage_multiplier"] = multiplier
+	}
+	acquired, err := s.tryAcquireAccountSlot(ctx, account.ID, account.Concurrency)
+	if err != nil {
+		return nil, false, err
+	}
+	if acquired != nil && acquired.Acquired {
+		return &AccountSelectionResult{Account: account, Acquired: true, ReleaseFunc: acquired.ReleaseFunc}, true, nil
+	}
+	if s.concurrencyService != nil {
+		cfg := s.schedulingConfig()
+		return &AccountSelectionResult{Account: account, WaitPlan: &AccountWaitPlan{
+			AccountID: account.ID, MaxConcurrency: account.Concurrency,
+			Timeout: cfg.FallbackWaitTimeout, MaxWaiting: cfg.FallbackMaxWaiting,
+		}}, true, nil
+	}
+	return nil, false, nil
 }
 
 func accountSupportsOpenAICapabilities(account *Account, requiredCapability OpenAIEndpointCapability, requiredImageCapability OpenAIImagesCapability) bool {

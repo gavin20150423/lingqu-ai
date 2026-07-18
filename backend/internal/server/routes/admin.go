@@ -113,6 +113,25 @@ func RegisterAdminRoutes(
 
 		// 操作审计日志
 		registerAuditLogRoutes(admin, h, stepUpAuth)
+
+		community := admin.Group("/community")
+		{
+			community.GET("/accounts", h.Community.AdminListAccounts)
+			community.PUT("/accounts/:id/review", h.Community.AdminReviewAccount)
+			community.GET("/tickets", h.Community.AdminListTickets)
+			community.GET("/tickets/:id", h.Community.AdminGetTicket)
+			community.POST("/tickets/:id/messages", h.Community.AdminReplyTicket)
+			community.PUT("/tickets/:id/status", h.Community.AdminUpdateTicket)
+			community.GET("/withdrawals", h.Community.AdminListWithdrawals)
+			community.PUT("/withdrawals/:id", h.Community.AdminReviewWithdrawal)
+			community.GET("/products", h.Community.AdminListProducts)
+			community.POST("/products", h.Community.AdminUpsertProduct)
+			community.PUT("/products/:id", h.Community.AdminUpsertProduct)
+			community.POST("/products/:id/inventory", h.Community.AdminAddInventory)
+			community.GET("/store-orders", h.Community.AdminListStoreOrders)
+			community.GET("/settings", h.Community.AdminGetCommission)
+			community.PUT("/settings", h.Community.AdminSetCommission)
+		}
 	}
 }
 
