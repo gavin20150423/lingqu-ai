@@ -5,6 +5,7 @@ import router from './router'
 import i18n, { initI18n } from './i18n'
 import { useAppStore } from '@/stores/app'
 import { DEFAULT_SITE_TAGLINE } from '@/constants/brand'
+import { updateFavicon } from '@/utils/branding'
 import './style.css'
 
 function initThemeClass() {
@@ -29,6 +30,7 @@ async function bootstrap() {
   if (appStore.siteName) {
     document.title = `${appStore.siteName} - ${DEFAULT_SITE_TAGLINE}`
   }
+  updateFavicon(appStore.siteLogo)
 
   await initI18n()
 
