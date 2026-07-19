@@ -282,13 +282,13 @@ func (r *accountRepository) ResolveCommunityAccountID(ctx context.Context, apiKe
 	for rows.Next() {
 		var candidate communityCandidate
 		if err = rows.Scan(&candidate.accountID, &candidate.membershipID, &candidate.status, &candidate.listingID, &candidate.seatLimit, &candidate.idleMinutes); err != nil {
-			rows.Close()
+			_ = rows.Close()
 			return 0, false, err
 		}
 		candidates = append(candidates, candidate)
 	}
 	if err = rows.Err(); err != nil {
-		rows.Close()
+		_ = rows.Close()
 		return 0, false, err
 	}
 	if err = rows.Close(); err != nil {
@@ -343,7 +343,7 @@ func (r *accountRepository) CommunityUsageMultiplier(ctx context.Context, apiKey
 	if err != nil {
 		return 0, false, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	if !rows.Next() {
 		return 0, false, rows.Err()
 	}
@@ -495,7 +495,7 @@ func sweepCommunityBillingTx(ctx context.Context, tx *sql.Tx, now time.Time) err
 	for rows.Next() {
 		var item expiredMembership
 		if err = rows.Scan(&item.id, &item.cutoff); err != nil {
-			rows.Close()
+			_ = rows.Close()
 			return err
 		}
 		expired = append(expired, item)
@@ -535,7 +535,7 @@ func sweepCommunityBillingTx(ctx context.Context, tx *sql.Tx, now time.Time) err
 	for windows.Next() {
 		var item billingWindow
 		if err = windows.Scan(&item.id, &item.membershipID, &item.payerUserID, &item.ownerUserID, &item.activeSeconds, &item.requestSpend, &item.precharged, &item.commission, &item.waiver); err != nil {
-			windows.Close()
+			_ = windows.Close()
 			return err
 		}
 		items = append(items, item)
@@ -613,7 +613,7 @@ func (r *accountRepository) SweepCommunityStoreReservations(ctx context.Context,
 	for rows.Next() {
 		var id int64
 		if err = rows.Scan(&id); err != nil {
-			rows.Close()
+			_ = rows.Close()
 			return err
 		}
 		ids = append(ids, id)

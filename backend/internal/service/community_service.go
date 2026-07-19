@@ -215,7 +215,7 @@ func (s *CommunityService) ListProxies(ctx context.Context, userID int64) ([]Com
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := make([]CommunityProxy, 0)
 	for rows.Next() {
 		var item CommunityProxy
@@ -505,7 +505,7 @@ func (s *CommunityService) ExportAccounts(ctx context.Context, userID int64, ids
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := make([]CommunityAccountExportItem, 0)
 	for rows.Next() {
 		var item CommunityAccountExportItem
@@ -662,7 +662,7 @@ func (s *CommunityService) ListAccounts(ctx context.Context, userID int64) ([]Co
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := make([]CommunityAccount, 0)
 	for rows.Next() {
 		item, err := scanCommunityAccount(rows)
@@ -679,7 +679,7 @@ func (s *CommunityService) ListAdminAccounts(ctx context.Context) ([]CommunityAc
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := make([]CommunityAccount, 0)
 	for rows.Next() {
 		item, scanErr := scanCommunityAccount(rows)
@@ -710,7 +710,7 @@ func (s *CommunityService) ReviewAccount(ctx context.Context, adminID, id int64,
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	var name, provider, encrypted, notes string
 	var concurrency, priority int
 	var expiresAt *time.Time
@@ -786,7 +786,7 @@ func (s *CommunityService) DeleteAccount(ctx context.Context, userID, id int64) 
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	var schedulerAccountID *int64
 	if err = tx.QueryRowContext(ctx, `SELECT scheduler_account_id FROM community_accounts WHERE id=$1 AND owner_user_id=$2 AND deleted_at IS NULL FOR UPDATE`, id, userID).Scan(&schedulerAccountID); errors.Is(err, sql.ErrNoRows) {
 		return ErrCommunityNotFound
@@ -853,7 +853,7 @@ func (s *CommunityService) CreateListing(ctx context.Context, userID int64, in C
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	var exists int
 	if err = tx.QueryRowContext(ctx, `SELECT 1 FROM community_accounts WHERE id=$1 AND owner_user_id=$2 AND review_status='approved' AND status='active' AND deleted_at IS NULL`, in.AccountID, userID).Scan(&exists); errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrCommunityForbidden
@@ -919,7 +919,7 @@ func (s *CommunityService) ListMarketplace(ctx context.Context, provider, search
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	out := []CommunityListing{}
 	for rows.Next() {
 		v, err := scanListing(rows)
@@ -943,7 +943,7 @@ func (s *CommunityService) ListOwnerListings(ctx context.Context, userID int64, 
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := make([]CommunityListing, 0)
 	for rows.Next() {
 		item, scanErr := scanListing(rows)
@@ -969,7 +969,7 @@ func (s *CommunityService) JoinListing(ctx context.Context, userID, listingID, a
 	if err != nil {
 		return 0, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	var owner int64
 	var provider string
 	var minimumBalance float64
@@ -1129,7 +1129,7 @@ func (s *CommunityService) ListAccountModeKeys(ctx context.Context, userID int64
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := make([]CommunityAccountModeKey, 0)
 	for rows.Next() {
 		var item CommunityAccountModeKey
@@ -1161,7 +1161,7 @@ func (s *CommunityService) ListMemberships(ctx context.Context, userID int64) ([
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := make([]CommunityMembership, 0)
 	for rows.Next() {
 		var item CommunityMembership
@@ -1183,7 +1183,7 @@ func (s *CommunityService) ListConsumptionAccounts(ctx context.Context, userID i
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := make([]CommunityConsumptionAccount, 0)
 	for rows.Next() {
 		var item CommunityConsumptionAccount
@@ -1207,9 +1207,10 @@ func (s *CommunityService) GetConsumptionSummary(ctx context.Context, userID, me
 	}
 	startClause := ""
 	args := []any{membershipID, userID}
-	if scope == "today" {
+	switch scope {
+	case "today":
 		startClause = " AND created_at>=CURRENT_DATE"
-	} else if scope == "7d" {
+	case "7d":
 		startClause = " AND created_at>=NOW()-INTERVAL '7 days'"
 	}
 	var requestSpend float64
@@ -1217,9 +1218,10 @@ func (s *CommunityService) GetConsumptionSummary(ctx context.Context, userID, me
 		return nil, err
 	}
 	windowClause := ""
-	if scope == "today" {
+	switch scope {
+	case "today":
 		windowClause = " AND created_at>=CURRENT_DATE"
-	} else if scope == "7d" {
+	case "7d":
 		windowClause = " AND created_at>=NOW()-INTERVAL '7 days'"
 	}
 	var precharged, refunded float64
@@ -1388,7 +1390,7 @@ func (s *CommunityService) CreateTicket(ctx context.Context, userID int64, subje
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	var id int64
 	err = tx.QueryRowContext(ctx, `INSERT INTO support_tickets(user_id,subject,category,priority) VALUES($1,$2,$3,$4) RETURNING id`, userID, subject, category, priority).Scan(&id)
 	if err != nil {
@@ -1424,7 +1426,7 @@ func (s *CommunityService) ListTickets(ctx context.Context, userID int64, admin 
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	out := []Ticket{}
 	for rows.Next() {
 		v, err := scanTicket(rows)
@@ -1450,7 +1452,7 @@ func (s *CommunityService) GetTicket(ctx context.Context, userID, id int64, admi
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		var m TicketMessage
 		if err = rows.Scan(&m.ID, &m.AuthorUserID, &m.AuthorRole, &m.Content, &m.AttachmentURL, &m.CreatedAt); err != nil {
@@ -1484,7 +1486,7 @@ func (s *CommunityService) ReplyTicket(ctx context.Context, userID, id int64, ad
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	var owner int64
 	var currentStatus string
 	if err = tx.QueryRowContext(ctx, `SELECT user_id,status FROM support_tickets WHERE id=$1`+where, args...).Scan(&owner, &currentStatus); errors.Is(err, sql.ErrNoRows) {
@@ -1598,7 +1600,7 @@ func (s *CommunityService) ListPayoutMethods(ctx context.Context, userID int64) 
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	out := []PayoutMethod{}
 	for rows.Next() {
 		var p PayoutMethod
@@ -1646,7 +1648,7 @@ func (s *CommunityService) CreateWithdrawal(ctx context.Context, userID int64, m
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	var snapshot string
 	if err = tx.QueryRowContext(ctx, `SELECT qr_code_data FROM payout_methods WHERE user_id=$1 AND method=$2`, userID, method).Scan(&snapshot); errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrCommunityInvalid
@@ -1728,7 +1730,7 @@ func (s *CommunityService) ListWithdrawals(ctx context.Context, userID int64, ad
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	out := []Withdrawal{}
 	for rows.Next() {
 		w, err := scanWithdrawal(rows, admin)
@@ -1760,7 +1762,7 @@ func (s *CommunityService) reviewWithdrawal(ctx context.Context, actorID, id int
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	var userID int64
 	var amount, fee float64
 	var current string
@@ -1784,7 +1786,8 @@ func (s *CommunityService) reviewWithdrawal(ctx context.Context, actorID, id int
 		return ErrCommunityConflict
 	}
 	total := amount + fee
-	if status == "cancelled" || status == "rejected" {
+	switch status {
+	case "cancelled", "rejected":
 		res, err := tx.ExecContext(ctx, `UPDATE users SET balance=balance+$1,frozen_balance=frozen_balance-$1,updated_at=NOW() WHERE id=$2 AND frozen_balance>=$1`, total, userID)
 		if err != nil {
 			return err
@@ -1793,7 +1796,7 @@ func (s *CommunityService) reviewWithdrawal(ctx context.Context, actorID, id int
 		if n == 0 {
 			return ErrCommunityConflict
 		}
-	} else if status == "paid" {
+	case "paid":
 		res, err := tx.ExecContext(ctx, `UPDATE users SET frozen_balance=frozen_balance-$1,updated_at=NOW() WHERE id=$2 AND frozen_balance>=$1`, total, userID)
 		if err != nil {
 			return err
@@ -1868,7 +1871,7 @@ func (s *CommunityService) ListProducts(ctx context.Context, admin bool) ([]Stor
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	out := []StoreProduct{}
 	for rows.Next() {
 		var p StoreProduct
@@ -1927,7 +1930,7 @@ func (s *CommunityService) AddInventory(ctx context.Context, productID int64, va
 	if err != nil {
 		return 0, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	var fulfillmentType string
 	if err = tx.QueryRowContext(ctx, `SELECT fulfillment_type FROM store_products WHERE id=$1 FOR UPDATE`, productID).Scan(&fulfillmentType); errors.Is(err, sql.ErrNoRows) {
 		return 0, ErrCommunityNotFound
@@ -1982,7 +1985,7 @@ func (s *CommunityService) PreparePlatformStoreOrder(ctx context.Context, userID
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	var product StoreProduct
 	if err = tx.QueryRowContext(ctx, `SELECT id,category,name,description,price,points_price,fulfillment_type,fulfillment_value,status,0,sort_order FROM store_products WHERE id=$1 AND status='active' FOR UPDATE`, productID).
 		Scan(&product.ID, &product.Category, &product.Name, &product.Description, &product.Price, &product.PointsPrice, &product.FulfillmentType, &product.FulfillmentValue, &product.Status, &product.Stock, &product.SortOrder); errors.Is(err, sql.ErrNoRows) {
@@ -2006,12 +2009,12 @@ func (s *CommunityService) PreparePlatformStoreOrder(ctx context.Context, userID
 		for rows.Next() {
 			var id int64
 			if scanErr := rows.Scan(&id); scanErr != nil {
-				rows.Close()
+				_ = rows.Close()
 				return nil, scanErr
 			}
 			ids = append(ids, id)
 		}
-		rows.Close()
+		_ = rows.Close()
 		if len(ids) != quantity {
 			return nil, ErrCommunityConflict
 		}
@@ -2042,7 +2045,7 @@ func (s *CommunityService) CancelPreparedPlatformStoreOrder(ctx context.Context,
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	result, err := tx.ExecContext(ctx, `UPDATE store_orders SET status='failed' WHERE id=$1 AND user_id=$2 AND payment_source='platform' AND status='pending'`, storeOrderID, userID)
 	if err != nil {
 		return err
@@ -2061,7 +2064,7 @@ func (s *CommunityService) FulfillPlatformStoreOrder(ctx context.Context, storeO
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	var userID, productID int64
 	var quantity int
 	var status, fulfillmentType string
@@ -2090,18 +2093,18 @@ func (s *CommunityService) FulfillPlatformStoreOrder(ctx context.Context, storeO
 			var id int64
 			var encrypted string
 			if scanErr := rows.Scan(&id, &encrypted); scanErr != nil {
-				rows.Close()
+				_ = rows.Close()
 				return scanErr
 			}
 			plain, decryptErr := s.encryptor.Decrypt(encrypted)
 			if decryptErr != nil {
-				rows.Close()
+				_ = rows.Close()
 				return decryptErr
 			}
 			ids = append(ids, id)
 			delivery = append(delivery, plain)
 		}
-		rows.Close()
+		_ = rows.Close()
 		if len(ids) != quantity {
 			return ErrCommunityConflict
 		}
@@ -2141,7 +2144,7 @@ func (s *CommunityService) BuyProduct(ctx context.Context, userID, productID int
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	var p StoreProduct
 	err = tx.QueryRowContext(ctx, `SELECT id,category,name,description,price,points_price,fulfillment_type,fulfillment_value,status,0,sort_order FROM store_products WHERE id=$1 AND status='active' FOR UPDATE`, productID).Scan(&p.ID, &p.Category, &p.Name, &p.Description, &p.Price, &p.PointsPrice, &p.FulfillmentType, &p.FulfillmentValue, &p.Status, &p.Stock, &p.SortOrder)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -2185,18 +2188,18 @@ func (s *CommunityService) BuyProduct(ctx context.Context, userID, productID int
 			var id int64
 			var v string
 			if err = rows.Scan(&id, &v); err != nil {
-				rows.Close()
+				_ = rows.Close()
 				return nil, err
 			}
 			plain, decryptErr := s.encryptor.Decrypt(v)
 			if decryptErr != nil {
-				rows.Close()
+				_ = rows.Close()
 				return nil, fmt.Errorf("decrypt inventory: %w", decryptErr)
 			}
 			ids = append(ids, id)
 			delivery = append(delivery, plain)
 		}
-		rows.Close()
+		_ = rows.Close()
 		if len(ids) != quantity {
 			return nil, ErrCommunityConflict
 		}
@@ -2262,7 +2265,7 @@ func (s *CommunityService) ListStoreOrders(ctx context.Context, userID int64, ad
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	out := []StoreOrder{}
 	for rows.Next() {
 		o, err := scanStoreOrder(rows)

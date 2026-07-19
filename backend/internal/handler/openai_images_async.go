@@ -1,3 +1,4 @@
+//nolint:unused // Legacy ?async=true worker retained for backward compatibility with existing clients.
 package handler
 
 import (
