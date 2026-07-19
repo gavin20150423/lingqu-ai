@@ -340,6 +340,27 @@ func (h *CommunityHandler) CreateListing(c *gin.Context) {
 	}
 	response.Created(c, v)
 }
+func (h *CommunityHandler) UpdateListing(c *gin.Context) {
+	uid, ok := communitySubject(c)
+	if !ok {
+		return
+	}
+	id, ok := communityID(c, "id")
+	if !ok {
+		return
+	}
+	var in service.CommunityListingInput
+	if err := c.ShouldBindJSON(&in); err != nil {
+		response.BadRequest(c, "Invalid request")
+		return
+	}
+	v, err := h.service.UpdateListing(c.Request.Context(), uid, id, in)
+	if err != nil {
+		communityError(c, err)
+		return
+	}
+	response.Success(c, v)
+}
 func (h *CommunityHandler) ListMarketplace(c *gin.Context) {
 	v, err := h.service.ListMarketplace(c.Request.Context(), c.Query("provider"), c.Query("search"))
 	if err != nil {

@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   marketplace: vi.fn(),
   ownerListings: vi.fn(),
   ownerSummary: vi.fn(),
+  updateListing: vi.fn(),
   memberships: vi.fn(),
   accountModeKeys: vi.fn(),
   consumptionAccounts: vi.fn(),
@@ -64,6 +65,7 @@ vi.mock('@/api/community', async () => {
       marketplace: mocks.marketplace,
       ownerListings: mocks.ownerListings,
       ownerSummary: mocks.ownerSummary,
+      updateListing: mocks.updateListing,
       memberships: mocks.memberships,
       accountModeKeys: mocks.accountModeKeys,
       consumptionAccounts: mocks.consumptionAccounts,
@@ -190,6 +192,7 @@ describe('community feature pages with mocked data', () => {
     mocks.marketplace.mockResolvedValue([listing])
     mocks.ownerListings.mockResolvedValue([listing])
     mocks.ownerSummary.mockResolvedValue({ published_listings: 1, active_members: 1, gross_revenue: 2, platform_fees: 0.2, net_revenue: 1.8 })
+    mocks.updateListing.mockResolvedValue(listing)
     mocks.memberships.mockResolvedValue([])
     mocks.accountModeKeys.mockResolvedValue([{ id: 8, name: 'Account Mode Key', status: 'active', account_mode_platform: 'openai' }])
     mocks.consumptionAccounts.mockResolvedValue([{ listing_id: 21, membership_id: 31, title: listing.title, provider: 'openai', status: 'active' }])
@@ -218,6 +221,26 @@ describe('community feature pages with mocked data', () => {
     expect(wrapper.text()).toContain('1.2x')
     expect(wrapper.text()).toContain('9.5')
     expect(wrapper.text()).toContain('Account Mode Key')
+  })
+
+  it('lets the owner edit listing terms in place', async () => {
+    const ownerListing = { ...listing, owner_user_id: 1 }
+    mocks.marketplace.mockResolvedValue([ownerListing])
+    mocks.ownerListings.mockResolvedValue([ownerListing])
+    const wrapper = mount(AccountMarketplaceView, { global: { stubs: layoutStubs } })
+    await flushPromises()
+
+    const ownerMode = wrapper.findAll('button').find(button => button.text().includes('我的账号'))
+    await ownerMode!.trigger('click')
+    await flushPromises()
+    const editButton = wrapper.findAll('button').find(button => button.text().includes('编辑共享条款'))
+    expect(editButton).toBeTruthy()
+    await editButton!.trigger('click')
+    expect(wrapper.get('[aria-label="编辑共享条款"]').text()).toContain('小时费')
+    await wrapper.get('[aria-label="编辑共享条款"] form').trigger('submit')
+    await flushPromises()
+
+    expect(mocks.updateListing).toHaveBeenCalledWith(21, expect.objectContaining({ hourly_price: 0.6, per_user_concurrency: 1, publish: true }))
   })
 
   it('renders a ticket thread with user, admin, and system messages and submits a reply', async () => {

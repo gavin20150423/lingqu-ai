@@ -107,6 +107,7 @@ export const communityAPI = {
   deleteProxy: (id:number) => apiClient.delete(`/community/proxies/${id}`),
   deleteAccount: (id:number) => apiClient.delete(`/community/accounts/${id}`),
   createListing: (data:Record<string,unknown>) => getData<CommunityListing>(apiClient.post('/community/listings',data)),
+  updateListing: (id:number,data:Record<string,unknown>) => getData<CommunityListing>(apiClient.put(`/community/listings/${id}`,data)),
   marketplace: (params?:Record<string,string|number>) => getData<CommunityListing[]>(apiClient.get('/community/marketplace',{params})),
   ownerListings: (provider:'openai'|'anthropic') => getData<CommunityListing[]>(apiClient.get('/community/owner/listings',{params:{provider}})),
   ownerSummary: () => getData<CommunityOwnerSummary>(apiClient.get('/community/owner/summary')),

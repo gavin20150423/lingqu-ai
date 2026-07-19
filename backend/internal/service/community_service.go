@@ -875,6 +875,18 @@ func (s *CommunityService) CreateListing(ctx context.Context, userID int64, in C
 	return s.GetListing(ctx, id)
 }
 
+// UpdateListing edits an existing owner's terms without exposing account ownership.
+func (s *CommunityService) UpdateListing(ctx context.Context, userID, listingID int64, in CommunityListingInput) (*CommunityListing, error) {
+	var accountID int64
+	if err := s.db.QueryRowContext(ctx, `SELECT account_id FROM community_listings WHERE id=$1 AND owner_user_id=$2`, listingID, userID).Scan(&accountID); errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrCommunityForbidden
+	} else if err != nil {
+		return nil, err
+	}
+	in.AccountID = accountID
+	return s.CreateListing(ctx, userID, in)
+}
+
 func (s *CommunityService) GetListing(ctx context.Context, id int64) (*CommunityListing, error) {
 	row := s.db.QueryRowContext(ctx, listingSelect+` WHERE l.id=$1`, id)
 	return scanListing(row)

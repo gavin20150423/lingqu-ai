@@ -144,6 +144,7 @@ func RegisterUserRoutes(
 			community.DELETE("/proxies/:id", h.Community.DeleteProxy)
 			community.DELETE("/accounts/:id", h.Community.DeleteAccount)
 			community.POST("/listings", h.Community.CreateListing)
+			community.PUT("/listings/:id", h.Community.UpdateListing)
 			community.GET("/marketplace", h.Community.ListMarketplace)
 			community.GET("/owner/listings", h.Community.ListOwnerListings)
 			community.GET("/memberships", h.Community.ListMemberships)
