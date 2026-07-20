@@ -10,7 +10,7 @@
       <div class="sidebar-logo flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl bg-white ring-1 ring-slate-200">
         <img
           v-if="settingsLoaded"
-          :src="siteLogo || '/logo.png'"
+          :src="siteLogo || '/brand/lingqu-ai-logo.svg'"
           alt="Logo"
           class="h-full w-full object-contain"
         />
