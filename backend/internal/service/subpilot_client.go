@@ -21,6 +21,7 @@ import (
 
 const (
 	subPilotSelectPath          = "/v1/dispatch/select"
+	subPilotReleaseLeasePath    = "/v1/dispatch/release-lease"
 	subPilotReportSuccessPath   = "/v1/dispatch/report-success"
 	subPilotReportFailurePath   = "/v1/dispatch/report-failure"
 	subPilotRuntimeConfigPath   = "/v1/dispatch/runtime-config"
@@ -71,12 +72,13 @@ type subPilotReportJob struct {
 }
 
 type subPilotSelectRequest struct {
-	RequestID  string `json:"request_id"`
-	APIKeyID   string `json:"api_key_id,omitempty"`
-	Platform   string `json:"platform"`
-	GroupID    string `json:"group_id,omitempty"`
-	Model      string `json:"model"`
-	SessionKey string `json:"session_key,omitempty"`
+	RequestID          string   `json:"request_id"`
+	APIKeyID           string   `json:"api_key_id,omitempty"`
+	Platform           string   `json:"platform"`
+	GroupID            string   `json:"group_id,omitempty"`
+	Model              string   `json:"model"`
+	SessionKey         string   `json:"session_key,omitempty"`
+	ExcludedAccountIDs []string `json:"excluded_account_ids,omitempty"`
 }
 
 type subPilotSelectResponse struct {
@@ -94,6 +96,12 @@ type subPilotSelectResult struct {
 	AccountID int64
 	LeaseID   string
 	RequestID string
+}
+
+type subPilotReleaseLeaseRequest struct {
+	RequestID string `json:"request_id"`
+	LeaseID   string `json:"lease_id"`
+	AccountID string `json:"account_id"`
 }
 
 type subPilotReportSuccessRequest struct {
@@ -189,12 +197,23 @@ func subPilotConfigFrom(cfg *config.Config) config.SubPilotConfig {
 }
 
 func (c *subPilotClient) recommendAccount(ctx context.Context, req subPilotSelectRequest) (*subPilotSelectResult, error) {
+	recommendation, _, err := c.recommendAccountWithOwnership(ctx, req)
+	return recommendation, err
+}
+
+func (c *subPilotClient) recommendAccountWithOwnership(ctx context.Context, req subPilotSelectRequest) (*subPilotSelectResult, bool, error) {
 	if c == nil {
-		return nil, nil
+		return nil, false, nil
 	}
 	runtime := c.runtimeConfig(ctx)
-	if !runtime.DispatchEnabled || c.isBypassed() {
-		return nil, nil
+	if !runtime.DispatchEnabled {
+		return nil, false, nil
+	}
+	if c.isBypassed() {
+		if runtime.DispatchFailOpen {
+			return nil, false, nil
+		}
+		return nil, true, errors.New("subpilot dispatch is temporarily bypassed after repeated failures")
 	}
 	var resp subPilotSelectResponse
 	timeout := time.Duration(runtime.DispatchSelectTimeoutMS) * time.Millisecond
@@ -203,11 +222,12 @@ func (c *subPilotClient) recommendAccount(ctx context.Context, req subPilotSelec
 	}
 	if err := c.postJSONWithTimeout(ctx, subPilotSelectPath, req, &resp, timeout); err != nil {
 		c.recordFailure(runtime)
-		return nil, c.handleRuntimeError("subpilot select failed", err, runtime.DispatchFailOpen)
+		handledErr := c.handleRuntimeError("subpilot select failed", err, runtime.DispatchFailOpen)
+		return nil, handledErr != nil, handledErr
 	}
 	c.recordSuccess()
 	if resp.Decision != "selected" {
-		return nil, nil
+		return nil, true, nil
 	}
 	accountID, err := strconv.ParseInt(strings.TrimSpace(resp.Account.ID), 10, 64)
 	if err != nil || accountID <= 0 || strings.TrimSpace(resp.Lease.ID) == "" {
@@ -215,9 +235,21 @@ func (c *subPilotClient) recommendAccount(ctx context.Context, req subPilotSelec
 			err = errors.New("missing account or lease")
 		}
 		c.recordFailure(runtime)
-		return nil, c.handleRuntimeError("subpilot select returned invalid account", err, runtime.DispatchFailOpen)
+		handledErr := c.handleRuntimeError("subpilot select returned invalid account", err, runtime.DispatchFailOpen)
+		return nil, handledErr != nil, handledErr
 	}
-	return &subPilotSelectResult{AccountID: accountID, LeaseID: strings.TrimSpace(resp.Lease.ID), RequestID: req.RequestID}, nil
+	return &subPilotSelectResult{AccountID: accountID, LeaseID: strings.TrimSpace(resp.Lease.ID), RequestID: req.RequestID}, true, nil
+}
+
+func (c *subPilotClient) takeoverActive(ctx context.Context) bool {
+	if c == nil {
+		return false
+	}
+	runtime := c.runtimeConfig(ctx)
+	if !runtime.DispatchEnabled {
+		return false
+	}
+	return !c.isBypassed() || !runtime.DispatchFailOpen
 }
 
 func (c *subPilotClient) reportSuccess(ctx context.Context, req subPilotReportSuccessRequest) {
@@ -232,6 +264,13 @@ func (c *subPilotClient) reportFailure(ctx context.Context, req subPilotReportFa
 		return
 	}
 	c.enqueueReport(subPilotReportFailurePath, req)
+}
+
+func (c *subPilotClient) releaseLease(ctx context.Context, req subPilotReleaseLeaseRequest) {
+	if c == nil {
+		return
+	}
+	c.enqueueReport(subPilotReleaseLeasePath, req)
 }
 
 func (c *subPilotClient) enqueueReport(path string, payload any) {

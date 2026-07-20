@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"sort"
 	"strconv"
 )
 
@@ -19,47 +20,64 @@ func (s *OpenAIGatewayService) subPilotClient() *subPilotClient {
 	return newSubPilotClient(subPilotConfigFrom(s.cfg))
 }
 
-func (s *GatewayService) trySubPilotRecommend(ctx context.Context, groupID *int64, platform string, sessionKey string, requestedModel string, excludedIDs map[int64]struct{}, accounts []Account, useMixed bool) (*AccountSelectionResult, error) {
+func (s *GatewayService) trySubPilotRecommend(ctx context.Context, groupID *int64, platform string, sessionKey string, requestedModel string, excludedIDs map[int64]struct{}, accounts []Account, useMixed bool) (*AccountSelectionResult, bool, error) {
 	if SubPilotDisabledFromContext(ctx) {
-		return nil, nil
+		return nil, false, nil
 	}
 	client := s.subPilotClient()
 	if client == nil || groupID == nil || requestedModel == "" {
-		return nil, nil
+		return nil, false, nil
 	}
-	rec, err := client.recommendAccount(ctx, newSubPilotSelectRequest(ctx, platform, *groupID, requestedModel, sessionKey))
-	if err != nil || rec == nil {
-		return nil, err
+	localExcluded := cloneSubPilotExcludedIDs(excludedIDs)
+	for {
+		req := newSubPilotSelectRequest(ctx, platform, *groupID, requestedModel, sessionKey)
+		req.ExcludedAccountIDs = subPilotExcludedAccountIDs(localExcluded)
+		rec, handled, err := client.recommendAccountWithOwnership(ctx, req)
+		if err != nil || !handled {
+			return nil, handled, err
+		}
+		if rec == nil {
+			return nil, true, ErrNoAvailableAccounts
+		}
+		if _, excluded := localExcluded[rec.AccountID]; excluded {
+			releaseSubPilotRecommendation(client, rec)
+			return nil, true, ErrNoAvailableAccounts
+		}
+		account := s.validateSubPilotGatewayAccount(ctx, rec.AccountID, platform, requestedModel, accounts, useMixed)
+		if account == nil {
+			releaseSubPilotRecommendation(client, rec)
+			localExcluded[rec.AccountID] = struct{}{}
+			continue
+		}
+		result, acquireErr := s.tryAcquireAccountSlot(ctx, account.ID, account.Concurrency)
+		if acquireErr != nil {
+			releaseSubPilotRecommendation(client, rec)
+			return nil, true, acquireErr
+		}
+		if result == nil || !result.Acquired {
+			releaseSubPilotRecommendation(client, rec)
+			localExcluded[rec.AccountID] = struct{}{}
+			continue
+		}
+		if !s.checkAndRegisterSession(ctx, account, sessionKey) {
+			result.ReleaseFunc()
+			releaseSubPilotRecommendation(client, rec)
+			localExcluded[rec.AccountID] = struct{}{}
+			continue
+		}
+		if sessionKey != "" && s.cache != nil {
+			_ = s.cache.SetSessionAccountID(ctx, derefGroupID(groupID), sessionKey, account.ID, stickySessionTTL)
+		}
+		selection, selectionErr := s.newSelectionResult(ctx, account, true, result.ReleaseFunc, nil)
+		if selectionErr != nil {
+			result.ReleaseFunc()
+			releaseSubPilotRecommendation(client, rec)
+			return nil, true, selectionErr
+		}
+		selection.SubPilotLeaseID = rec.LeaseID
+		selection.SubPilotRequestID = rec.RequestID
+		return selection, true, nil
 	}
-	if _, excluded := excludedIDs[rec.AccountID]; excluded {
-		s.reportSubPilotRecommendationFailure(ctx, rec, nil, platform, *groupID, requestedModel, sessionKey, "excluded_account", "SubPilot recommended an excluded account")
-		return nil, nil
-	}
-	account := s.validateSubPilotGatewayAccount(ctx, rec.AccountID, platform, requestedModel, accounts, useMixed)
-	if account == nil {
-		s.reportSubPilotRecommendationFailure(ctx, rec, nil, platform, *groupID, requestedModel, sessionKey, "invalid_account", "SubPilot recommended an account that failed local validation")
-		return nil, nil
-	}
-	result, err := s.tryAcquireAccountSlot(ctx, account.ID, account.Concurrency)
-	if err != nil || result == nil || !result.Acquired {
-		s.reportSubPilotRecommendationFailure(ctx, rec, account, platform, *groupID, requestedModel, sessionKey, "account_slot_unavailable", errorMessageOrDefault(err, "Sub2API account concurrency slot unavailable"))
-		return nil, err
-	}
-	if !s.checkAndRegisterSession(ctx, account, sessionKey) {
-		result.ReleaseFunc()
-		s.reportSubPilotRecommendationFailure(ctx, rec, account, platform, *groupID, requestedModel, sessionKey, "session_limit", "Sub2API session limit rejected the recommendation")
-		return nil, nil
-	}
-	if sessionKey != "" && s.cache != nil {
-		_ = s.cache.SetSessionAccountID(ctx, derefGroupID(groupID), sessionKey, account.ID, stickySessionTTL)
-	}
-	selection, err := s.newSelectionResult(ctx, account, true, result.ReleaseFunc, nil)
-	if err != nil {
-		return nil, err
-	}
-	selection.SubPilotLeaseID = rec.LeaseID
-	selection.SubPilotRequestID = rec.RequestID
-	return selection, nil
 }
 
 func (s *GatewayService) validateSubPilotGatewayAccount(ctx context.Context, accountID int64, platform string, requestedModel string, accounts []Account, useMixed bool) *Account {
@@ -94,45 +112,61 @@ func (s *GatewayService) validateSubPilotGatewayAccount(ctx context.Context, acc
 	return nil
 }
 
-func (s *OpenAIGatewayService) trySubPilotRecommend(ctx context.Context, groupID *int64, platform string, sessionKey string, requestedModel string, excludedIDs map[int64]struct{}, requireCompact bool, requiredCapability OpenAIEndpointCapability, accounts []Account) (*AccountSelectionResult, error) {
+func (s *OpenAIGatewayService) trySubPilotRecommend(ctx context.Context, groupID *int64, platform string, sessionKey string, requestedModel string, excludedIDs map[int64]struct{}, requireCompact bool, requiredCapability OpenAIEndpointCapability, requiredTransport OpenAIUpstreamTransport, requiredImageCapability OpenAIImagesCapability, accounts []Account) (*AccountSelectionResult, bool, error) {
 	if SubPilotDisabledFromContext(ctx) {
-		return nil, nil
+		return nil, false, nil
 	}
 	client := s.subPilotClient()
 	if client == nil || groupID == nil || requestedModel == "" {
-		return nil, nil
+		return nil, false, nil
 	}
-	rec, err := client.recommendAccount(ctx, newSubPilotSelectRequest(ctx, normalizeOpenAICompatiblePlatform(platform), *groupID, requestedModel, sessionKey))
-	if err != nil || rec == nil {
-		return nil, err
+	localExcluded := cloneSubPilotExcludedIDs(excludedIDs)
+	for {
+		req := newSubPilotSelectRequest(ctx, normalizeOpenAICompatiblePlatform(platform), *groupID, requestedModel, sessionKey)
+		req.ExcludedAccountIDs = subPilotExcludedAccountIDs(localExcluded)
+		rec, handled, err := client.recommendAccountWithOwnership(ctx, req)
+		if err != nil || !handled {
+			return nil, handled, err
+		}
+		if rec == nil {
+			return nil, true, ErrNoAvailableAccounts
+		}
+		if _, excluded := localExcluded[rec.AccountID]; excluded {
+			releaseSubPilotRecommendation(client, rec)
+			return nil, true, ErrNoAvailableAccounts
+		}
+		account := s.validateSubPilotOpenAIAccount(ctx, rec.AccountID, groupID, platform, requestedModel, requireCompact, requiredCapability, requiredTransport, requiredImageCapability, accounts)
+		if account == nil {
+			releaseSubPilotRecommendation(client, rec)
+			localExcluded[rec.AccountID] = struct{}{}
+			continue
+		}
+		result, acquireErr := s.tryAcquireAccountSlot(ctx, account.ID, account.Concurrency)
+		if acquireErr != nil {
+			releaseSubPilotRecommendation(client, rec)
+			return nil, true, acquireErr
+		}
+		if result == nil || !result.Acquired {
+			releaseSubPilotRecommendation(client, rec)
+			localExcluded[rec.AccountID] = struct{}{}
+			continue
+		}
+		if sessionKey != "" {
+			_ = s.setStickySessionAccountID(ctx, groupID, sessionKey, account.ID, openaiStickySessionTTL)
+		}
+		selection, selectionErr := s.newAcquiredSelectionResult(ctx, account, result.ReleaseFunc)
+		if selectionErr != nil {
+			result.ReleaseFunc()
+			releaseSubPilotRecommendation(client, rec)
+			return nil, true, selectionErr
+		}
+		selection.SubPilotLeaseID = rec.LeaseID
+		selection.SubPilotRequestID = rec.RequestID
+		return selection, true, nil
 	}
-	if _, excluded := excludedIDs[rec.AccountID]; excluded {
-		s.reportSubPilotRecommendationFailure(ctx, rec, nil, normalizeOpenAICompatiblePlatform(platform), *groupID, requestedModel, sessionKey, "excluded_account", "SubPilot recommended an excluded account")
-		return nil, nil
-	}
-	account := s.validateSubPilotOpenAIAccount(ctx, rec.AccountID, groupID, platform, requestedModel, requireCompact, requiredCapability, accounts)
-	if account == nil {
-		s.reportSubPilotRecommendationFailure(ctx, rec, nil, normalizeOpenAICompatiblePlatform(platform), *groupID, requestedModel, sessionKey, "invalid_account", "SubPilot recommended an account that failed local validation")
-		return nil, nil
-	}
-	result, err := s.tryAcquireAccountSlot(ctx, account.ID, account.Concurrency)
-	if err != nil || result == nil || !result.Acquired {
-		s.reportSubPilotRecommendationFailure(ctx, rec, account, normalizeOpenAICompatiblePlatform(platform), *groupID, requestedModel, sessionKey, "account_slot_unavailable", errorMessageOrDefault(err, "Sub2API account concurrency slot unavailable"))
-		return nil, err
-	}
-	if sessionKey != "" {
-		_ = s.setStickySessionAccountID(ctx, groupID, sessionKey, account.ID, openaiStickySessionTTL)
-	}
-	selection, err := s.newAcquiredSelectionResult(ctx, account, result.ReleaseFunc)
-	if err != nil {
-		return nil, err
-	}
-	selection.SubPilotLeaseID = rec.LeaseID
-	selection.SubPilotRequestID = rec.RequestID
-	return selection, nil
 }
 
-func (s *OpenAIGatewayService) validateSubPilotOpenAIAccount(ctx context.Context, accountID int64, groupID *int64, platform string, requestedModel string, requireCompact bool, requiredCapability OpenAIEndpointCapability, accounts []Account) *Account {
+func (s *OpenAIGatewayService) validateSubPilotOpenAIAccount(ctx context.Context, accountID int64, groupID *int64, platform string, requestedModel string, requireCompact bool, requiredCapability OpenAIEndpointCapability, requiredTransport OpenAIUpstreamTransport, requiredImageCapability OpenAIImagesCapability, accounts []Account) *Account {
 	for i := range accounts {
 		acc := &accounts[i]
 		if acc.ID != accountID {
@@ -146,9 +180,46 @@ func (s *OpenAIGatewayService) validateSubPilotOpenAIAccount(ctx context.Context
 		if fresh == nil {
 			return nil
 		}
+		if !s.isOpenAIAccountTransportCompatible(fresh, requiredTransport) || !accountSupportsOpenAICapabilities(fresh, requiredCapability, requiredImageCapability) {
+			return nil
+		}
 		return fresh
 	}
 	return nil
+}
+
+func cloneSubPilotExcludedIDs(excludedIDs map[int64]struct{}) map[int64]struct{} {
+	cloned := make(map[int64]struct{}, len(excludedIDs))
+	for accountID := range excludedIDs {
+		cloned[accountID] = struct{}{}
+	}
+	return cloned
+}
+
+func subPilotExcludedAccountIDs(excludedIDs map[int64]struct{}) []string {
+	ids := make([]int64, 0, len(excludedIDs))
+	for accountID := range excludedIDs {
+		if accountID > 0 {
+			ids = append(ids, accountID)
+		}
+	}
+	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	result := make([]string, 0, len(ids))
+	for _, accountID := range ids {
+		result = append(result, strconv.FormatInt(accountID, 10))
+	}
+	return result
+}
+
+func releaseSubPilotRecommendation(client *subPilotClient, rec *subPilotSelectResult) {
+	if client == nil || rec == nil || rec.AccountID <= 0 || rec.LeaseID == "" {
+		return
+	}
+	client.releaseLease(context.Background(), subPilotReleaseLeaseRequest{
+		RequestID: rec.RequestID,
+		LeaseID:   rec.LeaseID,
+		AccountID: strconv.FormatInt(rec.AccountID, 10),
+	})
 }
 
 func subPilotGroupIDString(apiKey *APIKey) string {
@@ -223,87 +294,4 @@ func subPilotOfficialUSD(totalCost float64, accountRateMultiplier float64) float
 		return 0
 	}
 	return totalCost / accountRateMultiplier
-}
-
-func errorMessageOrDefault(err error, fallback string) string {
-	if err == nil {
-		return fallback
-	}
-	return err.Error()
-}
-
-func (s *GatewayService) reportSubPilotRecommendationFailure(ctx context.Context, rec *subPilotSelectResult, account *Account, platform string, groupID int64, model string, sessionKey string, code string, message string) {
-	if s == nil || rec == nil || rec.LeaseID == "" {
-		return
-	}
-	client := s.subPilotClient()
-	if client == nil {
-		return
-	}
-	accountID := rec.AccountID
-	if account != nil {
-		accountID = account.ID
-	}
-	client.reportFailure(ctx, subPilotReportFailureRequest{
-		RequestID:    subPilotReportRequestID(ctx, rec.RequestID),
-		LeaseID:      rec.LeaseID,
-		APIKeyID:     subPilotAPIKeyIDFromRequestContext(ctx),
-		AccountID:    strconv.FormatInt(accountID, 10),
-		Platform:     platform,
-		GroupID:      strconv.FormatInt(groupID, 10),
-		Model:        subPilotReportModel(model, ""),
-		SessionKey:   sessionKey,
-		ErrorCode:    code,
-		ErrorMessage: message,
-		RequestType:  "selection",
-	})
-}
-
-func (s *OpenAIGatewayService) reportSubPilotRecommendationFailure(ctx context.Context, rec *subPilotSelectResult, account *Account, platform string, groupID int64, model string, sessionKey string, code string, message string) {
-	if s == nil || rec == nil || rec.LeaseID == "" {
-		return
-	}
-	client := s.subPilotClient()
-	if client == nil {
-		return
-	}
-	accountID := rec.AccountID
-	if account != nil {
-		accountID = account.ID
-	}
-	client.reportFailure(ctx, subPilotReportFailureRequest{
-		RequestID:    subPilotReportRequestID(ctx, rec.RequestID),
-		LeaseID:      rec.LeaseID,
-		APIKeyID:     subPilotAPIKeyIDFromRequestContext(ctx),
-		AccountID:    strconv.FormatInt(accountID, 10),
-		Platform:     platform,
-		GroupID:      strconv.FormatInt(groupID, 10),
-		Model:        subPilotReportModel(model, ""),
-		SessionKey:   sessionKey,
-		ErrorCode:    code,
-		ErrorMessage: message,
-		RequestType:  "selection",
-	})
-}
-
-func (s *OpenAIGatewayService) reportSubPilotSelectionFailure(ctx context.Context, selection *AccountSelectionResult, platform string, groupID *int64, model string, sessionKey string, code string, message string) {
-	if selection == nil || selection.SubPilotLeaseID == "" || selection.Account == nil {
-		return
-	}
-	groupIDString := ""
-	if groupID != nil {
-		groupIDString = strconv.FormatInt(*groupID, 10)
-	}
-	s.ReportSubPilotFailure(ctx, SubPilotFailureInput{
-		LeaseID:      selection.SubPilotLeaseID,
-		Account:      selection.Account,
-		RequestID:    selection.SubPilotRequestID,
-		Platform:     normalizeOpenAICompatiblePlatform(platform),
-		GroupID:      groupIDString,
-		Model:        model,
-		SessionKey:   sessionKey,
-		ErrorCode:    code,
-		ErrorMessage: message,
-		RequestType:  "selection",
-	})
 }

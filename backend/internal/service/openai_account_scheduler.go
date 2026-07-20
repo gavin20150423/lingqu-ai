@@ -1976,15 +1976,6 @@ func (s *OpenAIGatewayService) selectAccountWithScheduler(
 	ctx = s.withOpenAIQuotaAutoPauseContext(ctx)
 	platform = normalizeOpenAICompatiblePlatform(platform)
 	decision := OpenAIAccountScheduleDecision{}
-	if selection, found, err := s.selectCommunityOpenAIAccount(ctx, requestedModel, effectiveExcludedIDsOrNil(excludedIDs), requiredTransport, requiredCapability, requiredImageCapability, requireCompact, platform); err != nil {
-		return nil, decision, err
-	} else if found {
-		decision.Layer = "community"
-		decision.SelectedAccountID = selection.Account.ID
-		decision.SelectedAccountType = selection.Account.Type
-		decision.CandidateCount = 1
-		return selection, decision, nil
-	}
 	scheduler := s.getOpenAIAccountScheduler(ctx)
 	if scheduler != nil && s.checkChannelPricingRestriction(ctx, groupID, requestedModel) {
 		slog.Warn("channel pricing restriction blocked request",
@@ -1994,32 +1985,33 @@ func (s *OpenAIGatewayService) selectAccountWithScheduler(
 	}
 
 	effectiveExcludedIDs := cloneExcludedAccountIDs(excludedIDs)
-	if !SubPilotDisabledFromContext(ctx) && groupID != nil && requestedModel != "" && s.subPilotClient() != nil {
+	if client := s.subPilotClient(); !SubPilotDisabledFromContext(ctx) && groupID != nil && requestedModel != "" && client != nil && client.takeoverActive(ctx) {
 		accounts, listErr := s.listSchedulableAccounts(ctx, groupID, platform)
-		if listErr == nil && len(accounts) > 0 {
-			if selection, err := s.trySubPilotRecommend(ctx, groupID, platform, sessionHash, requestedModel, effectiveExcludedIDs, requireCompact, requiredCapability, accounts); err != nil {
-				return nil, decision, err
-			} else if selection != nil {
-				if s.isOpenAIAccountTransportCompatible(selection.Account, requiredTransport) &&
-					accountSupportsOpenAICapabilities(selection.Account, requiredCapability, requiredImageCapability) {
-					decision.Layer = "subpilot"
-					decision.SelectedAccountID = selection.Account.ID
-					decision.SelectedAccountType = selection.Account.Type
-					decision.CandidateCount = len(accounts)
-					return selection, decision, nil
-				}
-				s.reportSubPilotSelectionFailure(ctx, selection, platform, groupID, requestedModel, sessionHash, "capability_mismatch", "Sub2API rejected SubPilot recommendation because the selected account does not satisfy the requested transport or endpoint capability")
-				if selection.ReleaseFunc != nil {
-					selection.ReleaseFunc()
-				}
-				if effectiveExcludedIDs == nil {
-					effectiveExcludedIDs = make(map[int64]struct{})
-				}
-				if selection.Account != nil {
-					effectiveExcludedIDs[selection.Account.ID] = struct{}{}
-				}
-			}
+		if listErr != nil {
+			return nil, decision, listErr
 		}
+		if len(accounts) == 0 {
+			return nil, decision, ErrNoAvailableAccounts
+		}
+		if selection, handled, subPilotErr := s.trySubPilotRecommend(ctx, groupID, platform, sessionHash, requestedModel, effectiveExcludedIDs, requireCompact, requiredCapability, requiredTransport, requiredImageCapability, accounts); handled {
+			decision.Layer = "subpilot"
+			decision.CandidateCount = len(accounts)
+			if subPilotErr != nil {
+				return nil, decision, subPilotErr
+			}
+			decision.SelectedAccountID = selection.Account.ID
+			decision.SelectedAccountType = selection.Account.Type
+			return selection, decision, nil
+		}
+	}
+	if selection, found, err := s.selectCommunityOpenAIAccount(ctx, requestedModel, effectiveExcludedIDsOrNil(excludedIDs), requiredTransport, requiredCapability, requiredImageCapability, requireCompact, platform); err != nil {
+		return nil, decision, err
+	} else if found {
+		decision.Layer = "community"
+		decision.SelectedAccountID = selection.Account.ID
+		decision.SelectedAccountType = selection.Account.Type
+		decision.CandidateCount = 1
+		return selection, decision, nil
 	}
 
 	if scheduler == nil {

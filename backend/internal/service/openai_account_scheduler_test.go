@@ -143,6 +143,50 @@ func TestOpenAIGatewayServiceSelectsReservedCommunityAccountBeforeGroupScheduler
 	require.Equal(t, 1.25, selection.Account.Extra["community_usage_multiplier"])
 }
 
+func TestOpenAIGatewayServiceSubPilotTakeoverPreemptsReservedCommunityAccount(t *testing.T) {
+	communityAccount := Account{
+		ID: 901, Platform: PlatformOpenAI, Type: AccountTypeOAuth,
+		Status: StatusActive, Schedulable: true, Concurrency: 2,
+		Credentials: map[string]any{"access_token": "community-token"},
+	}
+	subPilotAccount := Account{
+		ID: 902, Platform: PlatformOpenAI, Type: AccountTypeOAuth,
+		Status: StatusActive, Schedulable: true, Concurrency: 2,
+		Credentials: map[string]any{"access_token": "subpilot-token"},
+	}
+	repo := &schedulerCommunityRoutingRepo{
+		schedulerTestOpenAIAccountRepo: schedulerTestOpenAIAccountRepo{accounts: []Account{communityAccount, subPilotAccount}},
+		resolvedID:                     communityAccount.ID,
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, subPilotSelectPath, r.URL.Path)
+		_, _ = w.Write([]byte(`{"decision":"selected","account":{"id":"902"},"lease":{"id":"lease-902"}}`))
+	}))
+	defer server.Close()
+
+	cfg := &config.Config{}
+	cfg.Gateway.SubPilot = config.SubPilotConfig{Enabled: true, BaseURL: server.URL, TimeoutMS: 500}
+	svc := &OpenAIGatewayService{
+		accountRepo:        repo,
+		cfg:                cfg,
+		concurrencyService: NewConcurrencyService(schedulerTestConcurrencyCache{}),
+	}
+	groupID := int64(10)
+	ctx := context.WithValue(context.Background(), ctxkey.APIKeyID, int64(77))
+
+	selection, decision, err := svc.SelectAccountWithSchedulerForCapability(
+		ctx, &groupID, "", "", "gpt-5.2", nil,
+		OpenAIUpstreamTransportAny, OpenAIEndpointCapabilityChatCompletions,
+		false, false, true, PlatformOpenAI,
+	)
+
+	require.NoError(t, err)
+	require.NotNil(t, selection)
+	require.Equal(t, subPilotAccount.ID, selection.Account.ID)
+	require.Equal(t, "subpilot", decision.Layer)
+	require.Zero(t, repo.apiKeyID, "community resolver must not run while SubPilot owns selection")
+}
+
 type schedulerTestConcurrencyCache struct {
 	ConcurrencyCache
 	loadBatchErr    error
@@ -581,6 +625,148 @@ func TestOpenAIGatewayService_SelectAccountWithScheduler_DefaultDisabledUsesSubP
 		require.Equal(t, "subpilot-default-session", req.SessionKey)
 	case <-time.After(time.Second):
 		t.Fatal("timed out waiting for SubPilot select request")
+	}
+}
+
+func TestOpenAIGatewayService_SubPilotNoChannelDoesNotFallBackToNativeScheduler(t *testing.T) {
+	resetOpenAIAdvancedSchedulerSettingCacheForTest()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, subPilotSelectPath, r.URL.Path)
+		_, _ = w.Write([]byte(`{"decision":"no_channel"}`))
+	}))
+	defer server.Close()
+
+	groupID := int64(10117)
+	accounts := []Account{{
+		ID: 36101, Platform: PlatformOpenAI, Type: AccountTypeAPIKey,
+		Status: StatusActive, Schedulable: true, Concurrency: 1,
+	}}
+	cfg := &config.Config{}
+	cfg.Gateway.Scheduling.LoadBatchEnabled = false
+	cfg.Gateway.SubPilot = config.SubPilotConfig{Enabled: true, BaseURL: server.URL, TimeoutMS: 500}
+	svc := &OpenAIGatewayService{
+		accountRepo:        schedulerTestOpenAIAccountRepo{accounts: accounts},
+		cache:              &schedulerTestGatewayCache{},
+		cfg:                cfg,
+		concurrencyService: NewConcurrencyService(schedulerTestConcurrencyCache{}),
+	}
+
+	selection, decision, err := svc.SelectAccountWithScheduler(
+		context.Background(), &groupID, "", "", "gpt-5.4", nil,
+		OpenAIUpstreamTransportAny, false,
+	)
+	require.ErrorIs(t, err, ErrNoAvailableAccounts)
+	require.Nil(t, selection)
+	require.Equal(t, "subpilot", decision.Layer)
+}
+
+func TestOpenAIGatewayService_SubPilotReceivesFailedAccountExclusions(t *testing.T) {
+	resetOpenAIAdvancedSchedulerSettingCacheForTest()
+
+	requests := make(chan subPilotSelectRequest, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, subPilotSelectPath, r.URL.Path)
+		var req subPilotSelectRequest
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
+		requests <- req
+		_, _ = w.Write([]byte(`{"decision":"selected","account":{"id":"36112"},"lease":{"id":"lease-36112"}}`))
+	}))
+	defer server.Close()
+
+	groupID := int64(10118)
+	accounts := []Account{
+		{ID: 36111, Platform: PlatformOpenAI, Type: AccountTypeAPIKey, Status: StatusActive, Schedulable: true, Concurrency: 1},
+		{ID: 36112, Platform: PlatformOpenAI, Type: AccountTypeAPIKey, Status: StatusActive, Schedulable: true, Concurrency: 1},
+	}
+	cfg := &config.Config{}
+	cfg.Gateway.Scheduling.LoadBatchEnabled = false
+	cfg.Gateway.SubPilot = config.SubPilotConfig{Enabled: true, BaseURL: server.URL, TimeoutMS: 500}
+	svc := &OpenAIGatewayService{
+		accountRepo:        schedulerTestOpenAIAccountRepo{accounts: accounts},
+		cache:              &schedulerTestGatewayCache{},
+		cfg:                cfg,
+		concurrencyService: NewConcurrencyService(schedulerTestConcurrencyCache{}),
+	}
+
+	selection, _, err := svc.SelectAccountWithScheduler(
+		context.Background(), &groupID, "", "", "gpt-5.4",
+		map[int64]struct{}{36111: {}}, OpenAIUpstreamTransportAny, false,
+	)
+	require.NoError(t, err)
+	require.Equal(t, int64(36112), selection.Account.ID)
+
+	select {
+	case req := <-requests:
+		require.Equal(t, []string{"36111"}, req.ExcludedAccountIDs)
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for SubPilot select request")
+	}
+}
+
+func TestOpenAIGatewayService_SubPilotReselectsAfterLocalTransportRejection(t *testing.T) {
+	resetOpenAIAdvancedSchedulerSettingCacheForTest()
+
+	var selectCalls int
+	releaseRequests := make(chan subPilotReleaseLeaseRequest, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case subPilotSelectPath:
+			var req subPilotSelectRequest
+			require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
+			selectCalls++
+			if selectCalls == 1 {
+				require.Empty(t, req.ExcludedAccountIDs)
+				_, _ = w.Write([]byte(`{"decision":"selected","account":{"id":"36121"},"lease":{"id":"lease-36121"}}`))
+				return
+			}
+			require.Equal(t, []string{"36121"}, req.ExcludedAccountIDs)
+			_, _ = w.Write([]byte(`{"decision":"selected","account":{"id":"36122"},"lease":{"id":"lease-36122"}}`))
+		case subPilotReleaseLeasePath:
+			var req subPilotReleaseLeaseRequest
+			require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
+			releaseRequests <- req
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	groupID := int64(10119)
+	accounts := []Account{
+		{ID: 36121, Platform: PlatformOpenAI, Type: AccountTypeAPIKey, Status: StatusActive, Schedulable: true, Concurrency: 1},
+		{
+			ID: 36122, Platform: PlatformOpenAI, Type: AccountTypeAPIKey,
+			Status: StatusActive, Schedulable: true, Concurrency: 1,
+			Extra: map[string]any{"openai_apikey_responses_websockets_v2_enabled": true},
+		},
+	}
+	cfg := newSchedulerTestOpenAIWSV2Config()
+	cfg.Gateway.Scheduling.LoadBatchEnabled = false
+	cfg.Gateway.SubPilot = config.SubPilotConfig{Enabled: true, BaseURL: server.URL, TimeoutMS: 500}
+	svc := &OpenAIGatewayService{
+		accountRepo:        schedulerTestOpenAIAccountRepo{accounts: accounts},
+		cache:              &schedulerTestGatewayCache{},
+		cfg:                cfg,
+		concurrencyService: NewConcurrencyService(schedulerTestConcurrencyCache{}),
+	}
+
+	selection, decision, err := svc.SelectAccountWithScheduler(
+		context.Background(), &groupID, "", "", "gpt-5.1", nil,
+		OpenAIUpstreamTransportResponsesWebsocketV2, false,
+	)
+	require.NoError(t, err)
+	require.Equal(t, int64(36122), selection.Account.ID)
+	require.Equal(t, "subpilot", decision.Layer)
+	require.Equal(t, 2, selectCalls)
+
+	select {
+	case req := <-releaseRequests:
+		require.Equal(t, "36121", req.AccountID)
+		require.Equal(t, "lease-36121", req.LeaseID)
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for rejected recommendation release")
 	}
 }
 
