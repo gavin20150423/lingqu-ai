@@ -69,6 +69,49 @@ func TestSubPilotReportFailureFallsBackToContextAPIKeyID(t *testing.T) {
 	}
 }
 
+func TestOpenAISubPilotSuccessReportCarriesLeaseAndSession(t *testing.T) {
+	requests := make(chan subPilotReportSuccessRequest, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, subPilotReportSuccessPath, r.URL.Path)
+		var req subPilotReportSuccessRequest
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
+		requests <- req
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+
+	svc := &OpenAIGatewayService{cfg: &config.Config{
+		Gateway: config.GatewayConfig{
+			SubPilot: config.SubPilotConfig{
+				Enabled:   true,
+				BaseURL:   server.URL,
+				TimeoutMS: 500,
+			},
+		},
+	}}
+	svc.reportSubPilotSuccess(
+		context.Background(),
+		&UsageLog{RequestID: "request-success", APIKeyID: 456, AccountID: 11, RequestedModel: "gpt-5.6"},
+		&OpenAIRecordUsageInput{
+			SubPilotLeaseID:    "lease-success",
+			SubPilotSessionKey: "session-success",
+			QuotaPlatform:      PlatformOpenAI,
+		},
+		nil,
+		1,
+	)
+
+	select {
+	case req := <-requests:
+		require.Equal(t, "lease-success", req.LeaseID)
+		require.Equal(t, "session-success", req.SessionKey)
+		require.Equal(t, "11", req.AccountID)
+		require.Equal(t, "gpt-5.6", req.Model)
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for SubPilot success report")
+	}
+}
+
 func TestSubPilotReportUsesLongerMinimumTimeoutThanSelect(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(150 * time.Millisecond)

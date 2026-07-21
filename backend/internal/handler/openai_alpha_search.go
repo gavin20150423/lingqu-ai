@@ -170,7 +170,7 @@ func (h *OpenAIGatewayHandler) AlphaSearch(c *gin.Context) {
 		if err == nil {
 			h.gatewayService.ReportOpenAIAccountScheduleResult(account.ID, account.GetMappedModel(requestedModel), true, nil)
 			if result != nil {
-				h.recordAlphaSearchUsage(c, apiKey, account, subscription, channelMapping, requestedModel, body, result, subject.UserID)
+				h.recordAlphaSearchUsage(c, apiKey, account, subscription, channelMapping, requestedModel, body, result, selection, sessionHash, subject.UserID)
 			}
 			return
 		}
@@ -229,6 +229,8 @@ func (h *OpenAIGatewayHandler) recordAlphaSearchUsage(
 	requestedModel string,
 	body []byte,
 	result *service.OpenAIForwardResult,
+	selection *service.AccountSelectionResult,
+	sessionHash string,
 	userID int64,
 ) {
 	userAgent := c.GetHeader("User-Agent")
@@ -250,6 +252,8 @@ func (h *OpenAIGatewayHandler) recordAlphaSearchUsage(
 			UserAgent:          userAgent,
 			IPAddress:          clientIP,
 			RequestPayloadHash: requestPayloadHash,
+			SubPilotLeaseID:    selection.SubPilotLeaseID,
+			SubPilotSessionKey: sessionHash,
 			APIKeyService:      h.apiKeyService,
 			QuotaPlatform:      quotaPlatform,
 			ChannelUsageFields: channelMapping.ToUsageFields(requestedModel, result.UpstreamModel),
