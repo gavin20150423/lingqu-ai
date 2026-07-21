@@ -64,7 +64,7 @@ func (h *SubPilotInternalHandler) ProbeAccount(c *gin.Context) {
 		return
 	}
 
-	result, err := h.accountTestService.RunTestBackground(c.Request.Context(), accountID, strings.TrimSpace(req.ModelID))
+	result, err := h.accountTestService.RunTestBackgroundWithPrompt(c.Request.Context(), accountID, strings.TrimSpace(req.ModelID), strings.TrimSpace(req.Prompt))
 	if err != nil && result == nil {
 		c.JSON(http.StatusOK, subPilotProbeResponse{
 			Success:      false,
