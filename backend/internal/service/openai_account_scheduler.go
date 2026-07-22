@@ -1990,9 +1990,6 @@ func (s *OpenAIGatewayService) selectAccountWithScheduler(
 		if listErr != nil {
 			return nil, decision, listErr
 		}
-		if len(accounts) == 0 {
-			return nil, decision, ErrNoAvailableAccounts
-		}
 		if selection, handled, subPilotErr := s.trySubPilotRecommend(ctx, groupID, platform, sessionHash, requestedModel, effectiveExcludedIDs, requireCompact, requiredCapability, requiredTransport, requiredImageCapability, accounts); handled {
 			decision.Layer = "subpilot"
 			decision.CandidateCount = len(accounts)

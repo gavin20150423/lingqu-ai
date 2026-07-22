@@ -4,6 +4,9 @@ import (
 	"context"
 	"sort"
 	"strconv"
+	"time"
+
+	"github.com/Wei-Shaw/sub2api/internal/config"
 )
 
 func (s *GatewayService) subPilotClient() *subPilotClient {
@@ -45,7 +48,7 @@ func (s *GatewayService) trySubPilotRecommend(ctx context.Context, groupID *int6
 				return nil, true, ErrNoAvailableAccounts
 			}
 		}
-		account := s.validateSubPilotGatewayAccount(ctx, rec.AccountID, platform, requestedModel, accounts, useMixed)
+		account := s.validateSubPilotGatewayAccount(ctx, rec.AccountID, groupID, platform, requestedModel, accounts, useMixed, rec.LastResort)
 		if account == nil {
 			releaseSubPilotRecommendation(client, rec)
 			if rec.LastResort {
@@ -91,36 +94,80 @@ func (s *GatewayService) trySubPilotRecommend(ctx context.Context, groupID *int6
 	}
 }
 
-func (s *GatewayService) validateSubPilotGatewayAccount(ctx context.Context, accountID int64, platform string, requestedModel string, accounts []Account, useMixed bool) *Account {
+func (s *GatewayService) validateSubPilotGatewayAccount(ctx context.Context, accountID int64, groupID *int64, platform string, requestedModel string, accounts []Account, useMixed bool, lastResort bool) *Account {
+	var account *Account
 	for i := range accounts {
-		acc := &accounts[i]
-		if acc.ID != accountID {
-			continue
+		if accounts[i].ID == accountID {
+			account = &accounts[i]
+			break
 		}
-		if !s.isAccountSchedulableForSelection(acc) {
-			return nil
-		}
-		if !s.isAccountAllowedForPlatform(acc, platform, useMixed) {
-			return nil
-		}
-		if requestedModel != "" && !s.isModelSupportedByAccountWithContext(ctx, acc, requestedModel) {
-			return nil
-		}
-		if !s.isAccountSchedulableForModelSelection(ctx, acc, requestedModel) {
-			return nil
-		}
-		if !s.isAccountSchedulableForQuota(acc) {
-			return nil
-		}
-		if !s.isAccountSchedulableForWindowCost(ctx, acc, false) {
-			return nil
-		}
-		if !s.isAccountSchedulableForRPM(ctx, acc, false) {
-			return nil
-		}
-		return acc
 	}
-	return nil
+
+	loadedDirectly := false
+	if account == nil && lastResort && s.accountRepo != nil {
+		fresh, err := s.accountRepo.GetByID(ctx, accountID)
+		if err != nil || fresh == nil {
+			return nil
+		}
+		account = fresh
+		loadedDirectly = true
+	}
+	if account == nil {
+		return nil
+	}
+
+	if lastResort {
+		if !isSubPilotHardEligibleAccount(account) {
+			return nil
+		}
+		if loadedDirectly && !s.subPilotGatewayAccountMatchesGroup(account, groupID) {
+			return nil
+		}
+		if !s.isAccountAllowedForPlatform(account, platform, useMixed) {
+			return nil
+		}
+		if requestedModel != "" && !s.isModelSupportedByAccountWithContext(ctx, account, requestedModel) {
+			return nil
+		}
+		return account
+	}
+
+	if !s.isAccountSchedulableForSelection(account) {
+		return nil
+	}
+	if !s.isAccountAllowedForPlatform(account, platform, useMixed) {
+		return nil
+	}
+	if requestedModel != "" && !s.isModelSupportedByAccountWithContext(ctx, account, requestedModel) {
+		return nil
+	}
+	if !s.isAccountSchedulableForModelSelection(ctx, account, requestedModel) {
+		return nil
+	}
+	if !s.isAccountSchedulableForQuota(account) {
+		return nil
+	}
+	if !s.isAccountSchedulableForWindowCost(ctx, account, false) {
+		return nil
+	}
+	if !s.isAccountSchedulableForRPM(ctx, account, false) {
+		return nil
+	}
+	return account
+}
+
+func (s *GatewayService) subPilotGatewayAccountMatchesGroup(account *Account, groupID *int64) bool {
+	if s != nil && s.cfg != nil && s.cfg.RunMode == config.RunModeSimple {
+		return account != nil
+	}
+	return s.isAccountInGroup(account, groupID)
+}
+
+func isSubPilotHardEligibleAccount(account *Account) bool {
+	if account == nil || !account.IsActive() || !account.Schedulable {
+		return false
+	}
+	return !account.AutoPauseOnExpired || account.ExpiresAt == nil || time.Now().Before(*account.ExpiresAt)
 }
 
 func (s *OpenAIGatewayService) trySubPilotRecommend(ctx context.Context, groupID *int64, platform string, sessionKey string, requestedModel string, excludedIDs map[int64]struct{}, requireCompact bool, requiredCapability OpenAIEndpointCapability, requiredTransport OpenAIUpstreamTransport, requiredImageCapability OpenAIImagesCapability, accounts []Account) (*AccountSelectionResult, bool, error) {
@@ -148,7 +195,7 @@ func (s *OpenAIGatewayService) trySubPilotRecommend(ctx context.Context, groupID
 				return nil, true, ErrNoAvailableAccounts
 			}
 		}
-		account := s.validateSubPilotOpenAIAccount(ctx, rec.AccountID, groupID, platform, requestedModel, requireCompact, requiredCapability, requiredTransport, requiredImageCapability, accounts)
+		account := s.validateSubPilotOpenAIAccount(ctx, rec.AccountID, groupID, platform, requestedModel, requireCompact, requiredCapability, requiredTransport, requiredImageCapability, accounts, rec.LastResort)
 		if account == nil {
 			releaseSubPilotRecommendation(client, rec)
 			if rec.LastResort {
@@ -185,26 +232,60 @@ func (s *OpenAIGatewayService) trySubPilotRecommend(ctx context.Context, groupID
 	}
 }
 
-func (s *OpenAIGatewayService) validateSubPilotOpenAIAccount(ctx context.Context, accountID int64, groupID *int64, platform string, requestedModel string, requireCompact bool, requiredCapability OpenAIEndpointCapability, requiredTransport OpenAIUpstreamTransport, requiredImageCapability OpenAIImagesCapability, accounts []Account) *Account {
+func (s *OpenAIGatewayService) validateSubPilotOpenAIAccount(ctx context.Context, accountID int64, groupID *int64, platform string, requestedModel string, requireCompact bool, requiredCapability OpenAIEndpointCapability, requiredTransport OpenAIUpstreamTransport, requiredImageCapability OpenAIImagesCapability, accounts []Account, lastResort bool) *Account {
+	var account *Account
 	for i := range accounts {
-		acc := &accounts[i]
-		if acc.ID != accountID {
-			continue
+		if accounts[i].ID == accountID {
+			account = &accounts[i]
+			break
 		}
-		fresh := s.resolveFreshSchedulableOpenAIAccount(ctx, acc, platform, requestedModel, requireCompact, requiredCapability)
-		if fresh == nil {
-			return nil
-		}
-		fresh = s.recheckSelectedOpenAIAccountFromDB(ctx, fresh, groupID, platform, requestedModel, requireCompact, requiredCapability)
-		if fresh == nil {
-			return nil
-		}
-		if !s.isOpenAIAccountTransportCompatible(fresh, requiredTransport) || !accountSupportsOpenAICapabilities(fresh, requiredCapability, requiredImageCapability) {
-			return nil
-		}
-		return fresh
 	}
-	return nil
+
+	loadedDirectly := false
+	if account == nil && lastResort && s.accountRepo != nil {
+		fresh, err := s.accountRepo.GetByID(ctx, accountID)
+		if err != nil || fresh == nil {
+			return nil
+		}
+		account = fresh
+		loadedDirectly = true
+	}
+	if account == nil {
+		return nil
+	}
+
+	if lastResort {
+		platform = normalizeOpenAICompatiblePlatform(platform)
+		if !isSubPilotHardEligibleAccount(account) || account.Platform != platform || !account.IsOpenAICompatible() {
+			return nil
+		}
+		if loadedDirectly && !s.openAIAccountMatchesSchedulingGroup(account, groupID) {
+			return nil
+		}
+		if requestedModel != "" && !account.IsModelSupported(requestedModel) {
+			return nil
+		}
+		if requireCompact && (!account.IsOpenAI() || openAICompactSupportTier(account) == 0) {
+			return nil
+		}
+		if !s.isOpenAIAccountTransportCompatible(account, requiredTransport) || !accountSupportsOpenAICapabilities(account, requiredCapability, requiredImageCapability) {
+			return nil
+		}
+		return account
+	}
+
+	fresh := s.resolveFreshSchedulableOpenAIAccount(ctx, account, platform, requestedModel, requireCompact, requiredCapability)
+	if fresh == nil {
+		return nil
+	}
+	fresh = s.recheckSelectedOpenAIAccountFromDB(ctx, fresh, groupID, platform, requestedModel, requireCompact, requiredCapability)
+	if fresh == nil {
+		return nil
+	}
+	if !s.isOpenAIAccountTransportCompatible(fresh, requiredTransport) || !accountSupportsOpenAICapabilities(fresh, requiredCapability, requiredImageCapability) {
+		return nil
+	}
+	return fresh
 }
 
 func cloneSubPilotExcludedIDs(excludedIDs map[int64]struct{}) map[int64]struct{} {

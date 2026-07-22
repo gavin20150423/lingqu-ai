@@ -3,14 +3,32 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	"github.com/stretchr/testify/require"
 )
+
+type subPilotSoftCooldownAccountRepo struct {
+	AccountRepository
+	account *Account
+}
+
+func (r subPilotSoftCooldownAccountRepo) GetByID(_ context.Context, id int64) (*Account, error) {
+	if r.account != nil && r.account.ID == id {
+		return r.account, nil
+	}
+	return nil, errors.New("account not found")
+}
+
+func (r subPilotSoftCooldownAccountRepo) ListSchedulableByGroupIDAndPlatform(context.Context, int64, string) ([]Account, error) {
+	return nil, nil
+}
 
 func TestNewSubPilotSelectRequestIncludesAPIKeyID(t *testing.T) {
 	ctx := WithSubPilotAPIKeyID(context.Background(), 123)
@@ -170,4 +188,139 @@ func TestGatewaySubPilotAcceptsExplicitLastResortExcludedAccount(t *testing.T) {
 	require.True(t, handled)
 	require.Equal(t, account.ID, selection.Account.ID)
 	require.Equal(t, "lease-36201", selection.SubPilotLeaseID)
+}
+
+func TestGatewaySubPilotLastResortReloadsSoftCooldownAccount(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, subPilotSelectPath, r.URL.Path)
+		_, _ = w.Write([]byte(`{"decision":"selected","reason":"last_resort","account":{"id":"36202"},"lease":{"id":"lease-36202"}}`))
+	}))
+	defer server.Close()
+
+	groupID := int64(10122)
+	cooldownUntil := time.Now().Add(time.Minute)
+	account := &Account{
+		ID: 36202, Platform: PlatformAnthropic, Type: AccountTypeAPIKey,
+		Status: StatusActive, Schedulable: true, Concurrency: 1,
+		TempUnschedulableUntil: &cooldownUntil,
+		AccountGroups:          []AccountGroup{{GroupID: groupID}},
+	}
+	svc := &GatewayService{
+		accountRepo: subPilotSoftCooldownAccountRepo{account: account},
+		cfg: &config.Config{Gateway: config.GatewayConfig{SubPilot: config.SubPilotConfig{
+			Enabled: true, BaseURL: server.URL, TimeoutMS: 500,
+		}}},
+	}
+
+	selection, handled, err := svc.trySubPilotRecommend(
+		context.Background(), &groupID, PlatformAnthropic, "", "claude-opus-4-6",
+		nil, nil, false,
+	)
+	require.NoError(t, err)
+	require.True(t, handled)
+	require.Equal(t, account.ID, selection.Account.ID)
+	require.Equal(t, "lease-36202", selection.SubPilotLeaseID)
+}
+
+func TestGatewaySubPilotLastResortRunsWhenSchedulableProjectionIsEmpty(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case subPilotRuntimeConfigPath:
+			_ = json.NewEncoder(w).Encode(subPilotRuntimeConfig{
+				DispatchEnabled: true, DispatchFailOpen: true, DispatchSelectTimeoutMS: 500,
+				DispatchAutoBypassFailures: 3, DispatchAutoRecover: true,
+			})
+		case subPilotSelectPath:
+			_, _ = w.Write([]byte(`{"decision":"selected","reason":"last_resort","account":{"id":"36205"},"lease":{"id":"lease-36205"}}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	groupID := int64(10125)
+	cooldownUntil := time.Now().Add(time.Minute)
+	account := &Account{
+		ID: 36205, Platform: PlatformAnthropic, Type: AccountTypeAPIKey,
+		Status: StatusActive, Schedulable: true, Concurrency: 1,
+		TempUnschedulableUntil: &cooldownUntil,
+		AccountGroups:          []AccountGroup{{GroupID: groupID}},
+	}
+	cfg := &config.Config{}
+	cfg.Gateway.Scheduling.LoadBatchEnabled = true
+	cfg.Gateway.SubPilot = config.SubPilotConfig{Enabled: true, BaseURL: server.URL, TimeoutMS: 500}
+	svc := &GatewayService{
+		accountRepo:        subPilotSoftCooldownAccountRepo{account: account},
+		cfg:                cfg,
+		concurrencyService: NewConcurrencyService(schedulerTestConcurrencyCache{}),
+	}
+	ctx := context.WithValue(context.Background(), ctxkey.ForcePlatform, PlatformAnthropic)
+
+	selection, err := svc.SelectAccountWithLoadAwareness(
+		ctx, &groupID, "", "claude-opus-4-6", nil, "", 0,
+	)
+	require.NoError(t, err)
+	require.Equal(t, account.ID, selection.Account.ID)
+	require.Equal(t, "lease-36205", selection.SubPilotLeaseID)
+}
+
+func TestOpenAISubPilotLastResortRunsWhenSchedulableProjectionIsEmpty(t *testing.T) {
+	resetOpenAIAdvancedSchedulerSettingCacheForTest()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case subPilotRuntimeConfigPath:
+			_ = json.NewEncoder(w).Encode(subPilotRuntimeConfig{
+				DispatchEnabled: true, DispatchFailOpen: true, DispatchSelectTimeoutMS: 500,
+				DispatchAutoBypassFailures: 3, DispatchAutoRecover: true,
+			})
+		case subPilotSelectPath:
+			_, _ = w.Write([]byte(`{"decision":"selected","reason":"last_resort","account":{"id":"36203"},"lease":{"id":"lease-36203"}}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	groupID := int64(10123)
+	cooldownUntil := time.Now().Add(time.Minute)
+	account := &Account{
+		ID: 36203, Platform: PlatformOpenAI, Type: AccountTypeAPIKey,
+		Status: StatusActive, Schedulable: true, Concurrency: 1,
+		TempUnschedulableUntil: &cooldownUntil,
+		AccountGroups:          []AccountGroup{{GroupID: groupID}},
+	}
+	cfg := &config.Config{}
+	cfg.Gateway.SubPilot = config.SubPilotConfig{Enabled: true, BaseURL: server.URL, TimeoutMS: 500}
+	svc := &OpenAIGatewayService{
+		accountRepo:        subPilotSoftCooldownAccountRepo{account: account},
+		cache:              &schedulerTestGatewayCache{},
+		cfg:                cfg,
+		concurrencyService: NewConcurrencyService(schedulerTestConcurrencyCache{}),
+	}
+
+	selection, decision, err := svc.SelectAccountWithScheduler(
+		context.Background(), &groupID, "", "", "gpt-5.4", nil,
+		OpenAIUpstreamTransportAny, false,
+	)
+	require.NoError(t, err)
+	require.Equal(t, account.ID, selection.Account.ID)
+	require.Equal(t, "lease-36203", selection.SubPilotLeaseID)
+	require.Equal(t, "subpilot", decision.Layer)
+}
+
+func TestSubPilotLastResortStillRejectsManuallyDisabledAccount(t *testing.T) {
+	groupID := int64(10124)
+	account := &Account{
+		ID: 36204, Platform: PlatformAnthropic, Type: AccountTypeAPIKey,
+		Status: StatusActive, Schedulable: false,
+		AccountGroups: []AccountGroup{{GroupID: groupID}},
+	}
+	svc := &GatewayService{accountRepo: subPilotSoftCooldownAccountRepo{account: account}, cfg: &config.Config{}}
+
+	selected := svc.validateSubPilotGatewayAccount(
+		context.Background(), account.ID, &groupID, PlatformAnthropic,
+		"claude-opus-4-6", nil, false, true,
+	)
+	require.Nil(t, selected)
 }
