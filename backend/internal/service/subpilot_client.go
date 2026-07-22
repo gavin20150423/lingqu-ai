@@ -83,6 +83,7 @@ type subPilotSelectRequest struct {
 
 type subPilotSelectResponse struct {
 	Decision string `json:"decision"`
+	Reason   string `json:"reason"`
 	GroupID  string `json:"group_id,omitempty"`
 	Account  struct {
 		ID string `json:"id"`
@@ -93,9 +94,10 @@ type subPilotSelectResponse struct {
 }
 
 type subPilotSelectResult struct {
-	AccountID int64
-	LeaseID   string
-	RequestID string
+	AccountID  int64
+	LeaseID    string
+	RequestID  string
+	LastResort bool
 }
 
 type subPilotReleaseLeaseRequest struct {
@@ -238,7 +240,12 @@ func (c *subPilotClient) recommendAccountWithOwnership(ctx context.Context, req 
 		handledErr := c.handleRuntimeError("subpilot select returned invalid account", err, runtime.DispatchFailOpen)
 		return nil, handledErr != nil, handledErr
 	}
-	return &subPilotSelectResult{AccountID: accountID, LeaseID: strings.TrimSpace(resp.Lease.ID), RequestID: req.RequestID}, true, nil
+	return &subPilotSelectResult{
+		AccountID:  accountID,
+		LeaseID:    strings.TrimSpace(resp.Lease.ID),
+		RequestID:  req.RequestID,
+		LastResort: resp.Reason == "last_resort",
+	}, true, nil
 }
 
 func (c *subPilotClient) takeoverActive(ctx context.Context) bool {

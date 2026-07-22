@@ -142,3 +142,32 @@ func TestSubPilotReportAPIKeyIDPrefersExplicitAPIKey(t *testing.T) {
 	ctx := WithSubPilotAPIKeyID(context.Background(), 789)
 	require.Equal(t, "456", subPilotReportAPIKeyID(ctx, &APIKey{ID: 456}))
 }
+
+func TestGatewaySubPilotAcceptsExplicitLastResortExcludedAccount(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, subPilotSelectPath, r.URL.Path)
+		var req subPilotSelectRequest
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
+		require.Equal(t, []string{"36201"}, req.ExcludedAccountIDs)
+		_, _ = w.Write([]byte(`{"decision":"selected","reason":"last_resort","account":{"id":"36201"},"lease":{"id":"lease-36201"}}`))
+	}))
+	defer server.Close()
+
+	groupID := int64(10121)
+	account := Account{
+		ID: 36201, Platform: PlatformAnthropic, Type: AccountTypeAPIKey,
+		Status: StatusActive, Schedulable: true, Concurrency: 1,
+	}
+	svc := &GatewayService{cfg: &config.Config{Gateway: config.GatewayConfig{
+		SubPilot: config.SubPilotConfig{Enabled: true, BaseURL: server.URL, TimeoutMS: 500},
+	}}}
+
+	selection, handled, err := svc.trySubPilotRecommend(
+		context.Background(), &groupID, PlatformAnthropic, "", "claude-opus-4-6",
+		map[int64]struct{}{account.ID: {}}, []Account{account}, false,
+	)
+	require.NoError(t, err)
+	require.True(t, handled)
+	require.Equal(t, account.ID, selection.Account.ID)
+	require.Equal(t, "lease-36201", selection.SubPilotLeaseID)
+}

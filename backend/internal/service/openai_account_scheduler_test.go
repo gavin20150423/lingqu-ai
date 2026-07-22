@@ -704,6 +704,43 @@ func TestOpenAIGatewayService_SubPilotReceivesFailedAccountExclusions(t *testing
 	}
 }
 
+func TestOpenAIGatewayService_SubPilotAcceptsExplicitLastResortExcludedAccount(t *testing.T) {
+	resetOpenAIAdvancedSchedulerSettingCacheForTest()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, subPilotSelectPath, r.URL.Path)
+		var req subPilotSelectRequest
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
+		require.Equal(t, []string{"36131"}, req.ExcludedAccountIDs)
+		_, _ = w.Write([]byte(`{"decision":"selected","reason":"last_resort","account":{"id":"36131"},"lease":{"id":"lease-36131"}}`))
+	}))
+	defer server.Close()
+
+	groupID := int64(10120)
+	accounts := []Account{{
+		ID: 36131, Platform: PlatformOpenAI, Type: AccountTypeAPIKey,
+		Status: StatusActive, Schedulable: true, Concurrency: 1,
+	}}
+	cfg := &config.Config{}
+	cfg.Gateway.Scheduling.LoadBatchEnabled = false
+	cfg.Gateway.SubPilot = config.SubPilotConfig{Enabled: true, BaseURL: server.URL, TimeoutMS: 500}
+	svc := &OpenAIGatewayService{
+		accountRepo:        schedulerTestOpenAIAccountRepo{accounts: accounts},
+		cache:              &schedulerTestGatewayCache{},
+		cfg:                cfg,
+		concurrencyService: NewConcurrencyService(schedulerTestConcurrencyCache{}),
+	}
+
+	selection, decision, err := svc.SelectAccountWithScheduler(
+		context.Background(), &groupID, "", "", "gpt-5.4",
+		map[int64]struct{}{36131: {}}, OpenAIUpstreamTransportAny, false,
+	)
+	require.NoError(t, err)
+	require.Equal(t, int64(36131), selection.Account.ID)
+	require.Equal(t, "lease-36131", selection.SubPilotLeaseID)
+	require.Equal(t, "subpilot", decision.Layer)
+}
+
 func TestOpenAIGatewayService_SubPilotReselectsAfterLocalTransportRejection(t *testing.T) {
 	resetOpenAIAdvancedSchedulerSettingCacheForTest()
 
