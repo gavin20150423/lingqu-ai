@@ -593,9 +593,10 @@ func TestOpenAIGatewayService_SelectAccountWithScheduler_DefaultDisabledUsesSubP
 		BaseURL:   server.URL,
 		TimeoutMS: 500,
 	}
+	cache := &subPilotStickyTrackingCache{}
 	svc := &OpenAIGatewayService{
 		accountRepo:        schedulerTestOpenAIAccountRepo{accounts: accounts},
-		cache:              &schedulerTestGatewayCache{},
+		cache:              cache,
 		cfg:                cfg,
 		concurrencyService: NewConcurrencyService(schedulerTestConcurrencyCache{}),
 	}
@@ -617,6 +618,7 @@ func TestOpenAIGatewayService_SelectAccountWithScheduler_DefaultDisabledUsesSubP
 	require.Equal(t, int64(36003), selection.Account.ID)
 	require.Equal(t, "subpilot", decision.Layer)
 	require.Equal(t, "lease-default-subpilot", selection.SubPilotLeaseID)
+	require.Greater(t, cache.setCalls, 0)
 
 	select {
 	case req := <-requests:
@@ -724,21 +726,24 @@ func TestOpenAIGatewayService_SubPilotAcceptsExplicitLastResortExcludedAccount(t
 	cfg := &config.Config{}
 	cfg.Gateway.Scheduling.LoadBatchEnabled = false
 	cfg.Gateway.SubPilot = config.SubPilotConfig{Enabled: true, BaseURL: server.URL, TimeoutMS: 500}
+	cache := &subPilotStickyTrackingCache{}
 	svc := &OpenAIGatewayService{
 		accountRepo:        schedulerTestOpenAIAccountRepo{accounts: accounts},
-		cache:              &schedulerTestGatewayCache{},
+		cache:              cache,
 		cfg:                cfg,
 		concurrencyService: NewConcurrencyService(schedulerTestConcurrencyCache{}),
 	}
 
 	selection, decision, err := svc.SelectAccountWithScheduler(
-		context.Background(), &groupID, "", "", "gpt-5.4",
+		context.Background(), &groupID, "", "openai-last-resort-session", "gpt-5.4",
 		map[int64]struct{}{36131: {}}, OpenAIUpstreamTransportAny, false,
 	)
 	require.NoError(t, err)
 	require.Equal(t, int64(36131), selection.Account.ID)
 	require.Equal(t, "lease-36131", selection.SubPilotLeaseID)
 	require.Equal(t, "subpilot", decision.Layer)
+	require.Zero(t, cache.setCalls)
+	require.Zero(t, cache.refreshCalls)
 }
 
 func TestOpenAIGatewayService_SubPilotReselectsAfterLocalTransportRejection(t *testing.T) {

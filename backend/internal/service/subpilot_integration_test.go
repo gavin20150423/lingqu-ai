@@ -19,6 +19,22 @@ type subPilotSoftCooldownAccountRepo struct {
 	account *Account
 }
 
+type subPilotStickyTrackingCache struct {
+	schedulerTestGatewayCache
+	setCalls     int
+	refreshCalls int
+}
+
+func (c *subPilotStickyTrackingCache) SetSessionAccountID(ctx context.Context, groupID int64, sessionHash string, accountID int64, ttl time.Duration) error {
+	c.setCalls++
+	return c.schedulerTestGatewayCache.SetSessionAccountID(ctx, groupID, sessionHash, accountID, ttl)
+}
+
+func (c *subPilotStickyTrackingCache) RefreshSessionTTL(ctx context.Context, groupID int64, sessionHash string, ttl time.Duration) error {
+	c.refreshCalls++
+	return c.schedulerTestGatewayCache.RefreshSessionTTL(ctx, groupID, sessionHash, ttl)
+}
+
 func (r subPilotSoftCooldownAccountRepo) GetByID(_ context.Context, id int64) (*Account, error) {
 	if r.account != nil && r.account.ID == id {
 		return r.account, nil
@@ -176,18 +192,21 @@ func TestGatewaySubPilotAcceptsExplicitLastResortExcludedAccount(t *testing.T) {
 		ID: 36201, Platform: PlatformAnthropic, Type: AccountTypeAPIKey,
 		Status: StatusActive, Schedulable: true, Concurrency: 1,
 	}
-	svc := &GatewayService{cfg: &config.Config{Gateway: config.GatewayConfig{
+	cache := &subPilotStickyTrackingCache{}
+	svc := &GatewayService{cache: cache, cfg: &config.Config{Gateway: config.GatewayConfig{
 		SubPilot: config.SubPilotConfig{Enabled: true, BaseURL: server.URL, TimeoutMS: 500},
 	}}}
 
 	selection, handled, err := svc.trySubPilotRecommend(
-		context.Background(), &groupID, PlatformAnthropic, "", "claude-opus-4-6",
+		context.Background(), &groupID, PlatformAnthropic, "gateway-last-resort-session", "claude-opus-4-6",
 		map[int64]struct{}{account.ID: {}}, []Account{account}, false,
 	)
 	require.NoError(t, err)
 	require.True(t, handled)
 	require.Equal(t, account.ID, selection.Account.ID)
 	require.Equal(t, "lease-36201", selection.SubPilotLeaseID)
+	require.Zero(t, cache.setCalls)
+	require.Zero(t, cache.refreshCalls)
 }
 
 func TestGatewaySubPilotLastResortReloadsSoftCooldownAccount(t *testing.T) {

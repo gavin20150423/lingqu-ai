@@ -79,7 +79,7 @@ func (s *GatewayService) trySubPilotRecommend(ctx context.Context, groupID *int6
 			localExcluded[rec.AccountID] = struct{}{}
 			continue
 		}
-		if sessionKey != "" && s.cache != nil {
+		if !rec.LastResort && sessionKey != "" && s.cache != nil {
 			_ = s.cache.SetSessionAccountID(ctx, derefGroupID(groupID), sessionKey, account.ID, stickySessionTTL)
 		}
 		selection, selectionErr := s.newSelectionResult(ctx, account, true, result.ReleaseFunc, nil)
@@ -217,7 +217,7 @@ func (s *OpenAIGatewayService) trySubPilotRecommend(ctx context.Context, groupID
 			localExcluded[rec.AccountID] = struct{}{}
 			continue
 		}
-		if sessionKey != "" {
+		if !rec.LastResort && sessionKey != "" {
 			_ = s.setStickySessionAccountID(ctx, groupID, sessionKey, account.ID, openaiStickySessionTTL)
 		}
 		selection, selectionErr := s.newAcquiredSelectionResult(ctx, account, result.ReleaseFunc)
