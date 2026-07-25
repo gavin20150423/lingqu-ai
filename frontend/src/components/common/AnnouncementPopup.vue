@@ -2,7 +2,7 @@
   <Teleport to="body">
     <Transition name="popup-fade">
       <div
-        v-if="announcementStore.currentPopup"
+        v-if="displayedAnnouncement"
         class="announcement-popup"
         :data-user-theme="theme"
       >
@@ -10,7 +10,7 @@
           class="announcement-popup__dialog"
           role="dialog"
           aria-modal="true"
-          :aria-labelledby="`announcement-popup-title-${announcementStore.currentPopup.id}`"
+          aria-labelledby="announcement-popup-title"
           @click.stop
         >
           <header class="announcement-popup__header">
@@ -20,20 +20,21 @@
               </span>
               <div class="announcement-popup__heading-copy">
                 <span
+                  v-if="!preview"
                   class="announcement-popup__status"
                   :class="{ 'announcement-popup__status--read': !isUnread }"
                 >
                   <i v-if="isUnread" aria-hidden="true"></i>
                   {{ isUnread ? t('announcements.unread') : t('announcements.read') }}
                 </span>
-                <h2 :id="`announcement-popup-title-${announcementStore.currentPopup.id}`">
-                  {{ announcementStore.currentPopup.title }}
+                <h2 id="announcement-popup-title">
+                  {{ displayedAnnouncement.title }}
                 </h2>
               </div>
             </div>
             <div class="announcement-popup__time">
               <Icon name="clock" size="sm" />
-              <time>{{ formatRelativeWithDateTime(announcementStore.currentPopup.created_at) }}</time>
+              <time>{{ formatRelativeWithDateTime(displayedAnnouncement.created_at) }}</time>
             </div>
           </header>
 
@@ -49,11 +50,11 @@
           <footer class="announcement-popup__footer">
             <span class="announcement-popup__footer-note">
               <Icon name="bell" size="sm" />
-              {{ isUnread ? '关闭后将标记为已读' : '可随时从顶部公告栏再次查看' }}
+              {{ preview ? '公告预览' : (isUnread ? '关闭后将标记为已读' : '可随时从顶部公告栏再次查看') }}
             </span>
-            <button type="button" class="announcement-popup__action" @click="handleDismiss">
-              <Icon :name="isUnread ? 'check' : 'x'" size="sm" />
-              {{ isUnread ? t('announcements.markRead') : t('common.close') }}
+            <button type="button" class="announcement-popup__action" data-testid="announcement-popup-dismiss" @click="handleDismiss">
+              <Icon :name="preview || !isUnread ? 'x' : 'check'" size="sm" />
+              {{ preview || !isUnread ? t('common.close') : t('announcements.markRead') }}
             </button>
           </footer>
         </div>
@@ -63,7 +64,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, watch } from 'vue'
+import { computed, onBeforeUnmount, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { marked } from 'marked'
@@ -72,11 +73,29 @@ import Icon from '@/components/icons/Icon.vue'
 import { useAnnouncementStore } from '@/stores/announcements'
 import { useUserThemeStore } from '@/stores/userTheme'
 import { formatRelativeWithDateTime } from '@/utils/format'
+import type { Announcement, UserAnnouncement } from '@/types'
+
+type PreviewAnnouncement = Pick<Announcement | UserAnnouncement, 'title' | 'content' | 'created_at'>
+
+const props = withDefaults(defineProps<{
+  announcement?: PreviewAnnouncement | null
+  preview?: boolean
+}>(), {
+  announcement: null,
+  preview: false,
+})
+
+const emit = defineEmits<{
+  close: []
+}>()
 
 const { t } = useI18n()
 const announcementStore = useAnnouncementStore()
 const userThemeStore = useUserThemeStore()
 const { theme } = storeToRefs(userThemeStore)
+const displayedAnnouncement = computed(() => (
+  props.preview ? props.announcement : announcementStore.currentPopup
+))
 
 marked.setOptions({
   breaks: true,
@@ -84,27 +103,38 @@ marked.setOptions({
 })
 
 const renderedContent = computed(() => {
-  const content = announcementStore.currentPopup?.content
+  const content = displayedAnnouncement.value?.content
   if (!content) return ''
   const html = marked.parse(content) as string
   return DOMPurify.sanitize(html)
 })
 
-const isUnread = computed(() => !announcementStore.currentPopup?.read_at)
+const isUnread = computed(() => !props.preview && !announcementStore.currentPopup?.read_at)
 
 function handleDismiss() {
+  if (props.preview) {
+    emit('close')
+    return
+  }
   announcementStore.dismissPopup()
 }
 
 // Manage body overflow — only set, never unset (bell component handles restore)
 watch(
-  () => announcementStore.currentPopup,
+  displayedAnnouncement,
   (popup) => {
     if (popup) {
       document.body.style.overflow = 'hidden'
+    } else if (props.preview) {
+      document.body.style.overflow = ''
     }
-  }
+  },
+  { immediate: true },
 )
+
+onBeforeUnmount(() => {
+  if (props.preview) document.body.style.overflow = ''
+})
 </script>
 
 <style scoped>
