@@ -375,6 +375,7 @@ func (s *GatewayService) handleErrorResponse(ctx context.Context, resp *http.Res
 
 	upstreamMsg := strings.TrimSpace(extractUpstreamErrorMessage(body))
 	upstreamMsg = sanitizeUpstreamErrorMessage(upstreamMsg)
+	contentPolicyDenied := isUpstreamContentPolicyBody(resp.StatusCode, body)
 
 	// Print a compact upstream request fingerprint when we hit the Claude Code OAuth
 	// credential scope error. This avoids requiring env-var tweaks in a fixed deploy.
@@ -409,10 +410,21 @@ func (s *GatewayService) handleErrorResponse(ctx context.Context, resp *http.Res
 		Message:            upstreamMsg,
 		Detail:             upstreamDetail,
 	})
+	if contentPolicyDenied {
+		MarkResponseCommitted(c)
+		c.JSON(http.StatusForbidden, gin.H{
+			"type": "error",
+			"error": gin.H{
+				"type":    "content_policy_error",
+				"message": upstreamContentPolicyClientMessage,
+			},
+		})
+		return nil, fmt.Errorf("upstream content policy denied request")
+	}
 
 	// 处理上游错误，标记账号状态
 	shouldDisable := false
-	if s.rateLimitService != nil {
+	if s.rateLimitService != nil && !contentPolicyDenied {
 		if len(requestedModel) > 0 {
 			shouldDisable = s.rateLimitService.HandleUpstreamError(ctx, account, resp.StatusCode, resp.Header, body, requestedModel[0])
 		} else {
@@ -485,9 +497,15 @@ func (s *GatewayService) handleErrorResponse(ctx context.Context, resp *http.Res
 		errType = "upstream_error"
 		errMsg = "Upstream authentication failed, please contact administrator"
 	case 403:
-		statusCode = http.StatusBadGateway
-		errType = "upstream_error"
-		errMsg = "Upstream access forbidden, please contact administrator"
+		if contentPolicyDenied {
+			statusCode = http.StatusForbidden
+			errType = "content_policy_error"
+			errMsg = upstreamContentPolicyClientMessage
+		} else {
+			statusCode = http.StatusBadGateway
+			errType = "upstream_error"
+			errMsg = "Upstream access forbidden, please contact administrator"
+		}
 	case 429:
 		statusCode = http.StatusTooManyRequests
 		errType = "rate_limit_error"

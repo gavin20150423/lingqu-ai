@@ -95,6 +95,30 @@ func TestGatewayForwardErrorAlreadyCommunicated(t *testing.T) {
 		assert.NotContains(t, body, `data: {"type":"error"`)
 	})
 
+	t.Run("content policy 403 already written", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodPost, EndpointMessages, nil)
+		before := c.Writer.Size()
+		c.JSON(http.StatusForbidden, gin.H{
+			"type": "error",
+			"error": gin.H{
+				"type":    "content_policy_error",
+				"message": "Request blocked by upstream content policy",
+			},
+		})
+
+		reported := gatewayForwardErrorAlreadyCommunicated(c, before, errors.New("upstream content policy denied request"))
+
+		require.True(t, reported)
+		require.Equal(t, http.StatusForbidden, w.Code)
+		body := w.Body.String()
+		assert.Equal(t, 1, strings.Count(body, `"type":"error"`))
+		assert.Equal(t, 1, strings.Count(body, `"type":"content_policy_error"`))
+		assert.NotContains(t, body, "Upstream request failed")
+		assert.NotContains(t, body, `data: {"type":"error"`)
+	})
+
 	t.Run("sse ping still needs fallback", func(t *testing.T) {
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)

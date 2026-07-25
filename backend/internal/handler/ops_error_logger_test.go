@@ -432,6 +432,7 @@ func TestNormalizeOpsErrorType(t *testing.T) {
 		{"known invalid_request_error", "invalid_request_error", "", "invalid_request_error"},
 		{"known rate_limit_error", "rate_limit_error", "", "rate_limit_error"},
 		{"known upstream_error", "upstream_error", "", "upstream_error"},
+		{"known content_policy_error", "content_policy_error", "", "content_policy_error"},
 
 		// Unknown/garbage types are rejected and fall through to code-based or default.
 		{"nil literal from upstream", "<nil>", "", "api_error"},
@@ -456,6 +457,27 @@ func TestNormalizeOpsErrorType(t *testing.T) {
 			require.Equal(t, tt.want, got)
 		})
 	}
+}
+
+func TestClassifyOpsContentPolicyErrorAsRequestScopedDenial(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	service.SetOpsUpstreamError(c, http.StatusForbidden,
+		"This request has been flagged by the content review system", "")
+
+	parsed := parseOpsErrorResponse([]byte(`{"type":"error","error":{"type":"content_policy_error","message":"Request blocked by upstream content policy"}}`))
+	errType := normalizeOpsErrorType(parsed.ErrorType, parsed.Code)
+	phase, businessLimited, owner, source := classifyOpsErrorLog(
+		c, errType, parsed.Message, parsed.Code, http.StatusForbidden,
+	)
+
+	require.Equal(t, "content_policy_error", errType)
+	require.Equal(t, "request", phase)
+	require.True(t, businessLimited)
+	require.Equal(t, "client", owner)
+	require.Equal(t, "client_request", source)
+	require.Equal(t, "P3", classifyOpsSeverity(errType, http.StatusForbidden))
 }
 
 func TestClassifyOpsNoAvailableAccountsExcludedFromSLA(t *testing.T) {

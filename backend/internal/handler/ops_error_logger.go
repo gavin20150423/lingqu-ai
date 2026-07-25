@@ -1466,6 +1466,7 @@ func isKnownOpsErrorType(t string) bool {
 		"rate_limit_error",
 		"billing_error",
 		"subscription_error",
+		"content_policy_error",
 		"upstream_error",
 		"overloaded_error",
 		"api_error",
@@ -1513,6 +1514,8 @@ func classifyOpsPhase(errType, message, code string) string {
 		return "upstream"
 	case "invalid_request_error":
 		return "request"
+	case "content_policy_error":
+		return "request"
 	case "upstream_error", "overloaded_error":
 		return "upstream"
 	case "api_error":
@@ -1527,7 +1530,7 @@ func classifyOpsPhase(errType, message, code string) string {
 
 func classifyOpsSeverity(errType string, status int) string {
 	switch errType {
-	case "invalid_request_error", "authentication_error", "billing_error", "subscription_error":
+	case "invalid_request_error", "authentication_error", "billing_error", "subscription_error", "content_policy_error":
 		return "P3"
 	}
 	if status >= 500 {
@@ -1543,6 +1546,13 @@ func classifyOpsSeverity(errType string, status int) string {
 }
 
 func classifyOpsErrorLog(c *gin.Context, errType, message, code string, status int) (phase string, isBusinessLimited bool, errorOwner string, errorSource string) {
+	// Upstream content-policy refusals are request-scoped denials. Preserve
+	// their upstream status/details for audit, but do not classify them as an
+	// account, provider-availability, or gateway-internal failure.
+	if errType == "content_policy_error" {
+		return "request", true, "client", "client_request"
+	}
+
 	phase = classifyOpsPhase(errType, message, code)
 	routingCapacityLimited := isOpsRoutingCapacityLimited(c)
 	clientBusinessLimited := service.HasOpsClientBusinessLimited(c)
