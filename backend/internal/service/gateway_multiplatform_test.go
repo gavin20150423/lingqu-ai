@@ -281,6 +281,8 @@ type mockGroupRepoForGateway struct {
 	groups           map[int64]*Group
 	getByIDCalls     int
 	getByIDLiteCalls int
+	singleAccounts   map[int64]int64
+	singleLookupErr  error
 }
 
 func (m *mockGroupRepoForGateway) GetByID(ctx context.Context, id int64) (*Group, error) {
@@ -333,6 +335,14 @@ func (m *mockGroupRepoForGateway) BindAccountsToGroup(ctx context.Context, group
 
 func (m *mockGroupRepoForGateway) GetAccountIDsByGroupIDs(ctx context.Context, groupIDs []int64) ([]int64, error) {
 	return nil, nil
+}
+
+func (m *mockGroupRepoForGateway) GetSingleAccountIDByGroupID(ctx context.Context, groupID int64) (int64, bool, error) {
+	if m.singleLookupErr != nil {
+		return 0, false, m.singleLookupErr
+	}
+	accountID, ok := m.singleAccounts[groupID]
+	return accountID, ok, nil
 }
 
 func (m *mockGroupRepoForGateway) UpdateSortOrders(ctx context.Context, updates []GroupSortOrderUpdate) error {

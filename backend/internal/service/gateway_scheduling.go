@@ -20,6 +20,10 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/usagestats"
 )
 
+type singleAccountGroupRepository interface {
+	GetSingleAccountIDByGroupID(ctx context.Context, groupID int64) (accountID int64, single bool, err error)
+}
+
 // SelectAccount 选择账号（粘性会话+优先级）
 func (s *GatewayService) SelectAccount(ctx context.Context, groupID *int64, sessionHash string) (*Account, error) {
 	return s.SelectAccountForModel(ctx, groupID, sessionHash, "")
@@ -133,6 +137,10 @@ func (s *GatewayService) SelectAccountWithLoadAwareness(ctx context.Context, gro
 		return nil, err
 	}
 	ctx = s.withGroupContext(ctx, group)
+
+	if selection, forced, forceErr := s.tryForceSingleAccountGroup(ctx, groupID); forced {
+		return selection, forceErr
+	}
 
 	// Claude Code 限制可能已将 groupID 解析为 fallback group，
 	// 渠道限制预检查必须使用解析后的分组。
@@ -921,6 +929,62 @@ func (s *GatewayService) checkClaudeCodeRestriction(ctx context.Context, groupID
 	}
 
 	return group, resolvedID, nil
+}
+
+func (s *GatewayService) tryForceSingleAccountGroup(ctx context.Context, groupID *int64) (*AccountSelectionResult, bool, error) {
+	if groupID == nil || *groupID <= 0 || s.groupRepo == nil || s.accountRepo == nil {
+		return nil, false, nil
+	}
+	repo, ok := s.groupRepo.(singleAccountGroupRepository)
+	if !ok {
+		return nil, false, nil
+	}
+
+	accountID, single, err := repo.GetSingleAccountIDByGroupID(ctx, *groupID)
+	if err != nil {
+		slog.Warn("single account group lookup failed; continuing with normal scheduling",
+			"group_id", *groupID,
+			"error", err)
+		return nil, false, nil
+	}
+	if !single {
+		return nil, false, nil
+	}
+
+	account, err := s.accountRepo.GetByID(ctx, accountID)
+	if err != nil {
+		return nil, true, err
+	}
+	if account == nil {
+		return nil, true, ErrNoAvailableAccounts
+	}
+
+	result, acquireErr := s.tryAcquireAccountSlot(ctx, account.ID, account.Concurrency)
+	if acquireErr == nil && result != nil && result.Acquired {
+		slog.Debug("single_account_group_forced",
+			"group_id", *groupID,
+			"account_id", account.ID,
+			"acquired", true)
+		selection, selectErr := s.newSelectionResult(ctx, account, true, result.ReleaseFunc, nil)
+		if selectErr != nil && result.ReleaseFunc != nil {
+			result.ReleaseFunc()
+		}
+		return selection, true, selectErr
+	}
+
+	cfg := s.schedulingConfig()
+	slog.Debug("single_account_group_forced",
+		"group_id", *groupID,
+		"account_id", account.ID,
+		"acquired", false,
+		"acquire_error", acquireErr)
+	selection, selectErr := s.newSelectionResult(ctx, account, false, nil, &AccountWaitPlan{
+		AccountID:      account.ID,
+		MaxConcurrency: account.Concurrency,
+		Timeout:        cfg.FallbackWaitTimeout,
+		MaxWaiting:     cfg.FallbackMaxWaiting,
+	})
+	return selection, true, selectErr
 }
 
 func (s *GatewayService) resolvePlatform(ctx context.Context, groupID *int64, group *Group, requestedModel string) (string, bool, error) {

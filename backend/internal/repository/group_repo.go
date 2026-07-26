@@ -961,6 +961,36 @@ func (r *groupRepository) GetAccountIDsByGroupIDs(ctx context.Context, groupIDs 
 	return accountIDs, nil
 }
 
+// GetSingleAccountIDByGroupID reports the account ID only when the group has
+// exactly one binding. LIMIT 2 keeps this gateway hot-path check bounded.
+func (r *groupRepository) GetSingleAccountIDByGroupID(ctx context.Context, groupID int64) (int64, bool, error) {
+	rows, err := r.sql.QueryContext(
+		ctx,
+		"SELECT account_id FROM account_groups WHERE group_id = $1 ORDER BY account_id LIMIT 2",
+		groupID,
+	)
+	if err != nil {
+		return 0, false, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	var accountIDs [2]int64
+	count := 0
+	for rows.Next() {
+		if err := rows.Scan(&accountIDs[count]); err != nil {
+			return 0, false, err
+		}
+		count++
+	}
+	if err := rows.Err(); err != nil {
+		return 0, false, err
+	}
+	if count != 1 {
+		return 0, false, nil
+	}
+	return accountIDs[0], true, nil
+}
+
 // BindAccountsToGroup 将多个账号绑定到指定分组（批量插入，忽略已存在的绑定）
 func (r *groupRepository) BindAccountsToGroup(ctx context.Context, groupID int64, accountIDs []int64) error {
 	if len(accountIDs) == 0 {
