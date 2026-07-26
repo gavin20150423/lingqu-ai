@@ -1714,6 +1714,8 @@ func (s *AccountTestService) testOpenAIImageAPIKey(c *gin.Context, ctx context.C
 		"model":           modelID,
 		"prompt":          prompt,
 		"n":               1,
+		"size":            "1024x1024",
+		"quality":         "low",
 		"response_format": "b64_json",
 	}
 	payloadBytes, _ := json.Marshal(payload)
@@ -1813,6 +1815,9 @@ func (s *AccountTestService) testOpenAIImageOAuth(c *gin.Context, ctx context.Co
 		Endpoint: openAIImagesGenerationsEndpoint,
 		Model:    strings.TrimSpace(modelID),
 		Prompt:   prompt,
+		N:        1,
+		Size:     "1024x1024",
+		Quality:  "low",
 	}
 	applyOpenAIImagesDefaults(parsed)
 
