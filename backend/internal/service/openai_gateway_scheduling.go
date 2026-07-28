@@ -1303,6 +1303,53 @@ func (s *OpenAIGatewayService) recheckSelectedOpenAIAccountFromDB(ctx context.Co
 	return latest
 }
 
+// RevalidateSelectedOpenAIAccountForDispatch closes the gap between account
+// selection and dispatch. Share-mode groups are authorized through the latest
+// active membership because their accounts are private to the owner.
+func (s *OpenAIGatewayService) RevalidateSelectedOpenAIAccountForDispatch(ctx context.Context, groupID *int64, account *Account, requirements OpenAIAccountDispatchRequirements) (*Account, error) {
+	if s == nil || s.accountRepo == nil || account == nil || account.ID <= 0 {
+		return nil, ErrNoAvailableAccounts
+	}
+
+	isModeGroup := groupID != nil && *groupID > 0 && s.accountShareModeService != nil && s.accountShareModeService.IsModeGroup(ctx, *groupID)
+	if isModeGroup {
+		requestCtx, ok := AccountShareModeRequestFromContext(ctx)
+		if !ok {
+			return nil, ErrAccountShareModeGroupUnbound
+		}
+		freshBindingCtx := WithAccountShareModeRequest(ctx, requestCtx.UserID, requestCtx.APIKeyID)
+		membership, _, err := s.accountShareModeService.ResolveActiveBindingForRequest(freshBindingCtx, requestCtx.UserID, requestCtx.APIKeyID, *groupID)
+		if err != nil {
+			return nil, err
+		}
+		if membership == nil || membership.AccountID != account.ID {
+			return nil, ErrAccountShareModeGroupUnbound
+		}
+	}
+
+	latest, err := s.accountRepo.GetByID(ctx, account.ID)
+	if err != nil {
+		return nil, fmt.Errorf("revalidate selected OpenAI account: %w", err)
+	}
+	platform := normalizeOpenAICompatiblePlatform(requirements.RequiredPlatform)
+	if latest == nil || latest.ID != account.ID ||
+		!isOpenAICompatibleAccountEligibleForRequest(ctx, latest, platform, requirements.RequestedModel, requirements.RequireCompact, requirements.RequiredEndpointCapability) ||
+		!parentHealthyForShadow(latest, s.parentAccountLookup(ctx)) ||
+		s.isOpenAIAccountRequestRuntimeBlocked(latest, requirements.RequestedModel) ||
+		s.isOpenAIProxyStreamQuarantined(latest) ||
+		!s.isOpenAIAccountTransportCompatible(latest, requirements.RequiredTransport) ||
+		!accountSupportsOpenAICapabilities(latest, requirements.RequiredEndpointCapability, requirements.RequiredImageCapability) {
+		return nil, ErrNoAvailableAccounts
+	}
+	if isModeGroup {
+		return latest, nil
+	}
+	if !IsAccountVisibleToRequestUser(ctx, latest) || !s.openAIAccountMatchesSchedulingGroup(latest, groupID) {
+		return nil, ErrNoAvailableAccounts
+	}
+	return latest, nil
+}
+
 func (s *OpenAIGatewayService) openAIAccountMatchesSchedulingGroup(account *Account, groupID *int64) bool {
 	if s != nil && s.cfg != nil && s.cfg.RunMode == config.RunModeSimple {
 		return account != nil

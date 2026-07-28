@@ -14,14 +14,18 @@ const (
 )
 
 type Proxy struct {
-	ID             int64
-	Name           string
-	Protocol       string
-	Host           string
-	Port           int
-	Username       string
-	Password       string
-	Status         string
+	ID       int64
+	Name     string
+	Protocol string
+	Host     string
+	Port     int
+	Username string
+	Password string
+	// OwnerUserID is nil for platform-managed proxies and set for user-owned proxies.
+	OwnerUserID *int64
+	Status      string
+	// MaxAccounts is zero when the proxy has no account binding limit.
+	MaxAccounts    int
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
 	ExpiresAt      *time.Time

@@ -85,7 +85,8 @@ type CreateOrderRequest struct {
 	OrderType       string
 	PlanID          int64
 	Locale          string
-	StoreOrderID    int64
+	ShopOrderID     int64
+	Subject         string
 }
 
 type CreateOrderResponse struct {
@@ -191,11 +192,14 @@ type PaymentService struct {
 	resumeService            *PaymentResumeService
 	affiliateService         *AffiliateService
 	notificationEmailService *NotificationEmailService
-	communityStore           CommunityStorePlatformFulfiller
+	shopFulfillment          ShopPaymentFulfillment
 }
 
-type CommunityStorePlatformFulfiller interface {
-	FulfillPlatformStoreOrder(ctx context.Context, storeOrderID, paymentOrderID int64) error
+type ShopPaymentFulfillment interface {
+	ConfirmPaidAndDeliver(ctx context.Context, paymentOrderID int64) error
+	CancelPendingPayment(ctx context.Context, paymentOrderID int64, shopStatus string) error
+	CancelPendingPaymentInTx(ctx context.Context, tx *dbent.Tx, paymentOrderID int64, shopStatus string) error
+	ReleaseStalePaymentReservations(ctx context.Context, cutoff time.Time) error
 }
 
 func NewPaymentService(entClient *dbent.Client, registry *payment.Registry, loadBalancer payment.LoadBalancer, redeemService *RedeemService, subscriptionSvc *SubscriptionService, configService *PaymentConfigService, userRepo UserRepository, groupRepo GroupRepository, affiliateService *AffiliateService) *PaymentService {
@@ -208,8 +212,11 @@ func (s *PaymentService) SetNotificationEmailService(notificationEmailService *N
 	s.notificationEmailService = notificationEmailService
 }
 
-func (s *PaymentService) SetCommunityStoreFulfiller(fulfiller CommunityStorePlatformFulfiller) {
-	s.communityStore = fulfiller
+func (s *PaymentService) SetShopFulfillment(fulfillment ShopPaymentFulfillment) {
+	if s == nil {
+		return
+	}
+	s.shopFulfillment = fulfillment
 }
 
 // --- Provider Registry ---

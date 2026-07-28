@@ -14,6 +14,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/account"
 	"github.com/Wei-Shaw/sub2api/ent/predicate"
 	"github.com/Wei-Shaw/sub2api/ent/proxy"
+	"github.com/Wei-Shaw/sub2api/ent/user"
 )
 
 // ProxyUpdate is the builder for updating Proxy entities.
@@ -158,6 +159,26 @@ func (_u *ProxyUpdate) ClearPassword() *ProxyUpdate {
 	return _u
 }
 
+// SetOwnerUserID sets the "owner_user_id" field.
+func (_u *ProxyUpdate) SetOwnerUserID(v int64) *ProxyUpdate {
+	_u.mutation.SetOwnerUserID(v)
+	return _u
+}
+
+// SetNillableOwnerUserID sets the "owner_user_id" field if the given value is not nil.
+func (_u *ProxyUpdate) SetNillableOwnerUserID(v *int64) *ProxyUpdate {
+	if v != nil {
+		_u.SetOwnerUserID(*v)
+	}
+	return _u
+}
+
+// ClearOwnerUserID clears the value of the "owner_user_id" field.
+func (_u *ProxyUpdate) ClearOwnerUserID() *ProxyUpdate {
+	_u.mutation.ClearOwnerUserID()
+	return _u
+}
+
 // SetStatus sets the "status" field.
 func (_u *ProxyUpdate) SetStatus(v string) *ProxyUpdate {
 	_u.mutation.SetStatus(v)
@@ -169,6 +190,27 @@ func (_u *ProxyUpdate) SetNillableStatus(v *string) *ProxyUpdate {
 	if v != nil {
 		_u.SetStatus(*v)
 	}
+	return _u
+}
+
+// SetMaxAccounts sets the "max_accounts" field.
+func (_u *ProxyUpdate) SetMaxAccounts(v int) *ProxyUpdate {
+	_u.mutation.ResetMaxAccounts()
+	_u.mutation.SetMaxAccounts(v)
+	return _u
+}
+
+// SetNillableMaxAccounts sets the "max_accounts" field if the given value is not nil.
+func (_u *ProxyUpdate) SetNillableMaxAccounts(v *int) *ProxyUpdate {
+	if v != nil {
+		_u.SetMaxAccounts(*v)
+	}
+	return _u
+}
+
+// AddMaxAccounts adds value to the "max_accounts" field.
+func (_u *ProxyUpdate) AddMaxAccounts(v int) *ProxyUpdate {
+	_u.mutation.AddMaxAccounts(v)
 	return _u
 }
 
@@ -262,6 +304,25 @@ func (_u *ProxyUpdate) AddAccounts(v ...*Account) *ProxyUpdate {
 	return _u.AddAccountIDs(ids...)
 }
 
+// SetOwnerID sets the "owner" edge to the User entity by ID.
+func (_u *ProxyUpdate) SetOwnerID(id int64) *ProxyUpdate {
+	_u.mutation.SetOwnerID(id)
+	return _u
+}
+
+// SetNillableOwnerID sets the "owner" edge to the User entity by ID if the given value is not nil.
+func (_u *ProxyUpdate) SetNillableOwnerID(id *int64) *ProxyUpdate {
+	if id != nil {
+		_u = _u.SetOwnerID(*id)
+	}
+	return _u
+}
+
+// SetOwner sets the "owner" edge to the User entity.
+func (_u *ProxyUpdate) SetOwner(v *User) *ProxyUpdate {
+	return _u.SetOwnerID(v.ID)
+}
+
 // SetBackupProxy sets the "backup_proxy" edge to the Proxy entity.
 func (_u *ProxyUpdate) SetBackupProxy(v *Proxy) *ProxyUpdate {
 	return _u.SetBackupProxyID(v.ID)
@@ -291,6 +352,12 @@ func (_u *ProxyUpdate) RemoveAccounts(v ...*Account) *ProxyUpdate {
 		ids[i] = v[i].ID
 	}
 	return _u.RemoveAccountIDs(ids...)
+}
+
+// ClearOwner clears the "owner" edge to the User entity.
+func (_u *ProxyUpdate) ClearOwner() *ProxyUpdate {
+	_u.mutation.ClearOwner()
+	return _u
 }
 
 // ClearBackupProxy clears the "backup_proxy" edge to the Proxy entity.
@@ -373,6 +440,11 @@ func (_u *ProxyUpdate) check() error {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "Proxy.status": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.MaxAccounts(); ok {
+		if err := proxy.MaxAccountsValidator(v); err != nil {
+			return &ValidationError{Name: "max_accounts", err: fmt.Errorf(`ent: validator failed for field "Proxy.max_accounts": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.FallbackMode(); ok {
 		if err := proxy.FallbackModeValidator(v); err != nil {
 			return &ValidationError{Name: "fallback_mode", err: fmt.Errorf(`ent: validator failed for field "Proxy.fallback_mode": %w`, err)}
@@ -432,6 +504,12 @@ func (_u *ProxyUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(proxy.FieldStatus, field.TypeString, value)
 	}
+	if value, ok := _u.mutation.MaxAccounts(); ok {
+		_spec.SetField(proxy.FieldMaxAccounts, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedMaxAccounts(); ok {
+		_spec.AddField(proxy.FieldMaxAccounts, field.TypeInt, value)
+	}
 	if value, ok := _u.mutation.ExpiresAt(); ok {
 		_spec.SetField(proxy.FieldExpiresAt, field.TypeTime, value)
 	}
@@ -485,6 +563,35 @@ func (_u *ProxyUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(account.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.OwnerCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   proxy.OwnerTable,
+			Columns: []string{proxy.OwnerColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(user.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.OwnerIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   proxy.OwnerTable,
+			Columns: []string{proxy.OwnerColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(user.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {
@@ -670,6 +777,26 @@ func (_u *ProxyUpdateOne) ClearPassword() *ProxyUpdateOne {
 	return _u
 }
 
+// SetOwnerUserID sets the "owner_user_id" field.
+func (_u *ProxyUpdateOne) SetOwnerUserID(v int64) *ProxyUpdateOne {
+	_u.mutation.SetOwnerUserID(v)
+	return _u
+}
+
+// SetNillableOwnerUserID sets the "owner_user_id" field if the given value is not nil.
+func (_u *ProxyUpdateOne) SetNillableOwnerUserID(v *int64) *ProxyUpdateOne {
+	if v != nil {
+		_u.SetOwnerUserID(*v)
+	}
+	return _u
+}
+
+// ClearOwnerUserID clears the value of the "owner_user_id" field.
+func (_u *ProxyUpdateOne) ClearOwnerUserID() *ProxyUpdateOne {
+	_u.mutation.ClearOwnerUserID()
+	return _u
+}
+
 // SetStatus sets the "status" field.
 func (_u *ProxyUpdateOne) SetStatus(v string) *ProxyUpdateOne {
 	_u.mutation.SetStatus(v)
@@ -681,6 +808,27 @@ func (_u *ProxyUpdateOne) SetNillableStatus(v *string) *ProxyUpdateOne {
 	if v != nil {
 		_u.SetStatus(*v)
 	}
+	return _u
+}
+
+// SetMaxAccounts sets the "max_accounts" field.
+func (_u *ProxyUpdateOne) SetMaxAccounts(v int) *ProxyUpdateOne {
+	_u.mutation.ResetMaxAccounts()
+	_u.mutation.SetMaxAccounts(v)
+	return _u
+}
+
+// SetNillableMaxAccounts sets the "max_accounts" field if the given value is not nil.
+func (_u *ProxyUpdateOne) SetNillableMaxAccounts(v *int) *ProxyUpdateOne {
+	if v != nil {
+		_u.SetMaxAccounts(*v)
+	}
+	return _u
+}
+
+// AddMaxAccounts adds value to the "max_accounts" field.
+func (_u *ProxyUpdateOne) AddMaxAccounts(v int) *ProxyUpdateOne {
+	_u.mutation.AddMaxAccounts(v)
 	return _u
 }
 
@@ -774,6 +922,25 @@ func (_u *ProxyUpdateOne) AddAccounts(v ...*Account) *ProxyUpdateOne {
 	return _u.AddAccountIDs(ids...)
 }
 
+// SetOwnerID sets the "owner" edge to the User entity by ID.
+func (_u *ProxyUpdateOne) SetOwnerID(id int64) *ProxyUpdateOne {
+	_u.mutation.SetOwnerID(id)
+	return _u
+}
+
+// SetNillableOwnerID sets the "owner" edge to the User entity by ID if the given value is not nil.
+func (_u *ProxyUpdateOne) SetNillableOwnerID(id *int64) *ProxyUpdateOne {
+	if id != nil {
+		_u = _u.SetOwnerID(*id)
+	}
+	return _u
+}
+
+// SetOwner sets the "owner" edge to the User entity.
+func (_u *ProxyUpdateOne) SetOwner(v *User) *ProxyUpdateOne {
+	return _u.SetOwnerID(v.ID)
+}
+
 // SetBackupProxy sets the "backup_proxy" edge to the Proxy entity.
 func (_u *ProxyUpdateOne) SetBackupProxy(v *Proxy) *ProxyUpdateOne {
 	return _u.SetBackupProxyID(v.ID)
@@ -803,6 +970,12 @@ func (_u *ProxyUpdateOne) RemoveAccounts(v ...*Account) *ProxyUpdateOne {
 		ids[i] = v[i].ID
 	}
 	return _u.RemoveAccountIDs(ids...)
+}
+
+// ClearOwner clears the "owner" edge to the User entity.
+func (_u *ProxyUpdateOne) ClearOwner() *ProxyUpdateOne {
+	_u.mutation.ClearOwner()
+	return _u
 }
 
 // ClearBackupProxy clears the "backup_proxy" edge to the Proxy entity.
@@ -898,6 +1071,11 @@ func (_u *ProxyUpdateOne) check() error {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "Proxy.status": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.MaxAccounts(); ok {
+		if err := proxy.MaxAccountsValidator(v); err != nil {
+			return &ValidationError{Name: "max_accounts", err: fmt.Errorf(`ent: validator failed for field "Proxy.max_accounts": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.FallbackMode(); ok {
 		if err := proxy.FallbackModeValidator(v); err != nil {
 			return &ValidationError{Name: "fallback_mode", err: fmt.Errorf(`ent: validator failed for field "Proxy.fallback_mode": %w`, err)}
@@ -974,6 +1152,12 @@ func (_u *ProxyUpdateOne) sqlSave(ctx context.Context) (_node *Proxy, err error)
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(proxy.FieldStatus, field.TypeString, value)
 	}
+	if value, ok := _u.mutation.MaxAccounts(); ok {
+		_spec.SetField(proxy.FieldMaxAccounts, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedMaxAccounts(); ok {
+		_spec.AddField(proxy.FieldMaxAccounts, field.TypeInt, value)
+	}
 	if value, ok := _u.mutation.ExpiresAt(); ok {
 		_spec.SetField(proxy.FieldExpiresAt, field.TypeTime, value)
 	}
@@ -1027,6 +1211,35 @@ func (_u *ProxyUpdateOne) sqlSave(ctx context.Context) (_node *Proxy, err error)
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(account.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.OwnerCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   proxy.OwnerTable,
+			Columns: []string{proxy.OwnerColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(user.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.OwnerIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   proxy.OwnerTable,
+			Columns: []string{proxy.OwnerColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(user.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {

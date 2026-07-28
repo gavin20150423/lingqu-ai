@@ -29,6 +29,14 @@ const (
 	FieldRole = "role"
 	// FieldBalance holds the string denoting the balance field in the database.
 	FieldBalance = "balance"
+	// FieldPointsBalance holds the string denoting the points_balance field in the database.
+	FieldPointsBalance = "points_balance"
+	// FieldLoadFactorCreditsBalance holds the string denoting the load_factor_credits_balance field in the database.
+	FieldLoadFactorCreditsBalance = "load_factor_credits_balance"
+	// FieldLoadFactorCreditsUsedTotal holds the string denoting the load_factor_credits_used_total field in the database.
+	FieldLoadFactorCreditsUsedTotal = "load_factor_credits_used_total"
+	// FieldPreferPointsBilling holds the string denoting the prefer_points_billing field in the database.
+	FieldPreferPointsBilling = "prefer_points_billing"
 	// FieldFrozenBalance holds the string denoting the frozen_balance field in the database.
 	FieldFrozenBalance = "frozen_balance"
 	// FieldConcurrency holds the string denoting the concurrency field in the database.
@@ -73,6 +81,12 @@ const (
 	EdgeAssignedSubscriptions = "assigned_subscriptions"
 	// EdgeAnnouncementReads holds the string denoting the announcement_reads edge name in mutations.
 	EdgeAnnouncementReads = "announcement_reads"
+	// EdgeSupportThreads holds the string denoting the support_threads edge name in mutations.
+	EdgeSupportThreads = "support_threads"
+	// EdgeAssignedSupportThreads holds the string denoting the assigned_support_threads edge name in mutations.
+	EdgeAssignedSupportThreads = "assigned_support_threads"
+	// EdgeSentSupportMessages holds the string denoting the sent_support_messages edge name in mutations.
+	EdgeSentSupportMessages = "sent_support_messages"
 	// EdgeAllowedGroups holds the string denoting the allowed_groups edge name in mutations.
 	EdgeAllowedGroups = "allowed_groups"
 	// EdgeUsageLogs holds the string denoting the usage_logs edge name in mutations.
@@ -83,12 +97,20 @@ const (
 	EdgePromoCodeUsages = "promo_code_usages"
 	// EdgePaymentOrders holds the string denoting the payment_orders edge name in mutations.
 	EdgePaymentOrders = "payment_orders"
+	// EdgeShopOrders holds the string denoting the shop_orders edge name in mutations.
+	EdgeShopOrders = "shop_orders"
+	// EdgeShopDrawCycles holds the string denoting the shop_draw_cycles edge name in mutations.
+	EdgeShopDrawCycles = "shop_draw_cycles"
+	// EdgeShopBalanceLedger holds the string denoting the shop_balance_ledger edge name in mutations.
+	EdgeShopBalanceLedger = "shop_balance_ledger"
 	// EdgeAuthIdentities holds the string denoting the auth_identities edge name in mutations.
 	EdgeAuthIdentities = "auth_identities"
 	// EdgePendingAuthSessions holds the string denoting the pending_auth_sessions edge name in mutations.
 	EdgePendingAuthSessions = "pending_auth_sessions"
 	// EdgePlatformQuotas holds the string denoting the platform_quotas edge name in mutations.
 	EdgePlatformQuotas = "platform_quotas"
+	// EdgeOwnedProxies holds the string denoting the owned_proxies edge name in mutations.
+	EdgeOwnedProxies = "owned_proxies"
 	// EdgeUserAllowedGroups holds the string denoting the user_allowed_groups edge name in mutations.
 	EdgeUserAllowedGroups = "user_allowed_groups"
 	// Table holds the table name of the user in the database.
@@ -128,6 +150,27 @@ const (
 	AnnouncementReadsInverseTable = "announcement_reads"
 	// AnnouncementReadsColumn is the table column denoting the announcement_reads relation/edge.
 	AnnouncementReadsColumn = "user_id"
+	// SupportThreadsTable is the table that holds the support_threads relation/edge.
+	SupportThreadsTable = "support_threads"
+	// SupportThreadsInverseTable is the table name for the SupportThread entity.
+	// It exists in this package in order to avoid circular dependency with the "supportthread" package.
+	SupportThreadsInverseTable = "support_threads"
+	// SupportThreadsColumn is the table column denoting the support_threads relation/edge.
+	SupportThreadsColumn = "user_id"
+	// AssignedSupportThreadsTable is the table that holds the assigned_support_threads relation/edge.
+	AssignedSupportThreadsTable = "support_threads"
+	// AssignedSupportThreadsInverseTable is the table name for the SupportThread entity.
+	// It exists in this package in order to avoid circular dependency with the "supportthread" package.
+	AssignedSupportThreadsInverseTable = "support_threads"
+	// AssignedSupportThreadsColumn is the table column denoting the assigned_support_threads relation/edge.
+	AssignedSupportThreadsColumn = "assigned_admin_id"
+	// SentSupportMessagesTable is the table that holds the sent_support_messages relation/edge.
+	SentSupportMessagesTable = "support_messages"
+	// SentSupportMessagesInverseTable is the table name for the SupportMessage entity.
+	// It exists in this package in order to avoid circular dependency with the "supportmessage" package.
+	SentSupportMessagesInverseTable = "support_messages"
+	// SentSupportMessagesColumn is the table column denoting the sent_support_messages relation/edge.
+	SentSupportMessagesColumn = "sender_id"
 	// AllowedGroupsTable is the table that holds the allowed_groups relation/edge. The primary key declared below.
 	AllowedGroupsTable = "user_allowed_groups"
 	// AllowedGroupsInverseTable is the table name for the Group entity.
@@ -161,6 +204,27 @@ const (
 	PaymentOrdersInverseTable = "payment_orders"
 	// PaymentOrdersColumn is the table column denoting the payment_orders relation/edge.
 	PaymentOrdersColumn = "user_id"
+	// ShopOrdersTable is the table that holds the shop_orders relation/edge.
+	ShopOrdersTable = "shop_orders"
+	// ShopOrdersInverseTable is the table name for the ShopOrder entity.
+	// It exists in this package in order to avoid circular dependency with the "shoporder" package.
+	ShopOrdersInverseTable = "shop_orders"
+	// ShopOrdersColumn is the table column denoting the shop_orders relation/edge.
+	ShopOrdersColumn = "user_id"
+	// ShopDrawCyclesTable is the table that holds the shop_draw_cycles relation/edge.
+	ShopDrawCyclesTable = "shop_draw_cycles"
+	// ShopDrawCyclesInverseTable is the table name for the ShopDrawCycle entity.
+	// It exists in this package in order to avoid circular dependency with the "shopdrawcycle" package.
+	ShopDrawCyclesInverseTable = "shop_draw_cycles"
+	// ShopDrawCyclesColumn is the table column denoting the shop_draw_cycles relation/edge.
+	ShopDrawCyclesColumn = "user_id"
+	// ShopBalanceLedgerTable is the table that holds the shop_balance_ledger relation/edge.
+	ShopBalanceLedgerTable = "shop_balance_ledger"
+	// ShopBalanceLedgerInverseTable is the table name for the ShopBalanceLedger entity.
+	// It exists in this package in order to avoid circular dependency with the "shopbalanceledger" package.
+	ShopBalanceLedgerInverseTable = "shop_balance_ledger"
+	// ShopBalanceLedgerColumn is the table column denoting the shop_balance_ledger relation/edge.
+	ShopBalanceLedgerColumn = "user_id"
 	// AuthIdentitiesTable is the table that holds the auth_identities relation/edge.
 	AuthIdentitiesTable = "auth_identities"
 	// AuthIdentitiesInverseTable is the table name for the AuthIdentity entity.
@@ -182,6 +246,13 @@ const (
 	PlatformQuotasInverseTable = "user_platform_quotas"
 	// PlatformQuotasColumn is the table column denoting the platform_quotas relation/edge.
 	PlatformQuotasColumn = "user_id"
+	// OwnedProxiesTable is the table that holds the owned_proxies relation/edge.
+	OwnedProxiesTable = "proxies"
+	// OwnedProxiesInverseTable is the table name for the Proxy entity.
+	// It exists in this package in order to avoid circular dependency with the "proxy" package.
+	OwnedProxiesInverseTable = "proxies"
+	// OwnedProxiesColumn is the table column denoting the owned_proxies relation/edge.
+	OwnedProxiesColumn = "owner_user_id"
 	// UserAllowedGroupsTable is the table that holds the user_allowed_groups relation/edge.
 	UserAllowedGroupsTable = "user_allowed_groups"
 	// UserAllowedGroupsInverseTable is the table name for the UserAllowedGroup entity.
@@ -201,6 +272,10 @@ var Columns = []string{
 	FieldPasswordHash,
 	FieldRole,
 	FieldBalance,
+	FieldPointsBalance,
+	FieldLoadFactorCreditsBalance,
+	FieldLoadFactorCreditsUsedTotal,
+	FieldPreferPointsBilling,
 	FieldFrozenBalance,
 	FieldConcurrency,
 	FieldStatus,
@@ -260,6 +335,14 @@ var (
 	RoleValidator func(string) error
 	// DefaultBalance holds the default value on creation for the "balance" field.
 	DefaultBalance float64
+	// DefaultPointsBalance holds the default value on creation for the "points_balance" field.
+	DefaultPointsBalance float64
+	// DefaultLoadFactorCreditsBalance holds the default value on creation for the "load_factor_credits_balance" field.
+	DefaultLoadFactorCreditsBalance int
+	// DefaultLoadFactorCreditsUsedTotal holds the default value on creation for the "load_factor_credits_used_total" field.
+	DefaultLoadFactorCreditsUsedTotal int
+	// DefaultPreferPointsBilling holds the default value on creation for the "prefer_points_billing" field.
+	DefaultPreferPointsBilling bool
 	// DefaultFrozenBalance holds the default value on creation for the "frozen_balance" field.
 	DefaultFrozenBalance float64
 	// DefaultConcurrency holds the default value on creation for the "concurrency" field.
@@ -333,6 +416,26 @@ func ByRole(opts ...sql.OrderTermOption) OrderOption {
 // ByBalance orders the results by the balance field.
 func ByBalance(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldBalance, opts...).ToFunc()
+}
+
+// ByPointsBalance orders the results by the points_balance field.
+func ByPointsBalance(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPointsBalance, opts...).ToFunc()
+}
+
+// ByLoadFactorCreditsBalance orders the results by the load_factor_credits_balance field.
+func ByLoadFactorCreditsBalance(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldLoadFactorCreditsBalance, opts...).ToFunc()
+}
+
+// ByLoadFactorCreditsUsedTotal orders the results by the load_factor_credits_used_total field.
+func ByLoadFactorCreditsUsedTotal(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldLoadFactorCreditsUsedTotal, opts...).ToFunc()
+}
+
+// ByPreferPointsBilling orders the results by the prefer_points_billing field.
+func ByPreferPointsBilling(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPreferPointsBilling, opts...).ToFunc()
 }
 
 // ByFrozenBalance orders the results by the frozen_balance field.
@@ -490,6 +593,48 @@ func ByAnnouncementReads(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption
 	}
 }
 
+// BySupportThreadsCount orders the results by support_threads count.
+func BySupportThreadsCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newSupportThreadsStep(), opts...)
+	}
+}
+
+// BySupportThreads orders the results by support_threads terms.
+func BySupportThreads(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newSupportThreadsStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
+// ByAssignedSupportThreadsCount orders the results by assigned_support_threads count.
+func ByAssignedSupportThreadsCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newAssignedSupportThreadsStep(), opts...)
+	}
+}
+
+// ByAssignedSupportThreads orders the results by assigned_support_threads terms.
+func ByAssignedSupportThreads(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newAssignedSupportThreadsStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
+// BySentSupportMessagesCount orders the results by sent_support_messages count.
+func BySentSupportMessagesCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newSentSupportMessagesStep(), opts...)
+	}
+}
+
+// BySentSupportMessages orders the results by sent_support_messages terms.
+func BySentSupportMessages(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newSentSupportMessagesStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
 // ByAllowedGroupsCount orders the results by allowed_groups count.
 func ByAllowedGroupsCount(opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
@@ -560,6 +705,48 @@ func ByPaymentOrders(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 	}
 }
 
+// ByShopOrdersCount orders the results by shop_orders count.
+func ByShopOrdersCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newShopOrdersStep(), opts...)
+	}
+}
+
+// ByShopOrders orders the results by shop_orders terms.
+func ByShopOrders(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newShopOrdersStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
+// ByShopDrawCyclesCount orders the results by shop_draw_cycles count.
+func ByShopDrawCyclesCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newShopDrawCyclesStep(), opts...)
+	}
+}
+
+// ByShopDrawCycles orders the results by shop_draw_cycles terms.
+func ByShopDrawCycles(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newShopDrawCyclesStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
+// ByShopBalanceLedgerCount orders the results by shop_balance_ledger count.
+func ByShopBalanceLedgerCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newShopBalanceLedgerStep(), opts...)
+	}
+}
+
+// ByShopBalanceLedger orders the results by shop_balance_ledger terms.
+func ByShopBalanceLedger(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newShopBalanceLedgerStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
 // ByAuthIdentitiesCount orders the results by auth_identities count.
 func ByAuthIdentitiesCount(opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
@@ -599,6 +786,20 @@ func ByPlatformQuotasCount(opts ...sql.OrderTermOption) OrderOption {
 func ByPlatformQuotas(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 	return func(s *sql.Selector) {
 		sqlgraph.OrderByNeighborTerms(s, newPlatformQuotasStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
+// ByOwnedProxiesCount orders the results by owned_proxies count.
+func ByOwnedProxiesCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newOwnedProxiesStep(), opts...)
+	}
+}
+
+// ByOwnedProxies orders the results by owned_proxies terms.
+func ByOwnedProxies(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newOwnedProxiesStep(), append([]sql.OrderTerm{term}, terms...)...)
 	}
 }
 
@@ -650,6 +851,27 @@ func newAnnouncementReadsStep() *sqlgraph.Step {
 		sqlgraph.Edge(sqlgraph.O2M, false, AnnouncementReadsTable, AnnouncementReadsColumn),
 	)
 }
+func newSupportThreadsStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(SupportThreadsInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, SupportThreadsTable, SupportThreadsColumn),
+	)
+}
+func newAssignedSupportThreadsStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(AssignedSupportThreadsInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, AssignedSupportThreadsTable, AssignedSupportThreadsColumn),
+	)
+}
+func newSentSupportMessagesStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(SentSupportMessagesInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, SentSupportMessagesTable, SentSupportMessagesColumn),
+	)
+}
 func newAllowedGroupsStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
@@ -685,6 +907,27 @@ func newPaymentOrdersStep() *sqlgraph.Step {
 		sqlgraph.Edge(sqlgraph.O2M, false, PaymentOrdersTable, PaymentOrdersColumn),
 	)
 }
+func newShopOrdersStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(ShopOrdersInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, ShopOrdersTable, ShopOrdersColumn),
+	)
+}
+func newShopDrawCyclesStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(ShopDrawCyclesInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, ShopDrawCyclesTable, ShopDrawCyclesColumn),
+	)
+}
+func newShopBalanceLedgerStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(ShopBalanceLedgerInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, ShopBalanceLedgerTable, ShopBalanceLedgerColumn),
+	)
+}
 func newAuthIdentitiesStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
@@ -704,6 +947,13 @@ func newPlatformQuotasStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(PlatformQuotasInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.O2M, false, PlatformQuotasTable, PlatformQuotasColumn),
+	)
+}
+func newOwnedProxiesStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(OwnedProxiesInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, OwnedProxiesTable, OwnedProxiesColumn),
 	)
 }
 func newUserAllowedGroupsStep() *sqlgraph.Step {

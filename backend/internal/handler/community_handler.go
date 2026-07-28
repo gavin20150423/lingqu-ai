@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/Wei-Shaw/sub2api/internal/payment"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
 	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
@@ -20,14 +19,10 @@ type CommunityHandler struct {
 	anthropicOAuth *service.OAuthService
 	openaiOAuth    *service.OpenAIOAuthService
 	billing        *service.BillingService
-	payment        *service.PaymentService
 }
 
-func NewCommunityHandler(s *service.CommunityService, anthropicOAuth *service.OAuthService, openaiOAuth *service.OpenAIOAuthService, billing *service.BillingService, paymentService *service.PaymentService) *CommunityHandler {
-	if paymentService != nil {
-		paymentService.SetCommunityStoreFulfiller(s)
-	}
-	return &CommunityHandler{service: s, anthropicOAuth: anthropicOAuth, openaiOAuth: openaiOAuth, billing: billing, payment: paymentService}
+func NewCommunityHandler(s *service.CommunityService, anthropicOAuth *service.OAuthService, openaiOAuth *service.OpenAIOAuthService, billing *service.BillingService) *CommunityHandler {
+	return &CommunityHandler{service: s, anthropicOAuth: anthropicOAuth, openaiOAuth: openaiOAuth, billing: billing}
 }
 
 func communitySubject(c *gin.Context) (int64, bool) {
@@ -832,53 +827,6 @@ func (h *CommunityHandler) BuyProduct(c *gin.Context) {
 	response.Created(c, v)
 }
 
-func (h *CommunityHandler) CreatePlatformStoreOrder(c *gin.Context) {
-	uid, ok := communitySubject(c)
-	if !ok {
-		return
-	}
-	if h.payment == nil {
-		response.Error(c, http.StatusServiceUnavailable, "平台支付暂不可用")
-		return
-	}
-	productID, valid := communityID(c, "id")
-	if !valid {
-		return
-	}
-	var in struct {
-		Quantity    int    `json:"quantity"`
-		PaymentType string `json:"payment_type"`
-		ReturnURL   string `json:"return_url"`
-	}
-	if err := c.ShouldBindJSON(&in); err != nil {
-		response.BadRequest(c, "Invalid request")
-		return
-	}
-	prepared, err := h.service.PreparePlatformStoreOrder(c.Request.Context(), uid, productID, in.Quantity, in.PaymentType)
-	if err != nil {
-		communityError(c, err)
-		return
-	}
-	result, err := h.payment.CreateOrder(c.Request.Context(), service.CreateOrderRequest{
-		UserID: uid, Amount: prepared.Amount, PaymentType: in.PaymentType,
-		ClientIP: c.ClientIP(), IsMobile: isMobile(c), SrcHost: c.Request.Host,
-		SrcURL: c.Request.Referer(), ReturnURL: in.ReturnURL, PaymentSource: "community_store",
-		OrderType: payment.OrderTypeStore, StoreOrderID: prepared.StoreOrderID,
-		Locale: c.GetHeader("Accept-Language"),
-	})
-	if err != nil {
-		_ = h.service.CancelPreparedPlatformStoreOrder(c.Request.Context(), uid, prepared.StoreOrderID)
-		response.ErrorFrom(c, err)
-		return
-	}
-	if err = h.service.BindPlatformStorePayment(c.Request.Context(), uid, prepared.StoreOrderID, result.OrderID, result.ExpiresAt); err != nil {
-		_, _ = h.payment.CancelOrder(c.Request.Context(), result.OrderID, uid)
-		_ = h.service.CancelPreparedPlatformStoreOrder(c.Request.Context(), uid, prepared.StoreOrderID)
-		communityError(c, err)
-		return
-	}
-	response.Created(c, gin.H{"store_order_id": prepared.StoreOrderID, "payment": result})
-}
 func (h *CommunityHandler) GetStoreWallet(c *gin.Context) {
 	uid, ok := communitySubject(c)
 	if !ok {

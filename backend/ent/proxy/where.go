@@ -100,9 +100,19 @@ func Password(v string) predicate.Proxy {
 	return predicate.Proxy(sql.FieldEQ(FieldPassword, v))
 }
 
+// OwnerUserID applies equality check predicate on the "owner_user_id" field. It's identical to OwnerUserIDEQ.
+func OwnerUserID(v int64) predicate.Proxy {
+	return predicate.Proxy(sql.FieldEQ(FieldOwnerUserID, v))
+}
+
 // Status applies equality check predicate on the "status" field. It's identical to StatusEQ.
 func Status(v string) predicate.Proxy {
 	return predicate.Proxy(sql.FieldEQ(FieldStatus, v))
+}
+
+// MaxAccounts applies equality check predicate on the "max_accounts" field. It's identical to MaxAccountsEQ.
+func MaxAccounts(v int) predicate.Proxy {
+	return predicate.Proxy(sql.FieldEQ(FieldMaxAccounts, v))
 }
 
 // ExpiresAt applies equality check predicate on the "expires_at" field. It's identical to ExpiresAtEQ.
@@ -640,6 +650,36 @@ func PasswordContainsFold(v string) predicate.Proxy {
 	return predicate.Proxy(sql.FieldContainsFold(FieldPassword, v))
 }
 
+// OwnerUserIDEQ applies the EQ predicate on the "owner_user_id" field.
+func OwnerUserIDEQ(v int64) predicate.Proxy {
+	return predicate.Proxy(sql.FieldEQ(FieldOwnerUserID, v))
+}
+
+// OwnerUserIDNEQ applies the NEQ predicate on the "owner_user_id" field.
+func OwnerUserIDNEQ(v int64) predicate.Proxy {
+	return predicate.Proxy(sql.FieldNEQ(FieldOwnerUserID, v))
+}
+
+// OwnerUserIDIn applies the In predicate on the "owner_user_id" field.
+func OwnerUserIDIn(vs ...int64) predicate.Proxy {
+	return predicate.Proxy(sql.FieldIn(FieldOwnerUserID, vs...))
+}
+
+// OwnerUserIDNotIn applies the NotIn predicate on the "owner_user_id" field.
+func OwnerUserIDNotIn(vs ...int64) predicate.Proxy {
+	return predicate.Proxy(sql.FieldNotIn(FieldOwnerUserID, vs...))
+}
+
+// OwnerUserIDIsNil applies the IsNil predicate on the "owner_user_id" field.
+func OwnerUserIDIsNil() predicate.Proxy {
+	return predicate.Proxy(sql.FieldIsNull(FieldOwnerUserID))
+}
+
+// OwnerUserIDNotNil applies the NotNil predicate on the "owner_user_id" field.
+func OwnerUserIDNotNil() predicate.Proxy {
+	return predicate.Proxy(sql.FieldNotNull(FieldOwnerUserID))
+}
+
 // StatusEQ applies the EQ predicate on the "status" field.
 func StatusEQ(v string) predicate.Proxy {
 	return predicate.Proxy(sql.FieldEQ(FieldStatus, v))
@@ -703,6 +743,46 @@ func StatusEqualFold(v string) predicate.Proxy {
 // StatusContainsFold applies the ContainsFold predicate on the "status" field.
 func StatusContainsFold(v string) predicate.Proxy {
 	return predicate.Proxy(sql.FieldContainsFold(FieldStatus, v))
+}
+
+// MaxAccountsEQ applies the EQ predicate on the "max_accounts" field.
+func MaxAccountsEQ(v int) predicate.Proxy {
+	return predicate.Proxy(sql.FieldEQ(FieldMaxAccounts, v))
+}
+
+// MaxAccountsNEQ applies the NEQ predicate on the "max_accounts" field.
+func MaxAccountsNEQ(v int) predicate.Proxy {
+	return predicate.Proxy(sql.FieldNEQ(FieldMaxAccounts, v))
+}
+
+// MaxAccountsIn applies the In predicate on the "max_accounts" field.
+func MaxAccountsIn(vs ...int) predicate.Proxy {
+	return predicate.Proxy(sql.FieldIn(FieldMaxAccounts, vs...))
+}
+
+// MaxAccountsNotIn applies the NotIn predicate on the "max_accounts" field.
+func MaxAccountsNotIn(vs ...int) predicate.Proxy {
+	return predicate.Proxy(sql.FieldNotIn(FieldMaxAccounts, vs...))
+}
+
+// MaxAccountsGT applies the GT predicate on the "max_accounts" field.
+func MaxAccountsGT(v int) predicate.Proxy {
+	return predicate.Proxy(sql.FieldGT(FieldMaxAccounts, v))
+}
+
+// MaxAccountsGTE applies the GTE predicate on the "max_accounts" field.
+func MaxAccountsGTE(v int) predicate.Proxy {
+	return predicate.Proxy(sql.FieldGTE(FieldMaxAccounts, v))
+}
+
+// MaxAccountsLT applies the LT predicate on the "max_accounts" field.
+func MaxAccountsLT(v int) predicate.Proxy {
+	return predicate.Proxy(sql.FieldLT(FieldMaxAccounts, v))
+}
+
+// MaxAccountsLTE applies the LTE predicate on the "max_accounts" field.
+func MaxAccountsLTE(v int) predicate.Proxy {
+	return predicate.Proxy(sql.FieldLTE(FieldMaxAccounts, v))
 }
 
 // ExpiresAtEQ applies the EQ predicate on the "expires_at" field.
@@ -905,6 +985,29 @@ func HasAccounts() predicate.Proxy {
 func HasAccountsWith(preds ...predicate.Account) predicate.Proxy {
 	return predicate.Proxy(func(s *sql.Selector) {
 		step := newAccountsStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasOwner applies the HasEdge predicate on the "owner" edge.
+func HasOwner() predicate.Proxy {
+	return predicate.Proxy(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, OwnerTable, OwnerColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasOwnerWith applies the HasEdge predicate on the "owner" edge with a given conditions (other predicates).
+func HasOwnerWith(preds ...predicate.User) predicate.Proxy {
+	return predicate.Proxy(func(s *sql.Selector) {
+		step := newOwnerStep()
 		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
 			for _, p := range preds {
 				p(s)

@@ -21,7 +21,13 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/pendingauthsession"
 	"github.com/Wei-Shaw/sub2api/ent/predicate"
 	"github.com/Wei-Shaw/sub2api/ent/promocodeusage"
+	"github.com/Wei-Shaw/sub2api/ent/proxy"
 	"github.com/Wei-Shaw/sub2api/ent/redeemcode"
+	"github.com/Wei-Shaw/sub2api/ent/shopbalanceledger"
+	"github.com/Wei-Shaw/sub2api/ent/shopdrawcycle"
+	"github.com/Wei-Shaw/sub2api/ent/shoporder"
+	"github.com/Wei-Shaw/sub2api/ent/supportmessage"
+	"github.com/Wei-Shaw/sub2api/ent/supportthread"
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
 	"github.com/Wei-Shaw/sub2api/ent/user"
 	"github.com/Wei-Shaw/sub2api/ent/userallowedgroup"
@@ -33,25 +39,32 @@ import (
 // UserQuery is the builder for querying User entities.
 type UserQuery struct {
 	config
-	ctx                       *QueryContext
-	order                     []user.OrderOption
-	inters                    []Interceptor
-	predicates                []predicate.User
-	withAPIKeys               *APIKeyQuery
-	withRedeemCodes           *RedeemCodeQuery
-	withSubscriptions         *UserSubscriptionQuery
-	withAssignedSubscriptions *UserSubscriptionQuery
-	withAnnouncementReads     *AnnouncementReadQuery
-	withAllowedGroups         *GroupQuery
-	withUsageLogs             *UsageLogQuery
-	withAttributeValues       *UserAttributeValueQuery
-	withPromoCodeUsages       *PromoCodeUsageQuery
-	withPaymentOrders         *PaymentOrderQuery
-	withAuthIdentities        *AuthIdentityQuery
-	withPendingAuthSessions   *PendingAuthSessionQuery
-	withPlatformQuotas        *UserPlatformQuotaQuery
-	withUserAllowedGroups     *UserAllowedGroupQuery
-	modifiers                 []func(*sql.Selector)
+	ctx                        *QueryContext
+	order                      []user.OrderOption
+	inters                     []Interceptor
+	predicates                 []predicate.User
+	withAPIKeys                *APIKeyQuery
+	withRedeemCodes            *RedeemCodeQuery
+	withSubscriptions          *UserSubscriptionQuery
+	withAssignedSubscriptions  *UserSubscriptionQuery
+	withAnnouncementReads      *AnnouncementReadQuery
+	withSupportThreads         *SupportThreadQuery
+	withAssignedSupportThreads *SupportThreadQuery
+	withSentSupportMessages    *SupportMessageQuery
+	withAllowedGroups          *GroupQuery
+	withUsageLogs              *UsageLogQuery
+	withAttributeValues        *UserAttributeValueQuery
+	withPromoCodeUsages        *PromoCodeUsageQuery
+	withPaymentOrders          *PaymentOrderQuery
+	withShopOrders             *ShopOrderQuery
+	withShopDrawCycles         *ShopDrawCycleQuery
+	withShopBalanceLedger      *ShopBalanceLedgerQuery
+	withAuthIdentities         *AuthIdentityQuery
+	withPendingAuthSessions    *PendingAuthSessionQuery
+	withPlatformQuotas         *UserPlatformQuotaQuery
+	withOwnedProxies           *ProxyQuery
+	withUserAllowedGroups      *UserAllowedGroupQuery
+	modifiers                  []func(*sql.Selector)
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -198,6 +211,72 @@ func (_q *UserQuery) QueryAnnouncementReads() *AnnouncementReadQuery {
 	return query
 }
 
+// QuerySupportThreads chains the current query on the "support_threads" edge.
+func (_q *UserQuery) QuerySupportThreads() *SupportThreadQuery {
+	query := (&SupportThreadClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(user.Table, user.FieldID, selector),
+			sqlgraph.To(supportthread.Table, supportthread.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, user.SupportThreadsTable, user.SupportThreadsColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QueryAssignedSupportThreads chains the current query on the "assigned_support_threads" edge.
+func (_q *UserQuery) QueryAssignedSupportThreads() *SupportThreadQuery {
+	query := (&SupportThreadClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(user.Table, user.FieldID, selector),
+			sqlgraph.To(supportthread.Table, supportthread.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, user.AssignedSupportThreadsTable, user.AssignedSupportThreadsColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QuerySentSupportMessages chains the current query on the "sent_support_messages" edge.
+func (_q *UserQuery) QuerySentSupportMessages() *SupportMessageQuery {
+	query := (&SupportMessageClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(user.Table, user.FieldID, selector),
+			sqlgraph.To(supportmessage.Table, supportmessage.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, user.SentSupportMessagesTable, user.SentSupportMessagesColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
 // QueryAllowedGroups chains the current query on the "allowed_groups" edge.
 func (_q *UserQuery) QueryAllowedGroups() *GroupQuery {
 	query := (&GroupClient{config: _q.config}).Query()
@@ -308,6 +387,72 @@ func (_q *UserQuery) QueryPaymentOrders() *PaymentOrderQuery {
 	return query
 }
 
+// QueryShopOrders chains the current query on the "shop_orders" edge.
+func (_q *UserQuery) QueryShopOrders() *ShopOrderQuery {
+	query := (&ShopOrderClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(user.Table, user.FieldID, selector),
+			sqlgraph.To(shoporder.Table, shoporder.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, user.ShopOrdersTable, user.ShopOrdersColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QueryShopDrawCycles chains the current query on the "shop_draw_cycles" edge.
+func (_q *UserQuery) QueryShopDrawCycles() *ShopDrawCycleQuery {
+	query := (&ShopDrawCycleClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(user.Table, user.FieldID, selector),
+			sqlgraph.To(shopdrawcycle.Table, shopdrawcycle.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, user.ShopDrawCyclesTable, user.ShopDrawCyclesColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QueryShopBalanceLedger chains the current query on the "shop_balance_ledger" edge.
+func (_q *UserQuery) QueryShopBalanceLedger() *ShopBalanceLedgerQuery {
+	query := (&ShopBalanceLedgerClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(user.Table, user.FieldID, selector),
+			sqlgraph.To(shopbalanceledger.Table, shopbalanceledger.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, user.ShopBalanceLedgerTable, user.ShopBalanceLedgerColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
 // QueryAuthIdentities chains the current query on the "auth_identities" edge.
 func (_q *UserQuery) QueryAuthIdentities() *AuthIdentityQuery {
 	query := (&AuthIdentityClient{config: _q.config}).Query()
@@ -367,6 +512,28 @@ func (_q *UserQuery) QueryPlatformQuotas() *UserPlatformQuotaQuery {
 			sqlgraph.From(user.Table, user.FieldID, selector),
 			sqlgraph.To(userplatformquota.Table, userplatformquota.FieldID),
 			sqlgraph.Edge(sqlgraph.O2M, false, user.PlatformQuotasTable, user.PlatformQuotasColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QueryOwnedProxies chains the current query on the "owned_proxies" edge.
+func (_q *UserQuery) QueryOwnedProxies() *ProxyQuery {
+	query := (&ProxyClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(user.Table, user.FieldID, selector),
+			sqlgraph.To(proxy.Table, proxy.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, user.OwnedProxiesTable, user.OwnedProxiesColumn),
 		)
 		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
 		return fromU, nil
@@ -583,25 +750,32 @@ func (_q *UserQuery) Clone() *UserQuery {
 		return nil
 	}
 	return &UserQuery{
-		config:                    _q.config,
-		ctx:                       _q.ctx.Clone(),
-		order:                     append([]user.OrderOption{}, _q.order...),
-		inters:                    append([]Interceptor{}, _q.inters...),
-		predicates:                append([]predicate.User{}, _q.predicates...),
-		withAPIKeys:               _q.withAPIKeys.Clone(),
-		withRedeemCodes:           _q.withRedeemCodes.Clone(),
-		withSubscriptions:         _q.withSubscriptions.Clone(),
-		withAssignedSubscriptions: _q.withAssignedSubscriptions.Clone(),
-		withAnnouncementReads:     _q.withAnnouncementReads.Clone(),
-		withAllowedGroups:         _q.withAllowedGroups.Clone(),
-		withUsageLogs:             _q.withUsageLogs.Clone(),
-		withAttributeValues:       _q.withAttributeValues.Clone(),
-		withPromoCodeUsages:       _q.withPromoCodeUsages.Clone(),
-		withPaymentOrders:         _q.withPaymentOrders.Clone(),
-		withAuthIdentities:        _q.withAuthIdentities.Clone(),
-		withPendingAuthSessions:   _q.withPendingAuthSessions.Clone(),
-		withPlatformQuotas:        _q.withPlatformQuotas.Clone(),
-		withUserAllowedGroups:     _q.withUserAllowedGroups.Clone(),
+		config:                     _q.config,
+		ctx:                        _q.ctx.Clone(),
+		order:                      append([]user.OrderOption{}, _q.order...),
+		inters:                     append([]Interceptor{}, _q.inters...),
+		predicates:                 append([]predicate.User{}, _q.predicates...),
+		withAPIKeys:                _q.withAPIKeys.Clone(),
+		withRedeemCodes:            _q.withRedeemCodes.Clone(),
+		withSubscriptions:          _q.withSubscriptions.Clone(),
+		withAssignedSubscriptions:  _q.withAssignedSubscriptions.Clone(),
+		withAnnouncementReads:      _q.withAnnouncementReads.Clone(),
+		withSupportThreads:         _q.withSupportThreads.Clone(),
+		withAssignedSupportThreads: _q.withAssignedSupportThreads.Clone(),
+		withSentSupportMessages:    _q.withSentSupportMessages.Clone(),
+		withAllowedGroups:          _q.withAllowedGroups.Clone(),
+		withUsageLogs:              _q.withUsageLogs.Clone(),
+		withAttributeValues:        _q.withAttributeValues.Clone(),
+		withPromoCodeUsages:        _q.withPromoCodeUsages.Clone(),
+		withPaymentOrders:          _q.withPaymentOrders.Clone(),
+		withShopOrders:             _q.withShopOrders.Clone(),
+		withShopDrawCycles:         _q.withShopDrawCycles.Clone(),
+		withShopBalanceLedger:      _q.withShopBalanceLedger.Clone(),
+		withAuthIdentities:         _q.withAuthIdentities.Clone(),
+		withPendingAuthSessions:    _q.withPendingAuthSessions.Clone(),
+		withPlatformQuotas:         _q.withPlatformQuotas.Clone(),
+		withOwnedProxies:           _q.withOwnedProxies.Clone(),
+		withUserAllowedGroups:      _q.withUserAllowedGroups.Clone(),
 		// clone intermediate query.
 		sql:  _q.sql.Clone(),
 		path: _q.path,
@@ -663,6 +837,39 @@ func (_q *UserQuery) WithAnnouncementReads(opts ...func(*AnnouncementReadQuery))
 	return _q
 }
 
+// WithSupportThreads tells the query-builder to eager-load the nodes that are connected to
+// the "support_threads" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *UserQuery) WithSupportThreads(opts ...func(*SupportThreadQuery)) *UserQuery {
+	query := (&SupportThreadClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withSupportThreads = query
+	return _q
+}
+
+// WithAssignedSupportThreads tells the query-builder to eager-load the nodes that are connected to
+// the "assigned_support_threads" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *UserQuery) WithAssignedSupportThreads(opts ...func(*SupportThreadQuery)) *UserQuery {
+	query := (&SupportThreadClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withAssignedSupportThreads = query
+	return _q
+}
+
+// WithSentSupportMessages tells the query-builder to eager-load the nodes that are connected to
+// the "sent_support_messages" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *UserQuery) WithSentSupportMessages(opts ...func(*SupportMessageQuery)) *UserQuery {
+	query := (&SupportMessageClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withSentSupportMessages = query
+	return _q
+}
+
 // WithAllowedGroups tells the query-builder to eager-load the nodes that are connected to
 // the "allowed_groups" edge. The optional arguments are used to configure the query builder of the edge.
 func (_q *UserQuery) WithAllowedGroups(opts ...func(*GroupQuery)) *UserQuery {
@@ -718,6 +925,39 @@ func (_q *UserQuery) WithPaymentOrders(opts ...func(*PaymentOrderQuery)) *UserQu
 	return _q
 }
 
+// WithShopOrders tells the query-builder to eager-load the nodes that are connected to
+// the "shop_orders" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *UserQuery) WithShopOrders(opts ...func(*ShopOrderQuery)) *UserQuery {
+	query := (&ShopOrderClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withShopOrders = query
+	return _q
+}
+
+// WithShopDrawCycles tells the query-builder to eager-load the nodes that are connected to
+// the "shop_draw_cycles" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *UserQuery) WithShopDrawCycles(opts ...func(*ShopDrawCycleQuery)) *UserQuery {
+	query := (&ShopDrawCycleClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withShopDrawCycles = query
+	return _q
+}
+
+// WithShopBalanceLedger tells the query-builder to eager-load the nodes that are connected to
+// the "shop_balance_ledger" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *UserQuery) WithShopBalanceLedger(opts ...func(*ShopBalanceLedgerQuery)) *UserQuery {
+	query := (&ShopBalanceLedgerClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withShopBalanceLedger = query
+	return _q
+}
+
 // WithAuthIdentities tells the query-builder to eager-load the nodes that are connected to
 // the "auth_identities" edge. The optional arguments are used to configure the query builder of the edge.
 func (_q *UserQuery) WithAuthIdentities(opts ...func(*AuthIdentityQuery)) *UserQuery {
@@ -748,6 +988,17 @@ func (_q *UserQuery) WithPlatformQuotas(opts ...func(*UserPlatformQuotaQuery)) *
 		opt(query)
 	}
 	_q.withPlatformQuotas = query
+	return _q
+}
+
+// WithOwnedProxies tells the query-builder to eager-load the nodes that are connected to
+// the "owned_proxies" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *UserQuery) WithOwnedProxies(opts ...func(*ProxyQuery)) *UserQuery {
+	query := (&ProxyClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withOwnedProxies = query
 	return _q
 }
 
@@ -840,20 +1091,27 @@ func (_q *UserQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*User, e
 	var (
 		nodes       = []*User{}
 		_spec       = _q.querySpec()
-		loadedTypes = [14]bool{
+		loadedTypes = [21]bool{
 			_q.withAPIKeys != nil,
 			_q.withRedeemCodes != nil,
 			_q.withSubscriptions != nil,
 			_q.withAssignedSubscriptions != nil,
 			_q.withAnnouncementReads != nil,
+			_q.withSupportThreads != nil,
+			_q.withAssignedSupportThreads != nil,
+			_q.withSentSupportMessages != nil,
 			_q.withAllowedGroups != nil,
 			_q.withUsageLogs != nil,
 			_q.withAttributeValues != nil,
 			_q.withPromoCodeUsages != nil,
 			_q.withPaymentOrders != nil,
+			_q.withShopOrders != nil,
+			_q.withShopDrawCycles != nil,
+			_q.withShopBalanceLedger != nil,
 			_q.withAuthIdentities != nil,
 			_q.withPendingAuthSessions != nil,
 			_q.withPlatformQuotas != nil,
+			_q.withOwnedProxies != nil,
 			_q.withUserAllowedGroups != nil,
 		}
 	)
@@ -915,6 +1173,29 @@ func (_q *UserQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*User, e
 			return nil, err
 		}
 	}
+	if query := _q.withSupportThreads; query != nil {
+		if err := _q.loadSupportThreads(ctx, query, nodes,
+			func(n *User) { n.Edges.SupportThreads = []*SupportThread{} },
+			func(n *User, e *SupportThread) { n.Edges.SupportThreads = append(n.Edges.SupportThreads, e) }); err != nil {
+			return nil, err
+		}
+	}
+	if query := _q.withAssignedSupportThreads; query != nil {
+		if err := _q.loadAssignedSupportThreads(ctx, query, nodes,
+			func(n *User) { n.Edges.AssignedSupportThreads = []*SupportThread{} },
+			func(n *User, e *SupportThread) {
+				n.Edges.AssignedSupportThreads = append(n.Edges.AssignedSupportThreads, e)
+			}); err != nil {
+			return nil, err
+		}
+	}
+	if query := _q.withSentSupportMessages; query != nil {
+		if err := _q.loadSentSupportMessages(ctx, query, nodes,
+			func(n *User) { n.Edges.SentSupportMessages = []*SupportMessage{} },
+			func(n *User, e *SupportMessage) { n.Edges.SentSupportMessages = append(n.Edges.SentSupportMessages, e) }); err != nil {
+			return nil, err
+		}
+	}
 	if query := _q.withAllowedGroups; query != nil {
 		if err := _q.loadAllowedGroups(ctx, query, nodes,
 			func(n *User) { n.Edges.AllowedGroups = []*Group{} },
@@ -950,6 +1231,27 @@ func (_q *UserQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*User, e
 			return nil, err
 		}
 	}
+	if query := _q.withShopOrders; query != nil {
+		if err := _q.loadShopOrders(ctx, query, nodes,
+			func(n *User) { n.Edges.ShopOrders = []*ShopOrder{} },
+			func(n *User, e *ShopOrder) { n.Edges.ShopOrders = append(n.Edges.ShopOrders, e) }); err != nil {
+			return nil, err
+		}
+	}
+	if query := _q.withShopDrawCycles; query != nil {
+		if err := _q.loadShopDrawCycles(ctx, query, nodes,
+			func(n *User) { n.Edges.ShopDrawCycles = []*ShopDrawCycle{} },
+			func(n *User, e *ShopDrawCycle) { n.Edges.ShopDrawCycles = append(n.Edges.ShopDrawCycles, e) }); err != nil {
+			return nil, err
+		}
+	}
+	if query := _q.withShopBalanceLedger; query != nil {
+		if err := _q.loadShopBalanceLedger(ctx, query, nodes,
+			func(n *User) { n.Edges.ShopBalanceLedger = []*ShopBalanceLedger{} },
+			func(n *User, e *ShopBalanceLedger) { n.Edges.ShopBalanceLedger = append(n.Edges.ShopBalanceLedger, e) }); err != nil {
+			return nil, err
+		}
+	}
 	if query := _q.withAuthIdentities; query != nil {
 		if err := _q.loadAuthIdentities(ctx, query, nodes,
 			func(n *User) { n.Edges.AuthIdentities = []*AuthIdentity{} },
@@ -970,6 +1272,13 @@ func (_q *UserQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*User, e
 		if err := _q.loadPlatformQuotas(ctx, query, nodes,
 			func(n *User) { n.Edges.PlatformQuotas = []*UserPlatformQuota{} },
 			func(n *User, e *UserPlatformQuota) { n.Edges.PlatformQuotas = append(n.Edges.PlatformQuotas, e) }); err != nil {
+			return nil, err
+		}
+	}
+	if query := _q.withOwnedProxies; query != nil {
+		if err := _q.loadOwnedProxies(ctx, query, nodes,
+			func(n *User) { n.Edges.OwnedProxies = []*Proxy{} },
+			func(n *User, e *Proxy) { n.Edges.OwnedProxies = append(n.Edges.OwnedProxies, e) }); err != nil {
 			return nil, err
 		}
 	}
@@ -1134,6 +1443,102 @@ func (_q *UserQuery) loadAnnouncementReads(ctx context.Context, query *Announcem
 		node, ok := nodeids[fk]
 		if !ok {
 			return fmt.Errorf(`unexpected referenced foreign-key "user_id" returned %v for node %v`, fk, n.ID)
+		}
+		assign(node, n)
+	}
+	return nil
+}
+func (_q *UserQuery) loadSupportThreads(ctx context.Context, query *SupportThreadQuery, nodes []*User, init func(*User), assign func(*User, *SupportThread)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[int64]*User)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+		if init != nil {
+			init(nodes[i])
+		}
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(supportthread.FieldUserID)
+	}
+	query.Where(predicate.SupportThread(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(user.SupportThreadsColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.UserID
+		node, ok := nodeids[fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "user_id" returned %v for node %v`, fk, n.ID)
+		}
+		assign(node, n)
+	}
+	return nil
+}
+func (_q *UserQuery) loadAssignedSupportThreads(ctx context.Context, query *SupportThreadQuery, nodes []*User, init func(*User), assign func(*User, *SupportThread)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[int64]*User)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+		if init != nil {
+			init(nodes[i])
+		}
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(supportthread.FieldAssignedAdminID)
+	}
+	query.Where(predicate.SupportThread(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(user.AssignedSupportThreadsColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.AssignedAdminID
+		if fk == nil {
+			return fmt.Errorf(`foreign-key "assigned_admin_id" is nil for node %v`, n.ID)
+		}
+		node, ok := nodeids[*fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "assigned_admin_id" returned %v for node %v`, *fk, n.ID)
+		}
+		assign(node, n)
+	}
+	return nil
+}
+func (_q *UserQuery) loadSentSupportMessages(ctx context.Context, query *SupportMessageQuery, nodes []*User, init func(*User), assign func(*User, *SupportMessage)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[int64]*User)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+		if init != nil {
+			init(nodes[i])
+		}
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(supportmessage.FieldSenderID)
+	}
+	query.Where(predicate.SupportMessage(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(user.SentSupportMessagesColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.SenderID
+		if fk == nil {
+			return fmt.Errorf(`foreign-key "sender_id" is nil for node %v`, n.ID)
+		}
+		node, ok := nodeids[*fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "sender_id" returned %v for node %v`, *fk, n.ID)
 		}
 		assign(node, n)
 	}
@@ -1320,6 +1725,96 @@ func (_q *UserQuery) loadPaymentOrders(ctx context.Context, query *PaymentOrderQ
 	}
 	return nil
 }
+func (_q *UserQuery) loadShopOrders(ctx context.Context, query *ShopOrderQuery, nodes []*User, init func(*User), assign func(*User, *ShopOrder)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[int64]*User)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+		if init != nil {
+			init(nodes[i])
+		}
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(shoporder.FieldUserID)
+	}
+	query.Where(predicate.ShopOrder(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(user.ShopOrdersColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.UserID
+		node, ok := nodeids[fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "user_id" returned %v for node %v`, fk, n.ID)
+		}
+		assign(node, n)
+	}
+	return nil
+}
+func (_q *UserQuery) loadShopDrawCycles(ctx context.Context, query *ShopDrawCycleQuery, nodes []*User, init func(*User), assign func(*User, *ShopDrawCycle)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[int64]*User)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+		if init != nil {
+			init(nodes[i])
+		}
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(shopdrawcycle.FieldUserID)
+	}
+	query.Where(predicate.ShopDrawCycle(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(user.ShopDrawCyclesColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.UserID
+		node, ok := nodeids[fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "user_id" returned %v for node %v`, fk, n.ID)
+		}
+		assign(node, n)
+	}
+	return nil
+}
+func (_q *UserQuery) loadShopBalanceLedger(ctx context.Context, query *ShopBalanceLedgerQuery, nodes []*User, init func(*User), assign func(*User, *ShopBalanceLedger)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[int64]*User)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+		if init != nil {
+			init(nodes[i])
+		}
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(shopbalanceledger.FieldUserID)
+	}
+	query.Where(predicate.ShopBalanceLedger(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(user.ShopBalanceLedgerColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.UserID
+		node, ok := nodeids[fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "user_id" returned %v for node %v`, fk, n.ID)
+		}
+		assign(node, n)
+	}
+	return nil
+}
 func (_q *UserQuery) loadAuthIdentities(ctx context.Context, query *AuthIdentityQuery, nodes []*User, init func(*User), assign func(*User, *AuthIdentity)) error {
 	fks := make([]driver.Value, 0, len(nodes))
 	nodeids := make(map[int64]*User)
@@ -1408,6 +1903,39 @@ func (_q *UserQuery) loadPlatformQuotas(ctx context.Context, query *UserPlatform
 		node, ok := nodeids[fk]
 		if !ok {
 			return fmt.Errorf(`unexpected referenced foreign-key "user_id" returned %v for node %v`, fk, n.ID)
+		}
+		assign(node, n)
+	}
+	return nil
+}
+func (_q *UserQuery) loadOwnedProxies(ctx context.Context, query *ProxyQuery, nodes []*User, init func(*User), assign func(*User, *Proxy)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[int64]*User)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+		if init != nil {
+			init(nodes[i])
+		}
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(proxy.FieldOwnerUserID)
+	}
+	query.Where(predicate.Proxy(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(user.OwnedProxiesColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.OwnerUserID
+		if fk == nil {
+			return fmt.Errorf(`foreign-key "owner_user_id" is nil for node %v`, n.ID)
+		}
+		node, ok := nodeids[*fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "owner_user_id" returned %v for node %v`, *fk, n.ID)
 		}
 		assign(node, n)
 	}

@@ -105,7 +105,12 @@
           </div>
           <ProfilePasswordForm embedded />
         </article>
-        <ProfileWalletPanel />
+        <ProfileWithdrawalCard
+          v-if="withdrawalManagementEnabled"
+          :rate-limit-window-days="withdrawalRateLimitWindowDays"
+          :rate-limit-max="withdrawalRateLimitMax"
+          :rate-limit-exempt-amount="withdrawalRateLimitExemptAmount"
+        />
       </section>
     </div>
   </UserWorkspaceLayout>
@@ -117,7 +122,7 @@ import QRCode from 'qrcode'
 import UserWorkspaceLayout from '@/components/layout/UserWorkspaceLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
 import ProfilePasswordForm from '@/components/user/profile/ProfilePasswordForm.vue'
-import ProfileWalletPanel from '@/components/user/profile/ProfileWalletPanel.vue'
+import ProfileWithdrawalCard from '@/components/user/profile/ProfileWithdrawalCard.vue'
 import { userAPI } from '@/api'
 import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
@@ -132,6 +137,10 @@ const user = computed(() => authStore.user)
 const contactQrCanvas = ref<HTMLCanvasElement | null>(null)
 const contactInfo = ref('')
 const systemDefaultThreshold = ref(0)
+const withdrawalManagementEnabled = ref(true)
+const withdrawalRateLimitWindowDays = ref(1)
+const withdrawalRateLimitMax = ref(0)
+const withdrawalRateLimitExemptAmount = ref(500)
 const savingNotify = ref(false)
 const notifyForm = reactive({
   enabled: true,
@@ -234,6 +243,10 @@ onMounted(async () => {
     .then((settings) => {
       contactInfo.value = settings?.contact_info || ''
       systemDefaultThreshold.value = settings?.balance_low_notify_threshold ?? 0
+      withdrawalManagementEnabled.value = settings?.withdrawal_management_enabled !== false
+      withdrawalRateLimitWindowDays.value = settings?.withdrawal_rate_limit_window_days ?? 1
+      withdrawalRateLimitMax.value = settings?.withdrawal_rate_limit_max ?? 0
+      withdrawalRateLimitExemptAmount.value = settings?.withdrawal_rate_limit_exempt_amount ?? 500
       syncNotifyForm()
     })
     .catch((error) => {

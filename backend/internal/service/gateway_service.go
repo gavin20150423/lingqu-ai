@@ -533,13 +533,23 @@ type AccountWaitPlan struct {
 	MaxWaiting     int
 }
 
+type OpenAIAccountDispatchRequirements struct {
+	RequestedModel             string
+	RequiredTransport          OpenAIUpstreamTransport
+	RequiredImageCapability    OpenAIImagesCapability
+	RequiredEndpointCapability OpenAIEndpointCapability
+	RequiredPlatform           string
+	RequireCompact             bool
+}
+
 type AccountSelectionResult struct {
-	Account           *Account
-	Acquired          bool
-	ReleaseFunc       func()
-	WaitPlan          *AccountWaitPlan // nil means no wait allowed
-	SubPilotLeaseID   string
-	SubPilotRequestID string
+	Account                    *Account
+	Acquired                   bool
+	ReleaseFunc                func()
+	WaitPlan                   *AccountWaitPlan // nil means no wait allowed
+	OpenAIDispatchRequirements *OpenAIAccountDispatchRequirements
+	SubPilotLeaseID            string
+	SubPilotRequestID          string
 }
 
 // ClaudeUsage 表示Claude API返回的usage信息
@@ -679,43 +689,44 @@ func (s *GatewayService) TempUnscheduleRetryableError(ctx context.Context, accou
 
 // GatewayService handles API gateway operations
 type GatewayService struct {
-	accountRepo           AccountRepository
-	groupRepo             GroupRepository
-	usageLogRepo          UsageLogRepository
-	usageBillingRepo      UsageBillingRepository
-	userRepo              UserRepository
-	userSubRepo           UserSubscriptionRepository
-	userGroupRateRepo     UserGroupRateRepository
-	cache                 GatewayCache
-	digestStore           *DigestSessionStore
-	cfg                   *config.Config
-	schedulerSnapshot     *SchedulerSnapshotService
-	billingService        *BillingService
-	rateLimitService      *RateLimitService
-	billingCacheService   *BillingCacheService
-	identityService       *IdentityService
-	httpUpstream          HTTPUpstream
-	deferredService       *DeferredService
-	concurrencyService    *ConcurrencyService
-	claudeTokenProvider   *ClaudeTokenProvider
-	sessionLimitCache     SessionLimitCache // 会话数量限制缓存（仅 Anthropic OAuth/SetupToken）
-	rpmCache              RPMCache          // RPM 计数缓存（仅 Anthropic OAuth/SetupToken）
-	userGroupRateResolver *userGroupRateResolver
-	userGroupRateCache    *gocache.Cache
-	userGroupRateSF       singleflight.Group
-	modelsListCache       *gocache.Cache
-	modelsListCacheTTL    time.Duration
-	settingService        *SettingService
-	responseHeaderFilter  *responseheaders.CompiledHeaderFilter
-	debugModelRouting     atomic.Bool
-	debugClaudeMimic      atomic.Bool
-	channelService        *ChannelService
-	resolver              *ModelPricingResolver
-	compositeResolver     *CompositeRouteResolver
-	debugGatewayBodyFile  atomic.Pointer[os.File] // non-nil when SUB2API_DEBUG_GATEWAY_BODY is set
-	tlsFPProfileService   *TLSFingerprintProfileService
-	balanceNotifyService  *BalanceNotifyService
-	userPlatformQuotaRepo UserPlatformQuotaRepository
+	accountRepo             AccountRepository
+	groupRepo               GroupRepository
+	usageLogRepo            UsageLogRepository
+	usageBillingRepo        UsageBillingRepository
+	userRepo                UserRepository
+	userSubRepo             UserSubscriptionRepository
+	userGroupRateRepo       UserGroupRateRepository
+	cache                   GatewayCache
+	digestStore             *DigestSessionStore
+	cfg                     *config.Config
+	schedulerSnapshot       *SchedulerSnapshotService
+	billingService          *BillingService
+	rateLimitService        *RateLimitService
+	billingCacheService     *BillingCacheService
+	identityService         *IdentityService
+	httpUpstream            HTTPUpstream
+	deferredService         *DeferredService
+	concurrencyService      *ConcurrencyService
+	claudeTokenProvider     *ClaudeTokenProvider
+	sessionLimitCache       SessionLimitCache // 会话数量限制缓存（仅 Anthropic OAuth/SetupToken）
+	rpmCache                RPMCache          // RPM 计数缓存（仅 Anthropic OAuth/SetupToken）
+	userGroupRateResolver   *userGroupRateResolver
+	userGroupRateCache      *gocache.Cache
+	userGroupRateSF         singleflight.Group
+	modelsListCache         *gocache.Cache
+	modelsListCacheTTL      time.Duration
+	settingService          *SettingService
+	responseHeaderFilter    *responseheaders.CompiledHeaderFilter
+	debugModelRouting       atomic.Bool
+	debugClaudeMimic        atomic.Bool
+	channelService          *ChannelService
+	resolver                *ModelPricingResolver
+	compositeResolver       *CompositeRouteResolver
+	debugGatewayBodyFile    atomic.Pointer[os.File] // non-nil when SUB2API_DEBUG_GATEWAY_BODY is set
+	tlsFPProfileService     *TLSFingerprintProfileService
+	balanceNotifyService    *BalanceNotifyService
+	userPlatformQuotaRepo   UserPlatformQuotaRepository
+	accountShareModeService *AccountShareModeService
 }
 
 type communityRoutingAccountRepository interface {
@@ -782,43 +793,45 @@ func NewGatewayService(
 	compositeResolver *CompositeRouteResolver,
 	balanceNotifyService *BalanceNotifyService,
 	userPlatformQuotaRepo UserPlatformQuotaRepository,
+	accountShareModeService *AccountShareModeService,
 ) *GatewayService {
 	userGroupRateTTL := resolveUserGroupRateCacheTTL(cfg)
 	modelsListTTL := resolveModelsListCacheTTL(cfg)
 
 	svc := &GatewayService{
-		accountRepo:           accountRepo,
-		groupRepo:             groupRepo,
-		usageLogRepo:          usageLogRepo,
-		usageBillingRepo:      usageBillingRepo,
-		userRepo:              userRepo,
-		userSubRepo:           userSubRepo,
-		userGroupRateRepo:     userGroupRateRepo,
-		cache:                 cache,
-		digestStore:           digestStore,
-		cfg:                   cfg,
-		schedulerSnapshot:     schedulerSnapshot,
-		concurrencyService:    concurrencyService,
-		billingService:        billingService,
-		rateLimitService:      rateLimitService,
-		billingCacheService:   billingCacheService,
-		identityService:       identityService,
-		httpUpstream:          httpUpstream,
-		deferredService:       deferredService,
-		claudeTokenProvider:   claudeTokenProvider,
-		sessionLimitCache:     sessionLimitCache,
-		rpmCache:              rpmCache,
-		userGroupRateCache:    gocache.New(userGroupRateTTL, time.Minute),
-		settingService:        settingService,
-		modelsListCache:       gocache.New(modelsListTTL, time.Minute),
-		modelsListCacheTTL:    modelsListTTL,
-		responseHeaderFilter:  compileResponseHeaderFilter(cfg),
-		tlsFPProfileService:   tlsFPProfileService,
-		channelService:        channelService,
-		resolver:              resolver,
-		compositeResolver:     compositeResolver,
-		balanceNotifyService:  balanceNotifyService,
-		userPlatformQuotaRepo: userPlatformQuotaRepo,
+		accountRepo:             accountRepo,
+		groupRepo:               groupRepo,
+		usageLogRepo:            usageLogRepo,
+		usageBillingRepo:        usageBillingRepo,
+		userRepo:                userRepo,
+		userSubRepo:             userSubRepo,
+		userGroupRateRepo:       userGroupRateRepo,
+		cache:                   cache,
+		digestStore:             digestStore,
+		cfg:                     cfg,
+		schedulerSnapshot:       schedulerSnapshot,
+		concurrencyService:      concurrencyService,
+		billingService:          billingService,
+		rateLimitService:        rateLimitService,
+		billingCacheService:     billingCacheService,
+		identityService:         identityService,
+		httpUpstream:            httpUpstream,
+		deferredService:         deferredService,
+		claudeTokenProvider:     claudeTokenProvider,
+		sessionLimitCache:       sessionLimitCache,
+		rpmCache:                rpmCache,
+		userGroupRateCache:      gocache.New(userGroupRateTTL, time.Minute),
+		settingService:          settingService,
+		modelsListCache:         gocache.New(modelsListTTL, time.Minute),
+		modelsListCacheTTL:      modelsListTTL,
+		responseHeaderFilter:    compileResponseHeaderFilter(cfg),
+		tlsFPProfileService:     tlsFPProfileService,
+		channelService:          channelService,
+		resolver:                resolver,
+		compositeResolver:       compositeResolver,
+		balanceNotifyService:    balanceNotifyService,
+		userPlatformQuotaRepo:   userPlatformQuotaRepo,
+		accountShareModeService: accountShareModeService,
 	}
 	svc.userGroupRateResolver = newUserGroupRateResolver(
 		userGroupRateRepo,

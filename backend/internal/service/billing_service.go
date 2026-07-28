@@ -146,6 +146,7 @@ type UsageTokens struct {
 	OutputTokens          int
 	CacheCreationTokens   int
 	CacheReadTokens       int
+	ImageCacheReadTokens  int
 	CacheCreation5mTokens int
 	CacheCreation1hTokens int
 	ImageOutputTokens     int

@@ -51,6 +51,8 @@ export default {
     disabled: 'Disabled',
 	    total: 'Total',
 	    balance: 'Balance',
+	    points: 'Points',
+	    uncategorized: 'Uncategorized',
 	    availableBalance: 'Available balance',
 	    frozenBalance: 'Frozen balance',
 	    totalBalance: 'Total balance',
@@ -198,6 +200,14 @@ export default {
     contentModeration: 'Content Moderation',
     promptAudit: 'Prompt Audit',
     auditLogs: 'Audit Logs',
+    store: 'Store',
+    conversations: 'Support',
+    storeManagement: 'Store Management',
+    storeCategories: 'Categories',
+    storeProducts: 'Products',
+    storeCards: 'Cards',
+    storeFileStorage: 'File Storage',
+    withdrawalManagement: 'Withdrawals',
   },
 
   // Auth

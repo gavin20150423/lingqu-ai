@@ -13,6 +13,7 @@ import (
 	"entgo.io/ent/schema/field"
 	"github.com/Wei-Shaw/sub2api/ent/account"
 	"github.com/Wei-Shaw/sub2api/ent/proxy"
+	"github.com/Wei-Shaw/sub2api/ent/user"
 )
 
 // ProxyCreate is the builder for creating a Proxy entity.
@@ -117,6 +118,20 @@ func (_c *ProxyCreate) SetNillablePassword(v *string) *ProxyCreate {
 	return _c
 }
 
+// SetOwnerUserID sets the "owner_user_id" field.
+func (_c *ProxyCreate) SetOwnerUserID(v int64) *ProxyCreate {
+	_c.mutation.SetOwnerUserID(v)
+	return _c
+}
+
+// SetNillableOwnerUserID sets the "owner_user_id" field if the given value is not nil.
+func (_c *ProxyCreate) SetNillableOwnerUserID(v *int64) *ProxyCreate {
+	if v != nil {
+		_c.SetOwnerUserID(*v)
+	}
+	return _c
+}
+
 // SetStatus sets the "status" field.
 func (_c *ProxyCreate) SetStatus(v string) *ProxyCreate {
 	_c.mutation.SetStatus(v)
@@ -127,6 +142,20 @@ func (_c *ProxyCreate) SetStatus(v string) *ProxyCreate {
 func (_c *ProxyCreate) SetNillableStatus(v *string) *ProxyCreate {
 	if v != nil {
 		_c.SetStatus(*v)
+	}
+	return _c
+}
+
+// SetMaxAccounts sets the "max_accounts" field.
+func (_c *ProxyCreate) SetMaxAccounts(v int) *ProxyCreate {
+	_c.mutation.SetMaxAccounts(v)
+	return _c
+}
+
+// SetNillableMaxAccounts sets the "max_accounts" field if the given value is not nil.
+func (_c *ProxyCreate) SetNillableMaxAccounts(v *int) *ProxyCreate {
+	if v != nil {
+		_c.SetMaxAccounts(*v)
 	}
 	return _c
 }
@@ -202,6 +231,25 @@ func (_c *ProxyCreate) AddAccounts(v ...*Account) *ProxyCreate {
 	return _c.AddAccountIDs(ids...)
 }
 
+// SetOwnerID sets the "owner" edge to the User entity by ID.
+func (_c *ProxyCreate) SetOwnerID(id int64) *ProxyCreate {
+	_c.mutation.SetOwnerID(id)
+	return _c
+}
+
+// SetNillableOwnerID sets the "owner" edge to the User entity by ID if the given value is not nil.
+func (_c *ProxyCreate) SetNillableOwnerID(id *int64) *ProxyCreate {
+	if id != nil {
+		_c = _c.SetOwnerID(*id)
+	}
+	return _c
+}
+
+// SetOwner sets the "owner" edge to the User entity.
+func (_c *ProxyCreate) SetOwner(v *User) *ProxyCreate {
+	return _c.SetOwnerID(v.ID)
+}
+
 // SetBackupProxy sets the "backup_proxy" edge to the Proxy entity.
 func (_c *ProxyCreate) SetBackupProxy(v *Proxy) *ProxyCreate {
 	return _c.SetBackupProxyID(v.ID)
@@ -261,6 +309,10 @@ func (_c *ProxyCreate) defaults() error {
 	if _, ok := _c.mutation.Status(); !ok {
 		v := proxy.DefaultStatus
 		_c.mutation.SetStatus(v)
+	}
+	if _, ok := _c.mutation.MaxAccounts(); !ok {
+		v := proxy.DefaultMaxAccounts
+		_c.mutation.SetMaxAccounts(v)
 	}
 	if _, ok := _c.mutation.FallbackMode(); !ok {
 		v := proxy.DefaultFallbackMode
@@ -324,6 +376,14 @@ func (_c *ProxyCreate) check() error {
 	if v, ok := _c.mutation.Status(); ok {
 		if err := proxy.StatusValidator(v); err != nil {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "Proxy.status": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.MaxAccounts(); !ok {
+		return &ValidationError{Name: "max_accounts", err: errors.New(`ent: missing required field "Proxy.max_accounts"`)}
+	}
+	if v, ok := _c.mutation.MaxAccounts(); ok {
+		if err := proxy.MaxAccountsValidator(v); err != nil {
+			return &ValidationError{Name: "max_accounts", err: fmt.Errorf(`ent: validator failed for field "Proxy.max_accounts": %w`, err)}
 		}
 	}
 	if _, ok := _c.mutation.FallbackMode(); !ok {
@@ -404,6 +464,10 @@ func (_c *ProxyCreate) createSpec() (*Proxy, *sqlgraph.CreateSpec) {
 		_spec.SetField(proxy.FieldStatus, field.TypeString, value)
 		_node.Status = value
 	}
+	if value, ok := _c.mutation.MaxAccounts(); ok {
+		_spec.SetField(proxy.FieldMaxAccounts, field.TypeInt, value)
+		_node.MaxAccounts = value
+	}
 	if value, ok := _c.mutation.ExpiresAt(); ok {
 		_spec.SetField(proxy.FieldExpiresAt, field.TypeTime, value)
 		_node.ExpiresAt = &value
@@ -430,6 +494,23 @@ func (_c *ProxyCreate) createSpec() (*Proxy, *sqlgraph.CreateSpec) {
 		for _, k := range nodes {
 			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.OwnerIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   proxy.OwnerTable,
+			Columns: []string{proxy.OwnerColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(user.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_node.OwnerUserID = &nodes[0]
 		_spec.Edges = append(_spec.Edges, edge)
 	}
 	if nodes := _c.mutation.BackupProxyIDs(); len(nodes) > 0 {
@@ -621,6 +702,24 @@ func (u *ProxyUpsert) ClearPassword() *ProxyUpsert {
 	return u
 }
 
+// SetOwnerUserID sets the "owner_user_id" field.
+func (u *ProxyUpsert) SetOwnerUserID(v int64) *ProxyUpsert {
+	u.Set(proxy.FieldOwnerUserID, v)
+	return u
+}
+
+// UpdateOwnerUserID sets the "owner_user_id" field to the value that was provided on create.
+func (u *ProxyUpsert) UpdateOwnerUserID() *ProxyUpsert {
+	u.SetExcluded(proxy.FieldOwnerUserID)
+	return u
+}
+
+// ClearOwnerUserID clears the value of the "owner_user_id" field.
+func (u *ProxyUpsert) ClearOwnerUserID() *ProxyUpsert {
+	u.SetNull(proxy.FieldOwnerUserID)
+	return u
+}
+
 // SetStatus sets the "status" field.
 func (u *ProxyUpsert) SetStatus(v string) *ProxyUpsert {
 	u.Set(proxy.FieldStatus, v)
@@ -630,6 +729,24 @@ func (u *ProxyUpsert) SetStatus(v string) *ProxyUpsert {
 // UpdateStatus sets the "status" field to the value that was provided on create.
 func (u *ProxyUpsert) UpdateStatus() *ProxyUpsert {
 	u.SetExcluded(proxy.FieldStatus)
+	return u
+}
+
+// SetMaxAccounts sets the "max_accounts" field.
+func (u *ProxyUpsert) SetMaxAccounts(v int) *ProxyUpsert {
+	u.Set(proxy.FieldMaxAccounts, v)
+	return u
+}
+
+// UpdateMaxAccounts sets the "max_accounts" field to the value that was provided on create.
+func (u *ProxyUpsert) UpdateMaxAccounts() *ProxyUpsert {
+	u.SetExcluded(proxy.FieldMaxAccounts)
+	return u
+}
+
+// AddMaxAccounts adds v to the "max_accounts" field.
+func (u *ProxyUpsert) AddMaxAccounts(v int) *ProxyUpsert {
+	u.Add(proxy.FieldMaxAccounts, v)
 	return u
 }
 
@@ -884,6 +1001,27 @@ func (u *ProxyUpsertOne) ClearPassword() *ProxyUpsertOne {
 	})
 }
 
+// SetOwnerUserID sets the "owner_user_id" field.
+func (u *ProxyUpsertOne) SetOwnerUserID(v int64) *ProxyUpsertOne {
+	return u.Update(func(s *ProxyUpsert) {
+		s.SetOwnerUserID(v)
+	})
+}
+
+// UpdateOwnerUserID sets the "owner_user_id" field to the value that was provided on create.
+func (u *ProxyUpsertOne) UpdateOwnerUserID() *ProxyUpsertOne {
+	return u.Update(func(s *ProxyUpsert) {
+		s.UpdateOwnerUserID()
+	})
+}
+
+// ClearOwnerUserID clears the value of the "owner_user_id" field.
+func (u *ProxyUpsertOne) ClearOwnerUserID() *ProxyUpsertOne {
+	return u.Update(func(s *ProxyUpsert) {
+		s.ClearOwnerUserID()
+	})
+}
+
 // SetStatus sets the "status" field.
 func (u *ProxyUpsertOne) SetStatus(v string) *ProxyUpsertOne {
 	return u.Update(func(s *ProxyUpsert) {
@@ -895,6 +1033,27 @@ func (u *ProxyUpsertOne) SetStatus(v string) *ProxyUpsertOne {
 func (u *ProxyUpsertOne) UpdateStatus() *ProxyUpsertOne {
 	return u.Update(func(s *ProxyUpsert) {
 		s.UpdateStatus()
+	})
+}
+
+// SetMaxAccounts sets the "max_accounts" field.
+func (u *ProxyUpsertOne) SetMaxAccounts(v int) *ProxyUpsertOne {
+	return u.Update(func(s *ProxyUpsert) {
+		s.SetMaxAccounts(v)
+	})
+}
+
+// AddMaxAccounts adds v to the "max_accounts" field.
+func (u *ProxyUpsertOne) AddMaxAccounts(v int) *ProxyUpsertOne {
+	return u.Update(func(s *ProxyUpsert) {
+		s.AddMaxAccounts(v)
+	})
+}
+
+// UpdateMaxAccounts sets the "max_accounts" field to the value that was provided on create.
+func (u *ProxyUpsertOne) UpdateMaxAccounts() *ProxyUpsertOne {
+	return u.Update(func(s *ProxyUpsert) {
+		s.UpdateMaxAccounts()
 	})
 }
 
@@ -1326,6 +1485,27 @@ func (u *ProxyUpsertBulk) ClearPassword() *ProxyUpsertBulk {
 	})
 }
 
+// SetOwnerUserID sets the "owner_user_id" field.
+func (u *ProxyUpsertBulk) SetOwnerUserID(v int64) *ProxyUpsertBulk {
+	return u.Update(func(s *ProxyUpsert) {
+		s.SetOwnerUserID(v)
+	})
+}
+
+// UpdateOwnerUserID sets the "owner_user_id" field to the value that was provided on create.
+func (u *ProxyUpsertBulk) UpdateOwnerUserID() *ProxyUpsertBulk {
+	return u.Update(func(s *ProxyUpsert) {
+		s.UpdateOwnerUserID()
+	})
+}
+
+// ClearOwnerUserID clears the value of the "owner_user_id" field.
+func (u *ProxyUpsertBulk) ClearOwnerUserID() *ProxyUpsertBulk {
+	return u.Update(func(s *ProxyUpsert) {
+		s.ClearOwnerUserID()
+	})
+}
+
 // SetStatus sets the "status" field.
 func (u *ProxyUpsertBulk) SetStatus(v string) *ProxyUpsertBulk {
 	return u.Update(func(s *ProxyUpsert) {
@@ -1337,6 +1517,27 @@ func (u *ProxyUpsertBulk) SetStatus(v string) *ProxyUpsertBulk {
 func (u *ProxyUpsertBulk) UpdateStatus() *ProxyUpsertBulk {
 	return u.Update(func(s *ProxyUpsert) {
 		s.UpdateStatus()
+	})
+}
+
+// SetMaxAccounts sets the "max_accounts" field.
+func (u *ProxyUpsertBulk) SetMaxAccounts(v int) *ProxyUpsertBulk {
+	return u.Update(func(s *ProxyUpsert) {
+		s.SetMaxAccounts(v)
+	})
+}
+
+// AddMaxAccounts adds v to the "max_accounts" field.
+func (u *ProxyUpsertBulk) AddMaxAccounts(v int) *ProxyUpsertBulk {
+	return u.Update(func(s *ProxyUpsert) {
+		s.AddMaxAccounts(v)
+	})
+}
+
+// UpdateMaxAccounts sets the "max_accounts" field to the value that was provided on create.
+func (u *ProxyUpsertBulk) UpdateMaxAccounts() *ProxyUpsertBulk {
+	return u.Update(func(s *ProxyUpsert) {
+		s.UpdateMaxAccounts()
 	})
 }
 

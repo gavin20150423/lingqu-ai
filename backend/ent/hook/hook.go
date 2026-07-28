@@ -357,6 +357,78 @@ func (f SettingFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, err
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.SettingMutation", m)
 }
 
+// The ShopBalanceLedgerFunc type is an adapter to allow the use of ordinary
+// function as ShopBalanceLedger mutator.
+type ShopBalanceLedgerFunc func(context.Context, *ent.ShopBalanceLedgerMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f ShopBalanceLedgerFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.ShopBalanceLedgerMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ShopBalanceLedgerMutation", m)
+}
+
+// The ShopCardKeyFunc type is an adapter to allow the use of ordinary
+// function as ShopCardKey mutator.
+type ShopCardKeyFunc func(context.Context, *ent.ShopCardKeyMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f ShopCardKeyFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.ShopCardKeyMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ShopCardKeyMutation", m)
+}
+
+// The ShopCategoryFunc type is an adapter to allow the use of ordinary
+// function as ShopCategory mutator.
+type ShopCategoryFunc func(context.Context, *ent.ShopCategoryMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f ShopCategoryFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.ShopCategoryMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ShopCategoryMutation", m)
+}
+
+// The ShopDrawCycleFunc type is an adapter to allow the use of ordinary
+// function as ShopDrawCycle mutator.
+type ShopDrawCycleFunc func(context.Context, *ent.ShopDrawCycleMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f ShopDrawCycleFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.ShopDrawCycleMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ShopDrawCycleMutation", m)
+}
+
+// The ShopOrderFunc type is an adapter to allow the use of ordinary
+// function as ShopOrder mutator.
+type ShopOrderFunc func(context.Context, *ent.ShopOrderMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f ShopOrderFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.ShopOrderMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ShopOrderMutation", m)
+}
+
+// The ShopProductFunc type is an adapter to allow the use of ordinary
+// function as ShopProduct mutator.
+type ShopProductFunc func(context.Context, *ent.ShopProductMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f ShopProductFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.ShopProductMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ShopProductMutation", m)
+}
+
 // The SubscriptionPlanFunc type is an adapter to allow the use of ordinary
 // function as SubscriptionPlan mutator.
 type SubscriptionPlanFunc func(context.Context, *ent.SubscriptionPlanMutation) (ent.Value, error)
@@ -367,6 +439,30 @@ func (f SubscriptionPlanFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.V
 		return f(ctx, mv)
 	}
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.SubscriptionPlanMutation", m)
+}
+
+// The SupportMessageFunc type is an adapter to allow the use of ordinary
+// function as SupportMessage mutator.
+type SupportMessageFunc func(context.Context, *ent.SupportMessageMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f SupportMessageFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.SupportMessageMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.SupportMessageMutation", m)
+}
+
+// The SupportThreadFunc type is an adapter to allow the use of ordinary
+// function as SupportThread mutator.
+type SupportThreadFunc func(context.Context, *ent.SupportThreadMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f SupportThreadFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.SupportThreadMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.SupportThreadMutation", m)
 }
 
 // The TLSFingerprintProfileFunc type is an adapter to allow the use of ordinary

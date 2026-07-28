@@ -35,7 +35,15 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/schema"
 	"github.com/Wei-Shaw/sub2api/ent/securitysecret"
 	"github.com/Wei-Shaw/sub2api/ent/setting"
+	"github.com/Wei-Shaw/sub2api/ent/shopbalanceledger"
+	"github.com/Wei-Shaw/sub2api/ent/shopcardkey"
+	"github.com/Wei-Shaw/sub2api/ent/shopcategory"
+	"github.com/Wei-Shaw/sub2api/ent/shopdrawcycle"
+	"github.com/Wei-Shaw/sub2api/ent/shoporder"
+	"github.com/Wei-Shaw/sub2api/ent/shopproduct"
 	"github.com/Wei-Shaw/sub2api/ent/subscriptionplan"
+	"github.com/Wei-Shaw/sub2api/ent/supportmessage"
+	"github.com/Wei-Shaw/sub2api/ent/supportthread"
 	"github.com/Wei-Shaw/sub2api/ent/tlsfingerprintprofile"
 	"github.com/Wei-Shaw/sub2api/ent/usagecleanuptask"
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
@@ -1306,45 +1314,45 @@ func init() {
 	// paymentorder.OrderTypeValidator is a validator for the "order_type" field. It is called by the builders before save.
 	paymentorder.OrderTypeValidator = paymentorderDescOrderType.Validators[0].(func(string) error)
 	// paymentorderDescProviderInstanceID is the schema descriptor for provider_instance_id field.
-	paymentorderDescProviderInstanceID := paymentorderFields[18].Descriptor()
+	paymentorderDescProviderInstanceID := paymentorderFields[19].Descriptor()
 	// paymentorder.ProviderInstanceIDValidator is a validator for the "provider_instance_id" field. It is called by the builders before save.
 	paymentorder.ProviderInstanceIDValidator = paymentorderDescProviderInstanceID.Validators[0].(func(string) error)
 	// paymentorderDescProviderKey is the schema descriptor for provider_key field.
-	paymentorderDescProviderKey := paymentorderFields[19].Descriptor()
+	paymentorderDescProviderKey := paymentorderFields[20].Descriptor()
 	// paymentorder.ProviderKeyValidator is a validator for the "provider_key" field. It is called by the builders before save.
 	paymentorder.ProviderKeyValidator = paymentorderDescProviderKey.Validators[0].(func(string) error)
 	// paymentorderDescStatus is the schema descriptor for status field.
-	paymentorderDescStatus := paymentorderFields[21].Descriptor()
+	paymentorderDescStatus := paymentorderFields[22].Descriptor()
 	// paymentorder.DefaultStatus holds the default value on creation for the status field.
 	paymentorder.DefaultStatus = paymentorderDescStatus.Default.(string)
 	// paymentorder.StatusValidator is a validator for the "status" field. It is called by the builders before save.
 	paymentorder.StatusValidator = paymentorderDescStatus.Validators[0].(func(string) error)
 	// paymentorderDescRefundAmount is the schema descriptor for refund_amount field.
-	paymentorderDescRefundAmount := paymentorderFields[22].Descriptor()
+	paymentorderDescRefundAmount := paymentorderFields[23].Descriptor()
 	// paymentorder.DefaultRefundAmount holds the default value on creation for the refund_amount field.
 	paymentorder.DefaultRefundAmount = paymentorderDescRefundAmount.Default.(float64)
 	// paymentorderDescForceRefund is the schema descriptor for force_refund field.
-	paymentorderDescForceRefund := paymentorderFields[25].Descriptor()
+	paymentorderDescForceRefund := paymentorderFields[26].Descriptor()
 	// paymentorder.DefaultForceRefund holds the default value on creation for the force_refund field.
 	paymentorder.DefaultForceRefund = paymentorderDescForceRefund.Default.(bool)
 	// paymentorderDescRefundRequestedBy is the schema descriptor for refund_requested_by field.
-	paymentorderDescRefundRequestedBy := paymentorderFields[28].Descriptor()
+	paymentorderDescRefundRequestedBy := paymentorderFields[29].Descriptor()
 	// paymentorder.RefundRequestedByValidator is a validator for the "refund_requested_by" field. It is called by the builders before save.
 	paymentorder.RefundRequestedByValidator = paymentorderDescRefundRequestedBy.Validators[0].(func(string) error)
 	// paymentorderDescClientIP is the schema descriptor for client_ip field.
-	paymentorderDescClientIP := paymentorderFields[34].Descriptor()
+	paymentorderDescClientIP := paymentorderFields[35].Descriptor()
 	// paymentorder.ClientIPValidator is a validator for the "client_ip" field. It is called by the builders before save.
 	paymentorder.ClientIPValidator = paymentorderDescClientIP.Validators[0].(func(string) error)
 	// paymentorderDescSrcHost is the schema descriptor for src_host field.
-	paymentorderDescSrcHost := paymentorderFields[35].Descriptor()
+	paymentorderDescSrcHost := paymentorderFields[36].Descriptor()
 	// paymentorder.SrcHostValidator is a validator for the "src_host" field. It is called by the builders before save.
 	paymentorder.SrcHostValidator = paymentorderDescSrcHost.Validators[0].(func(string) error)
 	// paymentorderDescCreatedAt is the schema descriptor for created_at field.
-	paymentorderDescCreatedAt := paymentorderFields[37].Descriptor()
+	paymentorderDescCreatedAt := paymentorderFields[38].Descriptor()
 	// paymentorder.DefaultCreatedAt holds the default value on creation for the created_at field.
 	paymentorder.DefaultCreatedAt = paymentorderDescCreatedAt.Default.(func() time.Time)
 	// paymentorderDescUpdatedAt is the schema descriptor for updated_at field.
-	paymentorderDescUpdatedAt := paymentorderFields[38].Descriptor()
+	paymentorderDescUpdatedAt := paymentorderFields[39].Descriptor()
 	// paymentorder.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	paymentorder.DefaultUpdatedAt = paymentorderDescUpdatedAt.Default.(func() time.Time)
 	// paymentorder.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
@@ -1660,19 +1668,25 @@ func init() {
 	// proxy.PasswordValidator is a validator for the "password" field. It is called by the builders before save.
 	proxy.PasswordValidator = proxyDescPassword.Validators[0].(func(string) error)
 	// proxyDescStatus is the schema descriptor for status field.
-	proxyDescStatus := proxyFields[6].Descriptor()
+	proxyDescStatus := proxyFields[7].Descriptor()
 	// proxy.DefaultStatus holds the default value on creation for the status field.
 	proxy.DefaultStatus = proxyDescStatus.Default.(string)
 	// proxy.StatusValidator is a validator for the "status" field. It is called by the builders before save.
 	proxy.StatusValidator = proxyDescStatus.Validators[0].(func(string) error)
+	// proxyDescMaxAccounts is the schema descriptor for max_accounts field.
+	proxyDescMaxAccounts := proxyFields[8].Descriptor()
+	// proxy.DefaultMaxAccounts holds the default value on creation for the max_accounts field.
+	proxy.DefaultMaxAccounts = proxyDescMaxAccounts.Default.(int)
+	// proxy.MaxAccountsValidator is a validator for the "max_accounts" field. It is called by the builders before save.
+	proxy.MaxAccountsValidator = proxyDescMaxAccounts.Validators[0].(func(int) error)
 	// proxyDescFallbackMode is the schema descriptor for fallback_mode field.
-	proxyDescFallbackMode := proxyFields[8].Descriptor()
+	proxyDescFallbackMode := proxyFields[10].Descriptor()
 	// proxy.DefaultFallbackMode holds the default value on creation for the fallback_mode field.
 	proxy.DefaultFallbackMode = proxyDescFallbackMode.Default.(string)
 	// proxy.FallbackModeValidator is a validator for the "fallback_mode" field. It is called by the builders before save.
 	proxy.FallbackModeValidator = proxyDescFallbackMode.Validators[0].(func(string) error)
 	// proxyDescExpiryWarnDays is the schema descriptor for expiry_warn_days field.
-	proxyDescExpiryWarnDays := proxyFields[10].Descriptor()
+	proxyDescExpiryWarnDays := proxyFields[12].Descriptor()
 	// proxy.DefaultExpiryWarnDays holds the default value on creation for the expiry_warn_days field.
 	proxy.DefaultExpiryWarnDays = proxyDescExpiryWarnDays.Default.(int)
 	redeemcodeFields := schema.RedeemCode{}.Fields()
@@ -1782,6 +1796,308 @@ func init() {
 	setting.DefaultUpdatedAt = settingDescUpdatedAt.Default.(func() time.Time)
 	// setting.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	setting.UpdateDefaultUpdatedAt = settingDescUpdatedAt.UpdateDefault.(func() time.Time)
+	shopbalanceledgerMixin := schema.ShopBalanceLedger{}.Mixin()
+	shopbalanceledgerMixinFields0 := shopbalanceledgerMixin[0].Fields()
+	_ = shopbalanceledgerMixinFields0
+	shopbalanceledgerFields := schema.ShopBalanceLedger{}.Fields()
+	_ = shopbalanceledgerFields
+	// shopbalanceledgerDescCreatedAt is the schema descriptor for created_at field.
+	shopbalanceledgerDescCreatedAt := shopbalanceledgerMixinFields0[0].Descriptor()
+	// shopbalanceledger.DefaultCreatedAt holds the default value on creation for the created_at field.
+	shopbalanceledger.DefaultCreatedAt = shopbalanceledgerDescCreatedAt.Default.(func() time.Time)
+	// shopbalanceledgerDescUpdatedAt is the schema descriptor for updated_at field.
+	shopbalanceledgerDescUpdatedAt := shopbalanceledgerMixinFields0[1].Descriptor()
+	// shopbalanceledger.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	shopbalanceledger.DefaultUpdatedAt = shopbalanceledgerDescUpdatedAt.Default.(func() time.Time)
+	// shopbalanceledger.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	shopbalanceledger.UpdateDefaultUpdatedAt = shopbalanceledgerDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// shopbalanceledgerDescEntryType is the schema descriptor for entry_type field.
+	shopbalanceledgerDescEntryType := shopbalanceledgerFields[2].Descriptor()
+	// shopbalanceledger.EntryTypeValidator is a validator for the "entry_type" field. It is called by the builders before save.
+	shopbalanceledger.EntryTypeValidator = shopbalanceledgerDescEntryType.Validators[0].(func(string) error)
+	// shopbalanceledgerDescDebitAmount is the schema descriptor for debit_amount field.
+	shopbalanceledgerDescDebitAmount := shopbalanceledgerFields[3].Descriptor()
+	// shopbalanceledger.DefaultDebitAmount holds the default value on creation for the debit_amount field.
+	shopbalanceledger.DefaultDebitAmount = shopbalanceledgerDescDebitAmount.Default.(float64)
+	// shopbalanceledgerDescCreditAmount is the schema descriptor for credit_amount field.
+	shopbalanceledgerDescCreditAmount := shopbalanceledgerFields[4].Descriptor()
+	// shopbalanceledger.DefaultCreditAmount holds the default value on creation for the credit_amount field.
+	shopbalanceledger.DefaultCreditAmount = shopbalanceledgerDescCreditAmount.Default.(float64)
+	shopcardkeyMixin := schema.ShopCardKey{}.Mixin()
+	shopcardkeyMixinFields0 := shopcardkeyMixin[0].Fields()
+	_ = shopcardkeyMixinFields0
+	shopcardkeyFields := schema.ShopCardKey{}.Fields()
+	_ = shopcardkeyFields
+	// shopcardkeyDescCreatedAt is the schema descriptor for created_at field.
+	shopcardkeyDescCreatedAt := shopcardkeyMixinFields0[0].Descriptor()
+	// shopcardkey.DefaultCreatedAt holds the default value on creation for the created_at field.
+	shopcardkey.DefaultCreatedAt = shopcardkeyDescCreatedAt.Default.(func() time.Time)
+	// shopcardkeyDescUpdatedAt is the schema descriptor for updated_at field.
+	shopcardkeyDescUpdatedAt := shopcardkeyMixinFields0[1].Descriptor()
+	// shopcardkey.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	shopcardkey.DefaultUpdatedAt = shopcardkeyDescUpdatedAt.Default.(func() time.Time)
+	// shopcardkey.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	shopcardkey.UpdateDefaultUpdatedAt = shopcardkeyDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// shopcardkeyDescContent is the schema descriptor for content field.
+	shopcardkeyDescContent := shopcardkeyFields[1].Descriptor()
+	// shopcardkey.ContentValidator is a validator for the "content" field. It is called by the builders before save.
+	shopcardkey.ContentValidator = shopcardkeyDescContent.Validators[0].(func(string) error)
+	// shopcardkeyDescStatus is the schema descriptor for status field.
+	shopcardkeyDescStatus := shopcardkeyFields[2].Descriptor()
+	// shopcardkey.DefaultStatus holds the default value on creation for the status field.
+	shopcardkey.DefaultStatus = shopcardkeyDescStatus.Default.(string)
+	// shopcardkey.StatusValidator is a validator for the "status" field. It is called by the builders before save.
+	shopcardkey.StatusValidator = shopcardkeyDescStatus.Validators[0].(func(string) error)
+	shopcategoryMixin := schema.ShopCategory{}.Mixin()
+	shopcategoryMixinFields0 := shopcategoryMixin[0].Fields()
+	_ = shopcategoryMixinFields0
+	shopcategoryFields := schema.ShopCategory{}.Fields()
+	_ = shopcategoryFields
+	// shopcategoryDescCreatedAt is the schema descriptor for created_at field.
+	shopcategoryDescCreatedAt := shopcategoryMixinFields0[0].Descriptor()
+	// shopcategory.DefaultCreatedAt holds the default value on creation for the created_at field.
+	shopcategory.DefaultCreatedAt = shopcategoryDescCreatedAt.Default.(func() time.Time)
+	// shopcategoryDescUpdatedAt is the schema descriptor for updated_at field.
+	shopcategoryDescUpdatedAt := shopcategoryMixinFields0[1].Descriptor()
+	// shopcategory.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	shopcategory.DefaultUpdatedAt = shopcategoryDescUpdatedAt.Default.(func() time.Time)
+	// shopcategory.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	shopcategory.UpdateDefaultUpdatedAt = shopcategoryDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// shopcategoryDescName is the schema descriptor for name field.
+	shopcategoryDescName := shopcategoryFields[0].Descriptor()
+	// shopcategory.NameValidator is a validator for the "name" field. It is called by the builders before save.
+	shopcategory.NameValidator = func() func(string) error {
+		validators := shopcategoryDescName.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(name string) error {
+			for _, fn := range fns {
+				if err := fn(name); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// shopcategoryDescIcon is the schema descriptor for icon field.
+	shopcategoryDescIcon := shopcategoryFields[1].Descriptor()
+	// shopcategory.IconValidator is a validator for the "icon" field. It is called by the builders before save.
+	shopcategory.IconValidator = shopcategoryDescIcon.Validators[0].(func(string) error)
+	// shopcategoryDescSortOrder is the schema descriptor for sort_order field.
+	shopcategoryDescSortOrder := shopcategoryFields[2].Descriptor()
+	// shopcategory.DefaultSortOrder holds the default value on creation for the sort_order field.
+	shopcategory.DefaultSortOrder = shopcategoryDescSortOrder.Default.(int)
+	// shopcategoryDescEnabled is the schema descriptor for enabled field.
+	shopcategoryDescEnabled := shopcategoryFields[3].Descriptor()
+	// shopcategory.DefaultEnabled holds the default value on creation for the enabled field.
+	shopcategory.DefaultEnabled = shopcategoryDescEnabled.Default.(bool)
+	shopdrawcycleMixin := schema.ShopDrawCycle{}.Mixin()
+	shopdrawcycleMixinFields0 := shopdrawcycleMixin[0].Fields()
+	_ = shopdrawcycleMixinFields0
+	shopdrawcycleFields := schema.ShopDrawCycle{}.Fields()
+	_ = shopdrawcycleFields
+	// shopdrawcycleDescCreatedAt is the schema descriptor for created_at field.
+	shopdrawcycleDescCreatedAt := shopdrawcycleMixinFields0[0].Descriptor()
+	// shopdrawcycle.DefaultCreatedAt holds the default value on creation for the created_at field.
+	shopdrawcycle.DefaultCreatedAt = shopdrawcycleDescCreatedAt.Default.(func() time.Time)
+	// shopdrawcycleDescUpdatedAt is the schema descriptor for updated_at field.
+	shopdrawcycleDescUpdatedAt := shopdrawcycleMixinFields0[1].Descriptor()
+	// shopdrawcycle.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	shopdrawcycle.DefaultUpdatedAt = shopdrawcycleDescUpdatedAt.Default.(func() time.Time)
+	// shopdrawcycle.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	shopdrawcycle.UpdateDefaultUpdatedAt = shopdrawcycleDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// shopdrawcycleDescDrawnCount is the schema descriptor for drawn_count field.
+	shopdrawcycleDescDrawnCount := shopdrawcycleFields[6].Descriptor()
+	// shopdrawcycle.DefaultDrawnCount holds the default value on creation for the drawn_count field.
+	shopdrawcycle.DefaultDrawnCount = shopdrawcycleDescDrawnCount.Default.(int)
+	// shopdrawcycleDescDrawnAmount is the schema descriptor for drawn_amount field.
+	shopdrawcycleDescDrawnAmount := shopdrawcycleFields[7].Descriptor()
+	// shopdrawcycle.DefaultDrawnAmount holds the default value on creation for the drawn_amount field.
+	shopdrawcycle.DefaultDrawnAmount = shopdrawcycleDescDrawnAmount.Default.(float64)
+	// shopdrawcycleDescCompleted is the schema descriptor for completed field.
+	shopdrawcycleDescCompleted := shopdrawcycleFields[8].Descriptor()
+	// shopdrawcycle.DefaultCompleted holds the default value on creation for the completed field.
+	shopdrawcycle.DefaultCompleted = shopdrawcycleDescCompleted.Default.(bool)
+	shoporderMixin := schema.ShopOrder{}.Mixin()
+	shoporderMixinFields0 := shoporderMixin[0].Fields()
+	_ = shoporderMixinFields0
+	shoporderFields := schema.ShopOrder{}.Fields()
+	_ = shoporderFields
+	// shoporderDescCreatedAt is the schema descriptor for created_at field.
+	shoporderDescCreatedAt := shoporderMixinFields0[0].Descriptor()
+	// shoporder.DefaultCreatedAt holds the default value on creation for the created_at field.
+	shoporder.DefaultCreatedAt = shoporderDescCreatedAt.Default.(func() time.Time)
+	// shoporderDescUpdatedAt is the schema descriptor for updated_at field.
+	shoporderDescUpdatedAt := shoporderMixinFields0[1].Descriptor()
+	// shoporder.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	shoporder.DefaultUpdatedAt = shoporderDescUpdatedAt.Default.(func() time.Time)
+	// shoporder.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	shoporder.UpdateDefaultUpdatedAt = shoporderDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// shoporderDescOrderNo is the schema descriptor for order_no field.
+	shoporderDescOrderNo := shoporderFields[0].Descriptor()
+	// shoporder.OrderNoValidator is a validator for the "order_no" field. It is called by the builders before save.
+	shoporder.OrderNoValidator = func() func(string) error {
+		validators := shoporderDescOrderNo.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(order_no string) error {
+			for _, fn := range fns {
+				if err := fn(order_no); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// shoporderDescProductName is the schema descriptor for product_name field.
+	shoporderDescProductName := shoporderFields[3].Descriptor()
+	// shoporder.ProductNameValidator is a validator for the "product_name" field. It is called by the builders before save.
+	shoporder.ProductNameValidator = func() func(string) error {
+		validators := shoporderDescProductName.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(product_name string) error {
+			for _, fn := range fns {
+				if err := fn(product_name); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// shoporderDescProductType is the schema descriptor for product_type field.
+	shoporderDescProductType := shoporderFields[6].Descriptor()
+	// shoporder.DefaultProductType holds the default value on creation for the product_type field.
+	shoporder.DefaultProductType = shoporderDescProductType.Default.(string)
+	// shoporder.ProductTypeValidator is a validator for the "product_type" field. It is called by the builders before save.
+	shoporder.ProductTypeValidator = shoporderDescProductType.Validators[0].(func(string) error)
+	// shoporderDescPointsAmount is the schema descriptor for points_amount field.
+	shoporderDescPointsAmount := shoporderFields[10].Descriptor()
+	// shoporder.DefaultPointsAmount holds the default value on creation for the points_amount field.
+	shoporder.DefaultPointsAmount = shoporderDescPointsAmount.Default.(float64)
+	// shoporderDescPaymentMethod is the schema descriptor for payment_method field.
+	shoporderDescPaymentMethod := shoporderFields[11].Descriptor()
+	// shoporder.PaymentMethodValidator is a validator for the "payment_method" field. It is called by the builders before save.
+	shoporder.PaymentMethodValidator = shoporderDescPaymentMethod.Validators[0].(func(string) error)
+	// shoporderDescStatus is the schema descriptor for status field.
+	shoporderDescStatus := shoporderFields[13].Descriptor()
+	// shoporder.DefaultStatus holds the default value on creation for the status field.
+	shoporder.DefaultStatus = shoporderDescStatus.Default.(string)
+	// shoporder.StatusValidator is a validator for the "status" field. It is called by the builders before save.
+	shoporder.StatusValidator = shoporderDescStatus.Validators[0].(func(string) error)
+	// shoporderDescLoadFactorCreditsAwarded is the schema descriptor for load_factor_credits_awarded field.
+	shoporderDescLoadFactorCreditsAwarded := shoporderFields[15].Descriptor()
+	// shoporder.DefaultLoadFactorCreditsAwarded holds the default value on creation for the load_factor_credits_awarded field.
+	shoporder.DefaultLoadFactorCreditsAwarded = shoporderDescLoadFactorCreditsAwarded.Default.(int)
+	shopproductMixin := schema.ShopProduct{}.Mixin()
+	shopproductMixinFields0 := shopproductMixin[0].Fields()
+	_ = shopproductMixinFields0
+	shopproductFields := schema.ShopProduct{}.Fields()
+	_ = shopproductFields
+	// shopproductDescCreatedAt is the schema descriptor for created_at field.
+	shopproductDescCreatedAt := shopproductMixinFields0[0].Descriptor()
+	// shopproduct.DefaultCreatedAt holds the default value on creation for the created_at field.
+	shopproduct.DefaultCreatedAt = shopproductDescCreatedAt.Default.(func() time.Time)
+	// shopproductDescUpdatedAt is the schema descriptor for updated_at field.
+	shopproductDescUpdatedAt := shopproductMixinFields0[1].Descriptor()
+	// shopproduct.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	shopproduct.DefaultUpdatedAt = shopproductDescUpdatedAt.Default.(func() time.Time)
+	// shopproduct.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	shopproduct.UpdateDefaultUpdatedAt = shopproductDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// shopproductDescName is the schema descriptor for name field.
+	shopproductDescName := shopproductFields[1].Descriptor()
+	// shopproduct.NameValidator is a validator for the "name" field. It is called by the builders before save.
+	shopproduct.NameValidator = func() func(string) error {
+		validators := shopproductDescName.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(name string) error {
+			for _, fn := range fns {
+				if err := fn(name); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// shopproductDescPrice is the schema descriptor for price field.
+	shopproductDescPrice := shopproductFields[4].Descriptor()
+	// shopproduct.DefaultPrice holds the default value on creation for the price field.
+	shopproduct.DefaultPrice = shopproductDescPrice.Default.(float64)
+	// shopproductDescEnabled is the schema descriptor for enabled field.
+	shopproductDescEnabled := shopproductFields[6].Descriptor()
+	// shopproduct.DefaultEnabled holds the default value on creation for the enabled field.
+	shopproduct.DefaultEnabled = shopproductDescEnabled.Default.(bool)
+	// shopproductDescSortOrder is the schema descriptor for sort_order field.
+	shopproductDescSortOrder := shopproductFields[7].Descriptor()
+	// shopproduct.DefaultSortOrder holds the default value on creation for the sort_order field.
+	shopproduct.DefaultSortOrder = shopproductDescSortOrder.Default.(int)
+	// shopproductDescMinPurchase is the schema descriptor for min_purchase field.
+	shopproductDescMinPurchase := shopproductFields[8].Descriptor()
+	// shopproduct.DefaultMinPurchase holds the default value on creation for the min_purchase field.
+	shopproduct.DefaultMinPurchase = shopproductDescMinPurchase.Default.(int)
+	// shopproductDescMaxPurchase is the schema descriptor for max_purchase field.
+	shopproductDescMaxPurchase := shopproductFields[9].Descriptor()
+	// shopproduct.DefaultMaxPurchase holds the default value on creation for the max_purchase field.
+	shopproduct.DefaultMaxPurchase = shopproductDescMaxPurchase.Default.(int)
+	// shopproductDescAutoDelivery is the schema descriptor for auto_delivery field.
+	shopproductDescAutoDelivery := shopproductFields[10].Descriptor()
+	// shopproduct.DefaultAutoDelivery holds the default value on creation for the auto_delivery field.
+	shopproduct.DefaultAutoDelivery = shopproductDescAutoDelivery.Default.(bool)
+	// shopproductDescProductType is the schema descriptor for product_type field.
+	shopproductDescProductType := shopproductFields[11].Descriptor()
+	// shopproduct.DefaultProductType holds the default value on creation for the product_type field.
+	shopproduct.DefaultProductType = shopproductDescProductType.Default.(string)
+	// shopproduct.ProductTypeValidator is a validator for the "product_type" field. It is called by the builders before save.
+	shopproduct.ProductTypeValidator = shopproductDescProductType.Validators[0].(func(string) error)
+	// shopproductDescBalanceOnly is the schema descriptor for balance_only field.
+	shopproductDescBalanceOnly := shopproductFields[12].Descriptor()
+	// shopproduct.DefaultBalanceOnly holds the default value on creation for the balance_only field.
+	shopproduct.DefaultBalanceOnly = shopproductDescBalanceOnly.Default.(bool)
+	// shopproductDescAllowBalancePayment is the schema descriptor for allow_balance_payment field.
+	shopproductDescAllowBalancePayment := shopproductFields[13].Descriptor()
+	// shopproduct.DefaultAllowBalancePayment holds the default value on creation for the allow_balance_payment field.
+	shopproduct.DefaultAllowBalancePayment = shopproductDescAllowBalancePayment.Default.(bool)
+	// shopproductDescAllowPointsPayment is the schema descriptor for allow_points_payment field.
+	shopproductDescAllowPointsPayment := shopproductFields[14].Descriptor()
+	// shopproduct.DefaultAllowPointsPayment holds the default value on creation for the allow_points_payment field.
+	shopproduct.DefaultAllowPointsPayment = shopproductDescAllowPointsPayment.Default.(bool)
+	// shopproductDescAllowPlatformPayment is the schema descriptor for allow_platform_payment field.
+	shopproductDescAllowPlatformPayment := shopproductFields[15].Descriptor()
+	// shopproduct.DefaultAllowPlatformPayment holds the default value on creation for the allow_platform_payment field.
+	shopproduct.DefaultAllowPlatformPayment = shopproductDescAllowPlatformPayment.Default.(bool)
+	// shopproductDescDrawEnabled is the schema descriptor for draw_enabled field.
+	shopproductDescDrawEnabled := shopproductFields[16].Descriptor()
+	// shopproduct.DefaultDrawEnabled holds the default value on creation for the draw_enabled field.
+	shopproduct.DefaultDrawEnabled = shopproductDescDrawEnabled.Default.(bool)
+	// shopproductDescLoadFactorCreditsPerUnit is the schema descriptor for load_factor_credits_per_unit field.
+	shopproductDescLoadFactorCreditsPerUnit := shopproductFields[17].Descriptor()
+	// shopproduct.DefaultLoadFactorCreditsPerUnit holds the default value on creation for the load_factor_credits_per_unit field.
+	shopproduct.DefaultLoadFactorCreditsPerUnit = shopproductDescLoadFactorCreditsPerUnit.Default.(int)
+	// shopproductDescDrawMinAmount is the schema descriptor for draw_min_amount field.
+	shopproductDescDrawMinAmount := shopproductFields[18].Descriptor()
+	// shopproduct.DefaultDrawMinAmount holds the default value on creation for the draw_min_amount field.
+	shopproduct.DefaultDrawMinAmount = shopproductDescDrawMinAmount.Default.(float64)
+	// shopproductDescDrawMaxAmount is the schema descriptor for draw_max_amount field.
+	shopproductDescDrawMaxAmount := shopproductFields[19].Descriptor()
+	// shopproduct.DefaultDrawMaxAmount holds the default value on creation for the draw_max_amount field.
+	shopproduct.DefaultDrawMaxAmount = shopproductDescDrawMaxAmount.Default.(float64)
+	// shopproductDescDrawGuaranteeCount is the schema descriptor for draw_guarantee_count field.
+	shopproductDescDrawGuaranteeCount := shopproductFields[20].Descriptor()
+	// shopproduct.DefaultDrawGuaranteeCount holds the default value on creation for the draw_guarantee_count field.
+	shopproduct.DefaultDrawGuaranteeCount = shopproductDescDrawGuaranteeCount.Default.(int)
+	// shopproductDescDrawReturnRate is the schema descriptor for draw_return_rate field.
+	shopproductDescDrawReturnRate := shopproductFields[21].Descriptor()
+	// shopproduct.DefaultDrawReturnRate holds the default value on creation for the draw_return_rate field.
+	shopproduct.DefaultDrawReturnRate = shopproductDescDrawReturnRate.Default.(float64)
 	subscriptionplanFields := schema.SubscriptionPlan{}.Fields()
 	_ = subscriptionplanFields
 	// subscriptionplanDescName is the schema descriptor for name field.
@@ -1850,6 +2166,105 @@ func init() {
 	subscriptionplan.DefaultUpdatedAt = subscriptionplanDescUpdatedAt.Default.(func() time.Time)
 	// subscriptionplan.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	subscriptionplan.UpdateDefaultUpdatedAt = subscriptionplanDescUpdatedAt.UpdateDefault.(func() time.Time)
+	supportmessageFields := schema.SupportMessage{}.Fields()
+	_ = supportmessageFields
+	// supportmessageDescSenderType is the schema descriptor for sender_type field.
+	supportmessageDescSenderType := supportmessageFields[1].Descriptor()
+	// supportmessage.SenderTypeValidator is a validator for the "sender_type" field. It is called by the builders before save.
+	supportmessage.SenderTypeValidator = supportmessageDescSenderType.Validators[0].(func(string) error)
+	// supportmessageDescMessageType is the schema descriptor for message_type field.
+	supportmessageDescMessageType := supportmessageFields[3].Descriptor()
+	// supportmessage.DefaultMessageType holds the default value on creation for the message_type field.
+	supportmessage.DefaultMessageType = supportmessageDescMessageType.Default.(string)
+	// supportmessage.MessageTypeValidator is a validator for the "message_type" field. It is called by the builders before save.
+	supportmessage.MessageTypeValidator = supportmessageDescMessageType.Validators[0].(func(string) error)
+	// supportmessageDescContentFormat is the schema descriptor for content_format field.
+	supportmessageDescContentFormat := supportmessageFields[4].Descriptor()
+	// supportmessage.DefaultContentFormat holds the default value on creation for the content_format field.
+	supportmessage.DefaultContentFormat = supportmessageDescContentFormat.Default.(string)
+	// supportmessage.ContentFormatValidator is a validator for the "content_format" field. It is called by the builders before save.
+	supportmessage.ContentFormatValidator = supportmessageDescContentFormat.Validators[0].(func(string) error)
+	// supportmessageDescTitle is the schema descriptor for title field.
+	supportmessageDescTitle := supportmessageFields[5].Descriptor()
+	// supportmessage.DefaultTitle holds the default value on creation for the title field.
+	supportmessage.DefaultTitle = supportmessageDescTitle.Default.(string)
+	// supportmessage.TitleValidator is a validator for the "title" field. It is called by the builders before save.
+	supportmessage.TitleValidator = supportmessageDescTitle.Validators[0].(func(string) error)
+	// supportmessageDescContent is the schema descriptor for content field.
+	supportmessageDescContent := supportmessageFields[6].Descriptor()
+	// supportmessage.ContentValidator is a validator for the "content" field. It is called by the builders before save.
+	supportmessage.ContentValidator = supportmessageDescContent.Validators[0].(func(string) error)
+	// supportmessageDescSource is the schema descriptor for source field.
+	supportmessageDescSource := supportmessageFields[7].Descriptor()
+	// supportmessage.DefaultSource holds the default value on creation for the source field.
+	supportmessage.DefaultSource = supportmessageDescSource.Default.(string)
+	// supportmessage.SourceValidator is a validator for the "source" field. It is called by the builders before save.
+	supportmessage.SourceValidator = supportmessageDescSource.Validators[0].(func(string) error)
+	// supportmessageDescSourceID is the schema descriptor for source_id field.
+	supportmessageDescSourceID := supportmessageFields[8].Descriptor()
+	// supportmessage.DefaultSourceID holds the default value on creation for the source_id field.
+	supportmessage.DefaultSourceID = supportmessageDescSourceID.Default.(string)
+	// supportmessage.SourceIDValidator is a validator for the "source_id" field. It is called by the builders before save.
+	supportmessage.SourceIDValidator = supportmessageDescSourceID.Validators[0].(func(string) error)
+	// supportmessageDescCreatedAt is the schema descriptor for created_at field.
+	supportmessageDescCreatedAt := supportmessageFields[10].Descriptor()
+	// supportmessage.DefaultCreatedAt holds the default value on creation for the created_at field.
+	supportmessage.DefaultCreatedAt = supportmessageDescCreatedAt.Default.(func() time.Time)
+	supportthreadMixin := schema.SupportThread{}.Mixin()
+	supportthreadMixinFields0 := supportthreadMixin[0].Fields()
+	_ = supportthreadMixinFields0
+	supportthreadFields := schema.SupportThread{}.Fields()
+	_ = supportthreadFields
+	// supportthreadDescCreatedAt is the schema descriptor for created_at field.
+	supportthreadDescCreatedAt := supportthreadMixinFields0[0].Descriptor()
+	// supportthread.DefaultCreatedAt holds the default value on creation for the created_at field.
+	supportthread.DefaultCreatedAt = supportthreadDescCreatedAt.Default.(func() time.Time)
+	// supportthreadDescUpdatedAt is the schema descriptor for updated_at field.
+	supportthreadDescUpdatedAt := supportthreadMixinFields0[1].Descriptor()
+	// supportthread.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	supportthread.DefaultUpdatedAt = supportthreadDescUpdatedAt.Default.(func() time.Time)
+	// supportthread.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	supportthread.UpdateDefaultUpdatedAt = supportthreadDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// supportthreadDescSubject is the schema descriptor for subject field.
+	supportthreadDescSubject := supportthreadFields[1].Descriptor()
+	// supportthread.DefaultSubject holds the default value on creation for the subject field.
+	supportthread.DefaultSubject = supportthreadDescSubject.Default.(string)
+	// supportthread.SubjectValidator is a validator for the "subject" field. It is called by the builders before save.
+	supportthread.SubjectValidator = supportthreadDescSubject.Validators[0].(func(string) error)
+	// supportthreadDescStatus is the schema descriptor for status field.
+	supportthreadDescStatus := supportthreadFields[2].Descriptor()
+	// supportthread.DefaultStatus holds the default value on creation for the status field.
+	supportthread.DefaultStatus = supportthreadDescStatus.Default.(string)
+	// supportthread.StatusValidator is a validator for the "status" field. It is called by the builders before save.
+	supportthread.StatusValidator = supportthreadDescStatus.Validators[0].(func(string) error)
+	// supportthreadDescPriority is the schema descriptor for priority field.
+	supportthreadDescPriority := supportthreadFields[3].Descriptor()
+	// supportthread.DefaultPriority holds the default value on creation for the priority field.
+	supportthread.DefaultPriority = supportthreadDescPriority.Default.(string)
+	// supportthread.PriorityValidator is a validator for the "priority" field. It is called by the builders before save.
+	supportthread.PriorityValidator = supportthreadDescPriority.Validators[0].(func(string) error)
+	// supportthreadDescType is the schema descriptor for type field.
+	supportthreadDescType := supportthreadFields[4].Descriptor()
+	// supportthread.DefaultType holds the default value on creation for the type field.
+	supportthread.DefaultType = supportthreadDescType.Default.(string)
+	// supportthread.TypeValidator is a validator for the "type" field. It is called by the builders before save.
+	supportthread.TypeValidator = supportthreadDescType.Validators[0].(func(string) error)
+	// supportthreadDescLastMessageSenderType is the schema descriptor for last_message_sender_type field.
+	supportthreadDescLastMessageSenderType := supportthreadFields[7].Descriptor()
+	// supportthread.DefaultLastMessageSenderType holds the default value on creation for the last_message_sender_type field.
+	supportthread.DefaultLastMessageSenderType = supportthreadDescLastMessageSenderType.Default.(string)
+	// supportthread.LastMessageSenderTypeValidator is a validator for the "last_message_sender_type" field. It is called by the builders before save.
+	supportthread.LastMessageSenderTypeValidator = supportthreadDescLastMessageSenderType.Validators[0].(func(string) error)
+	// supportthreadDescLastMessageExcerpt is the schema descriptor for last_message_excerpt field.
+	supportthreadDescLastMessageExcerpt := supportthreadFields[8].Descriptor()
+	// supportthread.DefaultLastMessageExcerpt holds the default value on creation for the last_message_excerpt field.
+	supportthread.DefaultLastMessageExcerpt = supportthreadDescLastMessageExcerpt.Default.(string)
+	// supportthread.LastMessageExcerptValidator is a validator for the "last_message_excerpt" field. It is called by the builders before save.
+	supportthread.LastMessageExcerptValidator = supportthreadDescLastMessageExcerpt.Validators[0].(func(string) error)
+	// supportthreadDescLastMessageAt is the schema descriptor for last_message_at field.
+	supportthreadDescLastMessageAt := supportthreadFields[9].Descriptor()
+	// supportthread.DefaultLastMessageAt holds the default value on creation for the last_message_at field.
+	supportthread.DefaultLastMessageAt = supportthreadDescLastMessageAt.Default.(func() time.Time)
 	tlsfingerprintprofileMixin := schema.TLSFingerprintProfile{}.Mixin()
 	tlsfingerprintprofileMixinFields0 := tlsfingerprintprofileMixin[0].Fields()
 	_ = tlsfingerprintprofileMixinFields0
@@ -2155,58 +2570,74 @@ func init() {
 	userDescBalance := userFields[3].Descriptor()
 	// user.DefaultBalance holds the default value on creation for the balance field.
 	user.DefaultBalance = userDescBalance.Default.(float64)
+	// userDescPointsBalance is the schema descriptor for points_balance field.
+	userDescPointsBalance := userFields[4].Descriptor()
+	// user.DefaultPointsBalance holds the default value on creation for the points_balance field.
+	user.DefaultPointsBalance = userDescPointsBalance.Default.(float64)
+	// userDescLoadFactorCreditsBalance is the schema descriptor for load_factor_credits_balance field.
+	userDescLoadFactorCreditsBalance := userFields[5].Descriptor()
+	// user.DefaultLoadFactorCreditsBalance holds the default value on creation for the load_factor_credits_balance field.
+	user.DefaultLoadFactorCreditsBalance = userDescLoadFactorCreditsBalance.Default.(int)
+	// userDescLoadFactorCreditsUsedTotal is the schema descriptor for load_factor_credits_used_total field.
+	userDescLoadFactorCreditsUsedTotal := userFields[6].Descriptor()
+	// user.DefaultLoadFactorCreditsUsedTotal holds the default value on creation for the load_factor_credits_used_total field.
+	user.DefaultLoadFactorCreditsUsedTotal = userDescLoadFactorCreditsUsedTotal.Default.(int)
+	// userDescPreferPointsBilling is the schema descriptor for prefer_points_billing field.
+	userDescPreferPointsBilling := userFields[7].Descriptor()
+	// user.DefaultPreferPointsBilling holds the default value on creation for the prefer_points_billing field.
+	user.DefaultPreferPointsBilling = userDescPreferPointsBilling.Default.(bool)
 	// userDescFrozenBalance is the schema descriptor for frozen_balance field.
-	userDescFrozenBalance := userFields[4].Descriptor()
+	userDescFrozenBalance := userFields[8].Descriptor()
 	// user.DefaultFrozenBalance holds the default value on creation for the frozen_balance field.
 	user.DefaultFrozenBalance = userDescFrozenBalance.Default.(float64)
 	// userDescConcurrency is the schema descriptor for concurrency field.
-	userDescConcurrency := userFields[5].Descriptor()
+	userDescConcurrency := userFields[9].Descriptor()
 	// user.DefaultConcurrency holds the default value on creation for the concurrency field.
 	user.DefaultConcurrency = userDescConcurrency.Default.(int)
 	// userDescStatus is the schema descriptor for status field.
-	userDescStatus := userFields[6].Descriptor()
+	userDescStatus := userFields[10].Descriptor()
 	// user.DefaultStatus holds the default value on creation for the status field.
 	user.DefaultStatus = userDescStatus.Default.(string)
 	// user.StatusValidator is a validator for the "status" field. It is called by the builders before save.
 	user.StatusValidator = userDescStatus.Validators[0].(func(string) error)
 	// userDescUsername is the schema descriptor for username field.
-	userDescUsername := userFields[7].Descriptor()
+	userDescUsername := userFields[11].Descriptor()
 	// user.DefaultUsername holds the default value on creation for the username field.
 	user.DefaultUsername = userDescUsername.Default.(string)
 	// user.UsernameValidator is a validator for the "username" field. It is called by the builders before save.
 	user.UsernameValidator = userDescUsername.Validators[0].(func(string) error)
 	// userDescNotes is the schema descriptor for notes field.
-	userDescNotes := userFields[8].Descriptor()
+	userDescNotes := userFields[12].Descriptor()
 	// user.DefaultNotes holds the default value on creation for the notes field.
 	user.DefaultNotes = userDescNotes.Default.(string)
 	// userDescTotpEnabled is the schema descriptor for totp_enabled field.
-	userDescTotpEnabled := userFields[10].Descriptor()
+	userDescTotpEnabled := userFields[14].Descriptor()
 	// user.DefaultTotpEnabled holds the default value on creation for the totp_enabled field.
 	user.DefaultTotpEnabled = userDescTotpEnabled.Default.(bool)
 	// userDescSignupSource is the schema descriptor for signup_source field.
-	userDescSignupSource := userFields[12].Descriptor()
+	userDescSignupSource := userFields[16].Descriptor()
 	// user.DefaultSignupSource holds the default value on creation for the signup_source field.
 	user.DefaultSignupSource = userDescSignupSource.Default.(string)
 	// user.SignupSourceValidator is a validator for the "signup_source" field. It is called by the builders before save.
 	user.SignupSourceValidator = userDescSignupSource.Validators[0].(func(string) error)
 	// userDescBalanceNotifyEnabled is the schema descriptor for balance_notify_enabled field.
-	userDescBalanceNotifyEnabled := userFields[15].Descriptor()
+	userDescBalanceNotifyEnabled := userFields[19].Descriptor()
 	// user.DefaultBalanceNotifyEnabled holds the default value on creation for the balance_notify_enabled field.
 	user.DefaultBalanceNotifyEnabled = userDescBalanceNotifyEnabled.Default.(bool)
 	// userDescBalanceNotifyThresholdType is the schema descriptor for balance_notify_threshold_type field.
-	userDescBalanceNotifyThresholdType := userFields[16].Descriptor()
+	userDescBalanceNotifyThresholdType := userFields[20].Descriptor()
 	// user.DefaultBalanceNotifyThresholdType holds the default value on creation for the balance_notify_threshold_type field.
 	user.DefaultBalanceNotifyThresholdType = userDescBalanceNotifyThresholdType.Default.(string)
 	// userDescBalanceNotifyExtraEmails is the schema descriptor for balance_notify_extra_emails field.
-	userDescBalanceNotifyExtraEmails := userFields[18].Descriptor()
+	userDescBalanceNotifyExtraEmails := userFields[22].Descriptor()
 	// user.DefaultBalanceNotifyExtraEmails holds the default value on creation for the balance_notify_extra_emails field.
 	user.DefaultBalanceNotifyExtraEmails = userDescBalanceNotifyExtraEmails.Default.(string)
 	// userDescTotalRecharged is the schema descriptor for total_recharged field.
-	userDescTotalRecharged := userFields[19].Descriptor()
+	userDescTotalRecharged := userFields[23].Descriptor()
 	// user.DefaultTotalRecharged holds the default value on creation for the total_recharged field.
 	user.DefaultTotalRecharged = userDescTotalRecharged.Default.(float64)
 	// userDescRpmLimit is the schema descriptor for rpm_limit field.
-	userDescRpmLimit := userFields[20].Descriptor()
+	userDescRpmLimit := userFields[24].Descriptor()
 	// user.DefaultRpmLimit holds the default value on creation for the rpm_limit field.
 	user.DefaultRpmLimit = userDescRpmLimit.Default.(int)
 	userallowedgroupFields := schema.UserAllowedGroup{}.Fields()

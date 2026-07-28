@@ -15,11 +15,17 @@ type GroupModelsListConfig = domain.GroupModelsListConfig
 type ReasoningEffortMapping = domain.ReasoningEffortMapping
 
 type Group struct {
-	ID             int64
-	Name           string
-	Description    string
-	Platform       string
-	RateMultiplier float64
+	ID                            int64
+	Name                          string
+	Description                   string
+	Platform                      string
+	RateMultiplier                float64
+	EffectiveRateMultiplier       *float64
+	EffectiveRateMultiplierSource string
+	NewUserRateEnabled            bool
+	NewUserRateMultiplier         float64
+	NewUserRateWindowSeconds      int
+	NewUserRateQuotaUSD           float64
 	// 高峰时段倍率：peak_rate_enabled 为 true 且当前时刻处于 [PeakStart, PeakEnd) 时，
 	// token 计费倍率额外乘以 PeakRateMultiplier。详见 PeakMultiplierAt。
 	PeakRateEnabled    bool
@@ -32,12 +38,15 @@ type Group struct {
 	// DuplicateOperationID is internal persistence metadata used only to recover
 	// an already committed one-click copy. It must never be mapped to API DTOs.
 	DuplicateOperationID string
+	OwnerUserID          *int64
+	Scope                string
 
-	SubscriptionType    string
-	DailyLimitUSD       *float64
-	WeeklyLimitUSD      *float64
-	MonthlyLimitUSD     *float64
-	DefaultValidityDays int
+	SubscriptionType     string
+	RequiredAccountLevel string
+	DailyLimitUSD        *float64
+	WeeklyLimitUSD       *float64
+	MonthlyLimitUSD      *float64
+	DefaultValidityDays  int
 
 	// 图片生成计费配置（antigravity 和 gemini 平台使用）
 	AllowImageGeneration         bool

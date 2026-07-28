@@ -12,6 +12,7 @@ import type {
   ProviderInstance
 } from '@/types/payment'
 import type { BasePaginationResponse } from '@/types'
+import type { ReceiptCodePaymentMethod, WithdrawalRequest } from '@/types'
 
 /** Admin-facing payment config returned by GET /admin/payment/config */
 export interface AdminPaymentConfig {
@@ -98,6 +99,29 @@ export const adminPaymentAPI = {
     order_type?: string
   }) {
     return apiClient.get<BasePaginationResponse<PaymentOrder>>('/admin/payment/orders', { params })
+  },
+
+  getWithdrawals(params?: {
+    page?: number
+    page_size?: number
+    status?: string
+    payment_method?: ReceiptCodePaymentMethod | ''
+    user_id?: number
+    keyword?: string
+  }) {
+    return apiClient.get<BasePaginationResponse<WithdrawalRequest>>('/admin/withdrawals', { params })
+  },
+
+  getWithdrawal(id: number) {
+    return apiClient.get<WithdrawalRequest>(`/admin/withdrawals/${id}`)
+  },
+
+  settleWithdrawal(id: number, data?: { note?: string }) {
+    return apiClient.post<WithdrawalRequest>(`/admin/withdrawals/${id}/settle`, data || {})
+  },
+
+  rejectWithdrawal(id: number, data?: { note?: string }) {
+    return apiClient.post<WithdrawalRequest>(`/admin/withdrawals/${id}/reject`, data || {})
   },
 
   /** Get a specific order by ID */

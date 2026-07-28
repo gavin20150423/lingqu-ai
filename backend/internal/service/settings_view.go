@@ -2,6 +2,15 @@ package service
 
 import "strings"
 
+type OpenAIAccountLevelConfig struct {
+	Key                string   `json:"key"`
+	Label              string   `json:"label"`
+	Aliases            []string `json:"aliases"`
+	SortOrder          int      `json:"sort_order"`
+	Enabled            bool     `json:"enabled"`
+	RequiresProxyLogin bool     `json:"requires_proxy_login"`
+}
+
 func firstNonEmpty(values ...string) string {
 	for _, value := range values {
 		if trimmed := strings.TrimSpace(value); trimmed != "" {
@@ -309,19 +318,23 @@ type PublicSettings struct {
 	CustomMenuItems             string // JSON array of custom menu items
 	CustomEndpoints             string // JSON array of custom endpoints
 
-	LinuxDoOAuthEnabled      bool
-	DingTalkOAuthEnabled     bool
-	WeChatOAuthEnabled       bool
-	WeChatOAuthOpenEnabled   bool
-	WeChatOAuthMPEnabled     bool
-	WeChatOAuthMobileEnabled bool
-	BackendModeEnabled       bool
-	PaymentEnabled           bool
-	OIDCOAuthEnabled         bool
-	OIDCOAuthProviderName    string
-	GitHubOAuthEnabled       bool
-	GoogleOAuthEnabled       bool
-	Version                  string
+	LinuxDoOAuthEnabled             bool
+	DingTalkOAuthEnabled            bool
+	WeChatOAuthEnabled              bool
+	WeChatOAuthOpenEnabled          bool
+	WeChatOAuthMPEnabled            bool
+	WeChatOAuthMobileEnabled        bool
+	BackendModeEnabled              bool
+	PaymentEnabled                  bool
+	WithdrawalManagementEnabled     bool    `json:"withdrawal_management_enabled"`
+	WithdrawalRateLimitWindowDays   int     `json:"withdrawal_rate_limit_window_days"`
+	WithdrawalRateLimitMax          int     `json:"withdrawal_rate_limit_max"`
+	WithdrawalRateLimitExemptAmount float64 `json:"withdrawal_rate_limit_exempt_amount"`
+	OIDCOAuthEnabled                bool
+	OIDCOAuthProviderName           string
+	GitHubOAuthEnabled              bool
+	GoogleOAuthEnabled              bool
+	Version                         string
 
 	BalanceLowNotifyEnabled     bool
 	AccountQuotaNotifyEnabled   bool

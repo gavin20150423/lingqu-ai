@@ -20,8 +20,12 @@ export { userChannelsAPI } from './channels'
 export * as batchImageAPI from './batchImage'
 export { totpAPI } from './totp'
 export { default as announcementsAPI } from './announcements'
+export { default as conversationsAPI } from './conversations'
 export { channelMonitorUserAPI } from './channelMonitor'
 export { communityAPI } from './community'
+export { accountsAPI } from './accounts'
+export { accountShareAPI } from './accountShare'
+export { storeAPI } from './store'
 
 // Admin APIs
 export { adminAPI } from './admin'

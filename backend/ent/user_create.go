@@ -18,7 +18,13 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/paymentorder"
 	"github.com/Wei-Shaw/sub2api/ent/pendingauthsession"
 	"github.com/Wei-Shaw/sub2api/ent/promocodeusage"
+	"github.com/Wei-Shaw/sub2api/ent/proxy"
 	"github.com/Wei-Shaw/sub2api/ent/redeemcode"
+	"github.com/Wei-Shaw/sub2api/ent/shopbalanceledger"
+	"github.com/Wei-Shaw/sub2api/ent/shopdrawcycle"
+	"github.com/Wei-Shaw/sub2api/ent/shoporder"
+	"github.com/Wei-Shaw/sub2api/ent/supportmessage"
+	"github.com/Wei-Shaw/sub2api/ent/supportthread"
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
 	"github.com/Wei-Shaw/sub2api/ent/user"
 	"github.com/Wei-Shaw/sub2api/ent/userattributevalue"
@@ -112,6 +118,62 @@ func (_c *UserCreate) SetBalance(v float64) *UserCreate {
 func (_c *UserCreate) SetNillableBalance(v *float64) *UserCreate {
 	if v != nil {
 		_c.SetBalance(*v)
+	}
+	return _c
+}
+
+// SetPointsBalance sets the "points_balance" field.
+func (_c *UserCreate) SetPointsBalance(v float64) *UserCreate {
+	_c.mutation.SetPointsBalance(v)
+	return _c
+}
+
+// SetNillablePointsBalance sets the "points_balance" field if the given value is not nil.
+func (_c *UserCreate) SetNillablePointsBalance(v *float64) *UserCreate {
+	if v != nil {
+		_c.SetPointsBalance(*v)
+	}
+	return _c
+}
+
+// SetLoadFactorCreditsBalance sets the "load_factor_credits_balance" field.
+func (_c *UserCreate) SetLoadFactorCreditsBalance(v int) *UserCreate {
+	_c.mutation.SetLoadFactorCreditsBalance(v)
+	return _c
+}
+
+// SetNillableLoadFactorCreditsBalance sets the "load_factor_credits_balance" field if the given value is not nil.
+func (_c *UserCreate) SetNillableLoadFactorCreditsBalance(v *int) *UserCreate {
+	if v != nil {
+		_c.SetLoadFactorCreditsBalance(*v)
+	}
+	return _c
+}
+
+// SetLoadFactorCreditsUsedTotal sets the "load_factor_credits_used_total" field.
+func (_c *UserCreate) SetLoadFactorCreditsUsedTotal(v int) *UserCreate {
+	_c.mutation.SetLoadFactorCreditsUsedTotal(v)
+	return _c
+}
+
+// SetNillableLoadFactorCreditsUsedTotal sets the "load_factor_credits_used_total" field if the given value is not nil.
+func (_c *UserCreate) SetNillableLoadFactorCreditsUsedTotal(v *int) *UserCreate {
+	if v != nil {
+		_c.SetLoadFactorCreditsUsedTotal(*v)
+	}
+	return _c
+}
+
+// SetPreferPointsBilling sets the "prefer_points_billing" field.
+func (_c *UserCreate) SetPreferPointsBilling(v bool) *UserCreate {
+	_c.mutation.SetPreferPointsBilling(v)
+	return _c
+}
+
+// SetNillablePreferPointsBilling sets the "prefer_points_billing" field if the given value is not nil.
+func (_c *UserCreate) SetNillablePreferPointsBilling(v *bool) *UserCreate {
+	if v != nil {
+		_c.SetPreferPointsBilling(*v)
 	}
 	return _c
 }
@@ -429,6 +491,51 @@ func (_c *UserCreate) AddAnnouncementReads(v ...*AnnouncementRead) *UserCreate {
 	return _c.AddAnnouncementReadIDs(ids...)
 }
 
+// AddSupportThreadIDs adds the "support_threads" edge to the SupportThread entity by IDs.
+func (_c *UserCreate) AddSupportThreadIDs(ids ...int64) *UserCreate {
+	_c.mutation.AddSupportThreadIDs(ids...)
+	return _c
+}
+
+// AddSupportThreads adds the "support_threads" edges to the SupportThread entity.
+func (_c *UserCreate) AddSupportThreads(v ...*SupportThread) *UserCreate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddSupportThreadIDs(ids...)
+}
+
+// AddAssignedSupportThreadIDs adds the "assigned_support_threads" edge to the SupportThread entity by IDs.
+func (_c *UserCreate) AddAssignedSupportThreadIDs(ids ...int64) *UserCreate {
+	_c.mutation.AddAssignedSupportThreadIDs(ids...)
+	return _c
+}
+
+// AddAssignedSupportThreads adds the "assigned_support_threads" edges to the SupportThread entity.
+func (_c *UserCreate) AddAssignedSupportThreads(v ...*SupportThread) *UserCreate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddAssignedSupportThreadIDs(ids...)
+}
+
+// AddSentSupportMessageIDs adds the "sent_support_messages" edge to the SupportMessage entity by IDs.
+func (_c *UserCreate) AddSentSupportMessageIDs(ids ...int64) *UserCreate {
+	_c.mutation.AddSentSupportMessageIDs(ids...)
+	return _c
+}
+
+// AddSentSupportMessages adds the "sent_support_messages" edges to the SupportMessage entity.
+func (_c *UserCreate) AddSentSupportMessages(v ...*SupportMessage) *UserCreate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddSentSupportMessageIDs(ids...)
+}
+
 // AddAllowedGroupIDs adds the "allowed_groups" edge to the Group entity by IDs.
 func (_c *UserCreate) AddAllowedGroupIDs(ids ...int64) *UserCreate {
 	_c.mutation.AddAllowedGroupIDs(ids...)
@@ -504,6 +611,51 @@ func (_c *UserCreate) AddPaymentOrders(v ...*PaymentOrder) *UserCreate {
 	return _c.AddPaymentOrderIDs(ids...)
 }
 
+// AddShopOrderIDs adds the "shop_orders" edge to the ShopOrder entity by IDs.
+func (_c *UserCreate) AddShopOrderIDs(ids ...int64) *UserCreate {
+	_c.mutation.AddShopOrderIDs(ids...)
+	return _c
+}
+
+// AddShopOrders adds the "shop_orders" edges to the ShopOrder entity.
+func (_c *UserCreate) AddShopOrders(v ...*ShopOrder) *UserCreate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddShopOrderIDs(ids...)
+}
+
+// AddShopDrawCycleIDs adds the "shop_draw_cycles" edge to the ShopDrawCycle entity by IDs.
+func (_c *UserCreate) AddShopDrawCycleIDs(ids ...int64) *UserCreate {
+	_c.mutation.AddShopDrawCycleIDs(ids...)
+	return _c
+}
+
+// AddShopDrawCycles adds the "shop_draw_cycles" edges to the ShopDrawCycle entity.
+func (_c *UserCreate) AddShopDrawCycles(v ...*ShopDrawCycle) *UserCreate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddShopDrawCycleIDs(ids...)
+}
+
+// AddShopBalanceLedgerIDs adds the "shop_balance_ledger" edge to the ShopBalanceLedger entity by IDs.
+func (_c *UserCreate) AddShopBalanceLedgerIDs(ids ...int64) *UserCreate {
+	_c.mutation.AddShopBalanceLedgerIDs(ids...)
+	return _c
+}
+
+// AddShopBalanceLedger adds the "shop_balance_ledger" edges to the ShopBalanceLedger entity.
+func (_c *UserCreate) AddShopBalanceLedger(v ...*ShopBalanceLedger) *UserCreate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddShopBalanceLedgerIDs(ids...)
+}
+
 // AddAuthIdentityIDs adds the "auth_identities" edge to the AuthIdentity entity by IDs.
 func (_c *UserCreate) AddAuthIdentityIDs(ids ...int64) *UserCreate {
 	_c.mutation.AddAuthIdentityIDs(ids...)
@@ -547,6 +699,21 @@ func (_c *UserCreate) AddPlatformQuotas(v ...*UserPlatformQuota) *UserCreate {
 		ids[i] = v[i].ID
 	}
 	return _c.AddPlatformQuotaIDs(ids...)
+}
+
+// AddOwnedProxyIDs adds the "owned_proxies" edge to the Proxy entity by IDs.
+func (_c *UserCreate) AddOwnedProxyIDs(ids ...int64) *UserCreate {
+	_c.mutation.AddOwnedProxyIDs(ids...)
+	return _c
+}
+
+// AddOwnedProxies adds the "owned_proxies" edges to the Proxy entity.
+func (_c *UserCreate) AddOwnedProxies(v ...*Proxy) *UserCreate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddOwnedProxyIDs(ids...)
 }
 
 // Mutation returns the UserMutation object of the builder.
@@ -607,6 +774,22 @@ func (_c *UserCreate) defaults() error {
 	if _, ok := _c.mutation.Balance(); !ok {
 		v := user.DefaultBalance
 		_c.mutation.SetBalance(v)
+	}
+	if _, ok := _c.mutation.PointsBalance(); !ok {
+		v := user.DefaultPointsBalance
+		_c.mutation.SetPointsBalance(v)
+	}
+	if _, ok := _c.mutation.LoadFactorCreditsBalance(); !ok {
+		v := user.DefaultLoadFactorCreditsBalance
+		_c.mutation.SetLoadFactorCreditsBalance(v)
+	}
+	if _, ok := _c.mutation.LoadFactorCreditsUsedTotal(); !ok {
+		v := user.DefaultLoadFactorCreditsUsedTotal
+		_c.mutation.SetLoadFactorCreditsUsedTotal(v)
+	}
+	if _, ok := _c.mutation.PreferPointsBilling(); !ok {
+		v := user.DefaultPreferPointsBilling
+		_c.mutation.SetPreferPointsBilling(v)
 	}
 	if _, ok := _c.mutation.FrozenBalance(); !ok {
 		v := user.DefaultFrozenBalance
@@ -693,6 +876,18 @@ func (_c *UserCreate) check() error {
 	}
 	if _, ok := _c.mutation.Balance(); !ok {
 		return &ValidationError{Name: "balance", err: errors.New(`ent: missing required field "User.balance"`)}
+	}
+	if _, ok := _c.mutation.PointsBalance(); !ok {
+		return &ValidationError{Name: "points_balance", err: errors.New(`ent: missing required field "User.points_balance"`)}
+	}
+	if _, ok := _c.mutation.LoadFactorCreditsBalance(); !ok {
+		return &ValidationError{Name: "load_factor_credits_balance", err: errors.New(`ent: missing required field "User.load_factor_credits_balance"`)}
+	}
+	if _, ok := _c.mutation.LoadFactorCreditsUsedTotal(); !ok {
+		return &ValidationError{Name: "load_factor_credits_used_total", err: errors.New(`ent: missing required field "User.load_factor_credits_used_total"`)}
+	}
+	if _, ok := _c.mutation.PreferPointsBilling(); !ok {
+		return &ValidationError{Name: "prefer_points_billing", err: errors.New(`ent: missing required field "User.prefer_points_billing"`)}
 	}
 	if _, ok := _c.mutation.FrozenBalance(); !ok {
 		return &ValidationError{Name: "frozen_balance", err: errors.New(`ent: missing required field "User.frozen_balance"`)}
@@ -799,6 +994,22 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Balance(); ok {
 		_spec.SetField(user.FieldBalance, field.TypeFloat64, value)
 		_node.Balance = value
+	}
+	if value, ok := _c.mutation.PointsBalance(); ok {
+		_spec.SetField(user.FieldPointsBalance, field.TypeFloat64, value)
+		_node.PointsBalance = value
+	}
+	if value, ok := _c.mutation.LoadFactorCreditsBalance(); ok {
+		_spec.SetField(user.FieldLoadFactorCreditsBalance, field.TypeInt, value)
+		_node.LoadFactorCreditsBalance = value
+	}
+	if value, ok := _c.mutation.LoadFactorCreditsUsedTotal(); ok {
+		_spec.SetField(user.FieldLoadFactorCreditsUsedTotal, field.TypeInt, value)
+		_node.LoadFactorCreditsUsedTotal = value
+	}
+	if value, ok := _c.mutation.PreferPointsBilling(); ok {
+		_spec.SetField(user.FieldPreferPointsBilling, field.TypeBool, value)
+		_node.PreferPointsBilling = value
 	}
 	if value, ok := _c.mutation.FrozenBalance(); ok {
 		_spec.SetField(user.FieldFrozenBalance, field.TypeFloat64, value)
@@ -948,6 +1159,54 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 		}
 		_spec.Edges = append(_spec.Edges, edge)
 	}
+	if nodes := _c.mutation.SupportThreadsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.SupportThreadsTable,
+			Columns: []string{user.SupportThreadsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(supportthread.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.AssignedSupportThreadsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.AssignedSupportThreadsTable,
+			Columns: []string{user.AssignedSupportThreadsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(supportthread.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.SentSupportMessagesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.SentSupportMessagesTable,
+			Columns: []string{user.SentSupportMessagesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(supportmessage.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
 	if nodes := _c.mutation.AllowedGroupsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2M,
@@ -1032,6 +1291,54 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 		}
 		_spec.Edges = append(_spec.Edges, edge)
 	}
+	if nodes := _c.mutation.ShopOrdersIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.ShopOrdersTable,
+			Columns: []string{user.ShopOrdersColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(shoporder.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.ShopDrawCyclesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.ShopDrawCyclesTable,
+			Columns: []string{user.ShopDrawCyclesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(shopdrawcycle.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.ShopBalanceLedgerIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.ShopBalanceLedgerTable,
+			Columns: []string{user.ShopBalanceLedgerColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(shopbalanceledger.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
 	if nodes := _c.mutation.AuthIdentitiesIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
@@ -1073,6 +1380,22 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(userplatformquota.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.OwnedProxiesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.OwnedProxiesTable,
+			Columns: []string{user.OwnedProxiesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(proxy.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {
@@ -1213,6 +1536,72 @@ func (u *UserUpsert) UpdateBalance() *UserUpsert {
 // AddBalance adds v to the "balance" field.
 func (u *UserUpsert) AddBalance(v float64) *UserUpsert {
 	u.Add(user.FieldBalance, v)
+	return u
+}
+
+// SetPointsBalance sets the "points_balance" field.
+func (u *UserUpsert) SetPointsBalance(v float64) *UserUpsert {
+	u.Set(user.FieldPointsBalance, v)
+	return u
+}
+
+// UpdatePointsBalance sets the "points_balance" field to the value that was provided on create.
+func (u *UserUpsert) UpdatePointsBalance() *UserUpsert {
+	u.SetExcluded(user.FieldPointsBalance)
+	return u
+}
+
+// AddPointsBalance adds v to the "points_balance" field.
+func (u *UserUpsert) AddPointsBalance(v float64) *UserUpsert {
+	u.Add(user.FieldPointsBalance, v)
+	return u
+}
+
+// SetLoadFactorCreditsBalance sets the "load_factor_credits_balance" field.
+func (u *UserUpsert) SetLoadFactorCreditsBalance(v int) *UserUpsert {
+	u.Set(user.FieldLoadFactorCreditsBalance, v)
+	return u
+}
+
+// UpdateLoadFactorCreditsBalance sets the "load_factor_credits_balance" field to the value that was provided on create.
+func (u *UserUpsert) UpdateLoadFactorCreditsBalance() *UserUpsert {
+	u.SetExcluded(user.FieldLoadFactorCreditsBalance)
+	return u
+}
+
+// AddLoadFactorCreditsBalance adds v to the "load_factor_credits_balance" field.
+func (u *UserUpsert) AddLoadFactorCreditsBalance(v int) *UserUpsert {
+	u.Add(user.FieldLoadFactorCreditsBalance, v)
+	return u
+}
+
+// SetLoadFactorCreditsUsedTotal sets the "load_factor_credits_used_total" field.
+func (u *UserUpsert) SetLoadFactorCreditsUsedTotal(v int) *UserUpsert {
+	u.Set(user.FieldLoadFactorCreditsUsedTotal, v)
+	return u
+}
+
+// UpdateLoadFactorCreditsUsedTotal sets the "load_factor_credits_used_total" field to the value that was provided on create.
+func (u *UserUpsert) UpdateLoadFactorCreditsUsedTotal() *UserUpsert {
+	u.SetExcluded(user.FieldLoadFactorCreditsUsedTotal)
+	return u
+}
+
+// AddLoadFactorCreditsUsedTotal adds v to the "load_factor_credits_used_total" field.
+func (u *UserUpsert) AddLoadFactorCreditsUsedTotal(v int) *UserUpsert {
+	u.Add(user.FieldLoadFactorCreditsUsedTotal, v)
+	return u
+}
+
+// SetPreferPointsBilling sets the "prefer_points_billing" field.
+func (u *UserUpsert) SetPreferPointsBilling(v bool) *UserUpsert {
+	u.Set(user.FieldPreferPointsBilling, v)
+	return u
+}
+
+// UpdatePreferPointsBilling sets the "prefer_points_billing" field to the value that was provided on create.
+func (u *UserUpsert) UpdatePreferPointsBilling() *UserUpsert {
+	u.SetExcluded(user.FieldPreferPointsBilling)
 	return u
 }
 
@@ -1620,6 +2009,83 @@ func (u *UserUpsertOne) AddBalance(v float64) *UserUpsertOne {
 func (u *UserUpsertOne) UpdateBalance() *UserUpsertOne {
 	return u.Update(func(s *UserUpsert) {
 		s.UpdateBalance()
+	})
+}
+
+// SetPointsBalance sets the "points_balance" field.
+func (u *UserUpsertOne) SetPointsBalance(v float64) *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.SetPointsBalance(v)
+	})
+}
+
+// AddPointsBalance adds v to the "points_balance" field.
+func (u *UserUpsertOne) AddPointsBalance(v float64) *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.AddPointsBalance(v)
+	})
+}
+
+// UpdatePointsBalance sets the "points_balance" field to the value that was provided on create.
+func (u *UserUpsertOne) UpdatePointsBalance() *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.UpdatePointsBalance()
+	})
+}
+
+// SetLoadFactorCreditsBalance sets the "load_factor_credits_balance" field.
+func (u *UserUpsertOne) SetLoadFactorCreditsBalance(v int) *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.SetLoadFactorCreditsBalance(v)
+	})
+}
+
+// AddLoadFactorCreditsBalance adds v to the "load_factor_credits_balance" field.
+func (u *UserUpsertOne) AddLoadFactorCreditsBalance(v int) *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.AddLoadFactorCreditsBalance(v)
+	})
+}
+
+// UpdateLoadFactorCreditsBalance sets the "load_factor_credits_balance" field to the value that was provided on create.
+func (u *UserUpsertOne) UpdateLoadFactorCreditsBalance() *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.UpdateLoadFactorCreditsBalance()
+	})
+}
+
+// SetLoadFactorCreditsUsedTotal sets the "load_factor_credits_used_total" field.
+func (u *UserUpsertOne) SetLoadFactorCreditsUsedTotal(v int) *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.SetLoadFactorCreditsUsedTotal(v)
+	})
+}
+
+// AddLoadFactorCreditsUsedTotal adds v to the "load_factor_credits_used_total" field.
+func (u *UserUpsertOne) AddLoadFactorCreditsUsedTotal(v int) *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.AddLoadFactorCreditsUsedTotal(v)
+	})
+}
+
+// UpdateLoadFactorCreditsUsedTotal sets the "load_factor_credits_used_total" field to the value that was provided on create.
+func (u *UserUpsertOne) UpdateLoadFactorCreditsUsedTotal() *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.UpdateLoadFactorCreditsUsedTotal()
+	})
+}
+
+// SetPreferPointsBilling sets the "prefer_points_billing" field.
+func (u *UserUpsertOne) SetPreferPointsBilling(v bool) *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.SetPreferPointsBilling(v)
+	})
+}
+
+// UpdatePreferPointsBilling sets the "prefer_points_billing" field to the value that was provided on create.
+func (u *UserUpsertOne) UpdatePreferPointsBilling() *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.UpdatePreferPointsBilling()
 	})
 }
 
@@ -2237,6 +2703,83 @@ func (u *UserUpsertBulk) AddBalance(v float64) *UserUpsertBulk {
 func (u *UserUpsertBulk) UpdateBalance() *UserUpsertBulk {
 	return u.Update(func(s *UserUpsert) {
 		s.UpdateBalance()
+	})
+}
+
+// SetPointsBalance sets the "points_balance" field.
+func (u *UserUpsertBulk) SetPointsBalance(v float64) *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.SetPointsBalance(v)
+	})
+}
+
+// AddPointsBalance adds v to the "points_balance" field.
+func (u *UserUpsertBulk) AddPointsBalance(v float64) *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.AddPointsBalance(v)
+	})
+}
+
+// UpdatePointsBalance sets the "points_balance" field to the value that was provided on create.
+func (u *UserUpsertBulk) UpdatePointsBalance() *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.UpdatePointsBalance()
+	})
+}
+
+// SetLoadFactorCreditsBalance sets the "load_factor_credits_balance" field.
+func (u *UserUpsertBulk) SetLoadFactorCreditsBalance(v int) *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.SetLoadFactorCreditsBalance(v)
+	})
+}
+
+// AddLoadFactorCreditsBalance adds v to the "load_factor_credits_balance" field.
+func (u *UserUpsertBulk) AddLoadFactorCreditsBalance(v int) *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.AddLoadFactorCreditsBalance(v)
+	})
+}
+
+// UpdateLoadFactorCreditsBalance sets the "load_factor_credits_balance" field to the value that was provided on create.
+func (u *UserUpsertBulk) UpdateLoadFactorCreditsBalance() *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.UpdateLoadFactorCreditsBalance()
+	})
+}
+
+// SetLoadFactorCreditsUsedTotal sets the "load_factor_credits_used_total" field.
+func (u *UserUpsertBulk) SetLoadFactorCreditsUsedTotal(v int) *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.SetLoadFactorCreditsUsedTotal(v)
+	})
+}
+
+// AddLoadFactorCreditsUsedTotal adds v to the "load_factor_credits_used_total" field.
+func (u *UserUpsertBulk) AddLoadFactorCreditsUsedTotal(v int) *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.AddLoadFactorCreditsUsedTotal(v)
+	})
+}
+
+// UpdateLoadFactorCreditsUsedTotal sets the "load_factor_credits_used_total" field to the value that was provided on create.
+func (u *UserUpsertBulk) UpdateLoadFactorCreditsUsedTotal() *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.UpdateLoadFactorCreditsUsedTotal()
+	})
+}
+
+// SetPreferPointsBilling sets the "prefer_points_billing" field.
+func (u *UserUpsertBulk) SetPreferPointsBilling(v bool) *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.SetPreferPointsBilling(v)
+	})
+}
+
+// UpdatePreferPointsBilling sets the "prefer_points_billing" field to the value that was provided on create.
+func (u *UserUpsertBulk) UpdatePreferPointsBilling() *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.UpdatePreferPointsBilling()
 	})
 }
 

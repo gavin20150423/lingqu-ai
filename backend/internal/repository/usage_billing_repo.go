@@ -209,6 +209,10 @@ func (r *usageBillingRepository) applyUsageBillingEffects(ctx context.Context, t
 		result.QuotaState = quotaState
 	}
 
+	if err := applyAccountShareModeSettlement(ctx, tx, cmd, 0, result); err != nil {
+		return err
+	}
+
 	return nil
 }
 

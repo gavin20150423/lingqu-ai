@@ -127,16 +127,38 @@ func (s *PaymentService) cancelCore(ctx context.Context, o *dbent.PaymentOrder, 
 			return checkPaidResultAlreadyPaid, nil
 		}
 	}
-	c, err := s.entClient.PaymentOrder.Update().Where(paymentorder.IDEQ(o.ID), paymentorder.StatusEQ(OrderStatusPending)).SetStatus(fs).Save(ctx)
+	tx, err := s.entClient.Tx(ctx)
+	if err != nil {
+		return "", fmt.Errorf("begin cancel transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	c, err := tx.PaymentOrder.Update().Where(paymentorder.IDEQ(o.ID), paymentorder.StatusEQ(OrderStatusPending)).SetStatus(fs).Save(ctx)
 	if err != nil {
 		return "", fmt.Errorf("update order status: %w", err)
 	}
 	if c > 0 {
+		if o.ShopOrderID != nil && *o.ShopOrderID > 0 && s.shopFulfillment != nil {
+			shopStatus := ShopOrderStatusCancelled
+			if fs == OrderStatusExpired {
+				shopStatus = ShopOrderStatusFailed
+			}
+			if err := s.shopFulfillment.CancelPendingPaymentInTx(ctx, tx, o.ID, shopStatus); err != nil {
+				return "", err
+			}
+		}
+		if err := tx.Commit(); err != nil {
+			return "", fmt.Errorf("commit cancel transaction: %w", err)
+		}
 		auditAction := "ORDER_CANCELLED"
 		if fs == OrderStatusExpired {
 			auditAction = "ORDER_EXPIRED"
 		}
 		s.writeAuditLog(ctx, o.ID, auditAction, op, map[string]any{"detail": ad})
+		return checkPaidResultCancelled, nil
+	}
+	if err := tx.Commit(); err != nil {
+		return "", fmt.Errorf("commit empty cancel transaction: %w", err)
 	}
 	return checkPaidResultCancelled, nil
 }
@@ -374,6 +396,11 @@ func normalizeOrderLookupOutTradeNo(raw string) (string, error) {
 
 func (s *PaymentService) ExpireTimedOutOrders(ctx context.Context) (int, error) {
 	now := time.Now()
+	if s.shopFulfillment != nil {
+		if err := s.shopFulfillment.ReleaseStalePaymentReservations(ctx, now.Add(-paymentGraceMinutes*time.Minute)); err != nil {
+			return 0, err
+		}
+	}
 	orders, err := s.entClient.PaymentOrder.Query().Where(paymentorder.StatusEQ(OrderStatusPending), paymentorder.ExpiresAtLTE(now)).All(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("query expired: %w", err)

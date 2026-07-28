@@ -98,6 +98,7 @@ type Config struct {
 	Idempotency             IdempotencyConfig             `mapstructure:"idempotency"`
 	BatchImage              BatchImageConfig              `mapstructure:"batch_image"`
 	ImageStorage            ImageStorageConfig            `mapstructure:"image_storage"`
+	ReceiptCodeStorage      ReceiptCodeStorageConfig      `mapstructure:"receipt_code_storage"`
 }
 
 type LogConfig struct {
@@ -164,6 +165,20 @@ type UpdateConfig struct {
 	// 支持 http/https/socks5/socks5h 协议
 	// 例如: "http://127.0.0.1:7890", "socks5://127.0.0.1:1080"
 	ProxyURL string `mapstructure:"proxy_url"`
+}
+
+type ReceiptCodeStorageConfig struct {
+	Enabled              bool   `mapstructure:"enabled"`
+	Endpoint             string `mapstructure:"endpoint"`
+	Region               string `mapstructure:"region"`
+	Bucket               string `mapstructure:"bucket"`
+	AccessKeyID          string `mapstructure:"access_key_id"`
+	SecretAccessKey      string `mapstructure:"secret_access_key"`
+	Prefix               string `mapstructure:"prefix"`
+	PublicBaseURL        string `mapstructure:"public_base_url"`
+	ForcePathStyle       bool   `mapstructure:"force_path_style"`
+	MaxSizeBytes         int64  `mapstructure:"max_size_bytes"`
+	PresignExpireSeconds int    `mapstructure:"presign_expire_seconds"`
 }
 
 type IdempotencyConfig struct {
@@ -2106,6 +2121,19 @@ func setDefaults() {
 	viper.SetDefault("image_storage.access_key_id", "")
 	viper.SetDefault("image_storage.secret_access_key", "")
 	viper.SetDefault("image_storage.public_base_url", "")
+
+	// Receipt-code storage for withdrawal payout images.
+	viper.SetDefault("receipt_code_storage.enabled", false)
+	viper.SetDefault("receipt_code_storage.endpoint", "")
+	viper.SetDefault("receipt_code_storage.region", "oss-cn-hangzhou")
+	viper.SetDefault("receipt_code_storage.bucket", "")
+	viper.SetDefault("receipt_code_storage.access_key_id", "")
+	viper.SetDefault("receipt_code_storage.secret_access_key", "")
+	viper.SetDefault("receipt_code_storage.prefix", "receipt-codes/")
+	viper.SetDefault("receipt_code_storage.public_base_url", "")
+	viper.SetDefault("receipt_code_storage.force_path_style", false)
+	viper.SetDefault("receipt_code_storage.max_size_bytes", int64(2*1024*1024))
+	viper.SetDefault("receipt_code_storage.presign_expire_seconds", 300)
 
 	// Ops (vNext)
 	viper.SetDefault("ops.enabled", true)

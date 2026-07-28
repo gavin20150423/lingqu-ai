@@ -73,16 +73,17 @@ type usageLogBestEffortWriter interface {
 
 // postUsageBillingParams 统一扣费所需的参数
 type postUsageBillingParams struct {
-	Cost                  *CostBreakdown
-	User                  *User
-	APIKey                *APIKey
-	Account               *Account
-	Subscription          *UserSubscription
-	RequestPayloadHash    string
-	IsSubscriptionBill    bool
-	AccountRateMultiplier float64
-	APIKeyService         APIKeyQuotaUpdater
-	Platform              string // 来自 APIKey 关联 Group 的平台标识
+	Cost                       *CostBreakdown
+	User                       *User
+	APIKey                     *APIKey
+	Account                    *Account
+	Subscription               *UserSubscription
+	RequestPayloadHash         string
+	IsSubscriptionBill         bool
+	AccountRateMultiplier      float64
+	APIKeyService              APIKeyQuotaUpdater
+	Platform                   string // 来自 APIKey 关联 Group 的平台标识
+	AccountShareModeSettlement *AccountShareModeBillingSnapshot
 }
 
 // PlatformFromAPIKey 从 APIKey 关联的 Group 推导 platform 名称。
@@ -240,14 +241,20 @@ func buildUsageBillingCommand(requestID string, usageLog *UsageLog, p *postUsage
 	}
 
 	cmd := &UsageBillingCommand{
-		RequestID:          requestID,
-		APIKeyID:           p.APIKey.ID,
-		UserID:             p.User.ID,
-		AccountID:          p.Account.ID,
-		AccountType:        p.Account.Type,
-		RequestPayloadHash: strings.TrimSpace(p.RequestPayloadHash),
+		RequestID:                  requestID,
+		APIKeyID:                   p.APIKey.ID,
+		UserID:                     p.User.ID,
+		AccountID:                  p.Account.ID,
+		AccountType:                p.Account.Type,
+		RequestPayloadHash:         strings.TrimSpace(p.RequestPayloadHash),
+		AccountShareModeSettlement: p.AccountShareModeSettlement,
+	}
+	if p.APIKey.GroupID != nil {
+		cmd.GroupID = p.APIKey.GroupID
 	}
 	if usageLog != nil {
+		cmd.UsageLog = usageLog
+		cmd.UsageOccurredAt = usageLog.CreatedAt
 		cmd.Model = usageLog.Model
 		cmd.BillingType = usageLog.BillingType
 		cmd.InputTokens = usageLog.InputTokens
@@ -340,6 +347,13 @@ func finalizePostUsageBilling(ctx context.Context, p *postUsageBillingParams, de
 
 	if p.Cost.ActualCost > 0 && p.APIKey != nil && p.APIKey.HasRateLimits() {
 		deps.billingCacheService.QueueUpdateAPIKeyRateLimitUsage(p.APIKey.ID, p.Cost.ActualCost)
+	}
+	if result != nil && deps.billingCacheService != nil {
+		for _, userID := range result.BalanceCreditUserIDs {
+			if userID > 0 {
+				_ = deps.billingCacheService.InvalidateUserBalance(ctx, userID)
+			}
+		}
 	}
 
 	deps.deferredService.ScheduleLastUsedUpdate(p.Account.ID)
@@ -693,11 +707,11 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 		groupDefault := apiKey.Group.RateMultiplier
 		multiplier = s.ResolveUserGroupRateMultiplier(ctx, user.ID, *apiKey.GroupID, groupDefault)
 	}
-	if account != nil && account.Extra != nil {
-		if communityMultiplier, ok := account.Extra["community_usage_multiplier"].(float64); ok && communityMultiplier >= 0 {
-			multiplier = communityMultiplier
-		}
+	accountShareMembership, accountShareListing, err := resolveAccountShareModeBillingBinding(ctx, s.accountShareModeService, user, apiKey, account)
+	if err != nil {
+		return err
 	}
+	multiplier = accountShareModeBillingMultiplier(accountShareMembership, accountShareListing, multiplier)
 	// token 倍率叠加高峰因子（token 计费含图片 token，图片按次倍率不受影响）。高峰因子按请求时刻现算，
 	// 不并入上面的 getUserGroupRateMultiplier，以免污染 user:group 倍率缓存。
 	multiplier, imageMultiplier := computePeakAwareMultipliers(apiKey, multiplier, timezone.Now())
@@ -730,6 +744,10 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 
 	// 计算费用
 	cost := s.calculateRecordUsageCost(ctx, result, apiKey, billingModel, multiplier, imageMultiplier, opts)
+	accountShareModeSettlement, err := buildAccountShareModeSettlement(ctx, s.accountShareModeService, account, accountShareMembership, accountShareListing, cost, int(result.Duration.Milliseconds()))
+	if err != nil {
+		return err
+	}
 
 	// 判断计费方式：订阅模式 vs 余额模式
 	isSubscriptionBilling := subscription != nil && apiKey.Group != nil && apiKey.Group.IsSubscriptionType()
@@ -780,25 +798,21 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 	}
 	requestID := usageLog.RequestID
 	_, billingErr := applyUsageBilling(ctx, requestID, usageLog, &postUsageBillingParams{
-		Cost:                  cost,
-		User:                  user,
-		APIKey:                apiKey,
-		Account:               account,
-		Subscription:          subscription,
-		RequestPayloadHash:    resolveUsageBillingPayloadFingerprint(ctx, input.RequestPayloadHash),
-		IsSubscriptionBill:    isSubscriptionBilling,
-		AccountRateMultiplier: accountRateMultiplier,
-		APIKeyService:         input.APIKeyService,
-		Platform:              quotaPlatform,
+		Cost:                       cost,
+		User:                       user,
+		APIKey:                     apiKey,
+		Account:                    account,
+		Subscription:               subscription,
+		RequestPayloadHash:         resolveUsageBillingPayloadFingerprint(ctx, input.RequestPayloadHash),
+		IsSubscriptionBill:         isSubscriptionBilling,
+		AccountRateMultiplier:      accountRateMultiplier,
+		APIKeyService:              input.APIKeyService,
+		Platform:                   quotaPlatform,
+		AccountShareModeSettlement: accountShareModeSettlement,
 	}, s.billingDeps(), s.usageBillingRepo)
 
 	if billingErr != nil {
 		return billingErr
-	}
-	if communityRepo, ok := s.accountRepo.(communityRoutingAccountRepository); ok && apiKey != nil && account != nil {
-		if _, settlementErr := communityRepo.RecordCommunityRequestSettlement(ctx, apiKey.ID, account.ID, requestID, cost.ActualCost); settlementErr != nil {
-			logger.LegacyPrintf("service.gateway", "community request settlement failed request=%s account=%d: %v", requestID, account.ID, settlementErr)
-		}
 	}
 	writeUsageLogBestEffort(ctx, s.usageLogRepo, usageLog, "service.gateway")
 

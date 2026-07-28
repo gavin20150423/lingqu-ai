@@ -41,7 +41,15 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/redeemcode"
 	"github.com/Wei-Shaw/sub2api/ent/securitysecret"
 	"github.com/Wei-Shaw/sub2api/ent/setting"
+	"github.com/Wei-Shaw/sub2api/ent/shopbalanceledger"
+	"github.com/Wei-Shaw/sub2api/ent/shopcardkey"
+	"github.com/Wei-Shaw/sub2api/ent/shopcategory"
+	"github.com/Wei-Shaw/sub2api/ent/shopdrawcycle"
+	"github.com/Wei-Shaw/sub2api/ent/shoporder"
+	"github.com/Wei-Shaw/sub2api/ent/shopproduct"
 	"github.com/Wei-Shaw/sub2api/ent/subscriptionplan"
+	"github.com/Wei-Shaw/sub2api/ent/supportmessage"
+	"github.com/Wei-Shaw/sub2api/ent/supportthread"
 	"github.com/Wei-Shaw/sub2api/ent/tlsfingerprintprofile"
 	"github.com/Wei-Shaw/sub2api/ent/usagecleanuptask"
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
@@ -140,7 +148,15 @@ func checkColumn(t, c string) error {
 			redeemcode.Table:                    redeemcode.ValidColumn,
 			securitysecret.Table:                securitysecret.ValidColumn,
 			setting.Table:                       setting.ValidColumn,
+			shopbalanceledger.Table:             shopbalanceledger.ValidColumn,
+			shopcardkey.Table:                   shopcardkey.ValidColumn,
+			shopcategory.Table:                  shopcategory.ValidColumn,
+			shopdrawcycle.Table:                 shopdrawcycle.ValidColumn,
+			shoporder.Table:                     shoporder.ValidColumn,
+			shopproduct.Table:                   shopproduct.ValidColumn,
 			subscriptionplan.Table:              subscriptionplan.ValidColumn,
+			supportmessage.Table:                supportmessage.ValidColumn,
+			supportthread.Table:                 supportthread.ValidColumn,
 			tlsfingerprintprofile.Table:         tlsfingerprintprofile.ValidColumn,
 			usagecleanuptask.Table:              usagecleanuptask.ValidColumn,
 			usagelog.Table:                      usagelog.ValidColumn,

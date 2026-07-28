@@ -363,8 +363,8 @@ const currentSection = computed(() => {
       description: '分享邀请链接，查看返利额度与邀请记录。'
     },
     {
-      match: (path: string) => path === '/accounts' || path === '/account-share',
-      kicker: 'Account sharing', title: route.path === '/accounts' ? '我的账号' : '账号广场',
+      match: (path: string) => path === '/account-share',
+      kicker: 'Account sharing', title: '账号共享',
       description: '管理 OAuth 账号资产与共享席位。'
     },
     {
@@ -407,8 +407,7 @@ const affiliateNavItem = {
 const baseNavItems = [
   { path: '/dashboard', activePaths: ['/dashboard'], label: '首页', icon: 'home' },
   { path: '/keys', activePaths: ['/keys', '/usage'], label: 'Key', icon: 'key' },
-  { path: '/accounts', activePaths: ['/accounts'], label: '我的账号', icon: 'globe' },
-  { path: '/account-share', activePaths: ['/account-share'], label: '账号广场', icon: 'users' },
+  { path: '/account-share', activePaths: ['/account-share'], label: '账号共享', icon: 'users' },
   { path: '/store', activePaths: ['/store'], label: '商城', icon: 'gift' },
   { path: '/conversations', activePaths: ['/conversations'], label: '工单', icon: 'chat' },
   { path: '/images', activePaths: ['/images'], label: '图工坊', icon: 'image' },
@@ -420,8 +419,7 @@ const baseBusinessNavItems = [
   { path: '/dashboard', activePaths: ['/dashboard'], label: '首页', icon: 'home' },
   { path: '/keys', activePaths: ['/keys'], label: 'Key', icon: 'key' },
   { path: '/usage', activePaths: ['/usage'], label: '使用记录', icon: 'chart' },
-  { path: '/accounts', activePaths: ['/accounts'], label: '我的账号', icon: 'globe' },
-  { path: '/account-share', activePaths: ['/account-share'], label: '账号广场', icon: 'users' },
+  { path: '/account-share', activePaths: ['/account-share'], label: '账号共享', icon: 'users' },
   { path: '/store', activePaths: ['/store'], label: '发卡商城', icon: 'gift' },
   { path: '/conversations', activePaths: ['/conversations'], label: '工单服务', icon: 'chat' },
   { path: '/images', activePaths: ['/images'], label: '图工坊', icon: 'image' },

@@ -38,9 +38,14 @@ func RegisterAdminRoutes(
 
 		// 账号管理
 		registerAccountRoutes(admin, h, stepUpAuth)
+		registerAccountSharePolicyRoutes(admin, h)
+		registerAccountShareModePolicyRoutes(admin, h)
 
 		// 公告管理
 		registerAnnouncementRoutes(admin, h)
+		registerConversationRoutes(admin, h)
+		registerWithdrawalRoutes(admin, h)
+		registerShopRoutes(admin, h)
 
 		// OpenAI OAuth
 		registerOpenAIOAuthRoutes(admin, h)
@@ -117,24 +122,67 @@ func RegisterAdminRoutes(
 		// 操作审计日志
 		registerAuditLogRoutes(admin, h, stepUpAuth)
 
-		community := admin.Group("/community")
-		{
-			community.GET("/accounts", h.Community.AdminListAccounts)
-			community.PUT("/accounts/:id/review", h.Community.AdminReviewAccount)
-			community.GET("/tickets", h.Community.AdminListTickets)
-			community.GET("/tickets/:id", h.Community.AdminGetTicket)
-			community.POST("/tickets/:id/messages", h.Community.AdminReplyTicket)
-			community.PUT("/tickets/:id/status", h.Community.AdminUpdateTicket)
-			community.GET("/withdrawals", h.Community.AdminListWithdrawals)
-			community.PUT("/withdrawals/:id", h.Community.AdminReviewWithdrawal)
-			community.GET("/products", h.Community.AdminListProducts)
-			community.POST("/products", h.Community.AdminUpsertProduct)
-			community.PUT("/products/:id", h.Community.AdminUpsertProduct)
-			community.POST("/products/:id/inventory", h.Community.AdminAddInventory)
-			community.GET("/store-orders", h.Community.AdminListStoreOrders)
-			community.GET("/settings", h.Community.AdminGetCommission)
-			community.PUT("/settings", h.Community.AdminSetCommission)
-		}
+	}
+}
+
+func registerWithdrawalRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	withdrawals := admin.Group("/withdrawals")
+	{
+		withdrawals.GET("", h.Admin.Withdrawal.List)
+		withdrawals.GET("/:id", h.Admin.Withdrawal.Get)
+		withdrawals.POST("/:id/settle", h.Admin.Withdrawal.Settle)
+		withdrawals.POST("/:id/reject", h.Admin.Withdrawal.Reject)
+	}
+}
+
+func registerConversationRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	conversations := admin.Group("/conversations")
+	{
+		conversations.GET("", h.Admin.Conversation.List)
+		conversations.POST("", h.Admin.Conversation.Create)
+		conversations.GET("/unread-count", h.Admin.Conversation.UnreadCount)
+		conversations.GET("/:id", h.Admin.Conversation.Get)
+		conversations.GET("/:id/messages", h.Admin.Conversation.ListMessages)
+		conversations.POST("/:id/messages", h.Admin.Conversation.AddMessage)
+		conversations.POST("/:id/read", h.Admin.Conversation.MarkRead)
+		conversations.PUT("/:id/status", h.Admin.Conversation.UpdateStatus)
+		conversations.PUT("/:id/assignee", h.Admin.Conversation.UpdateAssignee)
+	}
+}
+
+func registerShopRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	shop := admin.Group("/shop")
+	{
+		categories := shop.Group("/categories")
+		categories.GET("", h.Admin.Shop.ListCategories)
+		categories.POST("", h.Admin.Shop.CreateCategory)
+		categories.PUT("/:id", h.Admin.Shop.UpdateCategory)
+		categories.DELETE("/:id", h.Admin.Shop.DeleteCategory)
+
+		products := shop.Group("/products")
+		products.GET("", h.Admin.Shop.ListProducts)
+		products.POST("", h.Admin.Shop.CreateProduct)
+		products.PUT("/:id", h.Admin.Shop.UpdateProduct)
+		products.DELETE("/:id", h.Admin.Shop.DeleteProduct)
+
+		cardKeys := shop.Group("/card-keys")
+		cardKeys.GET("", h.Admin.Shop.ListCardKeys)
+		cardKeys.POST("", h.Admin.Shop.CreateCardKey)
+		cardKeys.POST("/import", h.Admin.Shop.ImportCardKeys)
+		cardKeys.POST("/import-files", h.Admin.Shop.ImportFileCardKeys)
+		cardKeys.POST("/bulk-status", h.Admin.Shop.BulkUpdateCardKeyStatus)
+		cardKeys.PUT("/:id", h.Admin.Shop.UpdateCardKey)
+		cardKeys.DELETE("/:id", h.Admin.Shop.DeleteCardKey)
+
+		orders := shop.Group("/orders")
+		orders.GET("/:id", h.Admin.Shop.GetOrder)
+		orders.GET("/:id/files/download.zip", h.Admin.Shop.DownloadOrderFilesZip)
+		orders.GET("/:id/files/:card_id/download", h.Admin.Shop.DownloadOrderFile)
+
+		storage := shop.Group("/file-card-storage")
+		storage.GET("", h.Admin.Shop.GetFileCardStorage)
+		storage.PUT("", h.Admin.Shop.UpdateFileCardStorage)
+		storage.POST("/test", h.Admin.Shop.TestFileCardStorage)
 	}
 }
 
@@ -151,6 +199,25 @@ func registerPromptAuditRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		promptAudit.POST("/events/batch-delete", h.Admin.PromptAudit.BatchDelete)
 		promptAudit.POST("/events/delete-preview", h.Admin.PromptAudit.DeletePreview)
 		promptAudit.POST("/events/delete-by-filter", h.Admin.PromptAudit.DeleteByFilter)
+	}
+}
+
+func registerAccountSharePolicyRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	policies := admin.Group("/account-share-policies")
+	{
+		policies.GET("", h.Admin.AccountSharePolicy.List)
+		policies.GET("/:id", h.Admin.AccountSharePolicy.GetByID)
+		policies.POST("", h.Admin.AccountSharePolicy.Create)
+		policies.PUT("/:id", h.Admin.AccountSharePolicy.Update)
+		policies.DELETE("/:id", h.Admin.AccountSharePolicy.Delete)
+	}
+}
+
+func registerAccountShareModePolicyRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	policy := admin.Group("/account-share-mode-policy")
+	{
+		policy.GET("", h.Admin.AccountShareModePolicy.Get)
+		policy.PUT("", h.Admin.AccountShareModePolicy.Update)
 	}
 }
 

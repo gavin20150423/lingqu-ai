@@ -79,8 +79,12 @@ var ProviderSet = wire.NewSet(
 	NewPromoCodeRepository,
 	NewAnnouncementRepository,
 	NewAnnouncementReadRepository,
+	NewConversationRepository,
 	NewUsageLogRepository,
 	NewUsageBillingRepository,
+	NewAccountSharePolicyRepository,
+	NewAccountShareModeRepository,
+	NewAccountShareModeAPIKeyBindingChecker,
 	NewBatchImageRepository,
 	NewIdempotencyRepository,
 	NewUsageCleanupRepository,
@@ -99,6 +103,8 @@ var ProviderSet = wire.NewSet(
 	NewChannelMonitorRequestTemplateRepository,
 	NewContentModerationRepository,
 	NewAffiliateRepository,
+	NewReceiptCodeRepository,
+	NewWithdrawalRepository,
 	NewUserPlatformQuotaRepository,     // T14: user × platform quota
 	NewUserPlatformQuotaServiceAdapter, // T14: adapter → service.UserPlatformQuotaRepository
 
@@ -142,6 +148,8 @@ var ProviderSet = wire.NewSet(
 	// Backup infrastructure
 	NewPgDumper,
 	NewS3BackupStoreFactory,
+	NewReceiptCodeObjectStoreFactory,
+	NewShopFileCardObjectStoreFactory,
 
 	// Image storage (async image task result offload)
 	ProvideImageStorageFactory,

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 )
 
 var ErrUsageBillingRequestIDRequired = errors.New("usage billing request_id is required")
@@ -21,6 +22,7 @@ type UsageBillingCommand struct {
 
 	UserID              int64
 	AccountID           int64
+	GroupID             *int64
 	SubscriptionID      *int64
 	AccountType         string
 	Model               string
@@ -39,6 +41,10 @@ type UsageBillingCommand struct {
 	APIKeyQuotaCost     float64
 	APIKeyRateLimitCost float64
 	AccountQuotaCost    float64
+
+	UsageOccurredAt            time.Time
+	AccountShareModeSettlement *AccountShareModeBillingSnapshot
+	UsageLog                   *UsageLog
 }
 
 func (c *UsageBillingCommand) Normalize() {
@@ -78,6 +84,23 @@ func buildUsageBillingFingerprint(c *UsageBillingCommand) string {
 		c.APIKeyRateLimitCost,
 		c.AccountQuotaCost,
 	)
+	if snapshot := c.AccountShareModeSettlement; snapshot != nil {
+		raw += fmt.Sprintf(
+			"|account_share_mode|%d|%d|%d|%d|%d|%0.10f|%0.10f|%0.10f|%0.10f|%0.10f|%0.10f|%d",
+			snapshot.MembershipID,
+			snapshot.ListingID,
+			snapshot.AccountID,
+			snapshot.OwnerUserID,
+			snapshot.ConsumerUserID,
+			snapshot.BaseCharge,
+			snapshot.HourlyCharge,
+			snapshot.TotalCharge,
+			snapshot.RateMultiplier,
+			snapshot.OwnerShareRatio,
+			snapshot.PlatformShareRatio,
+			snapshot.DurationMs,
+		)
+	}
 	if payloadHash := strings.TrimSpace(c.RequestPayloadHash); payloadHash != "" {
 		raw += "|" + payloadHash
 	}
@@ -117,6 +140,7 @@ type UsageBillingApplyResult struct {
 	NewBalance           *float64           // post-deduction balance (nil = no balance deduction)
 	BalanceOverdrafted   bool               // true when the sufficient-balance guard missed and debt was still recorded
 	QuotaState           *AccountQuotaState // post-increment quota state (nil = no quota increment)
+	BalanceCreditUserIDs []int64            // users credited by settlement side effects
 }
 
 // BatchImageBalanceHoldCommand describes an idempotent balance hold operation.

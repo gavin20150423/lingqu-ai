@@ -20,6 +20,7 @@ import (
 )
 
 const (
+	openAIAccountScheduleLayerAccountShareMode = "account_share_mode"
 	openAIAccountScheduleLayerPreviousResponse = "previous_response_id"
 	openAIAccountScheduleLayerSessionSticky    = "session_hash"
 	openAIAccountScheduleLayerLoadBalance      = "load_balance"
@@ -1990,7 +1991,9 @@ func (s *OpenAIGatewayService) SelectAccountWithScheduler(
 	requiredTransport OpenAIUpstreamTransport,
 	requireCompact bool,
 ) (*AccountSelectionResult, OpenAIAccountScheduleDecision, error) {
-	return s.selectAccountWithScheduler(ctx, groupID, previousResponseID, sessionHash, requestedModel, excludedIDs, requiredTransport, "", "", requireCompact, PlatformOpenAI, false, true)
+	selection, decision, err := s.selectAccountWithScheduler(ctx, groupID, previousResponseID, sessionHash, requestedModel, excludedIDs, requiredTransport, "", "", requireCompact, PlatformOpenAI, false, true)
+	setOpenAIDispatchRequirements(selection, requestedModel, requiredTransport, "", "", PlatformOpenAI, requireCompact)
+	return selection, decision, err
 }
 
 // SelectAccountWithSchedulerForCapability 按能力要求调度账号。
@@ -2014,7 +2017,9 @@ func (s *OpenAIGatewayService) SelectAccountWithSchedulerForCapability(
 	if len(platformOverride) > 0 {
 		platform = platformOverride[0]
 	}
-	return s.selectAccountWithScheduler(ctx, groupID, previousResponseID, sessionHash, requestedModel, excludedIDs, requiredTransport, requiredCapability, "", requireCompact, platform, previousResponseCanMove, useUpstreamTokenCost)
+	selection, decision, err := s.selectAccountWithScheduler(ctx, groupID, previousResponseID, sessionHash, requestedModel, excludedIDs, requiredTransport, requiredCapability, "", requireCompact, platform, previousResponseCanMove, useUpstreamTokenCost)
+	setOpenAIDispatchRequirements(selection, requestedModel, requiredTransport, requiredCapability, "", platform, requireCompact)
+	return selection, decision, err
 }
 
 func (s *OpenAIGatewayService) SelectAccountWithSchedulerForImages(
@@ -2027,13 +2032,30 @@ func (s *OpenAIGatewayService) SelectAccountWithSchedulerForImages(
 ) (*AccountSelectionResult, OpenAIAccountScheduleDecision, error) {
 	selection, decision, err := s.selectAccountWithScheduler(ctx, groupID, "", sessionHash, requestedModel, excludedIDs, OpenAIUpstreamTransportHTTPSSE, "", requiredCapability, false, PlatformOpenAI, false, false)
 	if err == nil && selection != nil && selection.Account != nil {
+		setOpenAIDispatchRequirements(selection, requestedModel, OpenAIUpstreamTransportHTTPSSE, "", requiredCapability, PlatformOpenAI, false)
 		return selection, decision, nil
 	}
 	// 如果要求 native 能力（如指定了模型）但没有可用的 APIKey 账号，回退到 basic（OAuth 账号）
 	if requiredCapability == OpenAIImagesCapabilityNative {
-		return s.selectAccountWithScheduler(ctx, groupID, "", sessionHash, requestedModel, excludedIDs, OpenAIUpstreamTransportHTTPSSE, "", OpenAIImagesCapabilityBasic, false, PlatformOpenAI, false, false)
+		selection, decision, err = s.selectAccountWithScheduler(ctx, groupID, "", sessionHash, requestedModel, excludedIDs, OpenAIUpstreamTransportHTTPSSE, "", OpenAIImagesCapabilityBasic, false, PlatformOpenAI, false, false)
+		setOpenAIDispatchRequirements(selection, requestedModel, OpenAIUpstreamTransportHTTPSSE, "", OpenAIImagesCapabilityBasic, PlatformOpenAI, false)
+		return selection, decision, err
 	}
 	return selection, decision, err
+}
+
+func setOpenAIDispatchRequirements(selection *AccountSelectionResult, requestedModel string, requiredTransport OpenAIUpstreamTransport, requiredEndpointCapability OpenAIEndpointCapability, requiredImageCapability OpenAIImagesCapability, requiredPlatform string, requireCompact bool) {
+	if selection == nil || selection.Account == nil {
+		return
+	}
+	selection.OpenAIDispatchRequirements = &OpenAIAccountDispatchRequirements{
+		RequestedModel:             requestedModel,
+		RequiredTransport:          requiredTransport,
+		RequiredEndpointCapability: requiredEndpointCapability,
+		RequiredImageCapability:    requiredImageCapability,
+		RequiredPlatform:           requiredPlatform,
+		RequireCompact:             requireCompact,
+	}
 }
 
 func (s *OpenAIGatewayService) selectAccountWithScheduler(
@@ -2054,6 +2076,9 @@ func (s *OpenAIGatewayService) selectAccountWithScheduler(
 	ctx = s.withOpenAIQuotaAutoPauseContext(ctx)
 	platform = normalizeOpenAICompatiblePlatform(platform)
 	decision := OpenAIAccountScheduleDecision{}
+	if selection, accountModeDecision, handled, err := s.selectAccountShareModeBoundAccount(ctx, groupID, requestedModel, excludedIDs, requiredTransport, requiredImageCapability, requiredCapability, requireCompact); handled {
+		return selection, accountModeDecision, err
+	}
 	scheduler := s.getOpenAIAccountScheduler(ctx)
 	if scheduler != nil && s.checkChannelPricingRestriction(ctx, groupID, requestedModel) {
 		slog.Warn("channel pricing restriction blocked request",
@@ -2079,16 +2104,6 @@ func (s *OpenAIGatewayService) selectAccountWithScheduler(
 			return selection, decision, nil
 		}
 	}
-	if selection, found, err := s.selectCommunityOpenAIAccount(ctx, requestedModel, effectiveExcludedIDsOrNil(excludedIDs), requiredTransport, requiredCapability, requiredImageCapability, requireCompact, platform); err != nil {
-		return nil, decision, err
-	} else if found {
-		decision.Layer = "community"
-		decision.SelectedAccountID = selection.Account.ID
-		decision.SelectedAccountType = selection.Account.Type
-		decision.CandidateCount = 1
-		return selection, decision, nil
-	}
-
 	if scheduler == nil {
 		decision.Layer = openAIAccountScheduleLayerLoadBalance
 		if requiredTransport == OpenAIUpstreamTransportAny || requiredTransport == OpenAIUpstreamTransportHTTPSSE {

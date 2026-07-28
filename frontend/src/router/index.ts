@@ -299,28 +299,28 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
-    path: '/accounts',
-    name: 'CommunityAccounts',
-    component: () => import('@/views/user/CommunityAccountsView.vue'),
-    meta: { requiresAuth: true, requiresAdmin: false, title: '我的账号' }
-  },
-  {
     path: '/account-share',
-    name: 'AccountMarketplace',
-    component: () => import('@/views/user/AccountMarketplaceView.vue'),
-    meta: { requiresAuth: true, requiresAdmin: false, title: '账号广场' }
+    name: 'AccountShare',
+    component: () => import('@/views/user/AccountShareView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      title: 'Account Plaza',
+      titleKey: 'accountShare.title',
+      descriptionKey: 'accountShare.description'
+    }
   },
   {
     path: '/conversations',
-    name: 'SupportTickets',
-    component: () => import('@/views/user/SupportTicketsView.vue'),
+    name: 'Conversations',
+    component: () => import('@/views/user/ConversationsView.vue'),
     meta: { requiresAuth: true, requiresAdmin: false, title: '工单服务' }
   },
   {
     path: '/store',
-    name: 'CardStore',
-    component: () => import('@/views/user/CardStoreView.vue'),
-    meta: { requiresAuth: true, requiresAdmin: false, title: '发卡商城' }
+    name: 'Store',
+    component: () => import('@/views/StoreView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: false, title: 'Store', titleKey: 'store.title' }
   },
   {
     path: '/subscriptions',
@@ -583,6 +583,12 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/admin/conversations',
+    name: 'AdminConversations',
+    component: () => import('@/views/admin/ConversationsView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true, title: 'Conversations', titleKey: 'admin.conversations.title' }
+  },
+  {
     path: '/admin/redeem',
     name: 'AdminRedeem',
     component: () => import('@/views/admin/RedeemView.vue'),
@@ -655,12 +661,6 @@ const routes: RouteRecordRaw[] = [
       titleKey: 'admin.usage.title',
       descriptionKey: 'admin.usage.description'
     }
-  },
-  {
-    path: '/admin/community',
-    name: 'AdminCommunity',
-    component: () => import('@/views/admin/AdminCommunityView.vue'),
-    meta: { requiresAuth: true, requiresAdmin: true, title: '共享与商城' }
   },
   {
     path: '/admin/affiliates',
@@ -740,6 +740,40 @@ const routes: RouteRecordRaw[] = [
       titleKey: 'nav.paymentPlans',
       requiresPayment: true
     }
+  },
+  {
+    path: '/admin/withdrawals',
+    name: 'AdminWithdrawals',
+    component: () => import('@/views/admin/orders/AdminWithdrawalsView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true, title: 'Withdrawal Management' }
+  },
+  {
+    path: '/admin/store',
+    redirect: '/admin/store/categories'
+  },
+  {
+    path: '/admin/store/categories',
+    name: 'AdminStoreCategories',
+    component: () => import('@/views/admin/store/StoreCategoriesView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true, title: 'Store Categories', titleKey: 'admin.store.categoriesTitle' }
+  },
+  {
+    path: '/admin/store/products',
+    name: 'AdminStoreProducts',
+    component: () => import('@/views/admin/store/StoreProductsView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true, title: 'Store Products', titleKey: 'admin.store.productsTitle' }
+  },
+  {
+    path: '/admin/store/cards',
+    name: 'AdminStoreCards',
+    component: () => import('@/views/admin/store/StoreCardsView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true, title: 'Store Cards', titleKey: 'admin.store.cardsTitle' }
+  },
+  {
+    path: '/admin/store/file-storage',
+    name: 'AdminStoreFileStorage',
+    component: () => import('@/views/admin/store/StoreFileStorageView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true, title: 'Store File Storage', titleKey: 'admin.store.fileStorageTitle' }
   },
 
   // ==================== 404 Not Found ====================

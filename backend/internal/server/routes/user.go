@@ -16,18 +16,39 @@ func RegisterUserRoutes(
 	auditLog middleware.AuditLogMiddleware,
 	settingService *service.SettingService,
 ) {
+	shopPublic := v1.Group("/shop")
+	{
+		shopPublic.GET("/categories", h.Shop.ListCategories)
+		shopPublic.GET("/products", h.Shop.ListProducts)
+		shopPublic.GET("/products/:id", h.Shop.GetProduct)
+	}
+
 	authenticated := v1.Group("")
 	authenticated.Use(gin.HandlerFunc(jwtAuth))
 	authenticated.Use(middleware.BackendModeUserGuard(settingService))
 	// 用户管理面变更类操作入审计（含 TOTP 启用/禁用、step-up 验证、密码修改等安全事件）
 	authenticated.Use(gin.HandlerFunc(auditLog))
 	{
+		shop := authenticated.Group("/shop")
+		{
+			shop.GET("/draw-progress", h.Shop.ListDrawProgress)
+			shop.POST("/orders", h.Shop.CreateOrder)
+			shop.GET("/orders/:id", h.Shop.GetOrder)
+			shop.GET("/orders/:id/files/download.zip", h.Shop.DownloadOrderFilesZip)
+			shop.GET("/orders/:id/files/:card_id/download", h.Shop.DownloadOrderFile)
+		}
 		// 用户接口
 		user := authenticated.Group("/user")
 		{
 			user.GET("/profile", h.User.GetProfile)
 			user.PUT("/password", h.User.ChangePassword)
 			user.PUT("", h.User.UpdateProfile)
+			user.GET("/receipt-code", h.ReceiptCode.Get)
+			user.POST("/receipt-code", h.ReceiptCode.Upload)
+			user.DELETE("/receipt-code", h.ReceiptCode.Delete)
+			user.GET("/withdrawals", h.Withdrawal.ListMine)
+			user.POST("/withdrawals", h.Withdrawal.Submit)
+			user.POST("/withdrawals/:id/cancel", h.Withdrawal.Cancel)
 			user.GET("/aff", h.User.GetAffiliate)
 			user.POST("/aff/transfer", h.User.TransferAffiliateQuota)
 			user.POST("/account-bindings/email/send-code", h.User.SendEmailBindingCode)
@@ -70,6 +91,36 @@ func RegisterUserRoutes(
 			keys.DELETE("/:id", h.APIKey.Delete)
 		}
 
+		accountShare := authenticated.Group("/account-share")
+		{
+			accountShare.GET("/mode-groups", h.AccountShareMode.ListModeGroups)
+			accountShare.POST("/openai/auth-url", h.AccountShareMode.GenerateOpenAIAuthURL)
+			accountShare.POST("/openai/exchange-code", h.AccountShareMode.ExchangeOpenAICode)
+			accountShare.POST("/anthropic/auth-url", h.AccountShareMode.GenerateAnthropicAuthURL)
+			accountShare.POST("/anthropic/exchange-code", h.AccountShareMode.ExchangeAnthropicCode)
+			accountShare.GET("/proxies", h.AccountShareMode.ListAvailableProxies)
+			accountShare.POST("/proxies", h.AccountShareMode.CreateProxy)
+			accountShare.PUT("/proxies/:id", h.AccountShareMode.UpdateProxy)
+			accountShare.DELETE("/proxies/:id", h.AccountShareMode.DeleteProxy)
+			accountShare.GET("/listings", h.AccountShareMode.ListListings)
+			accountShare.GET("/recommendations/usage-profile", h.AccountShareMode.GetRecommendationUsageProfile)
+			accountShare.POST("/recommendations", h.AccountShareMode.RecommendListings)
+			accountShare.GET("/listings/:id", h.AccountShareMode.GetListing)
+			accountShare.GET("/listings/:id/my-spend", h.AccountShareMode.GetMySpendSummary)
+			accountShare.GET("/listings/:id/reviews", h.AccountShareMode.ListListingReviews)
+			accountShare.GET("/owners/:owner_id/reviews", h.AccountShareMode.ListOwnerReviews)
+			accountShare.POST("/listings/:id/edit-session", h.AccountShareMode.BeginListingEdit)
+			accountShare.POST("/listings/:id/edit-session/release", h.AccountShareMode.ReleaseListingEdit)
+			accountShare.PATCH("/listings/:id", h.AccountShareMode.UpdateListing)
+			accountShare.POST("/listings/:id/join", h.AccountShareMode.JoinListing)
+			accountShare.GET("/queue/:apiKeyID", h.AccountShareMode.ListMembershipQueue)
+			accountShare.PATCH("/queue", h.AccountShareMode.ReorderMembershipQueue)
+			accountShare.PATCH("/memberships/:id/idle-timeout", h.AccountShareMode.UpdateMembershipIdleTimeout)
+			accountShare.POST("/memberships/:id/end-intent", h.AccountShareMode.CreateEndMembershipIntent)
+			accountShare.POST("/memberships/:id/end", h.AccountShareMode.EndMembership)
+			accountShare.POST("/memberships/:id/review", h.AccountShareMode.SubmitReview)
+		}
+
 		// 用户可用分组（非管理员接口）
 		groups := authenticated.Group("/groups")
 		{
@@ -106,6 +157,18 @@ func RegisterUserRoutes(
 			announcements.POST("/:id/read", h.Announcement.MarkRead)
 		}
 
+		conversations := authenticated.Group("/conversations")
+		{
+			conversations.GET("", h.Conversation.List)
+			conversations.POST("", h.Conversation.Create)
+			conversations.GET("/unread-count", h.Conversation.UnreadCount)
+			conversations.GET("/:id", h.Conversation.Get)
+			conversations.GET("/:id/messages", h.Conversation.ListMessages)
+			conversations.POST("/:id/messages", h.Conversation.AddMessage)
+			conversations.POST("/:id/read", h.Conversation.MarkRead)
+			conversations.POST("/:id/close", h.Conversation.Close)
+		}
+
 		// 卡密兑换
 		redeem := authenticated.Group("/redeem")
 		{
@@ -129,53 +192,5 @@ func RegisterUserRoutes(
 			monitors.GET("/:id/status", h.ChannelMonitor.GetStatus)
 		}
 
-		community := authenticated.Group("/community")
-		{
-			community.GET("/accounts", h.Community.ListAccounts)
-			community.POST("/accounts", h.Community.CreateAccount)
-			community.POST("/accounts/import", h.Community.ImportAccounts)
-			community.POST("/accounts/export", h.Community.ExportAccounts)
-			community.PATCH("/accounts/batch", h.Community.BatchUpdateAccounts)
-			community.POST("/accounts/oauth/auth-url", h.Community.GenerateAccountOAuthURL)
-			community.POST("/accounts/oauth/exchange", h.Community.ExchangeAccountOAuth)
-			community.GET("/proxies", h.Community.ListProxies)
-			community.POST("/proxies", h.Community.SaveProxy)
-			community.PUT("/proxies/:id", h.Community.SaveProxy)
-			community.DELETE("/proxies/:id", h.Community.DeleteProxy)
-			community.DELETE("/accounts/:id", h.Community.DeleteAccount)
-			community.POST("/listings", h.Community.CreateListing)
-			community.PUT("/listings/:id", h.Community.UpdateListing)
-			community.GET("/marketplace", h.Community.ListMarketplace)
-			community.GET("/owner/listings", h.Community.ListOwnerListings)
-			community.GET("/memberships", h.Community.ListMemberships)
-			community.GET("/consumption/accounts", h.Community.ListConsumptionAccounts)
-			community.GET("/consumption/:membership_id", h.Community.GetConsumptionSummary)
-			community.POST("/selection-assistant", h.Community.RecommendListings)
-			community.GET("/selection-assistant/recent/:api_key_id", h.Community.GetRecentUsageAverage)
-			community.GET("/owner/summary", h.Community.GetOwnerSummary)
-			community.PUT("/listings/:id/status", h.Community.SetListingStatus)
-			community.GET("/account-mode-keys", h.Community.ListAccountModeKeys)
-			community.PUT("/account-mode-keys/:id", h.Community.SetAccountModeKey)
-			community.POST("/marketplace/:id/join", h.Community.JoinListing)
-			community.DELETE("/marketplace/:id/membership", h.Community.LeaveListing)
-			community.POST("/memberships/:id/review", h.Community.ReviewMembership)
-			community.GET("/tickets", h.Community.ListTickets)
-			community.POST("/tickets", h.Community.CreateTicket)
-			community.GET("/tickets/:id", h.Community.GetTicket)
-			community.POST("/tickets/:id/messages", h.Community.ReplyTicket)
-			community.POST("/tickets/:id/read", h.Community.MarkTicketRead)
-			community.POST("/tickets/:id/close", h.Community.CloseTicket)
-			community.GET("/payout-methods", h.Community.ListPayoutMethods)
-			community.PUT("/payout-methods", h.Community.SavePayoutMethod)
-			community.DELETE("/payout-methods/:method", h.Community.DeletePayoutMethod)
-			community.GET("/withdrawals", h.Community.ListWithdrawals)
-			community.POST("/withdrawals", h.Community.CreateWithdrawal)
-			community.POST("/withdrawals/:id/cancel", h.Community.CancelWithdrawal)
-			community.GET("/store/products", h.Community.ListProducts)
-			community.GET("/store/wallet", h.Community.GetStoreWallet)
-			community.POST("/store/products/:id/buy", h.Community.BuyProduct)
-			community.POST("/store/products/:id/platform-order", h.Community.CreatePlatformStoreOrder)
-			community.GET("/store/orders", h.Community.ListStoreOrders)
-		}
 	}
 }

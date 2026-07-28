@@ -11,6 +11,7 @@ import proxiesAPI from './proxies'
 import redeemAPI from './redeem'
 import promoAPI from './promo'
 import announcementsAPI from './announcements'
+import conversationsAPI from './conversations'
 import settingsAPI from './settings'
 import systemAPI from './system'
 import subscriptionsAPI from './subscriptions'
@@ -31,9 +32,12 @@ import channelMonitorAPI from './channelMonitor'
 import channelMonitorTemplateAPI from './channelMonitorTemplate'
 import adminPaymentAPI from './payment'
 import affiliatesAPI from './affiliates'
+import accountSharePoliciesAPI from './accountSharePolicies'
+import accountShareModePolicyAPI from './accountShareModePolicy'
 import riskControlAPI from './riskControl'
 import adminComplianceAPI from './compliance'
 import auditAPI from './audit'
+import adminStoreAPI from './store'
 
 /**
  * Unified admin API object for convenient access
@@ -47,6 +51,7 @@ export const adminAPI = {
   redeem: redeemAPI,
   promo: promoAPI,
   announcements: announcementsAPI,
+  conversations: conversationsAPI,
   settings: settingsAPI,
   system: systemAPI,
   subscriptions: subscriptionsAPI,
@@ -67,9 +72,12 @@ export const adminAPI = {
   channelMonitorTemplate: channelMonitorTemplateAPI,
   payment: adminPaymentAPI,
   affiliates: affiliatesAPI,
+  accountSharePolicies: accountSharePoliciesAPI,
+  accountShareModePolicy: accountShareModePolicyAPI,
   riskControl: riskControlAPI,
   compliance: adminComplianceAPI,
-  audit: auditAPI
+  audit: auditAPI,
+  store: adminStoreAPI
 }
 
 export {
@@ -81,6 +89,7 @@ export {
   redeemAPI,
   promoAPI,
   announcementsAPI,
+  conversationsAPI,
   settingsAPI,
   systemAPI,
   subscriptionsAPI,
@@ -101,9 +110,12 @@ export {
   channelMonitorTemplateAPI,
   adminPaymentAPI,
   affiliatesAPI,
+  accountSharePoliciesAPI,
+  accountShareModePolicyAPI,
   riskControlAPI,
   adminComplianceAPI,
-  auditAPI
+  auditAPI,
+  adminStoreAPI
 }
 
 export default adminAPI
@@ -115,3 +127,5 @@ export type { ErrorPassthroughRule, CreateRuleRequest, UpdateRuleRequest } from 
 export type { BackupAgentHealth, DataManagementConfig } from './dataManagement'
 export type { TLSFingerprintProfile, CreateProfileRequest, UpdateProfileRequest } from './tlsFingerprintProfile'
 export type { ContentModerationConfig, ContentModerationLog, ModerationMode } from './riskControl'
+export type { AccountSharePolicy } from './accountSharePolicies'
+export type { AccountShareModePolicy } from './accountShareModePolicy'

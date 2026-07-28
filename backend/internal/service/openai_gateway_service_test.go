@@ -15,12 +15,96 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/model"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
 	"github.com/cespare/xxhash/v2"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
 )
+
+func TestOpenAIGatewayServiceRevalidateSelectedAccountForDispatchUsesLatestPublicState(t *testing.T) {
+	groupID := int64(7123)
+	ownerUserID := int64(91)
+	consumerUserID := int64(92)
+	account := Account{
+		ID:           551,
+		Platform:     PlatformOpenAI,
+		Type:         AccountTypeOAuth,
+		Status:       StatusActive,
+		Schedulable:  true,
+		Concurrency:  3,
+		OwnerUserID:  &ownerUserID,
+		ShareMode:    AccountShareModePublic,
+		ShareStatus:  AccountShareStatusApproved,
+		GroupIDs:     []int64{groupID},
+		AccountLevel: AccountLevelTeam,
+	}
+	repo := &stubOpenAIAccountRepo{accounts: []Account{account}}
+	svc := &OpenAIGatewayService{accountRepo: repo}
+	ctx := context.WithValue(context.Background(), ctxkey.UserID, consumerUserID)
+
+	requirements := OpenAIAccountDispatchRequirements{RequestedModel: "gpt-5", RequiredTransport: OpenAIUpstreamTransportAny}
+	latest, err := svc.RevalidateSelectedOpenAIAccountForDispatch(ctx, &groupID, &account, requirements)
+	require.NoError(t, err)
+	require.NotNil(t, latest)
+	require.Equal(t, account.ID, latest.ID)
+
+	repo.accounts[0].ShareStatus = AccountShareStatusPending
+	latest, err = svc.RevalidateSelectedOpenAIAccountForDispatch(ctx, &groupID, &account, requirements)
+	require.ErrorIs(t, err, ErrNoAvailableAccounts)
+	require.Nil(t, latest)
+
+	repo.accounts[0].ShareStatus = AccountShareStatusApproved
+	repo.accounts[0].GroupIDs = nil
+	latest, err = svc.RevalidateSelectedOpenAIAccountForDispatch(ctx, &groupID, &account, requirements)
+	require.ErrorIs(t, err, ErrNoAvailableAccounts)
+	require.Nil(t, latest)
+}
+
+func TestOpenAIGatewayServiceRevalidateSelectedAccountForDispatchUsesModeMembership(t *testing.T) {
+	modeGroupID := int64(8123)
+	ownerUserID := int64(101)
+	consumerUserID := int64(202)
+	apiKeyID := int64(303)
+	account := Account{
+		ID:           661,
+		Platform:     PlatformOpenAI,
+		Type:         AccountTypeOAuth,
+		Status:       StatusActive,
+		Schedulable:  true,
+		Concurrency:  3,
+		OwnerUserID:  &ownerUserID,
+		ShareMode:    AccountShareModePrivate,
+		ShareStatus:  AccountShareStatusApproved,
+		GroupIDs:     []int64{modeGroupID},
+		AccountLevel: AccountLevelTeam,
+	}
+	shareRepo := &accountShareModeRepoStub{
+		membership: &AccountShareMembership{ID: 1, AccountID: account.ID, ConsumerUserID: consumerUserID, APIKeyID: apiKeyID},
+		listing:    &AccountShareListing{ID: 2, AccountID: account.ID, OwnerUserID: ownerUserID, Status: AccountShareListingStatusActive},
+	}
+	svc := &OpenAIGatewayService{
+		accountRepo:             stubOpenAIAccountRepo{accounts: []Account{account}},
+		accountShareModeService: &AccountShareModeService{repo: shareRepo},
+	}
+	ctx := WithAccountShareModeRequest(context.Background(), consumerUserID, apiKeyID)
+
+	requirements := OpenAIAccountDispatchRequirements{RequestedModel: "gpt-5", RequiredTransport: OpenAIUpstreamTransportAny}
+	latest, err := svc.RevalidateSelectedOpenAIAccountForDispatch(ctx, &modeGroupID, &account, requirements)
+	require.NoError(t, err)
+	require.NotNil(t, latest)
+	require.Equal(t, account.ID, latest.ID)
+
+	wrongRepo := &accountShareModeRepoStub{
+		membership: &AccountShareMembership{ID: 3, AccountID: account.ID + 1, ConsumerUserID: consumerUserID, APIKeyID: apiKeyID},
+		listing:    &AccountShareListing{ID: 4, AccountID: account.ID + 1, OwnerUserID: ownerUserID, Status: AccountShareListingStatusActive},
+	}
+	svc.accountShareModeService = &AccountShareModeService{repo: wrongRepo}
+	latest, err = svc.RevalidateSelectedOpenAIAccountForDispatch(ctx, &modeGroupID, &account, requirements)
+	require.ErrorIs(t, err, ErrAccountShareModeGroupUnbound)
+	require.Nil(t, latest)
+}
 
 // 编译期接口断言
 var _ AccountRepository = (*stubOpenAIAccountRepo)(nil)

@@ -55,6 +55,12 @@ type ConcurrencyCache interface {
 	CleanupStaleProcessSlots(ctx context.Context, activeRequestPrefix string) error
 }
 
+type accountShareMembershipConcurrencyCache interface {
+	AcquireAccountShareMembershipSlot(ctx context.Context, membershipID int64, maxConcurrency int, requestID string) (bool, error)
+	ReleaseAccountShareMembershipSlot(ctx context.Context, membershipID int64, requestID string) error
+	GetAccountShareMembershipConcurrency(ctx context.Context, membershipID int64) (int, error)
+}
+
 type APIKeyConcurrencyCache interface {
 	TrackAPIKeySlot(ctx context.Context, apiKeyID int64, requestID string) error
 	ReleaseAPIKeySlot(ctx context.Context, apiKeyID int64, requestID string) error
@@ -310,6 +316,39 @@ func (s *ConcurrencyService) SetAccountLoadBatchCacheTTL(ttl time.Duration) {
 type AcquireResult struct {
 	Acquired    bool
 	ReleaseFunc func() // Must be called when done (typically via defer)
+}
+
+func (s *ConcurrencyService) AcquireAccountShareMembershipSlot(ctx context.Context, membershipID int64, maxConcurrency int) (*AcquireResult, error) {
+	if maxConcurrency <= 0 || s == nil || s.cache == nil {
+		return &AcquireResult{Acquired: true, ReleaseFunc: func() {}}, nil
+	}
+	cache, ok := s.cache.(accountShareMembershipConcurrencyCache)
+	if !ok {
+		return &AcquireResult{Acquired: true, ReleaseFunc: func() {}}, nil
+	}
+	requestID := generateRequestID()
+	acquired, err := cache.AcquireAccountShareMembershipSlot(ctx, membershipID, maxConcurrency, requestID)
+	if err != nil || !acquired {
+		return &AcquireResult{Acquired: acquired}, err
+	}
+	return &AcquireResult{Acquired: true, ReleaseFunc: func() {
+		releaseCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := cache.ReleaseAccountShareMembershipSlot(releaseCtx, membershipID, requestID); err != nil {
+			logger.LegacyPrintf("service.concurrency", "failed to release account share membership slot %d: %v", membershipID, err)
+		}
+	}}, nil
+}
+
+func (s *ConcurrencyService) GetAccountShareMembershipConcurrency(ctx context.Context, membershipID int64) (int, error) {
+	if s == nil || s.cache == nil || membershipID <= 0 {
+		return 0, nil
+	}
+	cache, ok := s.cache.(accountShareMembershipConcurrencyCache)
+	if !ok {
+		return 0, nil
+	}
+	return cache.GetAccountShareMembershipConcurrency(ctx, membershipID)
 }
 
 type AccountWithConcurrency struct {

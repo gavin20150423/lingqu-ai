@@ -44,7 +44,15 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/redeemcode"
 	"github.com/Wei-Shaw/sub2api/ent/securitysecret"
 	"github.com/Wei-Shaw/sub2api/ent/setting"
+	"github.com/Wei-Shaw/sub2api/ent/shopbalanceledger"
+	"github.com/Wei-Shaw/sub2api/ent/shopcardkey"
+	"github.com/Wei-Shaw/sub2api/ent/shopcategory"
+	"github.com/Wei-Shaw/sub2api/ent/shopdrawcycle"
+	"github.com/Wei-Shaw/sub2api/ent/shoporder"
+	"github.com/Wei-Shaw/sub2api/ent/shopproduct"
 	"github.com/Wei-Shaw/sub2api/ent/subscriptionplan"
+	"github.com/Wei-Shaw/sub2api/ent/supportmessage"
+	"github.com/Wei-Shaw/sub2api/ent/supportthread"
 	"github.com/Wei-Shaw/sub2api/ent/tlsfingerprintprofile"
 	"github.com/Wei-Shaw/sub2api/ent/usagecleanuptask"
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
@@ -121,8 +129,24 @@ type Client struct {
 	SecuritySecret *SecuritySecretClient
 	// Setting is the client for interacting with the Setting builders.
 	Setting *SettingClient
+	// ShopBalanceLedger is the client for interacting with the ShopBalanceLedger builders.
+	ShopBalanceLedger *ShopBalanceLedgerClient
+	// ShopCardKey is the client for interacting with the ShopCardKey builders.
+	ShopCardKey *ShopCardKeyClient
+	// ShopCategory is the client for interacting with the ShopCategory builders.
+	ShopCategory *ShopCategoryClient
+	// ShopDrawCycle is the client for interacting with the ShopDrawCycle builders.
+	ShopDrawCycle *ShopDrawCycleClient
+	// ShopOrder is the client for interacting with the ShopOrder builders.
+	ShopOrder *ShopOrderClient
+	// ShopProduct is the client for interacting with the ShopProduct builders.
+	ShopProduct *ShopProductClient
 	// SubscriptionPlan is the client for interacting with the SubscriptionPlan builders.
 	SubscriptionPlan *SubscriptionPlanClient
+	// SupportMessage is the client for interacting with the SupportMessage builders.
+	SupportMessage *SupportMessageClient
+	// SupportThread is the client for interacting with the SupportThread builders.
+	SupportThread *SupportThreadClient
 	// TLSFingerprintProfile is the client for interacting with the TLSFingerprintProfile builders.
 	TLSFingerprintProfile *TLSFingerprintProfileClient
 	// UsageCleanupTask is the client for interacting with the UsageCleanupTask builders.
@@ -181,7 +205,15 @@ func (c *Client) init() {
 	c.RedeemCode = NewRedeemCodeClient(c.config)
 	c.SecuritySecret = NewSecuritySecretClient(c.config)
 	c.Setting = NewSettingClient(c.config)
+	c.ShopBalanceLedger = NewShopBalanceLedgerClient(c.config)
+	c.ShopCardKey = NewShopCardKeyClient(c.config)
+	c.ShopCategory = NewShopCategoryClient(c.config)
+	c.ShopDrawCycle = NewShopDrawCycleClient(c.config)
+	c.ShopOrder = NewShopOrderClient(c.config)
+	c.ShopProduct = NewShopProductClient(c.config)
 	c.SubscriptionPlan = NewSubscriptionPlanClient(c.config)
+	c.SupportMessage = NewSupportMessageClient(c.config)
+	c.SupportThread = NewSupportThreadClient(c.config)
 	c.TLSFingerprintProfile = NewTLSFingerprintProfileClient(c.config)
 	c.UsageCleanupTask = NewUsageCleanupTaskClient(c.config)
 	c.UsageLog = NewUsageLogClient(c.config)
@@ -312,7 +344,15 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		RedeemCode:                    NewRedeemCodeClient(cfg),
 		SecuritySecret:                NewSecuritySecretClient(cfg),
 		Setting:                       NewSettingClient(cfg),
+		ShopBalanceLedger:             NewShopBalanceLedgerClient(cfg),
+		ShopCardKey:                   NewShopCardKeyClient(cfg),
+		ShopCategory:                  NewShopCategoryClient(cfg),
+		ShopDrawCycle:                 NewShopDrawCycleClient(cfg),
+		ShopOrder:                     NewShopOrderClient(cfg),
+		ShopProduct:                   NewShopProductClient(cfg),
 		SubscriptionPlan:              NewSubscriptionPlanClient(cfg),
+		SupportMessage:                NewSupportMessageClient(cfg),
+		SupportThread:                 NewSupportThreadClient(cfg),
 		TLSFingerprintProfile:         NewTLSFingerprintProfileClient(cfg),
 		UsageCleanupTask:              NewUsageCleanupTaskClient(cfg),
 		UsageLog:                      NewUsageLogClient(cfg),
@@ -370,7 +410,15 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		RedeemCode:                    NewRedeemCodeClient(cfg),
 		SecuritySecret:                NewSecuritySecretClient(cfg),
 		Setting:                       NewSettingClient(cfg),
+		ShopBalanceLedger:             NewShopBalanceLedgerClient(cfg),
+		ShopCardKey:                   NewShopCardKeyClient(cfg),
+		ShopCategory:                  NewShopCategoryClient(cfg),
+		ShopDrawCycle:                 NewShopDrawCycleClient(cfg),
+		ShopOrder:                     NewShopOrderClient(cfg),
+		ShopProduct:                   NewShopProductClient(cfg),
 		SubscriptionPlan:              NewSubscriptionPlanClient(cfg),
+		SupportMessage:                NewSupportMessageClient(cfg),
+		SupportThread:                 NewSupportThreadClient(cfg),
 		TLSFingerprintProfile:         NewTLSFingerprintProfileClient(cfg),
 		UsageCleanupTask:              NewUsageCleanupTaskClient(cfg),
 		UsageLog:                      NewUsageLogClient(cfg),
@@ -416,10 +464,12 @@ func (c *Client) Use(hooks ...Hook) {
 		c.CompositeModelRoute, c.ErrorPassthroughRule, c.Group, c.IdempotencyRecord,
 		c.IdentityAdoptionDecision, c.PaymentAuditLog, c.PaymentOrder,
 		c.PaymentProviderInstance, c.PendingAuthSession, c.PromoCode, c.PromoCodeUsage,
-		c.Proxy, c.RedeemCode, c.SecuritySecret, c.Setting, c.SubscriptionPlan,
-		c.TLSFingerprintProfile, c.UsageCleanupTask, c.UsageLog, c.User,
-		c.UserAllowedGroup, c.UserAttributeDefinition, c.UserAttributeValue,
-		c.UserPlatformQuota, c.UserSubscription,
+		c.Proxy, c.RedeemCode, c.SecuritySecret, c.Setting, c.ShopBalanceLedger,
+		c.ShopCardKey, c.ShopCategory, c.ShopDrawCycle, c.ShopOrder, c.ShopProduct,
+		c.SubscriptionPlan, c.SupportMessage, c.SupportThread, c.TLSFingerprintProfile,
+		c.UsageCleanupTask, c.UsageLog, c.User, c.UserAllowedGroup,
+		c.UserAttributeDefinition, c.UserAttributeValue, c.UserPlatformQuota,
+		c.UserSubscription,
 	} {
 		n.Use(hooks...)
 	}
@@ -436,10 +486,12 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.CompositeModelRoute, c.ErrorPassthroughRule, c.Group, c.IdempotencyRecord,
 		c.IdentityAdoptionDecision, c.PaymentAuditLog, c.PaymentOrder,
 		c.PaymentProviderInstance, c.PendingAuthSession, c.PromoCode, c.PromoCodeUsage,
-		c.Proxy, c.RedeemCode, c.SecuritySecret, c.Setting, c.SubscriptionPlan,
-		c.TLSFingerprintProfile, c.UsageCleanupTask, c.UsageLog, c.User,
-		c.UserAllowedGroup, c.UserAttributeDefinition, c.UserAttributeValue,
-		c.UserPlatformQuota, c.UserSubscription,
+		c.Proxy, c.RedeemCode, c.SecuritySecret, c.Setting, c.ShopBalanceLedger,
+		c.ShopCardKey, c.ShopCategory, c.ShopDrawCycle, c.ShopOrder, c.ShopProduct,
+		c.SubscriptionPlan, c.SupportMessage, c.SupportThread, c.TLSFingerprintProfile,
+		c.UsageCleanupTask, c.UsageLog, c.User, c.UserAllowedGroup,
+		c.UserAttributeDefinition, c.UserAttributeValue, c.UserPlatformQuota,
+		c.UserSubscription,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -506,8 +558,24 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.SecuritySecret.mutate(ctx, m)
 	case *SettingMutation:
 		return c.Setting.mutate(ctx, m)
+	case *ShopBalanceLedgerMutation:
+		return c.ShopBalanceLedger.mutate(ctx, m)
+	case *ShopCardKeyMutation:
+		return c.ShopCardKey.mutate(ctx, m)
+	case *ShopCategoryMutation:
+		return c.ShopCategory.mutate(ctx, m)
+	case *ShopDrawCycleMutation:
+		return c.ShopDrawCycle.mutate(ctx, m)
+	case *ShopOrderMutation:
+		return c.ShopOrder.mutate(ctx, m)
+	case *ShopProductMutation:
+		return c.ShopProduct.mutate(ctx, m)
 	case *SubscriptionPlanMutation:
 		return c.SubscriptionPlan.mutate(ctx, m)
+	case *SupportMessageMutation:
+		return c.SupportMessage.mutate(ctx, m)
+	case *SupportThreadMutation:
+		return c.SupportThread.mutate(ctx, m)
 	case *TLSFingerprintProfileMutation:
 		return c.TLSFingerprintProfile.mutate(ctx, m)
 	case *UsageCleanupTaskMutation:
@@ -4595,6 +4663,22 @@ func (c *ProxyClient) QueryAccounts(_m *Proxy) *AccountQuery {
 	return query
 }
 
+// QueryOwner queries the owner edge of a Proxy.
+func (c *ProxyClient) QueryOwner(_m *Proxy) *UserQuery {
+	query := (&UserClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(proxy.Table, proxy.FieldID, id),
+			sqlgraph.To(user.Table, user.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, proxy.OwnerTable, proxy.OwnerColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // QueryBackupProxy queries the backup_proxy edge of a Proxy.
 func (c *ProxyClient) QueryBackupProxy(_m *Proxy) *ProxyQuery {
 	query := (&ProxyClient{config: c.config}).Query()
@@ -5069,6 +5153,1108 @@ func (c *SettingClient) mutate(ctx context.Context, m *SettingMutation) (Value, 
 	}
 }
 
+// ShopBalanceLedgerClient is a client for the ShopBalanceLedger schema.
+type ShopBalanceLedgerClient struct {
+	config
+}
+
+// NewShopBalanceLedgerClient returns a client for the ShopBalanceLedger from the given config.
+func NewShopBalanceLedgerClient(c config) *ShopBalanceLedgerClient {
+	return &ShopBalanceLedgerClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `shopbalanceledger.Hooks(f(g(h())))`.
+func (c *ShopBalanceLedgerClient) Use(hooks ...Hook) {
+	c.hooks.ShopBalanceLedger = append(c.hooks.ShopBalanceLedger, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `shopbalanceledger.Intercept(f(g(h())))`.
+func (c *ShopBalanceLedgerClient) Intercept(interceptors ...Interceptor) {
+	c.inters.ShopBalanceLedger = append(c.inters.ShopBalanceLedger, interceptors...)
+}
+
+// Create returns a builder for creating a ShopBalanceLedger entity.
+func (c *ShopBalanceLedgerClient) Create() *ShopBalanceLedgerCreate {
+	mutation := newShopBalanceLedgerMutation(c.config, OpCreate)
+	return &ShopBalanceLedgerCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of ShopBalanceLedger entities.
+func (c *ShopBalanceLedgerClient) CreateBulk(builders ...*ShopBalanceLedgerCreate) *ShopBalanceLedgerCreateBulk {
+	return &ShopBalanceLedgerCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *ShopBalanceLedgerClient) MapCreateBulk(slice any, setFunc func(*ShopBalanceLedgerCreate, int)) *ShopBalanceLedgerCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &ShopBalanceLedgerCreateBulk{err: fmt.Errorf("calling to ShopBalanceLedgerClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*ShopBalanceLedgerCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &ShopBalanceLedgerCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for ShopBalanceLedger.
+func (c *ShopBalanceLedgerClient) Update() *ShopBalanceLedgerUpdate {
+	mutation := newShopBalanceLedgerMutation(c.config, OpUpdate)
+	return &ShopBalanceLedgerUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *ShopBalanceLedgerClient) UpdateOne(_m *ShopBalanceLedger) *ShopBalanceLedgerUpdateOne {
+	mutation := newShopBalanceLedgerMutation(c.config, OpUpdateOne, withShopBalanceLedger(_m))
+	return &ShopBalanceLedgerUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *ShopBalanceLedgerClient) UpdateOneID(id int64) *ShopBalanceLedgerUpdateOne {
+	mutation := newShopBalanceLedgerMutation(c.config, OpUpdateOne, withShopBalanceLedgerID(id))
+	return &ShopBalanceLedgerUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for ShopBalanceLedger.
+func (c *ShopBalanceLedgerClient) Delete() *ShopBalanceLedgerDelete {
+	mutation := newShopBalanceLedgerMutation(c.config, OpDelete)
+	return &ShopBalanceLedgerDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *ShopBalanceLedgerClient) DeleteOne(_m *ShopBalanceLedger) *ShopBalanceLedgerDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *ShopBalanceLedgerClient) DeleteOneID(id int64) *ShopBalanceLedgerDeleteOne {
+	builder := c.Delete().Where(shopbalanceledger.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &ShopBalanceLedgerDeleteOne{builder}
+}
+
+// Query returns a query builder for ShopBalanceLedger.
+func (c *ShopBalanceLedgerClient) Query() *ShopBalanceLedgerQuery {
+	return &ShopBalanceLedgerQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeShopBalanceLedger},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a ShopBalanceLedger entity by its id.
+func (c *ShopBalanceLedgerClient) Get(ctx context.Context, id int64) (*ShopBalanceLedger, error) {
+	return c.Query().Where(shopbalanceledger.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *ShopBalanceLedgerClient) GetX(ctx context.Context, id int64) *ShopBalanceLedger {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryUser queries the user edge of a ShopBalanceLedger.
+func (c *ShopBalanceLedgerClient) QueryUser(_m *ShopBalanceLedger) *UserQuery {
+	query := (&UserClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(shopbalanceledger.Table, shopbalanceledger.FieldID, id),
+			sqlgraph.To(user.Table, user.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, shopbalanceledger.UserTable, shopbalanceledger.UserColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryShopOrder queries the shop_order edge of a ShopBalanceLedger.
+func (c *ShopBalanceLedgerClient) QueryShopOrder(_m *ShopBalanceLedger) *ShopOrderQuery {
+	query := (&ShopOrderClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(shopbalanceledger.Table, shopbalanceledger.FieldID, id),
+			sqlgraph.To(shoporder.Table, shoporder.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, shopbalanceledger.ShopOrderTable, shopbalanceledger.ShopOrderColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryDrawCycle queries the draw_cycle edge of a ShopBalanceLedger.
+func (c *ShopBalanceLedgerClient) QueryDrawCycle(_m *ShopBalanceLedger) *ShopDrawCycleQuery {
+	query := (&ShopDrawCycleClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(shopbalanceledger.Table, shopbalanceledger.FieldID, id),
+			sqlgraph.To(shopdrawcycle.Table, shopdrawcycle.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, shopbalanceledger.DrawCycleTable, shopbalanceledger.DrawCycleColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *ShopBalanceLedgerClient) Hooks() []Hook {
+	return c.hooks.ShopBalanceLedger
+}
+
+// Interceptors returns the client interceptors.
+func (c *ShopBalanceLedgerClient) Interceptors() []Interceptor {
+	return c.inters.ShopBalanceLedger
+}
+
+func (c *ShopBalanceLedgerClient) mutate(ctx context.Context, m *ShopBalanceLedgerMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&ShopBalanceLedgerCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&ShopBalanceLedgerUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&ShopBalanceLedgerUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&ShopBalanceLedgerDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown ShopBalanceLedger mutation op: %q", m.Op())
+	}
+}
+
+// ShopCardKeyClient is a client for the ShopCardKey schema.
+type ShopCardKeyClient struct {
+	config
+}
+
+// NewShopCardKeyClient returns a client for the ShopCardKey from the given config.
+func NewShopCardKeyClient(c config) *ShopCardKeyClient {
+	return &ShopCardKeyClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `shopcardkey.Hooks(f(g(h())))`.
+func (c *ShopCardKeyClient) Use(hooks ...Hook) {
+	c.hooks.ShopCardKey = append(c.hooks.ShopCardKey, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `shopcardkey.Intercept(f(g(h())))`.
+func (c *ShopCardKeyClient) Intercept(interceptors ...Interceptor) {
+	c.inters.ShopCardKey = append(c.inters.ShopCardKey, interceptors...)
+}
+
+// Create returns a builder for creating a ShopCardKey entity.
+func (c *ShopCardKeyClient) Create() *ShopCardKeyCreate {
+	mutation := newShopCardKeyMutation(c.config, OpCreate)
+	return &ShopCardKeyCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of ShopCardKey entities.
+func (c *ShopCardKeyClient) CreateBulk(builders ...*ShopCardKeyCreate) *ShopCardKeyCreateBulk {
+	return &ShopCardKeyCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *ShopCardKeyClient) MapCreateBulk(slice any, setFunc func(*ShopCardKeyCreate, int)) *ShopCardKeyCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &ShopCardKeyCreateBulk{err: fmt.Errorf("calling to ShopCardKeyClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*ShopCardKeyCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &ShopCardKeyCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for ShopCardKey.
+func (c *ShopCardKeyClient) Update() *ShopCardKeyUpdate {
+	mutation := newShopCardKeyMutation(c.config, OpUpdate)
+	return &ShopCardKeyUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *ShopCardKeyClient) UpdateOne(_m *ShopCardKey) *ShopCardKeyUpdateOne {
+	mutation := newShopCardKeyMutation(c.config, OpUpdateOne, withShopCardKey(_m))
+	return &ShopCardKeyUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *ShopCardKeyClient) UpdateOneID(id int64) *ShopCardKeyUpdateOne {
+	mutation := newShopCardKeyMutation(c.config, OpUpdateOne, withShopCardKeyID(id))
+	return &ShopCardKeyUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for ShopCardKey.
+func (c *ShopCardKeyClient) Delete() *ShopCardKeyDelete {
+	mutation := newShopCardKeyMutation(c.config, OpDelete)
+	return &ShopCardKeyDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *ShopCardKeyClient) DeleteOne(_m *ShopCardKey) *ShopCardKeyDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *ShopCardKeyClient) DeleteOneID(id int64) *ShopCardKeyDeleteOne {
+	builder := c.Delete().Where(shopcardkey.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &ShopCardKeyDeleteOne{builder}
+}
+
+// Query returns a query builder for ShopCardKey.
+func (c *ShopCardKeyClient) Query() *ShopCardKeyQuery {
+	return &ShopCardKeyQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeShopCardKey},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a ShopCardKey entity by its id.
+func (c *ShopCardKeyClient) Get(ctx context.Context, id int64) (*ShopCardKey, error) {
+	return c.Query().Where(shopcardkey.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *ShopCardKeyClient) GetX(ctx context.Context, id int64) *ShopCardKey {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryProduct queries the product edge of a ShopCardKey.
+func (c *ShopCardKeyClient) QueryProduct(_m *ShopCardKey) *ShopProductQuery {
+	query := (&ShopProductClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(shopcardkey.Table, shopcardkey.FieldID, id),
+			sqlgraph.To(shopproduct.Table, shopproduct.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, shopcardkey.ProductTable, shopcardkey.ProductColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryOrder queries the order edge of a ShopCardKey.
+func (c *ShopCardKeyClient) QueryOrder(_m *ShopCardKey) *ShopOrderQuery {
+	query := (&ShopOrderClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(shopcardkey.Table, shopcardkey.FieldID, id),
+			sqlgraph.To(shoporder.Table, shoporder.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, shopcardkey.OrderTable, shopcardkey.OrderColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *ShopCardKeyClient) Hooks() []Hook {
+	return c.hooks.ShopCardKey
+}
+
+// Interceptors returns the client interceptors.
+func (c *ShopCardKeyClient) Interceptors() []Interceptor {
+	return c.inters.ShopCardKey
+}
+
+func (c *ShopCardKeyClient) mutate(ctx context.Context, m *ShopCardKeyMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&ShopCardKeyCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&ShopCardKeyUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&ShopCardKeyUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&ShopCardKeyDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown ShopCardKey mutation op: %q", m.Op())
+	}
+}
+
+// ShopCategoryClient is a client for the ShopCategory schema.
+type ShopCategoryClient struct {
+	config
+}
+
+// NewShopCategoryClient returns a client for the ShopCategory from the given config.
+func NewShopCategoryClient(c config) *ShopCategoryClient {
+	return &ShopCategoryClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `shopcategory.Hooks(f(g(h())))`.
+func (c *ShopCategoryClient) Use(hooks ...Hook) {
+	c.hooks.ShopCategory = append(c.hooks.ShopCategory, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `shopcategory.Intercept(f(g(h())))`.
+func (c *ShopCategoryClient) Intercept(interceptors ...Interceptor) {
+	c.inters.ShopCategory = append(c.inters.ShopCategory, interceptors...)
+}
+
+// Create returns a builder for creating a ShopCategory entity.
+func (c *ShopCategoryClient) Create() *ShopCategoryCreate {
+	mutation := newShopCategoryMutation(c.config, OpCreate)
+	return &ShopCategoryCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of ShopCategory entities.
+func (c *ShopCategoryClient) CreateBulk(builders ...*ShopCategoryCreate) *ShopCategoryCreateBulk {
+	return &ShopCategoryCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *ShopCategoryClient) MapCreateBulk(slice any, setFunc func(*ShopCategoryCreate, int)) *ShopCategoryCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &ShopCategoryCreateBulk{err: fmt.Errorf("calling to ShopCategoryClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*ShopCategoryCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &ShopCategoryCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for ShopCategory.
+func (c *ShopCategoryClient) Update() *ShopCategoryUpdate {
+	mutation := newShopCategoryMutation(c.config, OpUpdate)
+	return &ShopCategoryUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *ShopCategoryClient) UpdateOne(_m *ShopCategory) *ShopCategoryUpdateOne {
+	mutation := newShopCategoryMutation(c.config, OpUpdateOne, withShopCategory(_m))
+	return &ShopCategoryUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *ShopCategoryClient) UpdateOneID(id int64) *ShopCategoryUpdateOne {
+	mutation := newShopCategoryMutation(c.config, OpUpdateOne, withShopCategoryID(id))
+	return &ShopCategoryUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for ShopCategory.
+func (c *ShopCategoryClient) Delete() *ShopCategoryDelete {
+	mutation := newShopCategoryMutation(c.config, OpDelete)
+	return &ShopCategoryDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *ShopCategoryClient) DeleteOne(_m *ShopCategory) *ShopCategoryDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *ShopCategoryClient) DeleteOneID(id int64) *ShopCategoryDeleteOne {
+	builder := c.Delete().Where(shopcategory.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &ShopCategoryDeleteOne{builder}
+}
+
+// Query returns a query builder for ShopCategory.
+func (c *ShopCategoryClient) Query() *ShopCategoryQuery {
+	return &ShopCategoryQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeShopCategory},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a ShopCategory entity by its id.
+func (c *ShopCategoryClient) Get(ctx context.Context, id int64) (*ShopCategory, error) {
+	return c.Query().Where(shopcategory.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *ShopCategoryClient) GetX(ctx context.Context, id int64) *ShopCategory {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryProducts queries the products edge of a ShopCategory.
+func (c *ShopCategoryClient) QueryProducts(_m *ShopCategory) *ShopProductQuery {
+	query := (&ShopProductClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(shopcategory.Table, shopcategory.FieldID, id),
+			sqlgraph.To(shopproduct.Table, shopproduct.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, shopcategory.ProductsTable, shopcategory.ProductsColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *ShopCategoryClient) Hooks() []Hook {
+	return c.hooks.ShopCategory
+}
+
+// Interceptors returns the client interceptors.
+func (c *ShopCategoryClient) Interceptors() []Interceptor {
+	return c.inters.ShopCategory
+}
+
+func (c *ShopCategoryClient) mutate(ctx context.Context, m *ShopCategoryMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&ShopCategoryCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&ShopCategoryUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&ShopCategoryUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&ShopCategoryDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown ShopCategory mutation op: %q", m.Op())
+	}
+}
+
+// ShopDrawCycleClient is a client for the ShopDrawCycle schema.
+type ShopDrawCycleClient struct {
+	config
+}
+
+// NewShopDrawCycleClient returns a client for the ShopDrawCycle from the given config.
+func NewShopDrawCycleClient(c config) *ShopDrawCycleClient {
+	return &ShopDrawCycleClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `shopdrawcycle.Hooks(f(g(h())))`.
+func (c *ShopDrawCycleClient) Use(hooks ...Hook) {
+	c.hooks.ShopDrawCycle = append(c.hooks.ShopDrawCycle, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `shopdrawcycle.Intercept(f(g(h())))`.
+func (c *ShopDrawCycleClient) Intercept(interceptors ...Interceptor) {
+	c.inters.ShopDrawCycle = append(c.inters.ShopDrawCycle, interceptors...)
+}
+
+// Create returns a builder for creating a ShopDrawCycle entity.
+func (c *ShopDrawCycleClient) Create() *ShopDrawCycleCreate {
+	mutation := newShopDrawCycleMutation(c.config, OpCreate)
+	return &ShopDrawCycleCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of ShopDrawCycle entities.
+func (c *ShopDrawCycleClient) CreateBulk(builders ...*ShopDrawCycleCreate) *ShopDrawCycleCreateBulk {
+	return &ShopDrawCycleCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *ShopDrawCycleClient) MapCreateBulk(slice any, setFunc func(*ShopDrawCycleCreate, int)) *ShopDrawCycleCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &ShopDrawCycleCreateBulk{err: fmt.Errorf("calling to ShopDrawCycleClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*ShopDrawCycleCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &ShopDrawCycleCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for ShopDrawCycle.
+func (c *ShopDrawCycleClient) Update() *ShopDrawCycleUpdate {
+	mutation := newShopDrawCycleMutation(c.config, OpUpdate)
+	return &ShopDrawCycleUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *ShopDrawCycleClient) UpdateOne(_m *ShopDrawCycle) *ShopDrawCycleUpdateOne {
+	mutation := newShopDrawCycleMutation(c.config, OpUpdateOne, withShopDrawCycle(_m))
+	return &ShopDrawCycleUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *ShopDrawCycleClient) UpdateOneID(id int64) *ShopDrawCycleUpdateOne {
+	mutation := newShopDrawCycleMutation(c.config, OpUpdateOne, withShopDrawCycleID(id))
+	return &ShopDrawCycleUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for ShopDrawCycle.
+func (c *ShopDrawCycleClient) Delete() *ShopDrawCycleDelete {
+	mutation := newShopDrawCycleMutation(c.config, OpDelete)
+	return &ShopDrawCycleDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *ShopDrawCycleClient) DeleteOne(_m *ShopDrawCycle) *ShopDrawCycleDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *ShopDrawCycleClient) DeleteOneID(id int64) *ShopDrawCycleDeleteOne {
+	builder := c.Delete().Where(shopdrawcycle.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &ShopDrawCycleDeleteOne{builder}
+}
+
+// Query returns a query builder for ShopDrawCycle.
+func (c *ShopDrawCycleClient) Query() *ShopDrawCycleQuery {
+	return &ShopDrawCycleQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeShopDrawCycle},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a ShopDrawCycle entity by its id.
+func (c *ShopDrawCycleClient) Get(ctx context.Context, id int64) (*ShopDrawCycle, error) {
+	return c.Query().Where(shopdrawcycle.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *ShopDrawCycleClient) GetX(ctx context.Context, id int64) *ShopDrawCycle {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryUser queries the user edge of a ShopDrawCycle.
+func (c *ShopDrawCycleClient) QueryUser(_m *ShopDrawCycle) *UserQuery {
+	query := (&UserClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(shopdrawcycle.Table, shopdrawcycle.FieldID, id),
+			sqlgraph.To(user.Table, user.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, shopdrawcycle.UserTable, shopdrawcycle.UserColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryProduct queries the product edge of a ShopDrawCycle.
+func (c *ShopDrawCycleClient) QueryProduct(_m *ShopDrawCycle) *ShopProductQuery {
+	query := (&ShopProductClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(shopdrawcycle.Table, shopdrawcycle.FieldID, id),
+			sqlgraph.To(shopproduct.Table, shopproduct.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, shopdrawcycle.ProductTable, shopdrawcycle.ProductColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryOrders queries the orders edge of a ShopDrawCycle.
+func (c *ShopDrawCycleClient) QueryOrders(_m *ShopDrawCycle) *ShopOrderQuery {
+	query := (&ShopOrderClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(shopdrawcycle.Table, shopdrawcycle.FieldID, id),
+			sqlgraph.To(shoporder.Table, shoporder.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, shopdrawcycle.OrdersTable, shopdrawcycle.OrdersColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryBalanceLedger queries the balance_ledger edge of a ShopDrawCycle.
+func (c *ShopDrawCycleClient) QueryBalanceLedger(_m *ShopDrawCycle) *ShopBalanceLedgerQuery {
+	query := (&ShopBalanceLedgerClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(shopdrawcycle.Table, shopdrawcycle.FieldID, id),
+			sqlgraph.To(shopbalanceledger.Table, shopbalanceledger.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, shopdrawcycle.BalanceLedgerTable, shopdrawcycle.BalanceLedgerColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *ShopDrawCycleClient) Hooks() []Hook {
+	return c.hooks.ShopDrawCycle
+}
+
+// Interceptors returns the client interceptors.
+func (c *ShopDrawCycleClient) Interceptors() []Interceptor {
+	return c.inters.ShopDrawCycle
+}
+
+func (c *ShopDrawCycleClient) mutate(ctx context.Context, m *ShopDrawCycleMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&ShopDrawCycleCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&ShopDrawCycleUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&ShopDrawCycleUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&ShopDrawCycleDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown ShopDrawCycle mutation op: %q", m.Op())
+	}
+}
+
+// ShopOrderClient is a client for the ShopOrder schema.
+type ShopOrderClient struct {
+	config
+}
+
+// NewShopOrderClient returns a client for the ShopOrder from the given config.
+func NewShopOrderClient(c config) *ShopOrderClient {
+	return &ShopOrderClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `shoporder.Hooks(f(g(h())))`.
+func (c *ShopOrderClient) Use(hooks ...Hook) {
+	c.hooks.ShopOrder = append(c.hooks.ShopOrder, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `shoporder.Intercept(f(g(h())))`.
+func (c *ShopOrderClient) Intercept(interceptors ...Interceptor) {
+	c.inters.ShopOrder = append(c.inters.ShopOrder, interceptors...)
+}
+
+// Create returns a builder for creating a ShopOrder entity.
+func (c *ShopOrderClient) Create() *ShopOrderCreate {
+	mutation := newShopOrderMutation(c.config, OpCreate)
+	return &ShopOrderCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of ShopOrder entities.
+func (c *ShopOrderClient) CreateBulk(builders ...*ShopOrderCreate) *ShopOrderCreateBulk {
+	return &ShopOrderCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *ShopOrderClient) MapCreateBulk(slice any, setFunc func(*ShopOrderCreate, int)) *ShopOrderCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &ShopOrderCreateBulk{err: fmt.Errorf("calling to ShopOrderClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*ShopOrderCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &ShopOrderCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for ShopOrder.
+func (c *ShopOrderClient) Update() *ShopOrderUpdate {
+	mutation := newShopOrderMutation(c.config, OpUpdate)
+	return &ShopOrderUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *ShopOrderClient) UpdateOne(_m *ShopOrder) *ShopOrderUpdateOne {
+	mutation := newShopOrderMutation(c.config, OpUpdateOne, withShopOrder(_m))
+	return &ShopOrderUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *ShopOrderClient) UpdateOneID(id int64) *ShopOrderUpdateOne {
+	mutation := newShopOrderMutation(c.config, OpUpdateOne, withShopOrderID(id))
+	return &ShopOrderUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for ShopOrder.
+func (c *ShopOrderClient) Delete() *ShopOrderDelete {
+	mutation := newShopOrderMutation(c.config, OpDelete)
+	return &ShopOrderDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *ShopOrderClient) DeleteOne(_m *ShopOrder) *ShopOrderDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *ShopOrderClient) DeleteOneID(id int64) *ShopOrderDeleteOne {
+	builder := c.Delete().Where(shoporder.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &ShopOrderDeleteOne{builder}
+}
+
+// Query returns a query builder for ShopOrder.
+func (c *ShopOrderClient) Query() *ShopOrderQuery {
+	return &ShopOrderQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeShopOrder},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a ShopOrder entity by its id.
+func (c *ShopOrderClient) Get(ctx context.Context, id int64) (*ShopOrder, error) {
+	return c.Query().Where(shoporder.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *ShopOrderClient) GetX(ctx context.Context, id int64) *ShopOrder {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryUser queries the user edge of a ShopOrder.
+func (c *ShopOrderClient) QueryUser(_m *ShopOrder) *UserQuery {
+	query := (&UserClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(shoporder.Table, shoporder.FieldID, id),
+			sqlgraph.To(user.Table, user.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, shoporder.UserTable, shoporder.UserColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryProduct queries the product edge of a ShopOrder.
+func (c *ShopOrderClient) QueryProduct(_m *ShopOrder) *ShopProductQuery {
+	query := (&ShopProductClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(shoporder.Table, shoporder.FieldID, id),
+			sqlgraph.To(shopproduct.Table, shopproduct.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, shoporder.ProductTable, shoporder.ProductColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryDrawCycle queries the draw_cycle edge of a ShopOrder.
+func (c *ShopOrderClient) QueryDrawCycle(_m *ShopOrder) *ShopDrawCycleQuery {
+	query := (&ShopDrawCycleClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(shoporder.Table, shoporder.FieldID, id),
+			sqlgraph.To(shopdrawcycle.Table, shopdrawcycle.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, shoporder.DrawCycleTable, shoporder.DrawCycleColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryBalanceLedger queries the balance_ledger edge of a ShopOrder.
+func (c *ShopOrderClient) QueryBalanceLedger(_m *ShopOrder) *ShopBalanceLedgerQuery {
+	query := (&ShopBalanceLedgerClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(shoporder.Table, shoporder.FieldID, id),
+			sqlgraph.To(shopbalanceledger.Table, shopbalanceledger.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, shoporder.BalanceLedgerTable, shoporder.BalanceLedgerColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryCardKeys queries the card_keys edge of a ShopOrder.
+func (c *ShopOrderClient) QueryCardKeys(_m *ShopOrder) *ShopCardKeyQuery {
+	query := (&ShopCardKeyClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(shoporder.Table, shoporder.FieldID, id),
+			sqlgraph.To(shopcardkey.Table, shopcardkey.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, shoporder.CardKeysTable, shoporder.CardKeysColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *ShopOrderClient) Hooks() []Hook {
+	return c.hooks.ShopOrder
+}
+
+// Interceptors returns the client interceptors.
+func (c *ShopOrderClient) Interceptors() []Interceptor {
+	return c.inters.ShopOrder
+}
+
+func (c *ShopOrderClient) mutate(ctx context.Context, m *ShopOrderMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&ShopOrderCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&ShopOrderUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&ShopOrderUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&ShopOrderDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown ShopOrder mutation op: %q", m.Op())
+	}
+}
+
+// ShopProductClient is a client for the ShopProduct schema.
+type ShopProductClient struct {
+	config
+}
+
+// NewShopProductClient returns a client for the ShopProduct from the given config.
+func NewShopProductClient(c config) *ShopProductClient {
+	return &ShopProductClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `shopproduct.Hooks(f(g(h())))`.
+func (c *ShopProductClient) Use(hooks ...Hook) {
+	c.hooks.ShopProduct = append(c.hooks.ShopProduct, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `shopproduct.Intercept(f(g(h())))`.
+func (c *ShopProductClient) Intercept(interceptors ...Interceptor) {
+	c.inters.ShopProduct = append(c.inters.ShopProduct, interceptors...)
+}
+
+// Create returns a builder for creating a ShopProduct entity.
+func (c *ShopProductClient) Create() *ShopProductCreate {
+	mutation := newShopProductMutation(c.config, OpCreate)
+	return &ShopProductCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of ShopProduct entities.
+func (c *ShopProductClient) CreateBulk(builders ...*ShopProductCreate) *ShopProductCreateBulk {
+	return &ShopProductCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *ShopProductClient) MapCreateBulk(slice any, setFunc func(*ShopProductCreate, int)) *ShopProductCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &ShopProductCreateBulk{err: fmt.Errorf("calling to ShopProductClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*ShopProductCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &ShopProductCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for ShopProduct.
+func (c *ShopProductClient) Update() *ShopProductUpdate {
+	mutation := newShopProductMutation(c.config, OpUpdate)
+	return &ShopProductUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *ShopProductClient) UpdateOne(_m *ShopProduct) *ShopProductUpdateOne {
+	mutation := newShopProductMutation(c.config, OpUpdateOne, withShopProduct(_m))
+	return &ShopProductUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *ShopProductClient) UpdateOneID(id int64) *ShopProductUpdateOne {
+	mutation := newShopProductMutation(c.config, OpUpdateOne, withShopProductID(id))
+	return &ShopProductUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for ShopProduct.
+func (c *ShopProductClient) Delete() *ShopProductDelete {
+	mutation := newShopProductMutation(c.config, OpDelete)
+	return &ShopProductDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *ShopProductClient) DeleteOne(_m *ShopProduct) *ShopProductDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *ShopProductClient) DeleteOneID(id int64) *ShopProductDeleteOne {
+	builder := c.Delete().Where(shopproduct.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &ShopProductDeleteOne{builder}
+}
+
+// Query returns a query builder for ShopProduct.
+func (c *ShopProductClient) Query() *ShopProductQuery {
+	return &ShopProductQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeShopProduct},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a ShopProduct entity by its id.
+func (c *ShopProductClient) Get(ctx context.Context, id int64) (*ShopProduct, error) {
+	return c.Query().Where(shopproduct.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *ShopProductClient) GetX(ctx context.Context, id int64) *ShopProduct {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryCategory queries the category edge of a ShopProduct.
+func (c *ShopProductClient) QueryCategory(_m *ShopProduct) *ShopCategoryQuery {
+	query := (&ShopCategoryClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(shopproduct.Table, shopproduct.FieldID, id),
+			sqlgraph.To(shopcategory.Table, shopcategory.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, shopproduct.CategoryTable, shopproduct.CategoryColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryCardKeys queries the card_keys edge of a ShopProduct.
+func (c *ShopProductClient) QueryCardKeys(_m *ShopProduct) *ShopCardKeyQuery {
+	query := (&ShopCardKeyClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(shopproduct.Table, shopproduct.FieldID, id),
+			sqlgraph.To(shopcardkey.Table, shopcardkey.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, shopproduct.CardKeysTable, shopproduct.CardKeysColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryOrders queries the orders edge of a ShopProduct.
+func (c *ShopProductClient) QueryOrders(_m *ShopProduct) *ShopOrderQuery {
+	query := (&ShopOrderClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(shopproduct.Table, shopproduct.FieldID, id),
+			sqlgraph.To(shoporder.Table, shoporder.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, shopproduct.OrdersTable, shopproduct.OrdersColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryDrawCycles queries the draw_cycles edge of a ShopProduct.
+func (c *ShopProductClient) QueryDrawCycles(_m *ShopProduct) *ShopDrawCycleQuery {
+	query := (&ShopDrawCycleClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(shopproduct.Table, shopproduct.FieldID, id),
+			sqlgraph.To(shopdrawcycle.Table, shopdrawcycle.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, shopproduct.DrawCyclesTable, shopproduct.DrawCyclesColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *ShopProductClient) Hooks() []Hook {
+	return c.hooks.ShopProduct
+}
+
+// Interceptors returns the client interceptors.
+func (c *ShopProductClient) Interceptors() []Interceptor {
+	return c.inters.ShopProduct
+}
+
+func (c *ShopProductClient) mutate(ctx context.Context, m *ShopProductMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&ShopProductCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&ShopProductUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&ShopProductUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&ShopProductDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown ShopProduct mutation op: %q", m.Op())
+	}
+}
+
 // SubscriptionPlanClient is a client for the SubscriptionPlan schema.
 type SubscriptionPlanClient struct {
 	config
@@ -5199,6 +6385,352 @@ func (c *SubscriptionPlanClient) mutate(ctx context.Context, m *SubscriptionPlan
 		return (&SubscriptionPlanDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown SubscriptionPlan mutation op: %q", m.Op())
+	}
+}
+
+// SupportMessageClient is a client for the SupportMessage schema.
+type SupportMessageClient struct {
+	config
+}
+
+// NewSupportMessageClient returns a client for the SupportMessage from the given config.
+func NewSupportMessageClient(c config) *SupportMessageClient {
+	return &SupportMessageClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `supportmessage.Hooks(f(g(h())))`.
+func (c *SupportMessageClient) Use(hooks ...Hook) {
+	c.hooks.SupportMessage = append(c.hooks.SupportMessage, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `supportmessage.Intercept(f(g(h())))`.
+func (c *SupportMessageClient) Intercept(interceptors ...Interceptor) {
+	c.inters.SupportMessage = append(c.inters.SupportMessage, interceptors...)
+}
+
+// Create returns a builder for creating a SupportMessage entity.
+func (c *SupportMessageClient) Create() *SupportMessageCreate {
+	mutation := newSupportMessageMutation(c.config, OpCreate)
+	return &SupportMessageCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of SupportMessage entities.
+func (c *SupportMessageClient) CreateBulk(builders ...*SupportMessageCreate) *SupportMessageCreateBulk {
+	return &SupportMessageCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *SupportMessageClient) MapCreateBulk(slice any, setFunc func(*SupportMessageCreate, int)) *SupportMessageCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &SupportMessageCreateBulk{err: fmt.Errorf("calling to SupportMessageClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*SupportMessageCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &SupportMessageCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for SupportMessage.
+func (c *SupportMessageClient) Update() *SupportMessageUpdate {
+	mutation := newSupportMessageMutation(c.config, OpUpdate)
+	return &SupportMessageUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *SupportMessageClient) UpdateOne(_m *SupportMessage) *SupportMessageUpdateOne {
+	mutation := newSupportMessageMutation(c.config, OpUpdateOne, withSupportMessage(_m))
+	return &SupportMessageUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *SupportMessageClient) UpdateOneID(id int64) *SupportMessageUpdateOne {
+	mutation := newSupportMessageMutation(c.config, OpUpdateOne, withSupportMessageID(id))
+	return &SupportMessageUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for SupportMessage.
+func (c *SupportMessageClient) Delete() *SupportMessageDelete {
+	mutation := newSupportMessageMutation(c.config, OpDelete)
+	return &SupportMessageDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *SupportMessageClient) DeleteOne(_m *SupportMessage) *SupportMessageDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *SupportMessageClient) DeleteOneID(id int64) *SupportMessageDeleteOne {
+	builder := c.Delete().Where(supportmessage.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &SupportMessageDeleteOne{builder}
+}
+
+// Query returns a query builder for SupportMessage.
+func (c *SupportMessageClient) Query() *SupportMessageQuery {
+	return &SupportMessageQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeSupportMessage},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a SupportMessage entity by its id.
+func (c *SupportMessageClient) Get(ctx context.Context, id int64) (*SupportMessage, error) {
+	return c.Query().Where(supportmessage.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *SupportMessageClient) GetX(ctx context.Context, id int64) *SupportMessage {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryThread queries the thread edge of a SupportMessage.
+func (c *SupportMessageClient) QueryThread(_m *SupportMessage) *SupportThreadQuery {
+	query := (&SupportThreadClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(supportmessage.Table, supportmessage.FieldID, id),
+			sqlgraph.To(supportthread.Table, supportthread.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, supportmessage.ThreadTable, supportmessage.ThreadColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QuerySender queries the sender edge of a SupportMessage.
+func (c *SupportMessageClient) QuerySender(_m *SupportMessage) *UserQuery {
+	query := (&UserClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(supportmessage.Table, supportmessage.FieldID, id),
+			sqlgraph.To(user.Table, user.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, supportmessage.SenderTable, supportmessage.SenderColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *SupportMessageClient) Hooks() []Hook {
+	return c.hooks.SupportMessage
+}
+
+// Interceptors returns the client interceptors.
+func (c *SupportMessageClient) Interceptors() []Interceptor {
+	return c.inters.SupportMessage
+}
+
+func (c *SupportMessageClient) mutate(ctx context.Context, m *SupportMessageMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&SupportMessageCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&SupportMessageUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&SupportMessageUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&SupportMessageDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown SupportMessage mutation op: %q", m.Op())
+	}
+}
+
+// SupportThreadClient is a client for the SupportThread schema.
+type SupportThreadClient struct {
+	config
+}
+
+// NewSupportThreadClient returns a client for the SupportThread from the given config.
+func NewSupportThreadClient(c config) *SupportThreadClient {
+	return &SupportThreadClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `supportthread.Hooks(f(g(h())))`.
+func (c *SupportThreadClient) Use(hooks ...Hook) {
+	c.hooks.SupportThread = append(c.hooks.SupportThread, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `supportthread.Intercept(f(g(h())))`.
+func (c *SupportThreadClient) Intercept(interceptors ...Interceptor) {
+	c.inters.SupportThread = append(c.inters.SupportThread, interceptors...)
+}
+
+// Create returns a builder for creating a SupportThread entity.
+func (c *SupportThreadClient) Create() *SupportThreadCreate {
+	mutation := newSupportThreadMutation(c.config, OpCreate)
+	return &SupportThreadCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of SupportThread entities.
+func (c *SupportThreadClient) CreateBulk(builders ...*SupportThreadCreate) *SupportThreadCreateBulk {
+	return &SupportThreadCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *SupportThreadClient) MapCreateBulk(slice any, setFunc func(*SupportThreadCreate, int)) *SupportThreadCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &SupportThreadCreateBulk{err: fmt.Errorf("calling to SupportThreadClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*SupportThreadCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &SupportThreadCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for SupportThread.
+func (c *SupportThreadClient) Update() *SupportThreadUpdate {
+	mutation := newSupportThreadMutation(c.config, OpUpdate)
+	return &SupportThreadUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *SupportThreadClient) UpdateOne(_m *SupportThread) *SupportThreadUpdateOne {
+	mutation := newSupportThreadMutation(c.config, OpUpdateOne, withSupportThread(_m))
+	return &SupportThreadUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *SupportThreadClient) UpdateOneID(id int64) *SupportThreadUpdateOne {
+	mutation := newSupportThreadMutation(c.config, OpUpdateOne, withSupportThreadID(id))
+	return &SupportThreadUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for SupportThread.
+func (c *SupportThreadClient) Delete() *SupportThreadDelete {
+	mutation := newSupportThreadMutation(c.config, OpDelete)
+	return &SupportThreadDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *SupportThreadClient) DeleteOne(_m *SupportThread) *SupportThreadDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *SupportThreadClient) DeleteOneID(id int64) *SupportThreadDeleteOne {
+	builder := c.Delete().Where(supportthread.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &SupportThreadDeleteOne{builder}
+}
+
+// Query returns a query builder for SupportThread.
+func (c *SupportThreadClient) Query() *SupportThreadQuery {
+	return &SupportThreadQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeSupportThread},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a SupportThread entity by its id.
+func (c *SupportThreadClient) Get(ctx context.Context, id int64) (*SupportThread, error) {
+	return c.Query().Where(supportthread.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *SupportThreadClient) GetX(ctx context.Context, id int64) *SupportThread {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryUser queries the user edge of a SupportThread.
+func (c *SupportThreadClient) QueryUser(_m *SupportThread) *UserQuery {
+	query := (&UserClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(supportthread.Table, supportthread.FieldID, id),
+			sqlgraph.To(user.Table, user.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, supportthread.UserTable, supportthread.UserColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryAssignedAdmin queries the assigned_admin edge of a SupportThread.
+func (c *SupportThreadClient) QueryAssignedAdmin(_m *SupportThread) *UserQuery {
+	query := (&UserClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(supportthread.Table, supportthread.FieldID, id),
+			sqlgraph.To(user.Table, user.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, supportthread.AssignedAdminTable, supportthread.AssignedAdminColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryMessages queries the messages edge of a SupportThread.
+func (c *SupportThreadClient) QueryMessages(_m *SupportThread) *SupportMessageQuery {
+	query := (&SupportMessageClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(supportthread.Table, supportthread.FieldID, id),
+			sqlgraph.To(supportmessage.Table, supportmessage.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, supportthread.MessagesTable, supportthread.MessagesColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *SupportThreadClient) Hooks() []Hook {
+	return c.hooks.SupportThread
+}
+
+// Interceptors returns the client interceptors.
+func (c *SupportThreadClient) Interceptors() []Interceptor {
+	return c.inters.SupportThread
+}
+
+func (c *SupportThreadClient) mutate(ctx context.Context, m *SupportThreadMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&SupportThreadCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&SupportThreadUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&SupportThreadUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&SupportThreadDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown SupportThread mutation op: %q", m.Op())
 	}
 }
 
@@ -5869,6 +7401,54 @@ func (c *UserClient) QueryAnnouncementReads(_m *User) *AnnouncementReadQuery {
 	return query
 }
 
+// QuerySupportThreads queries the support_threads edge of a User.
+func (c *UserClient) QuerySupportThreads(_m *User) *SupportThreadQuery {
+	query := (&SupportThreadClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(user.Table, user.FieldID, id),
+			sqlgraph.To(supportthread.Table, supportthread.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, user.SupportThreadsTable, user.SupportThreadsColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryAssignedSupportThreads queries the assigned_support_threads edge of a User.
+func (c *UserClient) QueryAssignedSupportThreads(_m *User) *SupportThreadQuery {
+	query := (&SupportThreadClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(user.Table, user.FieldID, id),
+			sqlgraph.To(supportthread.Table, supportthread.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, user.AssignedSupportThreadsTable, user.AssignedSupportThreadsColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QuerySentSupportMessages queries the sent_support_messages edge of a User.
+func (c *UserClient) QuerySentSupportMessages(_m *User) *SupportMessageQuery {
+	query := (&SupportMessageClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(user.Table, user.FieldID, id),
+			sqlgraph.To(supportmessage.Table, supportmessage.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, user.SentSupportMessagesTable, user.SentSupportMessagesColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // QueryAllowedGroups queries the allowed_groups edge of a User.
 func (c *UserClient) QueryAllowedGroups(_m *User) *GroupQuery {
 	query := (&GroupClient{config: c.config}).Query()
@@ -5949,6 +7529,54 @@ func (c *UserClient) QueryPaymentOrders(_m *User) *PaymentOrderQuery {
 	return query
 }
 
+// QueryShopOrders queries the shop_orders edge of a User.
+func (c *UserClient) QueryShopOrders(_m *User) *ShopOrderQuery {
+	query := (&ShopOrderClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(user.Table, user.FieldID, id),
+			sqlgraph.To(shoporder.Table, shoporder.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, user.ShopOrdersTable, user.ShopOrdersColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryShopDrawCycles queries the shop_draw_cycles edge of a User.
+func (c *UserClient) QueryShopDrawCycles(_m *User) *ShopDrawCycleQuery {
+	query := (&ShopDrawCycleClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(user.Table, user.FieldID, id),
+			sqlgraph.To(shopdrawcycle.Table, shopdrawcycle.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, user.ShopDrawCyclesTable, user.ShopDrawCyclesColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryShopBalanceLedger queries the shop_balance_ledger edge of a User.
+func (c *UserClient) QueryShopBalanceLedger(_m *User) *ShopBalanceLedgerQuery {
+	query := (&ShopBalanceLedgerClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(user.Table, user.FieldID, id),
+			sqlgraph.To(shopbalanceledger.Table, shopbalanceledger.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, user.ShopBalanceLedgerTable, user.ShopBalanceLedgerColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // QueryAuthIdentities queries the auth_identities edge of a User.
 func (c *UserClient) QueryAuthIdentities(_m *User) *AuthIdentityQuery {
 	query := (&AuthIdentityClient{config: c.config}).Query()
@@ -5990,6 +7618,22 @@ func (c *UserClient) QueryPlatformQuotas(_m *User) *UserPlatformQuotaQuery {
 			sqlgraph.From(user.Table, user.FieldID, id),
 			sqlgraph.To(userplatformquota.Table, userplatformquota.FieldID),
 			sqlgraph.Edge(sqlgraph.O2M, false, user.PlatformQuotasTable, user.PlatformQuotasColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryOwnedProxies queries the owned_proxies edge of a User.
+func (c *UserClient) QueryOwnedProxies(_m *User) *ProxyQuery {
+	query := (&ProxyClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(user.Table, user.FieldID, id),
+			sqlgraph.To(proxy.Table, proxy.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, user.OwnedProxiesTable, user.OwnedProxiesColumn),
 		)
 		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
 		return fromV, nil
@@ -6828,25 +8472,27 @@ type (
 		APIKey, Account, AccountGroup, Announcement, AnnouncementRead, AuthIdentity,
 		AuthIdentityChannel, BatchImageEvent, BatchImageItem, BatchImageJob,
 		ChannelMonitor, ChannelMonitorDailyRollup, ChannelMonitorHistory,
-		ChannelMonitorRequestTemplate, CompositeModelRoute,
-		ErrorPassthroughRule, Group, IdempotencyRecord, IdentityAdoptionDecision,
-		PaymentAuditLog, PaymentOrder, PaymentProviderInstance, PendingAuthSession,
-		PromoCode, PromoCodeUsage, Proxy, RedeemCode, SecuritySecret, Setting,
-		SubscriptionPlan, TLSFingerprintProfile, UsageCleanupTask, UsageLog, User,
-		UserAllowedGroup, UserAttributeDefinition, UserAttributeValue,
-		UserPlatformQuota, UserSubscription []ent.Hook
+		ChannelMonitorRequestTemplate, CompositeModelRoute, ErrorPassthroughRule,
+		Group, IdempotencyRecord, IdentityAdoptionDecision, PaymentAuditLog,
+		PaymentOrder, PaymentProviderInstance, PendingAuthSession, PromoCode,
+		PromoCodeUsage, Proxy, RedeemCode, SecuritySecret, Setting, ShopBalanceLedger,
+		ShopCardKey, ShopCategory, ShopDrawCycle, ShopOrder, ShopProduct,
+		SubscriptionPlan, SupportMessage, SupportThread, TLSFingerprintProfile,
+		UsageCleanupTask, UsageLog, User, UserAllowedGroup, UserAttributeDefinition,
+		UserAttributeValue, UserPlatformQuota, UserSubscription []ent.Hook
 	}
 	inters struct {
 		APIKey, Account, AccountGroup, Announcement, AnnouncementRead, AuthIdentity,
 		AuthIdentityChannel, BatchImageEvent, BatchImageItem, BatchImageJob,
 		ChannelMonitor, ChannelMonitorDailyRollup, ChannelMonitorHistory,
-		ChannelMonitorRequestTemplate, CompositeModelRoute,
-		ErrorPassthroughRule, Group, IdempotencyRecord, IdentityAdoptionDecision,
-		PaymentAuditLog, PaymentOrder, PaymentProviderInstance, PendingAuthSession,
-		PromoCode, PromoCodeUsage, Proxy, RedeemCode, SecuritySecret, Setting,
-		SubscriptionPlan, TLSFingerprintProfile, UsageCleanupTask, UsageLog, User,
-		UserAllowedGroup, UserAttributeDefinition, UserAttributeValue,
-		UserPlatformQuota, UserSubscription []ent.Interceptor
+		ChannelMonitorRequestTemplate, CompositeModelRoute, ErrorPassthroughRule,
+		Group, IdempotencyRecord, IdentityAdoptionDecision, PaymentAuditLog,
+		PaymentOrder, PaymentProviderInstance, PendingAuthSession, PromoCode,
+		PromoCodeUsage, Proxy, RedeemCode, SecuritySecret, Setting, ShopBalanceLedger,
+		ShopCardKey, ShopCategory, ShopDrawCycle, ShopOrder, ShopProduct,
+		SubscriptionPlan, SupportMessage, SupportThread, TLSFingerprintProfile,
+		UsageCleanupTask, UsageLog, User, UserAllowedGroup, UserAttributeDefinition,
+		UserAttributeValue, UserPlatformQuota, UserSubscription []ent.Interceptor
 	}
 )
 

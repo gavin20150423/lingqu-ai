@@ -90,6 +90,26 @@ func Balance(v float64) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldBalance, v))
 }
 
+// PointsBalance applies equality check predicate on the "points_balance" field. It's identical to PointsBalanceEQ.
+func PointsBalance(v float64) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldPointsBalance, v))
+}
+
+// LoadFactorCreditsBalance applies equality check predicate on the "load_factor_credits_balance" field. It's identical to LoadFactorCreditsBalanceEQ.
+func LoadFactorCreditsBalance(v int) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldLoadFactorCreditsBalance, v))
+}
+
+// LoadFactorCreditsUsedTotal applies equality check predicate on the "load_factor_credits_used_total" field. It's identical to LoadFactorCreditsUsedTotalEQ.
+func LoadFactorCreditsUsedTotal(v int) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldLoadFactorCreditsUsedTotal, v))
+}
+
+// PreferPointsBilling applies equality check predicate on the "prefer_points_billing" field. It's identical to PreferPointsBillingEQ.
+func PreferPointsBilling(v bool) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldPreferPointsBilling, v))
+}
+
 // FrozenBalance applies equality check predicate on the "frozen_balance" field. It's identical to FrozenBalanceEQ.
 func FrozenBalance(v float64) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldFrozenBalance, v))
@@ -538,6 +558,136 @@ func BalanceLT(v float64) predicate.User {
 // BalanceLTE applies the LTE predicate on the "balance" field.
 func BalanceLTE(v float64) predicate.User {
 	return predicate.User(sql.FieldLTE(FieldBalance, v))
+}
+
+// PointsBalanceEQ applies the EQ predicate on the "points_balance" field.
+func PointsBalanceEQ(v float64) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldPointsBalance, v))
+}
+
+// PointsBalanceNEQ applies the NEQ predicate on the "points_balance" field.
+func PointsBalanceNEQ(v float64) predicate.User {
+	return predicate.User(sql.FieldNEQ(FieldPointsBalance, v))
+}
+
+// PointsBalanceIn applies the In predicate on the "points_balance" field.
+func PointsBalanceIn(vs ...float64) predicate.User {
+	return predicate.User(sql.FieldIn(FieldPointsBalance, vs...))
+}
+
+// PointsBalanceNotIn applies the NotIn predicate on the "points_balance" field.
+func PointsBalanceNotIn(vs ...float64) predicate.User {
+	return predicate.User(sql.FieldNotIn(FieldPointsBalance, vs...))
+}
+
+// PointsBalanceGT applies the GT predicate on the "points_balance" field.
+func PointsBalanceGT(v float64) predicate.User {
+	return predicate.User(sql.FieldGT(FieldPointsBalance, v))
+}
+
+// PointsBalanceGTE applies the GTE predicate on the "points_balance" field.
+func PointsBalanceGTE(v float64) predicate.User {
+	return predicate.User(sql.FieldGTE(FieldPointsBalance, v))
+}
+
+// PointsBalanceLT applies the LT predicate on the "points_balance" field.
+func PointsBalanceLT(v float64) predicate.User {
+	return predicate.User(sql.FieldLT(FieldPointsBalance, v))
+}
+
+// PointsBalanceLTE applies the LTE predicate on the "points_balance" field.
+func PointsBalanceLTE(v float64) predicate.User {
+	return predicate.User(sql.FieldLTE(FieldPointsBalance, v))
+}
+
+// LoadFactorCreditsBalanceEQ applies the EQ predicate on the "load_factor_credits_balance" field.
+func LoadFactorCreditsBalanceEQ(v int) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldLoadFactorCreditsBalance, v))
+}
+
+// LoadFactorCreditsBalanceNEQ applies the NEQ predicate on the "load_factor_credits_balance" field.
+func LoadFactorCreditsBalanceNEQ(v int) predicate.User {
+	return predicate.User(sql.FieldNEQ(FieldLoadFactorCreditsBalance, v))
+}
+
+// LoadFactorCreditsBalanceIn applies the In predicate on the "load_factor_credits_balance" field.
+func LoadFactorCreditsBalanceIn(vs ...int) predicate.User {
+	return predicate.User(sql.FieldIn(FieldLoadFactorCreditsBalance, vs...))
+}
+
+// LoadFactorCreditsBalanceNotIn applies the NotIn predicate on the "load_factor_credits_balance" field.
+func LoadFactorCreditsBalanceNotIn(vs ...int) predicate.User {
+	return predicate.User(sql.FieldNotIn(FieldLoadFactorCreditsBalance, vs...))
+}
+
+// LoadFactorCreditsBalanceGT applies the GT predicate on the "load_factor_credits_balance" field.
+func LoadFactorCreditsBalanceGT(v int) predicate.User {
+	return predicate.User(sql.FieldGT(FieldLoadFactorCreditsBalance, v))
+}
+
+// LoadFactorCreditsBalanceGTE applies the GTE predicate on the "load_factor_credits_balance" field.
+func LoadFactorCreditsBalanceGTE(v int) predicate.User {
+	return predicate.User(sql.FieldGTE(FieldLoadFactorCreditsBalance, v))
+}
+
+// LoadFactorCreditsBalanceLT applies the LT predicate on the "load_factor_credits_balance" field.
+func LoadFactorCreditsBalanceLT(v int) predicate.User {
+	return predicate.User(sql.FieldLT(FieldLoadFactorCreditsBalance, v))
+}
+
+// LoadFactorCreditsBalanceLTE applies the LTE predicate on the "load_factor_credits_balance" field.
+func LoadFactorCreditsBalanceLTE(v int) predicate.User {
+	return predicate.User(sql.FieldLTE(FieldLoadFactorCreditsBalance, v))
+}
+
+// LoadFactorCreditsUsedTotalEQ applies the EQ predicate on the "load_factor_credits_used_total" field.
+func LoadFactorCreditsUsedTotalEQ(v int) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldLoadFactorCreditsUsedTotal, v))
+}
+
+// LoadFactorCreditsUsedTotalNEQ applies the NEQ predicate on the "load_factor_credits_used_total" field.
+func LoadFactorCreditsUsedTotalNEQ(v int) predicate.User {
+	return predicate.User(sql.FieldNEQ(FieldLoadFactorCreditsUsedTotal, v))
+}
+
+// LoadFactorCreditsUsedTotalIn applies the In predicate on the "load_factor_credits_used_total" field.
+func LoadFactorCreditsUsedTotalIn(vs ...int) predicate.User {
+	return predicate.User(sql.FieldIn(FieldLoadFactorCreditsUsedTotal, vs...))
+}
+
+// LoadFactorCreditsUsedTotalNotIn applies the NotIn predicate on the "load_factor_credits_used_total" field.
+func LoadFactorCreditsUsedTotalNotIn(vs ...int) predicate.User {
+	return predicate.User(sql.FieldNotIn(FieldLoadFactorCreditsUsedTotal, vs...))
+}
+
+// LoadFactorCreditsUsedTotalGT applies the GT predicate on the "load_factor_credits_used_total" field.
+func LoadFactorCreditsUsedTotalGT(v int) predicate.User {
+	return predicate.User(sql.FieldGT(FieldLoadFactorCreditsUsedTotal, v))
+}
+
+// LoadFactorCreditsUsedTotalGTE applies the GTE predicate on the "load_factor_credits_used_total" field.
+func LoadFactorCreditsUsedTotalGTE(v int) predicate.User {
+	return predicate.User(sql.FieldGTE(FieldLoadFactorCreditsUsedTotal, v))
+}
+
+// LoadFactorCreditsUsedTotalLT applies the LT predicate on the "load_factor_credits_used_total" field.
+func LoadFactorCreditsUsedTotalLT(v int) predicate.User {
+	return predicate.User(sql.FieldLT(FieldLoadFactorCreditsUsedTotal, v))
+}
+
+// LoadFactorCreditsUsedTotalLTE applies the LTE predicate on the "load_factor_credits_used_total" field.
+func LoadFactorCreditsUsedTotalLTE(v int) predicate.User {
+	return predicate.User(sql.FieldLTE(FieldLoadFactorCreditsUsedTotal, v))
+}
+
+// PreferPointsBillingEQ applies the EQ predicate on the "prefer_points_billing" field.
+func PreferPointsBillingEQ(v bool) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldPreferPointsBilling, v))
+}
+
+// PreferPointsBillingNEQ applies the NEQ predicate on the "prefer_points_billing" field.
+func PreferPointsBillingNEQ(v bool) predicate.User {
+	return predicate.User(sql.FieldNEQ(FieldPreferPointsBilling, v))
 }
 
 // FrozenBalanceEQ applies the EQ predicate on the "frozen_balance" field.
@@ -1500,6 +1650,75 @@ func HasAnnouncementReadsWith(preds ...predicate.AnnouncementRead) predicate.Use
 	})
 }
 
+// HasSupportThreads applies the HasEdge predicate on the "support_threads" edge.
+func HasSupportThreads() predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, SupportThreadsTable, SupportThreadsColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasSupportThreadsWith applies the HasEdge predicate on the "support_threads" edge with a given conditions (other predicates).
+func HasSupportThreadsWith(preds ...predicate.SupportThread) predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := newSupportThreadsStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasAssignedSupportThreads applies the HasEdge predicate on the "assigned_support_threads" edge.
+func HasAssignedSupportThreads() predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, AssignedSupportThreadsTable, AssignedSupportThreadsColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasAssignedSupportThreadsWith applies the HasEdge predicate on the "assigned_support_threads" edge with a given conditions (other predicates).
+func HasAssignedSupportThreadsWith(preds ...predicate.SupportThread) predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := newAssignedSupportThreadsStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasSentSupportMessages applies the HasEdge predicate on the "sent_support_messages" edge.
+func HasSentSupportMessages() predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, SentSupportMessagesTable, SentSupportMessagesColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasSentSupportMessagesWith applies the HasEdge predicate on the "sent_support_messages" edge with a given conditions (other predicates).
+func HasSentSupportMessagesWith(preds ...predicate.SupportMessage) predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := newSentSupportMessagesStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
 // HasAllowedGroups applies the HasEdge predicate on the "allowed_groups" edge.
 func HasAllowedGroups() predicate.User {
 	return predicate.User(func(s *sql.Selector) {
@@ -1615,6 +1834,75 @@ func HasPaymentOrdersWith(preds ...predicate.PaymentOrder) predicate.User {
 	})
 }
 
+// HasShopOrders applies the HasEdge predicate on the "shop_orders" edge.
+func HasShopOrders() predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, ShopOrdersTable, ShopOrdersColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasShopOrdersWith applies the HasEdge predicate on the "shop_orders" edge with a given conditions (other predicates).
+func HasShopOrdersWith(preds ...predicate.ShopOrder) predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := newShopOrdersStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasShopDrawCycles applies the HasEdge predicate on the "shop_draw_cycles" edge.
+func HasShopDrawCycles() predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, ShopDrawCyclesTable, ShopDrawCyclesColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasShopDrawCyclesWith applies the HasEdge predicate on the "shop_draw_cycles" edge with a given conditions (other predicates).
+func HasShopDrawCyclesWith(preds ...predicate.ShopDrawCycle) predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := newShopDrawCyclesStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasShopBalanceLedger applies the HasEdge predicate on the "shop_balance_ledger" edge.
+func HasShopBalanceLedger() predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, ShopBalanceLedgerTable, ShopBalanceLedgerColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasShopBalanceLedgerWith applies the HasEdge predicate on the "shop_balance_ledger" edge with a given conditions (other predicates).
+func HasShopBalanceLedgerWith(preds ...predicate.ShopBalanceLedger) predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := newShopBalanceLedgerStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
 // HasAuthIdentities applies the HasEdge predicate on the "auth_identities" edge.
 func HasAuthIdentities() predicate.User {
 	return predicate.User(func(s *sql.Selector) {
@@ -1676,6 +1964,29 @@ func HasPlatformQuotas() predicate.User {
 func HasPlatformQuotasWith(preds ...predicate.UserPlatformQuota) predicate.User {
 	return predicate.User(func(s *sql.Selector) {
 		step := newPlatformQuotasStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasOwnedProxies applies the HasEdge predicate on the "owned_proxies" edge.
+func HasOwnedProxies() predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, OwnedProxiesTable, OwnedProxiesColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasOwnedProxiesWith applies the HasEdge predicate on the "owned_proxies" edge with a given conditions (other predicates).
+func HasOwnedProxiesWith(preds ...predicate.Proxy) predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := newOwnedProxiesStep()
 		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
 			for _, p := range preds {
 				p(s)

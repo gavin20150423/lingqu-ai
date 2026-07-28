@@ -51,6 +51,8 @@ export default {
     disabled: '已禁用',
 	    total: '总计',
 	    balance: '余额',
+	    points: '积分',
+	    uncategorized: '未分类',
 	    availableBalance: '可用余额',
 	    frozenBalance: '冻结金额',
 	    totalBalance: '总余额',
@@ -198,6 +200,14 @@ export default {
     contentModeration: '内容审核',
     promptAudit: '提示词审计',
     auditLogs: '操作日志',
+    store: '商城',
+    conversations: '工单服务',
+    storeManagement: '商城管理',
+    storeCategories: '商城分类',
+    storeProducts: '商城商品',
+    storeCards: '卡密管理',
+    storeFileStorage: '文件存储',
+    withdrawalManagement: '提现管理',
   },
 
   // Auth

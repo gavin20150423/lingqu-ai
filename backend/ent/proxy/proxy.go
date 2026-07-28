@@ -33,8 +33,12 @@ const (
 	FieldUsername = "username"
 	// FieldPassword holds the string denoting the password field in the database.
 	FieldPassword = "password"
+	// FieldOwnerUserID holds the string denoting the owner_user_id field in the database.
+	FieldOwnerUserID = "owner_user_id"
 	// FieldStatus holds the string denoting the status field in the database.
 	FieldStatus = "status"
+	// FieldMaxAccounts holds the string denoting the max_accounts field in the database.
+	FieldMaxAccounts = "max_accounts"
 	// FieldExpiresAt holds the string denoting the expires_at field in the database.
 	FieldExpiresAt = "expires_at"
 	// FieldFallbackMode holds the string denoting the fallback_mode field in the database.
@@ -45,6 +49,8 @@ const (
 	FieldExpiryWarnDays = "expiry_warn_days"
 	// EdgeAccounts holds the string denoting the accounts edge name in mutations.
 	EdgeAccounts = "accounts"
+	// EdgeOwner holds the string denoting the owner edge name in mutations.
+	EdgeOwner = "owner"
 	// EdgeBackupProxy holds the string denoting the backup_proxy edge name in mutations.
 	EdgeBackupProxy = "backup_proxy"
 	// Table holds the table name of the proxy in the database.
@@ -56,6 +62,13 @@ const (
 	AccountsInverseTable = "accounts"
 	// AccountsColumn is the table column denoting the accounts relation/edge.
 	AccountsColumn = "proxy_id"
+	// OwnerTable is the table that holds the owner relation/edge.
+	OwnerTable = "proxies"
+	// OwnerInverseTable is the table name for the User entity.
+	// It exists in this package in order to avoid circular dependency with the "user" package.
+	OwnerInverseTable = "users"
+	// OwnerColumn is the table column denoting the owner relation/edge.
+	OwnerColumn = "owner_user_id"
 	// BackupProxyTable is the table that holds the backup_proxy relation/edge.
 	BackupProxyTable = "proxies"
 	// BackupProxyColumn is the table column denoting the backup_proxy relation/edge.
@@ -74,7 +87,9 @@ var Columns = []string{
 	FieldPort,
 	FieldUsername,
 	FieldPassword,
+	FieldOwnerUserID,
 	FieldStatus,
+	FieldMaxAccounts,
 	FieldExpiresAt,
 	FieldFallbackMode,
 	FieldBackupProxyID,
@@ -119,6 +134,10 @@ var (
 	DefaultStatus string
 	// StatusValidator is a validator for the "status" field. It is called by the builders before save.
 	StatusValidator func(string) error
+	// DefaultMaxAccounts holds the default value on creation for the "max_accounts" field.
+	DefaultMaxAccounts int
+	// MaxAccountsValidator is a validator for the "max_accounts" field. It is called by the builders before save.
+	MaxAccountsValidator func(int) error
 	// DefaultFallbackMode holds the default value on creation for the "fallback_mode" field.
 	DefaultFallbackMode string
 	// FallbackModeValidator is a validator for the "fallback_mode" field. It is called by the builders before save.
@@ -180,9 +199,19 @@ func ByPassword(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldPassword, opts...).ToFunc()
 }
 
+// ByOwnerUserID orders the results by the owner_user_id field.
+func ByOwnerUserID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldOwnerUserID, opts...).ToFunc()
+}
+
 // ByStatus orders the results by the status field.
 func ByStatus(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldStatus, opts...).ToFunc()
+}
+
+// ByMaxAccounts orders the results by the max_accounts field.
+func ByMaxAccounts(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldMaxAccounts, opts...).ToFunc()
 }
 
 // ByExpiresAt orders the results by the expires_at field.
@@ -219,6 +248,13 @@ func ByAccounts(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 	}
 }
 
+// ByOwnerField orders the results by owner field.
+func ByOwnerField(field string, opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newOwnerStep(), sql.OrderByField(field, opts...))
+	}
+}
+
 // ByBackupProxyField orders the results by backup_proxy field.
 func ByBackupProxyField(field string, opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
@@ -230,6 +266,13 @@ func newAccountsStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(AccountsInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.O2M, true, AccountsTable, AccountsColumn),
+	)
+}
+func newOwnerStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(OwnerInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.M2O, true, OwnerTable, OwnerColumn),
 	)
 }
 func newBackupProxyStep() *sqlgraph.Step {

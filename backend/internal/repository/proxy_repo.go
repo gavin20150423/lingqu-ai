@@ -8,6 +8,7 @@ import (
 	"time"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
+	"github.com/Wei-Shaw/sub2api/ent/predicate"
 	"github.com/Wei-Shaw/sub2api/ent/proxy"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
@@ -40,8 +41,12 @@ func (r *proxyRepository) Create(ctx context.Context, proxyIn *service.Proxy) er
 		SetHost(proxyIn.Host).
 		SetPort(proxyIn.Port).
 		SetStatus(proxyIn.Status).
+		SetMaxAccounts(proxyIn.MaxAccounts).
 		SetFallbackMode(proxyIn.FallbackMode).
 		SetExpiryWarnDays(proxyIn.ExpiryWarnDays)
+	if proxyIn.OwnerUserID != nil {
+		builder.SetOwnerUserID(*proxyIn.OwnerUserID)
+	}
 	if proxyIn.Username != "" {
 		builder.SetUsername(proxyIn.Username)
 	}
@@ -154,8 +159,14 @@ func updateProxyAndInvalidateProbeSnapshots(ctx context.Context, client *dbent.C
 		SetHost(proxyIn.Host).
 		SetPort(proxyIn.Port).
 		SetStatus(proxyIn.Status).
+		SetMaxAccounts(proxyIn.MaxAccounts).
 		SetFallbackMode(proxyIn.FallbackMode).
 		SetExpiryWarnDays(proxyIn.ExpiryWarnDays)
+	if proxyIn.OwnerUserID != nil {
+		builder.SetOwnerUserID(*proxyIn.OwnerUserID)
+	} else {
+		builder.ClearOwnerUserID()
+	}
 	if proxyIn.Username != "" {
 		builder.SetUsername(proxyIn.Username)
 	} else {
@@ -450,6 +461,87 @@ func (r *proxyRepository) ListActive(ctx context.Context) ([]service.Proxy, erro
 	return outProxies, nil
 }
 
+func (r *proxyRepository) ListActiveVisibleWithAccountCount(ctx context.Context, userID int64) ([]service.ProxyWithAccountCount, error) {
+	proxies, err := r.client.Proxy.Query().
+		Where(proxy.StatusEQ(service.StatusActive), visibleProxyPredicate(userID)).
+		Order(dbent.Desc(proxy.FieldCreatedAt)).
+		All(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	counts, err := r.GetAccountCountsForProxies(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]service.ProxyWithAccountCount, 0, len(proxies))
+	for i := range proxies {
+		proxyOut := proxyEntityToService(proxies[i])
+		if proxyOut == nil {
+			continue
+		}
+		result = append(result, service.ProxyWithAccountCount{
+			Proxy:        *proxyOut,
+			AccountCount: counts[proxyOut.ID],
+		})
+	}
+	return result, nil
+}
+
+func (r *proxyRepository) GetVisibleByID(ctx context.Context, userID, id int64) (*service.Proxy, error) {
+	m, err := r.client.Proxy.Query().
+		Where(proxy.IDEQ(id), visibleProxyPredicate(userID)).
+		Only(ctx)
+	if err != nil {
+		if dbent.IsNotFound(err) {
+			return nil, service.ErrProxyNotFound
+		}
+		return nil, err
+	}
+	return proxyEntityToService(m), nil
+}
+
+func (r *proxyRepository) FindVisibleActiveByEndpoint(ctx context.Context, userID int64, protocol, host string, port int, username, password string) (*service.Proxy, error) {
+	q := r.client.Proxy.Query().Where(
+		proxy.StatusEQ(service.StatusActive),
+		visibleProxyPredicate(userID),
+		proxy.ProtocolEQ(protocol),
+		proxy.HostEQ(host),
+		proxy.PortEQ(port),
+	)
+
+	if username == "" {
+		q = q.Where(proxy.Or(proxy.UsernameIsNil(), proxy.UsernameEQ("")))
+	} else {
+		q = q.Where(proxy.UsernameEQ(username))
+	}
+	if password == "" {
+		q = q.Where(proxy.Or(proxy.PasswordIsNil(), proxy.PasswordEQ("")))
+	} else {
+		q = q.Where(proxy.PasswordEQ(password))
+	}
+
+	m, err := q.Order(
+		proxy.ByOwnerUserID(entsql.OrderDesc(), entsql.OrderNullsLast()),
+		dbent.Desc(proxy.FieldID),
+	).First(ctx)
+	if err != nil {
+		if dbent.IsNotFound(err) {
+			return nil, service.ErrProxyNotFound
+		}
+		return nil, err
+	}
+	return proxyEntityToService(m), nil
+}
+
+func visibleProxyPredicate(userID int64) predicate.Proxy {
+	if userID <= 0 {
+		return proxy.OwnerUserIDIsNil()
+	}
+	return proxy.Or(proxy.OwnerUserIDIsNil(), proxy.OwnerUserIDEQ(userID))
+}
+
 // ExistsByHostPortAuth checks if a proxy with the same host, port, username, and password exists
 func (r *proxyRepository) ExistsByHostPortAuth(ctx context.Context, host string, port int, username, password string) (bool, error) {
 	q := r.client.Proxy.Query().
@@ -590,7 +682,9 @@ func proxyEntityToService(m *dbent.Proxy) *service.Proxy {
 		Protocol:       m.Protocol,
 		Host:           m.Host,
 		Port:           m.Port,
+		OwnerUserID:    m.OwnerUserID,
 		Status:         m.Status,
+		MaxAccounts:    m.MaxAccounts,
 		CreatedAt:      m.CreatedAt,
 		UpdatedAt:      m.UpdatedAt,
 		ExpiresAt:      m.ExpiresAt,

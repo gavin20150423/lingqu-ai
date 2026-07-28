@@ -280,7 +280,9 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 		})
 		c.Set(string(ContextKeyUserRole), apiKey.User.Role)
 		setGroupContext(c, apiKey.Group)
-		c.Request = c.Request.WithContext(context.WithValue(c.Request.Context(), ctxkey.APIKeyID, apiKey.ID))
+		requestContext := context.WithValue(c.Request.Context(), ctxkey.APIKeyID, apiKey.ID)
+		requestContext = service.WithAccountShareModeRequest(requestContext, apiKey.User.ID, apiKey.ID)
+		c.Request = c.Request.WithContext(requestContext)
 		if !billingInfoRequest {
 			_ = apiKeyService.TouchLastUsed(c.Request.Context(), apiKey.ID)
 		}

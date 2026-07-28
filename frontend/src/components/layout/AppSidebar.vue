@@ -324,10 +324,9 @@ function buildSelfNavItems(withDashboard: boolean): NavItem[] {
   }
   items.push(
     { path: '/keys', label: t('nav.apiKeys'), icon: 'key' },
-    { path: '/store', label: '发卡商城', icon: 'gift', hideInSimpleMode: true },
-    { path: '/accounts', label: '我的账号', icon: 'globe', hideInSimpleMode: true },
-    { path: '/account-share', label: '账号广场', icon: 'users', hideInSimpleMode: true },
-    { path: '/conversations', label: '工单服务', icon: 'chat', hideInSimpleMode: true },
+    { path: '/store', label: t('nav.store'), icon: 'gift', hideInSimpleMode: true },
+    { path: '/account-share', label: '账号共享', icon: 'users', hideInSimpleMode: true },
+    { path: '/conversations', label: t('nav.conversations'), icon: 'chat', hideInSimpleMode: true },
     { path: '/batch-image', label: t('nav.batchImage'), icon: 'grid', hideInSimpleMode: true, featureFlag: flagBatchImageAccess },
     { path: '/usage', label: t('nav.usage'), icon: 'chart', hideInSimpleMode: true },
     { path: '/available-channels', label: t('nav.availableChannels'), icon: 'server', hideInSimpleMode: true, featureFlag: flagAvailableChannels },
@@ -362,7 +361,6 @@ const adminNavItems = computed((): NavItem[] => {
     { path: '/admin/users', label: t('nav.users'), icon: 'users', hideInSimpleMode: true },
     { path: '/admin/groups', label: t('nav.groups'), icon: 'grid' },
     { path: '/admin/accounts', label: t('nav.accounts'), icon: 'globe' },
-    { path: '/admin/community', label: '共享与商城', icon: 'gift', hideInSimpleMode: true },
     {
       path: '/admin/channels',
       label: t('nav.channelManagement'),
@@ -376,6 +374,7 @@ const adminNavItems = computed((): NavItem[] => {
     },
     { path: '/admin/subscriptions', label: t('nav.subscriptions'), icon: 'creditCard', hideInSimpleMode: true },
     { path: '/admin/announcements', label: t('nav.announcements'), icon: 'bell' },
+    { path: '/admin/conversations', label: t('nav.conversations'), icon: 'chat' },
     { path: '/admin/proxies', label: t('nav.proxies'), icon: 'server' },
     {
       path: '/admin/security-audit',
@@ -391,6 +390,19 @@ const adminNavItems = computed((): NavItem[] => {
     },
     { path: '/admin/redeem', label: t('nav.redeemCodes'), icon: 'badge', hideInSimpleMode: true },
     { path: '/admin/promo-codes', label: t('nav.promoCodes'), icon: 'gift', hideInSimpleMode: true },
+    {
+      path: '/admin/store',
+      label: t('nav.storeManagement'),
+      icon: 'gift',
+      hideInSimpleMode: true,
+      expandOnly: true,
+      children: [
+        { path: '/admin/store/categories', label: t('nav.storeCategories'), icon: 'grid' },
+        { path: '/admin/store/products', label: t('nav.storeProducts'), icon: 'gift' },
+        { path: '/admin/store/cards', label: t('nav.storeCards'), icon: 'badge' },
+        { path: '/admin/store/file-storage', label: t('nav.storeFileStorage'), icon: 'server' },
+      ],
+    },
     {
       path: '/admin/affiliates',
       label: t('nav.affiliateManagement'),
@@ -415,6 +427,7 @@ const adminNavItems = computed((): NavItem[] => {
         { path: '/admin/orders/dashboard', label: t('nav.paymentDashboard'), icon: 'chart' },
         { path: '/admin/orders', label: t('nav.orderManagement'), icon: 'document' },
         { path: '/admin/orders/plans', label: t('nav.paymentPlans'), icon: 'creditCard' },
+        { path: '/admin/withdrawals', label: t('nav.withdrawalManagement'), icon: 'creditCard' },
       ],
     },
     { path: '/admin/usage', label: t('nav.usage'), icon: 'chart' },

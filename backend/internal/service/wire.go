@@ -698,6 +698,8 @@ var ProviderSet = wire.NewSet(
 	NewGroupService,
 	NewCompositeRouteResolver,
 	NewAccountService,
+	NewAccountSharePolicyService,
+	ProvideAccountShareModeService,
 	NewProxyService,
 	NewRedeemService,
 	NewPromoService,
@@ -707,6 +709,8 @@ var ProviderSet = wire.NewSet(
 	NewBillingService,
 	ProvideBillingCacheService,
 	NewAnnouncementService,
+	NewConversationService,
+	NewSystemNoticeService,
 	NewAdminService,
 	NewGatewayService,
 	NewOpenAIGatewayService,
@@ -793,8 +797,12 @@ var ProviderSet = wire.NewSet(
 	NewGroupCapacityService,
 	NewChannelService,
 	NewModelPricingResolver,
-	NewContentModerationService,
+	ProvideContentModerationService,
 	NewAffiliateService,
+	NewReceiptCodeStorageConfigProvider,
+	NewReceiptCodeService,
+	NewWithdrawalService,
+	ProvideShopService,
 	ProvidePaymentConfigService,
 	ProvidePaymentService,
 	ProvidePaymentOrderExpiryService,
@@ -805,6 +813,43 @@ var ProviderSet = wire.NewSet(
 	ProvideUserPlatformQuotaUsageFlusher,
 	NewCommunityService,
 )
+
+func ProvideShopService(
+	entClient *dbent.Client,
+	paymentService *PaymentService,
+	authCacheInvalidator APIKeyAuthCacheInvalidator,
+	billingCacheService *BillingCacheService,
+	settingRepo SettingRepository,
+	key payment.EncryptionKey,
+	fileCardStoreFactory ShopFileCardObjectStoreFactory,
+) *ShopService {
+	svc := NewShopService(
+		entClient,
+		paymentService,
+		authCacheInvalidator,
+		billingCacheService,
+		WithShopSettingRepository(settingRepo),
+		WithShopEncryptionKey([]byte(key)),
+		WithShopFileCardObjectStoreFactory(fileCardStoreFactory),
+	)
+	paymentService.SetShopFulfillment(svc)
+	return svc
+}
+
+func ProvideContentModerationService(
+	settingRepo SettingRepository,
+	repo ContentModerationRepository,
+	hashCache ContentModerationHashCache,
+	groupRepo GroupRepository,
+	userRepo UserRepository,
+	authCacheInvalidator APIKeyAuthCacheInvalidator,
+	emailService *EmailService,
+	accountShareModeService *AccountShareModeService,
+) *ContentModerationService {
+	svc := NewContentModerationService(settingRepo, repo, hashCache, groupRepo, userRepo, authCacheInvalidator, emailService)
+	svc.SetAccountShareModeResolver(accountShareModeService)
+	return svc
+}
 
 // ProvideUserPlatformQuotaUsageFlusher 创建并启动 UserPlatformQuotaUsageFlusher。
 func ProvideUserPlatformQuotaUsageFlusher(cfg *config.Config, cache BillingCache, quotaRepo UserPlatformQuotaRepository, tw *TimingWheelService) *UserPlatformQuotaUsageFlusher {

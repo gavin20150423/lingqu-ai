@@ -49,9 +49,15 @@ func (Proxy) Fields() []ent.Field {
 			MaxLen(100).
 			Optional().
 			Nillable(),
+		field.Int64("owner_user_id").
+			Optional().
+			Nillable(),
 		field.String("status").
 			MaxLen(20).
 			Default("active"),
+		field.Int("max_accounts").
+			Default(0).
+			NonNegative(),
 		field.Time("expires_at").
 			Optional().Nillable().
 			Comment("Proxy expiration time (NULL means never expires)."),
@@ -73,6 +79,10 @@ func (Proxy) Edges() []ent.Edge {
 		// accounts: 使用此代理的账户（反向边）
 		edge.From("accounts", Account.Type).
 			Ref("proxy"),
+		edge.From("owner", User.Type).
+			Ref("owned_proxies").
+			Field("owner_user_id").
+			Unique(),
 		edge.To("backup_proxy", Proxy.Type).
 			Field("backup_proxy_id").
 			Unique(),
@@ -82,6 +92,7 @@ func (Proxy) Edges() []ent.Edge {
 func (Proxy) Indexes() []ent.Index {
 	return []ent.Index{
 		index.Fields("status"),
+		index.Fields("owner_user_id"),
 		index.Fields("deleted_at"),
 		index.Fields("expires_at"),
 		index.Fields("backup_proxy_id"),

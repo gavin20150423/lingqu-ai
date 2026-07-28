@@ -49,6 +49,12 @@ func (User) Fields() []ent.Field {
 		field.Float("balance").
 			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}).
 			Default(0),
+		field.Float("points_balance").
+			SchemaType(map[string]string{dialect.Postgres: "decimal(20,10)"}).
+			Default(0),
+		field.Int("load_factor_credits_balance").Default(0),
+		field.Int("load_factor_credits_used_total").Default(0),
+		field.Bool("prefer_points_billing").Default(false),
 		field.Float("frozen_balance").
 			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}).
 			Default(0),
@@ -125,16 +131,23 @@ func (User) Edges() []ent.Edge {
 		edge.To("subscriptions", UserSubscription.Type),
 		edge.To("assigned_subscriptions", UserSubscription.Type),
 		edge.To("announcement_reads", AnnouncementRead.Type),
+		edge.To("support_threads", SupportThread.Type),
+		edge.To("assigned_support_threads", SupportThread.Type),
+		edge.To("sent_support_messages", SupportMessage.Type),
 		edge.To("allowed_groups", Group.Type).
 			Through("user_allowed_groups", UserAllowedGroup.Type),
 		edge.To("usage_logs", UsageLog.Type),
 		edge.To("attribute_values", UserAttributeValue.Type),
 		edge.To("promo_code_usages", PromoCodeUsage.Type),
 		edge.To("payment_orders", PaymentOrder.Type),
+		edge.To("shop_orders", ShopOrder.Type),
+		edge.To("shop_draw_cycles", ShopDrawCycle.Type),
+		edge.To("shop_balance_ledger", ShopBalanceLedger.Type),
 		edge.To("auth_identities", AuthIdentity.Type).
 			Annotations(entsql.OnDelete(entsql.Cascade)),
 		edge.To("pending_auth_sessions", PendingAuthSession.Type),
 		edge.To("platform_quotas", UserPlatformQuota.Type),
+		edge.To("owned_proxies", Proxy.Type),
 	}
 }
 

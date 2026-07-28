@@ -17,6 +17,10 @@ import type {
   UserAffiliateDetail,
   AffiliateTransferResponse,
   PlatformQuotasResponse,
+  ReceiptCode,
+  ReceiptCodePaymentMethod,
+  WithdrawalRequest,
+  BasePaginationResponse,
 } from '@/types'
 
 /**
@@ -194,6 +198,45 @@ export async function getMyPlatformQuotas(): Promise<PlatformQuotasResponse> {
   return data
 }
 
+export async function getReceiptCode(paymentMethod: ReceiptCodePaymentMethod): Promise<ReceiptCode | null> {
+  const { data } = await apiClient.get<ReceiptCode | null>('/user/receipt-code', {
+    params: { payment_method: paymentMethod }
+  })
+  return data
+}
+
+export async function uploadReceiptCode(paymentMethod: ReceiptCodePaymentMethod, file: File): Promise<ReceiptCode> {
+  const form = new FormData()
+  form.append('payment_method', paymentMethod)
+  form.append('file', file)
+  const { data } = await apiClient.post<ReceiptCode>('/user/receipt-code', form, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  })
+  return data
+}
+
+export async function deleteReceiptCode(paymentMethod: ReceiptCodePaymentMethod): Promise<{ deleted: boolean }> {
+  const { data } = await apiClient.delete<{ deleted: boolean }>('/user/receipt-code', {
+    params: { payment_method: paymentMethod }
+  })
+  return data
+}
+
+export async function listWithdrawals(params?: { page?: number; page_size?: number }): Promise<BasePaginationResponse<WithdrawalRequest>> {
+  const { data } = await apiClient.get<BasePaginationResponse<WithdrawalRequest>>('/user/withdrawals', { params })
+  return data
+}
+
+export async function submitWithdrawal(payload: { amount: number; payment_method: ReceiptCodePaymentMethod }): Promise<WithdrawalRequest> {
+  const { data } = await apiClient.post<WithdrawalRequest>('/user/withdrawals', payload)
+  return data
+}
+
+export async function cancelWithdrawal(id: number, reason?: string): Promise<WithdrawalRequest> {
+  const { data } = await apiClient.post<WithdrawalRequest>(`/user/withdrawals/${id}/cancel`, { reason: reason || '' })
+  return data
+}
+
 export const userAPI = {
   getProfile,
   updateProfile,
@@ -210,6 +253,12 @@ export const userAPI = {
   getAffiliateDetail,
   transferAffiliateQuota,
   getMyPlatformQuotas,
+  getReceiptCode,
+  uploadReceiptCode,
+  deleteReceiptCode,
+  listWithdrawals,
+  submitWithdrawal,
+  cancelWithdrawal,
 }
 
 export default userAPI

@@ -107,7 +107,7 @@ func (r schedulerGroupAwareOpenAIAccountRepo) ListSchedulableUngroupedByPlatform
 	return result, nil
 }
 
-func TestOpenAIGatewayServiceSelectsReservedCommunityAccountBeforeGroupScheduler(t *testing.T) {
+func TestOpenAIGatewayServiceIgnoresLegacyCommunityRouting(t *testing.T) {
 	account := Account{
 		ID:          901,
 		Platform:    PlatformOpenAI,
@@ -137,10 +137,10 @@ func TestOpenAIGatewayServiceSelectsReservedCommunityAccountBeforeGroupScheduler
 	require.NotNil(t, selection)
 	require.Equal(t, account.ID, selection.Account.ID)
 	require.True(t, selection.Acquired)
-	require.Equal(t, "community", decision.Layer)
-	require.Equal(t, int64(77), repo.apiKeyID)
-	require.Equal(t, "gpt-5.2", repo.model)
-	require.Equal(t, 1.25, selection.Account.Extra["community_usage_multiplier"])
+	require.Equal(t, openAIAccountScheduleLayerLoadBalance, decision.Layer)
+	require.Zero(t, repo.apiKeyID)
+	require.Empty(t, repo.model)
+	require.NotContains(t, selection.Account.Extra, "community_usage_multiplier")
 }
 
 func TestOpenAIGatewayServiceSubPilotTakeoverPreemptsReservedCommunityAccount(t *testing.T) {

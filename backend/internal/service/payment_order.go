@@ -115,20 +115,17 @@ func (s *PaymentService) CreateOrder(ctx context.Context, req CreateOrderRequest
 }
 
 func (s *PaymentService) validateOrderInput(ctx context.Context, req CreateOrderRequest, cfg *PaymentConfig) (*dbent.SubscriptionPlan, error) {
-	switch req.OrderType {
-	case payment.OrderTypeBalance, payment.OrderTypeSubscription:
-	case payment.OrderTypeStore:
-		if req.StoreOrderID <= 0 {
-			return nil, infraerrors.BadRequest("INVALID_INPUT", "store order requires a store_order_id")
-		}
-	default:
-		return nil, infraerrors.BadRequest("INVALID_INPUT", "unsupported order type")
-	}
 	if req.OrderType == payment.OrderTypeBalance && cfg.BalanceDisabled {
 		return nil, infraerrors.Forbidden("BALANCE_PAYMENT_DISABLED", "balance recharge has been disabled")
 	}
 	if req.OrderType == payment.OrderTypeSubscription {
 		return s.validateSubOrder(ctx, req)
+	}
+	if req.OrderType == payment.OrderTypeShop && req.ShopOrderID <= 0 {
+		return nil, infraerrors.BadRequest("INVALID_INPUT", "shop order requires a shop_order_id")
+	}
+	if req.OrderType != payment.OrderTypeBalance && req.OrderType != payment.OrderTypeShop {
+		return nil, infraerrors.BadRequest("INVALID_INPUT", "unsupported order type")
 	}
 	if math.IsNaN(req.Amount) || math.IsInf(req.Amount, 0) || req.Amount <= 0 {
 		return nil, infraerrors.BadRequest("INVALID_AMOUNT", "amount must be a positive number")
@@ -218,6 +215,9 @@ func (s *PaymentService) createOrderInTx(ctx context.Context, req CreateOrderReq
 	if plan != nil {
 		b.SetPlanID(plan.ID).SetSubscriptionGroupID(plan.GroupID).SetSubscriptionDays(psComputeValidityDays(plan.ValidityDays, plan.ValidityUnit))
 	}
+	if req.ShopOrderID > 0 {
+		b.SetShopOrderID(req.ShopOrderID)
+	}
 	order, err := b.Save(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("create order: %w", err)
@@ -270,8 +270,8 @@ func buildPaymentOrderProviderSnapshot(sel *payment.InstanceSelection, req Creat
 
 	snapshot := map[string]any{}
 	snapshot["schema_version"] = 2
-	if req.OrderType == payment.OrderTypeStore && req.StoreOrderID > 0 {
-		snapshot["community_store_order_id"] = req.StoreOrderID
+	if req.OrderType == payment.OrderTypeShop && req.ShopOrderID > 0 {
+		snapshot["shop_order_id"] = req.ShopOrderID
 	}
 
 	instanceID := strings.TrimSpace(sel.InstanceID)
@@ -425,7 +425,7 @@ func (s *PaymentService) invokeProvider(ctx context.Context, order *dbent.Paymen
 		return nil, infraerrors.ServiceUnavailable("PAYMENT_PROVIDER_MISCONFIGURED", "provider_misconfigured").
 			WithMetadata(map[string]string{"provider": sel.ProviderKey, "instance_id": sel.InstanceID})
 	}
-	subject := s.buildPaymentSubject(plan, limitAmount, cfg, sel)
+	subject := s.buildPaymentSubjectForRequest(req, plan, limitAmount, cfg, sel)
 	outTradeNo := order.OutTradeNo
 	canonicalReturnURL, err := CanonicalizeReturnURL(req.ReturnURL, req.SrcHost, req.SrcURL)
 	if err != nil {
@@ -544,6 +544,13 @@ func selectedInstanceSupportedTypes(sel *payment.InstanceSelection) string {
 }
 
 func (s *PaymentService) buildPaymentSubject(plan *dbent.SubscriptionPlan, limitAmount float64, cfg *PaymentConfig, sel *payment.InstanceSelection) string {
+	return s.buildPaymentSubjectForRequest(CreateOrderRequest{}, plan, limitAmount, cfg, sel)
+}
+
+func (s *PaymentService) buildPaymentSubjectForRequest(req CreateOrderRequest, plan *dbent.SubscriptionPlan, limitAmount float64, cfg *PaymentConfig, sel *payment.InstanceSelection) string {
+	if subject := strings.TrimSpace(req.Subject); subject != "" {
+		return applyPaymentProductNameAffix(subject, cfg)
+	}
 	if plan != nil {
 		productName := plan.ProductName
 		if productName == "" {
@@ -603,7 +610,19 @@ func (s *PaymentService) buildWeChatOAuthRequiredResponse(ctx context.Context, r
 		return nil, err
 	}
 
-	authorizeURL, err := buildWeChatPaymentOAuthStartURL(req, "snsapi_base")
+	contextToken, err := s.paymentResume().CreateWeChatPaymentOAuthContextToken(WeChatPaymentOAuthContextClaims{
+		UserID:      req.UserID,
+		PaymentType: req.PaymentType,
+		Amount:      strconv.FormatFloat(req.Amount, 'f', -1, 64),
+		OrderType:   req.OrderType,
+		PlanID:      req.PlanID,
+		RedirectTo:  paymentRedirectPathFromURL(req.SrcURL),
+		Scope:       "snsapi_base",
+	})
+	if err != nil {
+		return nil, fmt.Errorf("create wechat payment oauth context token: %w", err)
+	}
+	authorizeURL, err := buildWeChatPaymentOAuthStartURL(contextToken)
 	if err != nil {
 		return nil, err
 	}
@@ -766,28 +785,13 @@ func buildCreateOrderResponse(order *dbent.PaymentOrder, req CreateOrderRequest,
 	}
 }
 
-func buildWeChatPaymentOAuthStartURL(req CreateOrderRequest, scope string) (string, error) {
+func buildWeChatPaymentOAuthStartURL(contextToken string) (string, error) {
 	u, err := url.Parse("/api/v1/auth/oauth/wechat/payment/start")
 	if err != nil {
 		return "", fmt.Errorf("build wechat payment oauth start url: %w", err)
 	}
 	q := u.Query()
-	q.Set("payment_type", strings.TrimSpace(req.PaymentType))
-	if req.Amount > 0 {
-		q.Set("amount", strconv.FormatFloat(req.Amount, 'f', -1, 64))
-	}
-	if orderType := strings.TrimSpace(req.OrderType); orderType != "" {
-		q.Set("order_type", orderType)
-	}
-	if req.PlanID > 0 {
-		q.Set("plan_id", strconv.FormatInt(req.PlanID, 10))
-	}
-	if scope = strings.TrimSpace(scope); scope != "" {
-		q.Set("scope", scope)
-	}
-	if redirectTo := paymentRedirectPathFromURL(req.SrcURL); redirectTo != "" {
-		q.Set("redirect", redirectTo)
-	}
+	q.Set("context_token", strings.TrimSpace(contextToken))
 	u.RawQuery = q.Encode()
 	return u.String(), nil
 }

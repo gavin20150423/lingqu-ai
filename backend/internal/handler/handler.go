@@ -11,7 +11,10 @@ type AdminHandlers struct {
 	User                   *admin.UserHandler
 	Group                  *admin.GroupHandler
 	Account                *admin.AccountHandler
+	AccountSharePolicy     *admin.AccountSharePolicyHandler
+	AccountShareModePolicy *admin.AccountShareModePolicyHandler
 	Announcement           *admin.AnnouncementHandler
+	Conversation           *admin.ConversationHandler
 	DataManagement         *admin.DataManagementHandler
 	Backup                 *admin.BackupHandler
 	OAuth                  *admin.OAuthHandler
@@ -38,6 +41,8 @@ type AdminHandlers struct {
 	ContentModeration      *admin.ContentModerationHandler
 	PromptAudit            *securityaudit.PromptAdminHandler
 	Payment                *admin.PaymentHandler
+	Withdrawal             *admin.WithdrawalHandler
+	Shop                   *admin.ShopHandler
 	Affiliate              *admin.AffiliateHandler
 	Compliance             *admin.ComplianceHandler
 	AuditLog               *admin.AuditLogHandler
@@ -48,10 +53,12 @@ type Handlers struct {
 	Auth             *AuthHandler
 	User             *UserHandler
 	APIKey           *APIKeyHandler
+	AccountShareMode *AccountShareModeHandler
 	Usage            *UsageHandler
 	Redeem           *RedeemHandler
 	Subscription     *SubscriptionHandler
 	Announcement     *AnnouncementHandler
+	Conversation     *ConversationHandler
 	ChannelMonitor   *ChannelMonitorUserHandler
 	Admin            *AdminHandlers
 	Gateway          *GatewayHandler
@@ -61,6 +68,9 @@ type Handlers struct {
 	Payment          *PaymentHandler
 	PaymentWebhook   *PaymentWebhookHandler
 	AvailableChannel *AvailableChannelHandler
+	ReceiptCode      *ReceiptCodeHandler
+	Withdrawal       *WithdrawalHandler
+	Shop             *ShopHandler
 	SubPilotInternal *SubPilotInternalHandler
 	AsyncImage       *AsyncImageHandler
 	BatchImage       *BatchImageHandler

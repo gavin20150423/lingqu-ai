@@ -31,6 +31,14 @@ type User struct {
 	Role string `json:"role,omitempty"`
 	// Balance holds the value of the "balance" field.
 	Balance float64 `json:"balance,omitempty"`
+	// PointsBalance holds the value of the "points_balance" field.
+	PointsBalance float64 `json:"points_balance,omitempty"`
+	// LoadFactorCreditsBalance holds the value of the "load_factor_credits_balance" field.
+	LoadFactorCreditsBalance int `json:"load_factor_credits_balance,omitempty"`
+	// LoadFactorCreditsUsedTotal holds the value of the "load_factor_credits_used_total" field.
+	LoadFactorCreditsUsedTotal int `json:"load_factor_credits_used_total,omitempty"`
+	// PreferPointsBilling holds the value of the "prefer_points_billing" field.
+	PreferPointsBilling bool `json:"prefer_points_billing,omitempty"`
 	// FrozenBalance holds the value of the "frozen_balance" field.
 	FrozenBalance float64 `json:"frozen_balance,omitempty"`
 	// Concurrency holds the value of the "concurrency" field.
@@ -83,6 +91,12 @@ type UserEdges struct {
 	AssignedSubscriptions []*UserSubscription `json:"assigned_subscriptions,omitempty"`
 	// AnnouncementReads holds the value of the announcement_reads edge.
 	AnnouncementReads []*AnnouncementRead `json:"announcement_reads,omitempty"`
+	// SupportThreads holds the value of the support_threads edge.
+	SupportThreads []*SupportThread `json:"support_threads,omitempty"`
+	// AssignedSupportThreads holds the value of the assigned_support_threads edge.
+	AssignedSupportThreads []*SupportThread `json:"assigned_support_threads,omitempty"`
+	// SentSupportMessages holds the value of the sent_support_messages edge.
+	SentSupportMessages []*SupportMessage `json:"sent_support_messages,omitempty"`
 	// AllowedGroups holds the value of the allowed_groups edge.
 	AllowedGroups []*Group `json:"allowed_groups,omitempty"`
 	// UsageLogs holds the value of the usage_logs edge.
@@ -93,17 +107,25 @@ type UserEdges struct {
 	PromoCodeUsages []*PromoCodeUsage `json:"promo_code_usages,omitempty"`
 	// PaymentOrders holds the value of the payment_orders edge.
 	PaymentOrders []*PaymentOrder `json:"payment_orders,omitempty"`
+	// ShopOrders holds the value of the shop_orders edge.
+	ShopOrders []*ShopOrder `json:"shop_orders,omitempty"`
+	// ShopDrawCycles holds the value of the shop_draw_cycles edge.
+	ShopDrawCycles []*ShopDrawCycle `json:"shop_draw_cycles,omitempty"`
+	// ShopBalanceLedger holds the value of the shop_balance_ledger edge.
+	ShopBalanceLedger []*ShopBalanceLedger `json:"shop_balance_ledger,omitempty"`
 	// AuthIdentities holds the value of the auth_identities edge.
 	AuthIdentities []*AuthIdentity `json:"auth_identities,omitempty"`
 	// PendingAuthSessions holds the value of the pending_auth_sessions edge.
 	PendingAuthSessions []*PendingAuthSession `json:"pending_auth_sessions,omitempty"`
 	// PlatformQuotas holds the value of the platform_quotas edge.
 	PlatformQuotas []*UserPlatformQuota `json:"platform_quotas,omitempty"`
+	// OwnedProxies holds the value of the owned_proxies edge.
+	OwnedProxies []*Proxy `json:"owned_proxies,omitempty"`
 	// UserAllowedGroups holds the value of the user_allowed_groups edge.
 	UserAllowedGroups []*UserAllowedGroup `json:"user_allowed_groups,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [14]bool
+	loadedTypes [21]bool
 }
 
 // APIKeysOrErr returns the APIKeys value or an error if the edge
@@ -151,10 +173,37 @@ func (e UserEdges) AnnouncementReadsOrErr() ([]*AnnouncementRead, error) {
 	return nil, &NotLoadedError{edge: "announcement_reads"}
 }
 
+// SupportThreadsOrErr returns the SupportThreads value or an error if the edge
+// was not loaded in eager-loading.
+func (e UserEdges) SupportThreadsOrErr() ([]*SupportThread, error) {
+	if e.loadedTypes[5] {
+		return e.SupportThreads, nil
+	}
+	return nil, &NotLoadedError{edge: "support_threads"}
+}
+
+// AssignedSupportThreadsOrErr returns the AssignedSupportThreads value or an error if the edge
+// was not loaded in eager-loading.
+func (e UserEdges) AssignedSupportThreadsOrErr() ([]*SupportThread, error) {
+	if e.loadedTypes[6] {
+		return e.AssignedSupportThreads, nil
+	}
+	return nil, &NotLoadedError{edge: "assigned_support_threads"}
+}
+
+// SentSupportMessagesOrErr returns the SentSupportMessages value or an error if the edge
+// was not loaded in eager-loading.
+func (e UserEdges) SentSupportMessagesOrErr() ([]*SupportMessage, error) {
+	if e.loadedTypes[7] {
+		return e.SentSupportMessages, nil
+	}
+	return nil, &NotLoadedError{edge: "sent_support_messages"}
+}
+
 // AllowedGroupsOrErr returns the AllowedGroups value or an error if the edge
 // was not loaded in eager-loading.
 func (e UserEdges) AllowedGroupsOrErr() ([]*Group, error) {
-	if e.loadedTypes[5] {
+	if e.loadedTypes[8] {
 		return e.AllowedGroups, nil
 	}
 	return nil, &NotLoadedError{edge: "allowed_groups"}
@@ -163,7 +212,7 @@ func (e UserEdges) AllowedGroupsOrErr() ([]*Group, error) {
 // UsageLogsOrErr returns the UsageLogs value or an error if the edge
 // was not loaded in eager-loading.
 func (e UserEdges) UsageLogsOrErr() ([]*UsageLog, error) {
-	if e.loadedTypes[6] {
+	if e.loadedTypes[9] {
 		return e.UsageLogs, nil
 	}
 	return nil, &NotLoadedError{edge: "usage_logs"}
@@ -172,7 +221,7 @@ func (e UserEdges) UsageLogsOrErr() ([]*UsageLog, error) {
 // AttributeValuesOrErr returns the AttributeValues value or an error if the edge
 // was not loaded in eager-loading.
 func (e UserEdges) AttributeValuesOrErr() ([]*UserAttributeValue, error) {
-	if e.loadedTypes[7] {
+	if e.loadedTypes[10] {
 		return e.AttributeValues, nil
 	}
 	return nil, &NotLoadedError{edge: "attribute_values"}
@@ -181,7 +230,7 @@ func (e UserEdges) AttributeValuesOrErr() ([]*UserAttributeValue, error) {
 // PromoCodeUsagesOrErr returns the PromoCodeUsages value or an error if the edge
 // was not loaded in eager-loading.
 func (e UserEdges) PromoCodeUsagesOrErr() ([]*PromoCodeUsage, error) {
-	if e.loadedTypes[8] {
+	if e.loadedTypes[11] {
 		return e.PromoCodeUsages, nil
 	}
 	return nil, &NotLoadedError{edge: "promo_code_usages"}
@@ -190,16 +239,43 @@ func (e UserEdges) PromoCodeUsagesOrErr() ([]*PromoCodeUsage, error) {
 // PaymentOrdersOrErr returns the PaymentOrders value or an error if the edge
 // was not loaded in eager-loading.
 func (e UserEdges) PaymentOrdersOrErr() ([]*PaymentOrder, error) {
-	if e.loadedTypes[9] {
+	if e.loadedTypes[12] {
 		return e.PaymentOrders, nil
 	}
 	return nil, &NotLoadedError{edge: "payment_orders"}
 }
 
+// ShopOrdersOrErr returns the ShopOrders value or an error if the edge
+// was not loaded in eager-loading.
+func (e UserEdges) ShopOrdersOrErr() ([]*ShopOrder, error) {
+	if e.loadedTypes[13] {
+		return e.ShopOrders, nil
+	}
+	return nil, &NotLoadedError{edge: "shop_orders"}
+}
+
+// ShopDrawCyclesOrErr returns the ShopDrawCycles value or an error if the edge
+// was not loaded in eager-loading.
+func (e UserEdges) ShopDrawCyclesOrErr() ([]*ShopDrawCycle, error) {
+	if e.loadedTypes[14] {
+		return e.ShopDrawCycles, nil
+	}
+	return nil, &NotLoadedError{edge: "shop_draw_cycles"}
+}
+
+// ShopBalanceLedgerOrErr returns the ShopBalanceLedger value or an error if the edge
+// was not loaded in eager-loading.
+func (e UserEdges) ShopBalanceLedgerOrErr() ([]*ShopBalanceLedger, error) {
+	if e.loadedTypes[15] {
+		return e.ShopBalanceLedger, nil
+	}
+	return nil, &NotLoadedError{edge: "shop_balance_ledger"}
+}
+
 // AuthIdentitiesOrErr returns the AuthIdentities value or an error if the edge
 // was not loaded in eager-loading.
 func (e UserEdges) AuthIdentitiesOrErr() ([]*AuthIdentity, error) {
-	if e.loadedTypes[10] {
+	if e.loadedTypes[16] {
 		return e.AuthIdentities, nil
 	}
 	return nil, &NotLoadedError{edge: "auth_identities"}
@@ -208,7 +284,7 @@ func (e UserEdges) AuthIdentitiesOrErr() ([]*AuthIdentity, error) {
 // PendingAuthSessionsOrErr returns the PendingAuthSessions value or an error if the edge
 // was not loaded in eager-loading.
 func (e UserEdges) PendingAuthSessionsOrErr() ([]*PendingAuthSession, error) {
-	if e.loadedTypes[11] {
+	if e.loadedTypes[17] {
 		return e.PendingAuthSessions, nil
 	}
 	return nil, &NotLoadedError{edge: "pending_auth_sessions"}
@@ -217,16 +293,25 @@ func (e UserEdges) PendingAuthSessionsOrErr() ([]*PendingAuthSession, error) {
 // PlatformQuotasOrErr returns the PlatformQuotas value or an error if the edge
 // was not loaded in eager-loading.
 func (e UserEdges) PlatformQuotasOrErr() ([]*UserPlatformQuota, error) {
-	if e.loadedTypes[12] {
+	if e.loadedTypes[18] {
 		return e.PlatformQuotas, nil
 	}
 	return nil, &NotLoadedError{edge: "platform_quotas"}
 }
 
+// OwnedProxiesOrErr returns the OwnedProxies value or an error if the edge
+// was not loaded in eager-loading.
+func (e UserEdges) OwnedProxiesOrErr() ([]*Proxy, error) {
+	if e.loadedTypes[19] {
+		return e.OwnedProxies, nil
+	}
+	return nil, &NotLoadedError{edge: "owned_proxies"}
+}
+
 // UserAllowedGroupsOrErr returns the UserAllowedGroups value or an error if the edge
 // was not loaded in eager-loading.
 func (e UserEdges) UserAllowedGroupsOrErr() ([]*UserAllowedGroup, error) {
-	if e.loadedTypes[13] {
+	if e.loadedTypes[20] {
 		return e.UserAllowedGroups, nil
 	}
 	return nil, &NotLoadedError{edge: "user_allowed_groups"}
@@ -237,11 +322,11 @@ func (*User) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case user.FieldTotpEnabled, user.FieldBalanceNotifyEnabled:
+		case user.FieldPreferPointsBilling, user.FieldTotpEnabled, user.FieldBalanceNotifyEnabled:
 			values[i] = new(sql.NullBool)
-		case user.FieldBalance, user.FieldFrozenBalance, user.FieldBalanceNotifyThreshold, user.FieldTotalRecharged:
+		case user.FieldBalance, user.FieldPointsBalance, user.FieldFrozenBalance, user.FieldBalanceNotifyThreshold, user.FieldTotalRecharged:
 			values[i] = new(sql.NullFloat64)
-		case user.FieldID, user.FieldConcurrency, user.FieldRpmLimit:
+		case user.FieldID, user.FieldLoadFactorCreditsBalance, user.FieldLoadFactorCreditsUsedTotal, user.FieldConcurrency, user.FieldRpmLimit:
 			values[i] = new(sql.NullInt64)
 		case user.FieldEmail, user.FieldPasswordHash, user.FieldRole, user.FieldStatus, user.FieldUsername, user.FieldNotes, user.FieldTotpSecretEncrypted, user.FieldSignupSource, user.FieldBalanceNotifyThresholdType, user.FieldBalanceNotifyExtraEmails:
 			values[i] = new(sql.NullString)
@@ -310,6 +395,30 @@ func (_m *User) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field balance", values[i])
 			} else if value.Valid {
 				_m.Balance = value.Float64
+			}
+		case user.FieldPointsBalance:
+			if value, ok := values[i].(*sql.NullFloat64); !ok {
+				return fmt.Errorf("unexpected type %T for field points_balance", values[i])
+			} else if value.Valid {
+				_m.PointsBalance = value.Float64
+			}
+		case user.FieldLoadFactorCreditsBalance:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field load_factor_credits_balance", values[i])
+			} else if value.Valid {
+				_m.LoadFactorCreditsBalance = int(value.Int64)
+			}
+		case user.FieldLoadFactorCreditsUsedTotal:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field load_factor_credits_used_total", values[i])
+			} else if value.Valid {
+				_m.LoadFactorCreditsUsedTotal = int(value.Int64)
+			}
+		case user.FieldPreferPointsBilling:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field prefer_points_billing", values[i])
+			} else if value.Valid {
+				_m.PreferPointsBilling = value.Bool
 			}
 		case user.FieldFrozenBalance:
 			if value, ok := values[i].(*sql.NullFloat64); !ok {
@@ -456,6 +565,21 @@ func (_m *User) QueryAnnouncementReads() *AnnouncementReadQuery {
 	return NewUserClient(_m.config).QueryAnnouncementReads(_m)
 }
 
+// QuerySupportThreads queries the "support_threads" edge of the User entity.
+func (_m *User) QuerySupportThreads() *SupportThreadQuery {
+	return NewUserClient(_m.config).QuerySupportThreads(_m)
+}
+
+// QueryAssignedSupportThreads queries the "assigned_support_threads" edge of the User entity.
+func (_m *User) QueryAssignedSupportThreads() *SupportThreadQuery {
+	return NewUserClient(_m.config).QueryAssignedSupportThreads(_m)
+}
+
+// QuerySentSupportMessages queries the "sent_support_messages" edge of the User entity.
+func (_m *User) QuerySentSupportMessages() *SupportMessageQuery {
+	return NewUserClient(_m.config).QuerySentSupportMessages(_m)
+}
+
 // QueryAllowedGroups queries the "allowed_groups" edge of the User entity.
 func (_m *User) QueryAllowedGroups() *GroupQuery {
 	return NewUserClient(_m.config).QueryAllowedGroups(_m)
@@ -481,6 +605,21 @@ func (_m *User) QueryPaymentOrders() *PaymentOrderQuery {
 	return NewUserClient(_m.config).QueryPaymentOrders(_m)
 }
 
+// QueryShopOrders queries the "shop_orders" edge of the User entity.
+func (_m *User) QueryShopOrders() *ShopOrderQuery {
+	return NewUserClient(_m.config).QueryShopOrders(_m)
+}
+
+// QueryShopDrawCycles queries the "shop_draw_cycles" edge of the User entity.
+func (_m *User) QueryShopDrawCycles() *ShopDrawCycleQuery {
+	return NewUserClient(_m.config).QueryShopDrawCycles(_m)
+}
+
+// QueryShopBalanceLedger queries the "shop_balance_ledger" edge of the User entity.
+func (_m *User) QueryShopBalanceLedger() *ShopBalanceLedgerQuery {
+	return NewUserClient(_m.config).QueryShopBalanceLedger(_m)
+}
+
 // QueryAuthIdentities queries the "auth_identities" edge of the User entity.
 func (_m *User) QueryAuthIdentities() *AuthIdentityQuery {
 	return NewUserClient(_m.config).QueryAuthIdentities(_m)
@@ -494,6 +633,11 @@ func (_m *User) QueryPendingAuthSessions() *PendingAuthSessionQuery {
 // QueryPlatformQuotas queries the "platform_quotas" edge of the User entity.
 func (_m *User) QueryPlatformQuotas() *UserPlatformQuotaQuery {
 	return NewUserClient(_m.config).QueryPlatformQuotas(_m)
+}
+
+// QueryOwnedProxies queries the "owned_proxies" edge of the User entity.
+func (_m *User) QueryOwnedProxies() *ProxyQuery {
+	return NewUserClient(_m.config).QueryOwnedProxies(_m)
 }
 
 // QueryUserAllowedGroups queries the "user_allowed_groups" edge of the User entity.
@@ -546,6 +690,18 @@ func (_m *User) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("balance=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Balance))
+	builder.WriteString(", ")
+	builder.WriteString("points_balance=")
+	builder.WriteString(fmt.Sprintf("%v", _m.PointsBalance))
+	builder.WriteString(", ")
+	builder.WriteString("load_factor_credits_balance=")
+	builder.WriteString(fmt.Sprintf("%v", _m.LoadFactorCreditsBalance))
+	builder.WriteString(", ")
+	builder.WriteString("load_factor_credits_used_total=")
+	builder.WriteString(fmt.Sprintf("%v", _m.LoadFactorCreditsUsedTotal))
+	builder.WriteString(", ")
+	builder.WriteString("prefer_points_billing=")
+	builder.WriteString(fmt.Sprintf("%v", _m.PreferPointsBilling))
 	builder.WriteString(", ")
 	builder.WriteString("frozen_balance=")
 	builder.WriteString(fmt.Sprintf("%v", _m.FrozenBalance))

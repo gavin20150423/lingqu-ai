@@ -72,8 +72,24 @@ type Tx struct {
 	SecuritySecret *SecuritySecretClient
 	// Setting is the client for interacting with the Setting builders.
 	Setting *SettingClient
+	// ShopBalanceLedger is the client for interacting with the ShopBalanceLedger builders.
+	ShopBalanceLedger *ShopBalanceLedgerClient
+	// ShopCardKey is the client for interacting with the ShopCardKey builders.
+	ShopCardKey *ShopCardKeyClient
+	// ShopCategory is the client for interacting with the ShopCategory builders.
+	ShopCategory *ShopCategoryClient
+	// ShopDrawCycle is the client for interacting with the ShopDrawCycle builders.
+	ShopDrawCycle *ShopDrawCycleClient
+	// ShopOrder is the client for interacting with the ShopOrder builders.
+	ShopOrder *ShopOrderClient
+	// ShopProduct is the client for interacting with the ShopProduct builders.
+	ShopProduct *ShopProductClient
 	// SubscriptionPlan is the client for interacting with the SubscriptionPlan builders.
 	SubscriptionPlan *SubscriptionPlanClient
+	// SupportMessage is the client for interacting with the SupportMessage builders.
+	SupportMessage *SupportMessageClient
+	// SupportThread is the client for interacting with the SupportThread builders.
+	SupportThread *SupportThreadClient
 	// TLSFingerprintProfile is the client for interacting with the TLSFingerprintProfile builders.
 	TLSFingerprintProfile *TLSFingerprintProfileClient
 	// UsageCleanupTask is the client for interacting with the UsageCleanupTask builders.
@@ -252,7 +268,15 @@ func (tx *Tx) init() {
 	tx.RedeemCode = NewRedeemCodeClient(tx.config)
 	tx.SecuritySecret = NewSecuritySecretClient(tx.config)
 	tx.Setting = NewSettingClient(tx.config)
+	tx.ShopBalanceLedger = NewShopBalanceLedgerClient(tx.config)
+	tx.ShopCardKey = NewShopCardKeyClient(tx.config)
+	tx.ShopCategory = NewShopCategoryClient(tx.config)
+	tx.ShopDrawCycle = NewShopDrawCycleClient(tx.config)
+	tx.ShopOrder = NewShopOrderClient(tx.config)
+	tx.ShopProduct = NewShopProductClient(tx.config)
 	tx.SubscriptionPlan = NewSubscriptionPlanClient(tx.config)
+	tx.SupportMessage = NewSupportMessageClient(tx.config)
+	tx.SupportThread = NewSupportThreadClient(tx.config)
 	tx.TLSFingerprintProfile = NewTLSFingerprintProfileClient(tx.config)
 	tx.UsageCleanupTask = NewUsageCleanupTaskClient(tx.config)
 	tx.UsageLog = NewUsageLogClient(tx.config)
