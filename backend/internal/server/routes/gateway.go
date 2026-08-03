@@ -67,6 +67,10 @@ func RegisterGatewayRoutes(
 		}
 	}
 	modelsHandler := func(c *gin.Context) {
+		if getGroupPlatform(c) == service.PlatformOpenAI && h.XiaoVideo != nil && h.XiaoVideo.EnabledFor(c) {
+			h.XiaoVideo.Models(c)
+			return
+		}
 		if isOpenAIGatewayPlatform(c) && c.Query("client_version") != "" {
 			h.OpenAIGateway.CodexModels(c)
 			return
@@ -112,6 +116,10 @@ func RegisterGatewayRoutes(
 		h.AsyncImage.Get(c)
 	}
 	videoGenerationHandler := func(c *gin.Context) {
+		if getGroupPlatform(c) == service.PlatformOpenAI && h.XiaoVideo != nil && h.XiaoVideo.EnabledFor(c) {
+			h.XiaoVideo.Create(c)
+			return
+		}
 		if getGroupPlatform(c) == service.PlatformGrok {
 			h.OpenAIGateway.GrokVideoGeneration(c)
 			return
@@ -276,6 +284,12 @@ func RegisterGatewayRoutes(
 		gateway.DELETE("/images/batches/:id", h.BatchImage.DeleteRecord)
 		gateway.DELETE("/images/batches/:id/outputs", h.BatchImage.DeleteOutputs)
 		gateway.POST("/videos/generations", videoGenerationHandler)
+		gateway.POST("/videos/uploads", h.XiaoVideo.Upload)
+		gateway.GET("/videos/uploads/:media_id/content", h.XiaoVideo.MediaContent)
+		gateway.GET("/videos/jobs", h.XiaoVideo.List)
+		gateway.GET("/videos/jobs/:job_id", h.XiaoVideo.Get)
+		gateway.DELETE("/videos/jobs/:job_id", h.XiaoVideo.Cancel)
+		gateway.GET("/videos/jobs/:job_id/content", h.XiaoVideo.Content)
 		gateway.POST("/videos/edits", videoEditHandler)
 		gateway.POST("/videos/extensions", videoExtensionHandler)
 		gateway.GET("/videos/:request_id", videoStatusHandler)

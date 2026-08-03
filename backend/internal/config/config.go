@@ -98,6 +98,7 @@ type Config struct {
 	Update                  UpdateConfig                  `mapstructure:"update"`
 	Idempotency             IdempotencyConfig             `mapstructure:"idempotency"`
 	BatchImage              BatchImageConfig              `mapstructure:"batch_image"`
+	VideoAPI                VideoAPIConfig                `mapstructure:"video_api"`
 	ImageStorage            ImageStorageConfig            `mapstructure:"image_storage"`
 	ReceiptCodeStorage      ReceiptCodeStorageConfig      `mapstructure:"receipt_code_storage"`
 }
@@ -249,6 +250,27 @@ type BatchImageConfig struct {
 	VertexOutputRetentionHours   int    `mapstructure:"vertex_output_retention_hours"`
 	VertexBatchPredictionBaseURL string `mapstructure:"vertex_batch_prediction_base_url"`
 	VertexGCSBaseURL             string `mapstructure:"vertex_gcs_base_url"`
+}
+
+// VideoAPIConfig exposes the XiaoAPI-compatible asynchronous video API.
+// Provider credentials live on OpenAI API-key accounts and are selected by
+// the normal account scheduler at request time.
+type VideoAPIConfig struct {
+	Enabled                  bool   `mapstructure:"enabled"`
+	PublicBaseURL            string `mapstructure:"public_base_url"`
+	RequestTimeoutSeconds    int    `mapstructure:"request_timeout_seconds"`
+	ReconcileIntervalSeconds int    `mapstructure:"reconcile_interval_seconds"`
+	ReconcileBatchSize       int    `mapstructure:"reconcile_batch_size"`
+}
+
+func (c VideoAPIConfig) Active() bool {
+	if !c.Enabled {
+		return false
+	}
+	publicURL, err := url.Parse(strings.TrimSpace(c.PublicBaseURL))
+	return err == nil &&
+		(publicURL.Scheme == "http" || publicURL.Scheme == "https") &&
+		publicURL.Host != "" && publicURL.RawQuery == "" && publicURL.Fragment == ""
 }
 
 // ImageStorageConfig 配置异步图片任务结果上传的 S3 兼容对象存储。
@@ -1819,6 +1841,7 @@ func load(allowMissingJWTSecret bool) (*Config, error) {
 	if cfg.Gateway.SubPilot.ProbeSecret == "" {
 		cfg.Gateway.SubPilot.ProbeSecret = cfg.Gateway.SubPilot.SharedSecret
 	}
+	cfg.VideoAPI.PublicBaseURL = strings.TrimRight(strings.TrimSpace(cfg.VideoAPI.PublicBaseURL), "/")
 
 	// 兼容旧键 gateway.openai_ws.sticky_previous_response_ttl_seconds。
 	// 新键未配置（<=0）时回退旧键；新键优先。
@@ -2137,6 +2160,14 @@ func setDefaults() {
 	viper.SetDefault("batch_image.vertex_output_retention_hours", 72)
 	viper.SetDefault("batch_image.vertex_batch_prediction_base_url", "")
 	viper.SetDefault("batch_image.vertex_gcs_base_url", "")
+
+	// XiaoAPI-compatible video API. Provider credentials live on OpenAI API-key
+	// accounts and are selected by group at request time.
+	viper.SetDefault("video_api.enabled", false)
+	viper.SetDefault("video_api.public_base_url", "")
+	viper.SetDefault("video_api.request_timeout_seconds", 30)
+	viper.SetDefault("video_api.reconcile_interval_seconds", 30)
+	viper.SetDefault("video_api.reconcile_batch_size", 20)
 
 	// Image storage (async image task result offload to S3-compatible object storage)
 	viper.SetDefault("image_storage.enabled", false)

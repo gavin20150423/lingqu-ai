@@ -203,6 +203,7 @@ func ProvideHandlers(
 	modelPlazaHandler *ModelPlazaHandler,
 	asyncImageHandler *AsyncImageHandler,
 	batchImageHandler *BatchImageHandler,
+	xiaoVideoHandler *XiaoVideoHandler,
 	communityHandler *CommunityHandler,
 	_ *service.IdempotencyCoordinator,
 	_ *service.IdempotencyCleanupService,
@@ -234,6 +235,7 @@ func ProvideHandlers(
 		ModelPlaza:       modelPlazaHandler,
 		AsyncImage:       asyncImageHandler,
 		BatchImage:       batchImageHandler,
+		XiaoVideo:        xiaoVideoHandler,
 		Community:        communityHandler,
 	}
 }
@@ -266,6 +268,7 @@ var ProviderSet = wire.NewSet(
 	NewModelPlazaHandler,
 	NewAsyncImageHandler,
 	ProvideBatchImageHandler,
+	NewXiaoVideoHandler,
 	NewCommunityHandler,
 
 	// Admin handlers

@@ -1307,6 +1307,17 @@ update:
 #
 # 换其它厂商对象存储：只要它兼容 S3 API 即可直接用；如需完全自定义，实现
 # service.ImageStorage 接口（Save(ctx, key, contentType, data) -> url）即可。
+# XiaoAPI-compatible asynchronous video API.
+# Upstream Base URLs and API keys are configured per OpenAI API-key account;
+# enable the "video_api" account capability to make an account eligible.
+video_api:
+  enabled: false
+  # Public downstream origin used in uploaded-media URLs. No trailing slash.
+  public_base_url: ""
+  request_timeout_seconds: 30
+  reconcile_interval_seconds: 30
+  reconcile_batch_size: 20
+
 image_storage:
   enabled: false
   # S3 兼容端点。AWS 官方可留空；R2 形如 https://<account_id>.r2.cloudflarestorage.com

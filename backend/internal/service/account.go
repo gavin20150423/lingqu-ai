@@ -104,6 +104,9 @@ const (
 	// entitlement probe was forbidden. Video status lookups intentionally do not
 	// require this capability so already-submitted requests remain queryable.
 	OpenAIEndpointCapabilityGrokMediaGeneration OpenAIEndpointCapability = "grok_media_generation"
+	// OpenAIEndpointCapabilityVideoAPI marks an OpenAI API-key account whose
+	// custom base URL exposes the XiaoAPI-compatible video contract.
+	OpenAIEndpointCapabilityVideoAPI OpenAIEndpointCapability = "video_api"
 	// OpenAIEndpointCapabilityResponses 表示上游确实提供 /v1/responses 端点。
 	// 与其他能力不同：支持状态来自 accounts.extra 的自动探测标记
 	// （openai_responses_supported / openai_responses_mode），而非
@@ -1458,6 +1461,8 @@ func (a *Account) SupportsOpenAIEndpointCapability(capability OpenAIEndpointCapa
 			// forwarding gate itself fails closed if that probe is unavailable or
 			// cannot produce positive paid-entitlement evidence.
 			return eligible || reason == "billing_unobserved"
+		case OpenAIEndpointCapabilityVideoAPI:
+			return false
 		default:
 			return false
 		}
@@ -1492,6 +1497,12 @@ func (a *Account) SupportsOpenAIEndpointCapability(capability OpenAIEndpointCapa
 		if a.Type != AccountTypeAPIKey {
 			return false
 		}
+	case OpenAIEndpointCapabilityVideoAPI:
+		if a.Platform != PlatformOpenAI || a.Type != AccountTypeAPIKey {
+			return false
+		}
+		configured, found := a.openAIEndpointCapabilitySet()
+		return found && configured[string(OpenAIEndpointCapabilityVideoAPI)]
 	default:
 		return false
 	}
