@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -897,6 +898,14 @@ func (s *XiaoVideoService) selectVideoAccount(ctx context.Context, owner VideoOw
 	selection, _, err := s.openAIGateway.SelectAccountWithSchedulerForCapability(ctx, owner.GroupID, "", "", model, excluded, OpenAIUpstreamTransportHTTPSSE, OpenAIEndpointCapabilityVideoAPI, false, false, false, PlatformOpenAI)
 	if err != nil || selection == nil || selection.Account == nil {
 		if err != nil {
+			slog.WarnContext(ctx, "xiao_video.account_selection_failed",
+				"group_id", derefGroupID(owner.GroupID),
+				"model", model,
+				"error", err,
+			)
+			if errors.Is(err, ErrNoAvailableAccounts) {
+				return nil, func() {}, ErrVideoCapacityExhausted.WithCause(err)
+			}
 			return nil, func() {}, err
 		}
 		return nil, func() {}, ErrVideoUpstreamUnavailable

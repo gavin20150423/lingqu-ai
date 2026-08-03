@@ -556,6 +556,24 @@ func TestXiaoVideoCreateScopesUpstreamIdempotencyByDownstreamKey(t *testing.T) {
 	require.NotEqual(t, upstreamKeys[0], upstreamKeys[1])
 }
 
+func TestXiaoVideoCreateMapsSchedulerExhaustionToVideoCapacityError(t *testing.T) {
+	const groupID int64 = 7
+	repo := newVideoRepositoryStub()
+	accounts := &videoAccountRepoStub{}
+	svc := newVideoServiceForTest(repo, accounts, &videoHTTPUpstreamStub{do: func(*http.Request, string, int64, int) (*http.Response, error) {
+		t.Fatal("upstream must not be called")
+		return nil, nil
+	}})
+
+	_, err := svc.Create(
+		context.Background(),
+		VideoOwner{UserID: 11, APIKeyID: 22, GroupID: videoInt64Ptr(groupID)},
+		[]byte(`{"model":"video-public","prompt":"no capacity"}`),
+		"no-capacity",
+	)
+	require.ErrorIs(t, err, ErrVideoCapacityExhausted)
+}
+
 func TestXiaoVideoListModelsMapsAliases(t *testing.T) {
 	const groupID int64 = 7
 	accounts := &videoAccountRepoStub{accounts: []Account{videoTestAccount(42, groupID, "https://upstream.example/v1")}}
