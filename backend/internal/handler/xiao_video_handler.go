@@ -182,7 +182,7 @@ func (h *XiaoVideoHandler) requireOwner(c *gin.Context) (service.VideoOwner, boo
 		return service.VideoOwner{}, false
 	}
 	if h == nil || h.service == nil {
-		videoError(c, service.ErrVideoGenerationDisabled)
+		videoError(c, service.ErrVideoExecutionDisabled)
 		return service.VideoOwner{}, false
 	}
 	return owner, true
@@ -191,6 +191,10 @@ func (h *XiaoVideoHandler) requireOwner(c *gin.Context) (service.VideoOwner, boo
 func (h *XiaoVideoHandler) requireEnabledOwner(c *gin.Context) (service.VideoOwner, bool) {
 	owner, ok := h.requireOwner(c)
 	if !ok {
+		return service.VideoOwner{}, false
+	}
+	if !h.service.Enabled() {
+		videoError(c, service.ErrVideoExecutionDisabled)
 		return service.VideoOwner{}, false
 	}
 	enabled, _ := c.Get(xiaoVideoEnabledContextKey)

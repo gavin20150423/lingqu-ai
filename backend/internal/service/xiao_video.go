@@ -28,7 +28,8 @@ const (
 )
 
 var (
-	ErrVideoGenerationDisabled   = infraerrors.New(http.StatusServiceUnavailable, "VIDEO_GENERATION_DISABLED", "video generation is disabled")
+	ErrVideoGenerationDisabled   = infraerrors.New(http.StatusForbidden, "VIDEO_GENERATION_DISABLED", "video generation is not enabled for this API key")
+	ErrVideoExecutionDisabled    = infraerrors.New(http.StatusServiceUnavailable, "VIDEO_EXECUTION_DISABLED", "video execution is disabled")
 	ErrVideoResourceNotFound     = infraerrors.New(http.StatusNotFound, "VIDEO_RESOURCE_NOT_FOUND", "video resource not found")
 	ErrVideoRequestInvalid       = infraerrors.New(http.StatusBadRequest, "VIDEO_REQUEST_INVALID", "video request is invalid")
 	ErrVideoIdempotencyInvalid   = infraerrors.New(http.StatusBadRequest, "IDEMPOTENCY_KEY_INVALID", "idempotency key must be 1 to 128 printable ASCII characters")
@@ -195,6 +196,10 @@ func (s *XiaoVideoService) ActiveForGroup(ctx context.Context, groupID *int64) b
 	return false
 }
 
+func (s *XiaoVideoService) Enabled() bool {
+	return s != nil && s.cfg != nil && s.cfg.VideoAPI.Active()
+}
+
 func (s *XiaoVideoService) PublicBaseURL() string {
 	if s == nil || s.cfg == nil {
 		return ""
@@ -345,7 +350,10 @@ func (s *XiaoVideoService) OpenMedia(ctx context.Context, owner VideoOwner, medi
 }
 
 func (s *XiaoVideoService) Create(ctx context.Context, owner VideoOwner, body []byte, idempotencyKey string) (*VideoJob, error) {
-	if s == nil || s.cfg == nil || !s.cfg.VideoAPI.Active() || owner.GroupID == nil {
+	if !s.Enabled() {
+		return nil, ErrVideoExecutionDisabled
+	}
+	if owner.GroupID == nil {
 		return nil, ErrVideoGenerationDisabled
 	}
 	idempotencyKey = strings.TrimSpace(idempotencyKey)
@@ -1037,8 +1045,11 @@ func (s *XiaoVideoService) videoAccounts(ctx context.Context, groupID *int64, in
 }
 
 func (s *XiaoVideoService) upstreamWithAccount(ctx context.Context, account *Account, method, path, contentType string, body io.Reader, rangeHeader, idempotencyKey string) (*http.Response, error) {
-	if s == nil || account == nil || s.cfg == nil || !s.cfg.VideoAPI.Active() {
-		return nil, ErrVideoGenerationDisabled
+	if !s.Enabled() {
+		return nil, ErrVideoExecutionDisabled
+	}
+	if account == nil {
+		return nil, ErrVideoUpstreamUnavailable
 	}
 	endpoint, err := accountVideoEndpoint(account.GetCredential("base_url"), path)
 	if err != nil {

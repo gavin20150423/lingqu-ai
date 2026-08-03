@@ -116,7 +116,7 @@ func RegisterGatewayRoutes(
 		h.AsyncImage.Get(c)
 	}
 	videoGenerationHandler := func(c *gin.Context) {
-		if getGroupPlatform(c) == service.PlatformOpenAI && h.XiaoVideo != nil && h.XiaoVideo.EnabledFor(c) {
+		if getGroupPlatform(c) == service.PlatformOpenAI && h.XiaoVideo != nil {
 			h.XiaoVideo.Create(c)
 			return
 		}

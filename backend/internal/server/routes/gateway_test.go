@@ -32,16 +32,20 @@ func newGatewayRoutesTestRouterWithConfig(cfg *config.Config, platform ...string
 	if len(platform) > 0 && platform[0] != "" {
 		groupPlatform = platform[0]
 	}
+	xiaoVideoService := service.NewXiaoVideoService(nil, nil, nil, nil, nil, nil, cfg)
 	RegisterGatewayRoutes(
 		router,
 		&handler.Handlers{
 			Gateway:       &handler.GatewayHandler{},
 			OpenAIGateway: &handler.OpenAIGatewayHandler{},
 			AsyncImage:    handler.NewAsyncImageHandler(nil, nil),
+			XiaoVideo:     handler.NewXiaoVideoHandler(xiaoVideoService, nil),
 		},
 		servermiddleware.APIKeyAuthMiddleware(func(c *gin.Context) {
 			groupID := int64(1)
 			c.Set(string(servermiddleware.ContextKeyAPIKey), &service.APIKey{
+				ID:      1,
+				UserID:  1,
 				GroupID: &groupID,
 				Group:   &service.Group{Platform: groupPlatform},
 			})
@@ -268,7 +272,38 @@ func TestGatewayRoutesCompositeChatCompletionsWithGrokModelUsesOpenAIGateway(t *
 	}
 }
 
-func TestGatewayRoutesNonGrokVideosAreRejectedAtPlatformGate(t *testing.T) {
+func TestGatewayRoutesOpenAIVideoGenerationReportsExecutionDisabled(t *testing.T) {
+	router := newGatewayRoutesTestRouter(service.PlatformOpenAI)
+	for _, path := range []string{"/v1/videos/generations", "/videos/generations"} {
+		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{"model":"video-public","prompt":"waves"}`))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Prefer", "respond-async")
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+		require.Equal(t, http.StatusServiceUnavailable, w.Code, "path=%s", path)
+		require.Contains(t, w.Body.String(), "VIDEO_EXECUTION_DISABLED")
+	}
+}
+
+func TestGatewayRoutesOpenAIVideoGenerationReportsMissingGroupPermission(t *testing.T) {
+	router := newGatewayRoutesTestRouterWithConfig(&config.Config{
+		Gateway:  config.GatewayConfig{MaxBodySize: 1024 * 1024, TextMaxBodySize: 1024 * 1024},
+		VideoAPI: config.VideoAPIConfig{Enabled: true, PublicBaseURL: "https://video.example.test"},
+	}, service.PlatformOpenAI)
+	for _, path := range []string{"/v1/videos/generations", "/videos/generations"} {
+		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{"model":"video-public","prompt":"waves"}`))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Prefer", "respond-async")
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+		require.Equal(t, http.StatusForbidden, w.Code, "path=%s", path)
+		require.Contains(t, w.Body.String(), "VIDEO_GENERATION_DISABLED")
+	}
+}
+
+func TestGatewayRoutesUnsupportedOpenAIVideoOperationsAreRejectedAtPlatformGate(t *testing.T) {
 	router := newGatewayRoutesTestRouter(service.PlatformOpenAI)
 
 	for _, tc := range []struct {
@@ -276,8 +311,6 @@ func TestGatewayRoutesNonGrokVideosAreRejectedAtPlatformGate(t *testing.T) {
 		path   string
 		body   string
 	}{
-		{http.MethodPost, "/v1/videos/generations", `{"model":"grok-imagine-video-1.5","prompt":"waves"}`},
-		{http.MethodPost, "/videos/generations", `{"model":"grok-imagine-video-1.5","prompt":"waves"}`},
 		{http.MethodPost, "/v1/videos/edits", `{"model":"grok-imagine-video","prompt":"waves","video":{"url":"https://example.com/in.mp4"}}`},
 		{http.MethodPost, "/videos/edits", `{"model":"grok-imagine-video","prompt":"waves","video":{"url":"https://example.com/in.mp4"}}`},
 		{http.MethodPost, "/v1/videos/extensions", `{"model":"grok-imagine-video","prompt":"waves","video":{"url":"https://example.com/in.mp4"}}`},
