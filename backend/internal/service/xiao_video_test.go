@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -40,6 +41,24 @@ func (r *videoAccountRepoStub) ListModelAvailabilityCandidates(_ context.Context
 			continue
 		}
 		result = append(result, account)
+	}
+	return result, nil
+}
+
+func (r *videoAccountRepoStub) ListSchedulableByGroupIDAndPlatform(ctx context.Context, groupID int64, platform string) ([]Account, error) {
+	return r.ListSchedulableByGroupIDAndPlatforms(ctx, groupID, []string{platform})
+}
+
+func (r *videoAccountRepoStub) ListSchedulableByGroupIDAndPlatforms(ctx context.Context, groupID int64, platforms []string) ([]Account, error) {
+	candidates, err := r.ListModelAvailabilityCandidates(ctx, &groupID, platforms, true)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]Account, 0, len(candidates))
+	for _, account := range candidates {
+		if account.IsSchedulable() {
+			result = append(result, account)
+		}
 	}
 	return result, nil
 }
@@ -90,8 +109,9 @@ func (r *videoRepositoryStub) GetMediaForOwner(_ context.Context, mediaID string
 
 func (r *videoRepositoryStub) ReserveJob(_ context.Context, reservation VideoJobReservation) (*VideoJob, bool, error) {
 	key := strings.TrimSpace(reservation.IdempotencyKey)
+	scopedKey := strconv.FormatInt(reservation.Owner.APIKeyID, 10) + ":" + key
 	if key != "" {
-		if existing := r.idempotency[key]; existing != nil {
+		if existing := r.idempotency[scopedKey]; existing != nil {
 			copy := *existing
 			return &copy, false, nil
 		}
@@ -122,7 +142,7 @@ func (r *videoRepositoryStub) ReserveJob(_ context.Context, reservation VideoJob
 	}
 	if key != "" {
 		job.IdempotencyKey = &key
-		r.idempotency[key] = job
+		r.idempotency[scopedKey] = job
 	}
 	r.jobs[job.JobID] = job
 	copy := *job
@@ -137,7 +157,7 @@ func (r *videoRepositoryStub) ReleaseJobReservation(_ context.Context, jobID str
 		r.frozen -= job.Amount
 		delete(r.jobs, jobID)
 		if job.IdempotencyKey != nil {
-			delete(r.idempotency, *job.IdempotencyKey)
+			delete(r.idempotency, strconv.FormatInt(job.APIKeyID, 10)+":"+*job.IdempotencyKey)
 		}
 	}
 	return nil
@@ -181,6 +201,15 @@ func (r *videoRepositoryStub) FinalizeJobAndReconcileHold(_ context.Context, fin
 	job.Status = finalization.Status
 	job.Amount = finalization.Amount
 	job.Currency = finalization.Currency
+	if finalization.Resolution != "" {
+		job.Resolution = finalization.Resolution
+	}
+	if finalization.Duration > 0 {
+		job.Duration = finalization.Duration
+	}
+	if finalization.AspectRatio != "" {
+		job.AspectRatio = finalization.AspectRatio
+	}
 	job.UpstreamResponse = append([]byte(nil), finalization.UpstreamResponse...)
 	job.SettlementStatus = "held"
 	if finalization.Status == "completed" {
@@ -226,6 +255,15 @@ func (r *videoRepositoryStub) UpdateJobAndSettle(_ context.Context, update Video
 		return nil, ErrVideoResourceNotFound
 	}
 	job.Status = update.Status
+	if update.Resolution != "" {
+		job.Resolution = update.Resolution
+	}
+	if update.Duration > 0 {
+		job.Duration = update.Duration
+	}
+	if update.AspectRatio != "" {
+		job.AspectRatio = update.AspectRatio
+	}
 	job.UpstreamResponse = append([]byte(nil), update.UpstreamResponse...)
 	job.FinishedAt = update.FinishedAt
 	job.UpdatedAt = time.Now()
@@ -316,6 +354,87 @@ func TestXiaoVideoCreateBindsMediaAccountAndMapsModel(t *testing.T) {
 	require.InDelta(t, 97.0, repo.balance, 0.00000001)
 	require.InDelta(t, 3.0, repo.frozen, 0.00000001)
 	require.NotContains(t, string(job.UpstreamResponse), "video.example.test")
+}
+
+func TestXiaoVideoCreatePersistsResolvedUpstreamDefaults(t *testing.T) {
+	const groupID int64 = 7
+	repo := newVideoRepositoryStub()
+	accounts := &videoAccountRepoStub{accounts: []Account{videoTestAccount(42, groupID, "https://upstream.example.test/v1")}}
+	upstream := &videoHTTPUpstreamStub{do: func(req *http.Request, _ string, accountID int64, _ int) (*http.Response, error) {
+		require.Equal(t, int64(42), accountID)
+		require.Equal(t, http.MethodPost, req.Method)
+		return &http.Response{
+			StatusCode: http.StatusAccepted,
+			Header:     make(http.Header),
+			Body: io.NopCloser(strings.NewReader(`{
+				"job_id":"up-job-defaults",
+				"status":"pending",
+				"amount":"2.00000000",
+				"currency":"USD",
+				"resolution":"720p",
+				"duration":8,
+				"aspect_ratio":"16:9"
+			}`)),
+		}, nil
+	}}
+	svc := newVideoServiceForTest(repo, accounts, upstream)
+
+	job, err := svc.Create(
+		context.Background(),
+		VideoOwner{UserID: 11, APIKeyID: 22, GroupID: videoInt64Ptr(groupID)},
+		[]byte(`{"model":"video-public","prompt":"use provider defaults"}`),
+		"defaults-1",
+	)
+	require.NoError(t, err)
+	require.Equal(t, "video-public", job.Model)
+	require.Equal(t, "720p", job.Resolution)
+	require.Equal(t, 8, job.Duration)
+	require.Equal(t, "16:9", job.AspectRatio)
+}
+
+func TestXiaoVideoGetRefreshesResolvedUpstreamMetadata(t *testing.T) {
+	const groupID int64 = 7
+	repo := newVideoRepositoryStub()
+	repo.jobs["vidjob_defaults"] = &VideoJob{
+		JobID:            "vidjob_defaults",
+		UpstreamJobID:    "up-job-defaults",
+		AccountID:        42,
+		UserID:           11,
+		APIKeyID:         22,
+		Model:            "video-public",
+		Status:           "pending",
+		Amount:           2,
+		Currency:         "USD",
+		SettlementStatus: "held",
+	}
+	accounts := &videoAccountRepoStub{accounts: []Account{videoTestAccount(42, groupID, "https://upstream.example.test/v1")}}
+	upstream := &videoHTTPUpstreamStub{do: func(req *http.Request, _ string, accountID int64, _ int) (*http.Response, error) {
+		require.Equal(t, int64(42), accountID)
+		require.Equal(t, http.MethodGet, req.Method)
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     make(http.Header),
+			Body: io.NopCloser(strings.NewReader(`{
+				"job_id":"up-job-defaults",
+				"status":"running",
+				"resolution":"480p",
+				"duration":4,
+				"aspect_ratio":"9:16"
+			}`)),
+		}, nil
+	}}
+	svc := newVideoServiceForTest(repo, accounts, upstream)
+
+	job, err := svc.Get(
+		context.Background(),
+		VideoOwner{UserID: 11, APIKeyID: 22, GroupID: videoInt64Ptr(groupID)},
+		"vidjob_defaults",
+	)
+	require.NoError(t, err)
+	require.Equal(t, "video-public", job.Model)
+	require.Equal(t, "480p", job.Resolution)
+	require.Equal(t, 4, job.Duration)
+	require.Equal(t, "9:16", job.AspectRatio)
 }
 
 func TestXiaoVideoCreateRejectsInsufficientBalanceBeforeCallingUpstream(t *testing.T) {
@@ -409,6 +528,32 @@ func TestXiaoVideoCreateRejectsCrossKeyMediaAndIdempotencyConflict(t *testing.T)
 	_, err = svc.Create(context.Background(), owner, []byte(`{"model":"video-public","prompt":"different","start_frame_url":"https://video.example/v1/videos/uploads/vidmedia_local/content"}`), "same-key")
 	require.ErrorIs(t, err, ErrVideoIdempotencyConflict)
 	require.Equal(t, 1, requests)
+}
+
+func TestXiaoVideoCreateScopesUpstreamIdempotencyByDownstreamKey(t *testing.T) {
+	const groupID int64 = 7
+	repo := newVideoRepositoryStub()
+	accounts := &videoAccountRepoStub{accounts: []Account{videoTestAccount(42, groupID, "https://upstream.example/v1")}}
+	upstreamKeys := make([]string, 0, 2)
+	upstream := &videoHTTPUpstreamStub{do: func(req *http.Request, _ string, _ int64, _ int) (*http.Response, error) {
+		upstreamKeys = append(upstreamKeys, req.Header.Get("Idempotency-Key"))
+		jobID := "up-job-" + strconv.Itoa(len(upstreamKeys))
+		return &http.Response{
+			StatusCode: http.StatusAccepted,
+			Header:     make(http.Header),
+			Body:       io.NopCloser(strings.NewReader(`{"job_id":"` + jobID + `","status":"pending","amount":"1"}`)),
+		}, nil
+	}}
+	svc := newVideoServiceForTest(repo, accounts, upstream)
+	body := []byte(`{"model":"video-public","prompt":"same client order id"}`)
+
+	_, err := svc.Create(context.Background(), VideoOwner{UserID: 11, APIKeyID: 22, GroupID: videoInt64Ptr(groupID)}, body, "shared-order-id")
+	require.NoError(t, err)
+	_, err = svc.Create(context.Background(), VideoOwner{UserID: 11, APIKeyID: 23, GroupID: videoInt64Ptr(groupID)}, body, "shared-order-id")
+	require.NoError(t, err)
+	require.Len(t, upstreamKeys, 2)
+	require.NotEmpty(t, upstreamKeys[0])
+	require.NotEqual(t, upstreamKeys[0], upstreamKeys[1])
 }
 
 func TestXiaoVideoListModelsMapsAliases(t *testing.T) {

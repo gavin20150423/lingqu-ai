@@ -126,8 +126,8 @@ func TestVideoRepository_FinalizeJobReconcilesPreauthorization(t *testing.T) {
 	mock.ExpectExec("UPDATE users").
 		WithArgs(8.0, 8.0, int64(11), 10.0).
 		WillReturnResult(sqlmock.NewResult(0, 1))
-	mock.ExpectExec("UPDATE video_jobs SET upstream_job_id").
-		WithArgs("vidjob_reconcile", "up-job", "running", 2.0, "USD", "held", []byte(`{"status":"running"}`), nil, nil).
+	mock.ExpectExec("UPDATE video_jobs SET").
+		WithArgs("vidjob_reconcile", "up-job", "running", 2.0, "USD", "held", []byte(`{"status":"running"}`), nil, nil, "720p", 8, "16:9").
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
 	mock.ExpectQuery(regexp.QuoteMeta(videoJobSelect + ` WHERE job_id=$1`)).
@@ -136,7 +136,8 @@ func TestVideoRepository_FinalizeJobReconcilesPreauthorization(t *testing.T) {
 
 	repo := NewVideoRepository(db)
 	job, err := repo.FinalizeJobAndReconcileHold(context.Background(), service.VideoJobFinalization{
-		JobID: "vidjob_reconcile", UpstreamJobID: "up-job", Status: "running", Amount: 2, Currency: "USD", UpstreamResponse: []byte(`{"status":"running"}`),
+		JobID: "vidjob_reconcile", UpstreamJobID: "up-job", Status: "running", Amount: 2, Currency: "USD",
+		Resolution: "720p", Duration: 8, AspectRatio: "16:9", UpstreamResponse: []byte(`{"status":"running"}`),
 	})
 	require.NoError(t, err)
 	require.Equal(t, 2.0, job.Amount)
@@ -202,8 +203,8 @@ func TestVideoRepository_UpdateJobAndSettleCapturesHeldAmount(t *testing.T) {
 	mock.ExpectExec(regexp.QuoteMeta(`UPDATE users SET frozen_balance=COALESCE(frozen_balance,0)-$1,updated_at=NOW() WHERE id=$2 AND COALESCE(frozen_balance,0)>=$1`)).
 		WithArgs(2.0, int64(11)).
 		WillReturnResult(sqlmock.NewResult(0, 1))
-	mock.ExpectExec(regexp.QuoteMeta(`UPDATE video_jobs SET status=$2,upstream_response=$3,updated_at=NOW(),finished_at=COALESCE($4,finished_at),settlement_status=$5,settled_at=$6 WHERE job_id=$1`)).
-		WithArgs("vidjob_capture", "completed", []byte(`{"status":"completed"}`), sqlmock.AnyArg(), "captured", sqlmock.AnyArg()).
+	mock.ExpectExec("UPDATE video_jobs SET").
+		WithArgs("vidjob_capture", "completed", []byte(`{"status":"completed"}`), sqlmock.AnyArg(), "captured", sqlmock.AnyArg(), "1080p", 12, "21:9").
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
 	mock.ExpectQuery(regexp.QuoteMeta(videoJobSelect + ` WHERE job_id=$1`)).
@@ -213,7 +214,8 @@ func TestVideoRepository_UpdateJobAndSettleCapturesHeldAmount(t *testing.T) {
 	repo := NewVideoRepository(db)
 	finished := now
 	job, err := repo.UpdateJobAndSettle(context.Background(), service.VideoJobUpdate{
-		JobID: "vidjob_capture", Status: "completed", UpstreamResponse: []byte(`{"status":"completed"}`), FinishedAt: &finished,
+		JobID: "vidjob_capture", Status: "completed", Resolution: "1080p", Duration: 12, AspectRatio: "21:9",
+		UpstreamResponse: []byte(`{"status":"completed"}`), FinishedAt: &finished,
 	})
 	require.NoError(t, err)
 	require.Equal(t, "captured", job.SettlementStatus)

@@ -233,7 +233,16 @@ func (r *videoRepository) FinalizeJobAndReconcileHold(ctx context.Context, p ser
 	if !json.Valid(raw) {
 		raw = json.RawMessage(`{}`)
 	}
-	_, err = tx.ExecContext(ctx, `UPDATE video_jobs SET upstream_job_id=$2,status=$3,amount=$4,currency=$5,settlement_status=$6,upstream_response=$7,updated_at=NOW(),settled_at=$8,finished_at=$9 WHERE job_id=$1`, p.JobID, p.UpstreamJobID, p.Status, p.Amount, p.Currency, settlement, raw, settledAt, finishedAt)
+	_, err = tx.ExecContext(ctx, `
+		UPDATE video_jobs SET
+			upstream_job_id=$2,status=$3,amount=$4,currency=$5,settlement_status=$6,
+			upstream_response=$7,updated_at=NOW(),settled_at=$8,finished_at=$9,
+			resolution=COALESCE(NULLIF($10,''),resolution),
+			duration=CASE WHEN $11 > 0 THEN $11 ELSE duration END,
+			aspect_ratio=COALESCE(NULLIF($12,''),aspect_ratio)
+		WHERE job_id=$1
+	`, p.JobID, p.UpstreamJobID, p.Status, p.Amount, p.Currency, settlement, raw, settledAt, finishedAt,
+		p.Resolution, p.Duration, p.AspectRatio)
 	if err != nil {
 		return nil, err
 	}
@@ -325,7 +334,15 @@ func (r *videoRepository) UpdateJobAndSettle(ctx context.Context, p service.Vide
 	if !json.Valid(raw) {
 		raw = json.RawMessage(`{}`)
 	}
-	_, err = tx.ExecContext(ctx, `UPDATE video_jobs SET status=$2,upstream_response=$3,updated_at=NOW(),finished_at=COALESCE($4,finished_at),settlement_status=$5,settled_at=$6 WHERE job_id=$1`, p.JobID, p.Status, raw, p.FinishedAt, settlement, settledAt)
+	_, err = tx.ExecContext(ctx, `
+		UPDATE video_jobs SET
+			status=$2,upstream_response=$3,updated_at=NOW(),finished_at=COALESCE($4,finished_at),
+			settlement_status=$5,settled_at=$6,
+			resolution=COALESCE(NULLIF($7,''),resolution),
+			duration=CASE WHEN $8 > 0 THEN $8 ELSE duration END,
+			aspect_ratio=COALESCE(NULLIF($9,''),aspect_ratio)
+		WHERE job_id=$1
+	`, p.JobID, p.Status, raw, p.FinishedAt, settlement, settledAt, p.Resolution, p.Duration, p.AspectRatio)
 	if err != nil {
 		return nil, err
 	}

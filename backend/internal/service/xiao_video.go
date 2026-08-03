@@ -101,12 +101,18 @@ type VideoJobFinalization struct {
 	Status           string
 	Amount           float64
 	Currency         string
+	Resolution       string
+	Duration         int
+	AspectRatio      string
 	UpstreamResponse []byte
 }
 
 type VideoJobUpdate struct {
 	JobID            string
 	Status           string
+	Resolution       string
+	Duration         int
+	AspectRatio      string
 	UpstreamResponse []byte
 	FinishedAt       *time.Time
 }
@@ -433,7 +439,7 @@ func (s *XiaoVideoService) Create(ctx context.Context, owner VideoOwner, body []
 				return nil, rewriteErr
 			}
 		}
-		resp, requestErr := s.upstreamWithAccount(ctx, account, http.MethodPost, "/v1/videos/generations", "application/json", bytes.NewReader(upstreamBody), "", idempotencyKey)
+		resp, requestErr := s.upstreamWithAccount(ctx, account, http.MethodPost, "/v1/videos/generations", "application/json", bytes.NewReader(upstreamBody), "", videoUpstreamIdempotencyScope(owner.APIKeyID, idempotencyKey))
 		release()
 		if requestErr != nil {
 			if idempotencyKey != "" {
@@ -530,12 +536,16 @@ func (s *XiaoVideoService) Create(ctx context.Context, owner VideoOwner, body []
 			return nil, ErrVideoPricingUnavailable
 		}
 		currency := defaultString(videoStringValue(upstream["currency"]), "USD")
+		resolvedMeta := resolveVideoGenerationMeta(meta, upstream)
 		job, finalizeErr := s.repo.FinalizeJobAndReconcileHold(ctx, VideoJobFinalization{
 			JobID:            jobID,
 			UpstreamJobID:    upstreamID,
 			Status:           status,
 			Amount:           amount,
 			Currency:         currency,
+			Resolution:       resolvedMeta.Resolution,
+			Duration:         resolvedMeta.Duration,
+			AspectRatio:      resolvedMeta.AspectRatio,
 			UpstreamResponse: raw,
 		})
 		if finalizeErr != nil {
@@ -721,7 +731,20 @@ func (s *XiaoVideoService) Cancel(ctx context.Context, owner VideoOwner, jobID s
 				now := time.Now()
 				finished = &now
 			}
-			updated, updateErr := s.repo.UpdateJobAndSettle(ctx, VideoJobUpdate{JobID: job.JobID, Status: status, UpstreamResponse: raw, FinishedAt: finished})
+			meta := resolveVideoGenerationMeta(videoGenerationMeta{
+				Resolution:  job.Resolution,
+				Duration:    job.Duration,
+				AspectRatio: job.AspectRatio,
+			}, upstream)
+			updated, updateErr := s.repo.UpdateJobAndSettle(ctx, VideoJobUpdate{
+				JobID:            job.JobID,
+				Status:           status,
+				Resolution:       meta.Resolution,
+				Duration:         meta.Duration,
+				AspectRatio:      meta.AspectRatio,
+				UpstreamResponse: raw,
+				FinishedAt:       finished,
+			})
 			if updateErr != nil {
 				return nil, updateErr
 			}
@@ -805,7 +828,20 @@ func (s *XiaoVideoService) refresh(ctx context.Context, job *VideoJob) (*VideoJo
 		now := time.Now()
 		finished = &now
 	}
-	updated, err := s.repo.UpdateJobAndSettle(ctx, VideoJobUpdate{JobID: job.JobID, Status: status, UpstreamResponse: raw, FinishedAt: finished})
+	meta := resolveVideoGenerationMeta(videoGenerationMeta{
+		Resolution:  job.Resolution,
+		Duration:    job.Duration,
+		AspectRatio: job.AspectRatio,
+	}, upstream)
+	updated, err := s.repo.UpdateJobAndSettle(ctx, VideoJobUpdate{
+		JobID:            job.JobID,
+		Status:           status,
+		Resolution:       meta.Resolution,
+		Duration:         meta.Duration,
+		AspectRatio:      meta.AspectRatio,
+		UpstreamResponse: raw,
+		FinishedAt:       finished,
+	})
 	if err == nil && updated.SettlementStatus != job.SettlementStatus {
 		s.invalidateBalance(ctx, updated.UserID)
 	}
@@ -1052,6 +1088,19 @@ func sanitizeVideoModel(item map[string]any, account *Account) map[string]any {
 	return model
 }
 
+func resolveVideoGenerationMeta(current videoGenerationMeta, upstream map[string]any) videoGenerationMeta {
+	if resolution := videoStringValue(upstream["resolution"]); resolution != "" {
+		current.Resolution = resolution
+	}
+	if duration, err := strconv.Atoi(videoStringValue(upstream["duration"])); err == nil && duration > 0 {
+		current.Duration = duration
+	}
+	if aspectRatio := videoStringValue(upstream["aspect_ratio"]); aspectRatio != "" {
+		current.AspectRatio = aspectRatio
+	}
+	return current
+}
+
 func isRetryableVideoTransportError(err error) bool {
 	return err != nil && errors.Is(err, ErrVideoUpstreamUnavailable)
 }
@@ -1162,6 +1211,13 @@ func validVideoIdempotencyKey(value string) bool {
 		}
 	}
 	return true
+}
+
+func videoUpstreamIdempotencyScope(apiKeyID int64, idempotencyKey string) string {
+	if strings.TrimSpace(idempotencyKey) == "" {
+		return ""
+	}
+	return strconv.FormatInt(apiKeyID, 10) + ":" + idempotencyKey
 }
 
 func newVideoID(prefix string) (string, error) {

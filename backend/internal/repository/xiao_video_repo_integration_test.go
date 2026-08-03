@@ -81,9 +81,13 @@ func TestVideoRepository_BindsAccountAndSettlesHoldExactlyOnce(t *testing.T) {
 	assertVideoBalance(t, ctx, userID, 0, 20)
 
 	first, err = repo.FinalizeJobAndReconcileHold(ctx, service.VideoJobFinalization{
-		JobID: first.JobID, UpstreamJobID: "same-upstream-id", Status: "running", Amount: 2, Currency: "USD", UpstreamResponse: []byte(`{"status":"running"}`),
+		JobID: first.JobID, UpstreamJobID: "same-upstream-id", Status: "running", Amount: 2, Currency: "USD",
+		Resolution: "720p", Duration: 8, AspectRatio: "9:16", UpstreamResponse: []byte(`{"status":"running"}`),
 	})
 	require.NoError(t, err)
+	require.Equal(t, "720p", first.Resolution)
+	require.Equal(t, 8, first.Duration)
+	require.Equal(t, "9:16", first.AspectRatio)
 	second, err = repo.FinalizeJobAndReconcileHold(ctx, service.VideoJobFinalization{
 		JobID: second.JobID, UpstreamJobID: "same-upstream-id", Status: "running", Amount: 3, Currency: "USD", UpstreamResponse: []byte(`{"status":"running"}`),
 	})
@@ -91,9 +95,15 @@ func TestVideoRepository_BindsAccountAndSettlesHoldExactlyOnce(t *testing.T) {
 
 	assertVideoBalance(t, ctx, userID, 15, 5)
 	now := time.Now()
-	first, err = repo.UpdateJobAndSettle(ctx, service.VideoJobUpdate{JobID: first.JobID, Status: "completed", UpstreamResponse: []byte(`{"status":"completed"}`), FinishedAt: &now})
+	first, err = repo.UpdateJobAndSettle(ctx, service.VideoJobUpdate{
+		JobID: first.JobID, Status: "completed", Resolution: "1080p", Duration: 12, AspectRatio: "21:9",
+		UpstreamResponse: []byte(`{"status":"completed"}`), FinishedAt: &now,
+	})
 	require.NoError(t, err)
 	require.Equal(t, "captured", first.SettlementStatus)
+	require.Equal(t, "1080p", first.Resolution)
+	require.Equal(t, 12, first.Duration)
+	require.Equal(t, "21:9", first.AspectRatio)
 	assertVideoBalance(t, ctx, userID, 15, 3)
 
 	first, err = repo.UpdateJobAndSettle(ctx, service.VideoJobUpdate{JobID: first.JobID, Status: "running", UpstreamResponse: []byte(`{"status":"running"}`)})

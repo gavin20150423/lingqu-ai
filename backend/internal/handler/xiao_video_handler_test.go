@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -76,4 +77,29 @@ func TestVideoRequestHeaderValidation(t *testing.T) {
 	require.False(t, validVideoUploadContentType("multipart/form-data"))
 	require.True(t, videoPreferRespondAsync("wait=5, respond-async"))
 	require.False(t, videoPreferRespondAsync("not-respond-async"))
+}
+
+func TestProxyVideoResponseForwardsRangeHeadersAndStreams(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	upstream := &http.Response{
+		StatusCode: http.StatusPartialContent,
+		Header: http.Header{
+			"Content-Type":   []string{"video/mp4"},
+			"Content-Length": []string{"4"},
+			"Content-Range":  []string{"bytes 0-3/10"},
+			"Accept-Ranges":  []string{"bytes"},
+		},
+		Body: io.NopCloser(strings.NewReader("data")),
+	}
+
+	proxyVideoResponse(ctx, upstream, true)
+
+	require.Equal(t, http.StatusPartialContent, recorder.Code)
+	require.Equal(t, "video/mp4", recorder.Header().Get("Content-Type"))
+	require.Equal(t, "4", recorder.Header().Get("Content-Length"))
+	require.Equal(t, "bytes 0-3/10", recorder.Header().Get("Content-Range"))
+	require.Equal(t, "bytes", recorder.Header().Get("Accept-Ranges"))
+	require.Equal(t, "data", recorder.Body.String())
 }
