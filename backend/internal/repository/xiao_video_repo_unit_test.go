@@ -36,6 +36,137 @@ func TestVideoRepository_CreateMediaPersistsOwnershipAndAccount(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestVideoRepository_ReserveJobHoldsBeforeReturning(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	now := time.Now().UTC()
+	groupID := int64(7)
+	reservation := service.VideoJobReservation{
+		JobID:                  "vidjob_reserve",
+		AccountID:              42,
+		Owner:                  service.VideoOwner{UserID: 11, APIKeyID: 22, GroupID: &groupID},
+		IdempotencyKey:         "reserve-key",
+		RequestHash:            "hash",
+		Model:                  "video-public",
+		Resolution:             "480p",
+		Duration:               4,
+		AspectRatio:            "16:9",
+		PreauthorizationAmount: 10,
+	}
+	mock.ExpectBegin()
+	mock.ExpectExec("INSERT INTO video_jobs").
+		WithArgs(reservation.JobID, "creating:"+reservation.JobID, reservation.AccountID, reservation.Owner.UserID,
+			reservation.Owner.APIKeyID, reservation.Owner.GroupID, reservation.IdempotencyKey, reservation.RequestHash,
+			reservation.Model, reservation.Resolution, reservation.Duration, reservation.AspectRatio, reservation.PreauthorizationAmount).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectQuery("UPDATE users").
+		WithArgs(reservation.PreauthorizationAmount, reservation.Owner.UserID).
+		WillReturnRows(sqlmock.NewRows([]string{"balance"}).AddRow(10.0))
+	mock.ExpectCommit()
+	mock.ExpectQuery(regexp.QuoteMeta(videoJobSelect + ` WHERE job_id=$1`)).
+		WithArgs(reservation.JobID).
+		WillReturnRows(videoJobRows(reservation.JobID, "creating:"+reservation.JobID, "pending", 10, "held", now))
+
+	repo := NewVideoRepository(db)
+	job, created, err := repo.ReserveJob(context.Background(), reservation)
+	require.NoError(t, err)
+	require.True(t, created)
+	require.Equal(t, 10.0, job.Amount)
+	require.Equal(t, "held", job.SettlementStatus)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestVideoRepository_ReserveJobInsufficientBalanceRollsBack(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	reservation := service.VideoJobReservation{
+		JobID:                  "vidjob_no_balance",
+		AccountID:              42,
+		Owner:                  service.VideoOwner{UserID: 11, APIKeyID: 22},
+		RequestHash:            "hash",
+		Model:                  "video-public",
+		Resolution:             "480p",
+		Duration:               4,
+		AspectRatio:            "16:9",
+		PreauthorizationAmount: 10,
+	}
+	mock.ExpectBegin()
+	mock.ExpectExec("INSERT INTO video_jobs").
+		WithArgs(reservation.JobID, "creating:"+reservation.JobID, reservation.AccountID, reservation.Owner.UserID,
+			reservation.Owner.APIKeyID, reservation.Owner.GroupID, nil, reservation.RequestHash, reservation.Model,
+			reservation.Resolution, reservation.Duration, reservation.AspectRatio, reservation.PreauthorizationAmount).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectQuery("UPDATE users").
+		WithArgs(reservation.PreauthorizationAmount, reservation.Owner.UserID).
+		WillReturnRows(sqlmock.NewRows([]string{"balance"}))
+	mock.ExpectRollback()
+
+	repo := NewVideoRepository(db)
+	_, created, err := repo.ReserveJob(context.Background(), reservation)
+	require.ErrorIs(t, err, service.ErrVideoInsufficientBalance)
+	require.False(t, created)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestVideoRepository_FinalizeJobReconcilesPreauthorization(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	now := time.Now().UTC()
+	mock.ExpectBegin()
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT user_id,upstream_job_id,amount,settlement_status FROM video_jobs WHERE job_id=$1 FOR UPDATE`)).
+		WithArgs("vidjob_reconcile").
+		WillReturnRows(sqlmock.NewRows([]string{"user_id", "upstream_job_id", "amount", "settlement_status"}).
+			AddRow(int64(11), "creating:vidjob_reconcile", 10.0, "held"))
+	mock.ExpectExec("UPDATE users").
+		WithArgs(8.0, 8.0, int64(11), 10.0).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("UPDATE video_jobs SET upstream_job_id").
+		WithArgs("vidjob_reconcile", "up-job", "running", 2.0, "USD", "held", []byte(`{"status":"running"}`), nil, nil).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+	mock.ExpectQuery(regexp.QuoteMeta(videoJobSelect + ` WHERE job_id=$1`)).
+		WithArgs("vidjob_reconcile").
+		WillReturnRows(videoJobRows("vidjob_reconcile", "up-job", "running", 2, "held", now))
+
+	repo := NewVideoRepository(db)
+	job, err := repo.FinalizeJobAndReconcileHold(context.Background(), service.VideoJobFinalization{
+		JobID: "vidjob_reconcile", UpstreamJobID: "up-job", Status: "running", Amount: 2, Currency: "USD", UpstreamResponse: []byte(`{"status":"running"}`),
+	})
+	require.NoError(t, err)
+	require.Equal(t, 2.0, job.Amount)
+	require.Equal(t, "held", job.SettlementStatus)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestVideoRepository_ReleaseJobReservationRefundsAndDeletes(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	mock.ExpectBegin()
+	mock.ExpectQuery("SELECT user_id,amount,upstream_job_id,settlement_status").
+		WithArgs("vidjob_release").
+		WillReturnRows(sqlmock.NewRows([]string{"user_id", "amount", "upstream_job_id", "settlement_status"}).
+			AddRow(int64(11), 10.0, "creating:vidjob_release", "held"))
+	mock.ExpectExec("UPDATE users").
+		WithArgs(10.0, int64(11)).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec(regexp.QuoteMeta(`DELETE FROM video_jobs WHERE job_id=$1`)).
+		WithArgs("vidjob_release").
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+
+	repo := NewVideoRepository(db)
+	require.NoError(t, repo.ReleaseJobReservation(context.Background(), "vidjob_release"))
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestVideoRepository_UpdateJobAndSettleDoesNotRegressTerminalState(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)

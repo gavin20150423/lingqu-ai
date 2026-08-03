@@ -548,6 +548,11 @@ export default {
         capabilityChatCompletionsAuto: 'Chat Completions (auto probe)',
         capabilityEmbeddings: 'Embeddings',
         capabilityVideoAPI: 'Video API',
+        videoPreauthorizationAmount: 'Maximum upstream cost per job (USD)',
+        videoPreauthorizationAmountDesc:
+          'Before creation, the platform holds this ceiling multiplied by the account billing rate. It refunds the difference after receiving the upstream amount. Set it high enough to cover the most expensive job this upstream permits.',
+        videoPreauthorizationAmountRequired:
+          'A maximum upstream cost greater than 0 is required when Video API is enabled.',
         responsesStatusAutoSupported: 'Auto probe: Responses',
         responsesStatusAutoUnsupported: 'Auto probe: Chat Completions',
         responsesStatusAutoUnknown: 'Auto probe: unknown',

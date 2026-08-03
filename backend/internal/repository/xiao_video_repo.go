@@ -36,22 +36,29 @@ func (r *videoRepository) GetMediaForOwner(ctx context.Context, mediaID string, 
 }
 
 func (r *videoRepository) ReserveJob(ctx context.Context, p service.VideoJobReservation) (*service.VideoJob, bool, error) {
+	if p.PreauthorizationAmount < 0 {
+		return nil, false, errors.New("video preauthorization amount must be non-negative")
+	}
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, false, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
 	upstreamPlaceholder := "creating:" + p.JobID
-	var result sql.Result
-	var err error
 	var idempotency any
 	if strings.TrimSpace(p.IdempotencyKey) != "" {
 		idempotency = strings.TrimSpace(p.IdempotencyKey)
 	}
-	result, err = r.db.ExecContext(ctx, `
+	result, err := tx.ExecContext(ctx, `
 		INSERT INTO video_jobs (
 			job_id, upstream_job_id, account_id, user_id, api_key_id, group_id, idempotency_key,
 			request_hash, model, resolution, duration, aspect_ratio, status, amount,
 			currency, settlement_status, upstream_response
-		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'pending',0,'USD','released','{}'::jsonb)
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'pending',$13,'USD','held','{}'::jsonb)
 		ON CONFLICT DO NOTHING
 	`, p.JobID, upstreamPlaceholder, p.AccountID, p.Owner.UserID, p.Owner.APIKeyID, p.Owner.GroupID, idempotency,
-		p.RequestHash, p.Model, p.Resolution, p.Duration, p.AspectRatio)
+		p.RequestHash, p.Model, p.Resolution, p.Duration, p.AspectRatio, p.PreauthorizationAmount)
 	if err != nil {
 		return nil, false, err
 	}
@@ -60,8 +67,27 @@ func (r *videoRepository) ReserveJob(ctx context.Context, p service.VideoJobRese
 		return nil, false, err
 	}
 	if rows == 1 {
+		var newBalance float64
+		err = tx.QueryRowContext(ctx, `
+			UPDATE users
+			SET balance=balance-$1,frozen_balance=COALESCE(frozen_balance,0)+$1,updated_at=NOW()
+			WHERE id=$2 AND deleted_at IS NULL AND balance >= $1
+			RETURNING balance
+		`, p.PreauthorizationAmount, p.Owner.UserID).Scan(&newBalance)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, false, service.ErrVideoInsufficientBalance
+		}
+		if err != nil {
+			return nil, false, err
+		}
+		if err = tx.Commit(); err != nil {
+			return nil, false, err
+		}
 		job, err := r.getJobByID(ctx, p.JobID)
 		return job, true, err
+	}
+	if err = tx.Rollback(); err != nil {
+		return nil, false, err
 	}
 	if idempotency == nil {
 		return nil, false, errors.New("video job reservation conflict")
@@ -73,7 +99,7 @@ func (r *videoRepository) ReserveJob(ctx context.Context, p service.VideoJobRese
 func (r *videoRepository) MarkJobReservationRetryable(ctx context.Context, jobID string) error {
 	_, err := r.db.ExecContext(ctx, `
 		UPDATE video_jobs SET upstream_job_id=$2,updated_at=NOW()
-		WHERE job_id=$1 AND upstream_job_id=$3 AND settlement_status='released'
+		WHERE job_id=$1 AND upstream_job_id=$3 AND settlement_status='held'
 	`, jobID, "retry:"+jobID, "creating:"+jobID)
 	return err
 }
@@ -81,7 +107,7 @@ func (r *videoRepository) MarkJobReservationRetryable(ctx context.Context, jobID
 func (r *videoRepository) ClaimJobReservationRetry(ctx context.Context, jobID string, staleBefore time.Time) (bool, error) {
 	result, err := r.db.ExecContext(ctx, `
 		UPDATE video_jobs SET upstream_job_id=$2,updated_at=NOW()
-		WHERE job_id=$1 AND settlement_status='released'
+		WHERE job_id=$1 AND settlement_status='held'
 		  AND (upstream_job_id=$3 OR (upstream_job_id=$2 AND updated_at < $4))
 	`, jobID, "creating:"+jobID, "retry:"+jobID, staleBefore)
 	if err != nil {
@@ -91,12 +117,49 @@ func (r *videoRepository) ClaimJobReservationRetry(ctx context.Context, jobID st
 	return rows == 1, err
 }
 
-func (r *videoRepository) DeleteJobReservation(ctx context.Context, jobID string) error {
-	_, err := r.db.ExecContext(ctx, `DELETE FROM video_jobs WHERE job_id=$1 AND upstream_job_id=$2 AND settlement_status='released'`, jobID, "creating:"+jobID)
-	return err
+func (r *videoRepository) ReleaseJobReservation(ctx context.Context, jobID string) error {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var userID int64
+	var amount float64
+	var upstreamID, settlement string
+	err = tx.QueryRowContext(ctx, `
+		SELECT user_id,amount,upstream_job_id,settlement_status
+		FROM video_jobs WHERE job_id=$1 FOR UPDATE
+	`, jobID).Scan(&userID, &amount, &upstreamID, &settlement)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if settlement != "held" || (upstreamID != "creating:"+jobID && upstreamID != "retry:"+jobID) {
+		return nil
+	}
+	result, err := tx.ExecContext(ctx, `
+		UPDATE users
+		SET balance=balance+$1,frozen_balance=COALESCE(frozen_balance,0)-$1,updated_at=NOW()
+		WHERE id=$2 AND COALESCE(frozen_balance,0)>=$1
+	`, amount, userID)
+	if err != nil {
+		return err
+	}
+	if rows, rowsErr := result.RowsAffected(); rowsErr != nil {
+		return rowsErr
+	} else if rows != 1 {
+		return errors.New("video frozen balance is insufficient")
+	}
+	if _, err = tx.ExecContext(ctx, `DELETE FROM video_jobs WHERE job_id=$1`, jobID); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
-func (r *videoRepository) FinalizeJobAndHold(ctx context.Context, p service.VideoJobFinalization) (_ *service.VideoJob, err error) {
+func (r *videoRepository) FinalizeJobAndReconcileHold(ctx context.Context, p service.VideoJobFinalization) (_ *service.VideoJob, err error) {
 	if videoJobStatusRank(p.Status) < 0 {
 		return nil, errors.New("invalid video job status")
 	}
@@ -111,7 +174,10 @@ func (r *videoRepository) FinalizeJobAndHold(ctx context.Context, p service.Vide
 	}()
 	var userID int64
 	var currentUpstream string
-	err = tx.QueryRowContext(ctx, `SELECT user_id, upstream_job_id FROM video_jobs WHERE job_id=$1 FOR UPDATE`, p.JobID).Scan(&userID, &currentUpstream)
+	var preauthorizationAmount float64
+	var currentSettlement string
+	err = tx.QueryRowContext(ctx, `SELECT user_id,upstream_job_id,amount,settlement_status FROM video_jobs WHERE job_id=$1 FOR UPDATE`, p.JobID).
+		Scan(&userID, &currentUpstream, &preauthorizationAmount, &currentSettlement)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, service.ErrVideoResourceNotFound
 	}
@@ -121,34 +187,47 @@ func (r *videoRepository) FinalizeJobAndHold(ctx context.Context, p service.Vide
 	if currentUpstream != "creating:"+p.JobID {
 		return nil, errors.New("video job already finalized")
 	}
+	if currentSettlement != "held" {
+		return nil, errors.New("video job preauthorization is not held")
+	}
 	if p.Amount < 0 {
 		return nil, errors.New("video hold amount must be non-negative")
 	}
-	var newBalance float64
-	err = tx.QueryRowContext(ctx, `UPDATE users SET balance=balance-$1,frozen_balance=COALESCE(frozen_balance,0)+$1,updated_at=NOW() WHERE id=$2 AND deleted_at IS NULL AND balance >= $1 RETURNING balance`, p.Amount, userID).Scan(&newBalance)
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, service.ErrVideoInsufficientBalance
+	if p.Amount > preauthorizationAmount {
+		if p.Amount-preauthorizationAmount > 0.00000001 {
+			return nil, service.ErrVideoPricingUnavailable
+		}
+		p.Amount = preauthorizationAmount
 	}
-	if err != nil {
-		return nil, err
-	}
+	balanceRefund := preauthorizationAmount - p.Amount
+	frozenReduction := balanceRefund
 	settlement := "held"
 	var settledAt any
 	var finishedAt any
 	if p.Status == "completed" {
-		if _, err = tx.ExecContext(ctx, `UPDATE users SET frozen_balance=COALESCE(frozen_balance,0)-$1,updated_at=NOW() WHERE id=$2 AND COALESCE(frozen_balance,0)>=$1`, p.Amount, userID); err != nil {
-			return nil, err
-		}
+		frozenReduction = preauthorizationAmount
 		settlement = "captured"
 		settledAt = time.Now()
 		finishedAt = settledAt
 	} else if p.Status == "failed" || p.Status == "canceled" {
-		if _, err = tx.ExecContext(ctx, `UPDATE users SET balance=balance+$1,frozen_balance=COALESCE(frozen_balance,0)-$1,updated_at=NOW() WHERE id=$2 AND COALESCE(frozen_balance,0)>=$1`, p.Amount, userID); err != nil {
-			return nil, err
-		}
+		balanceRefund = preauthorizationAmount
+		frozenReduction = preauthorizationAmount
 		settlement = "released"
 		settledAt = time.Now()
 		finishedAt = settledAt
+	}
+	result, err := tx.ExecContext(ctx, `
+		UPDATE users
+		SET balance=balance+$1,frozen_balance=COALESCE(frozen_balance,0)-$2,updated_at=NOW()
+		WHERE id=$3 AND COALESCE(frozen_balance,0)>=$4
+	`, balanceRefund, frozenReduction, userID, preauthorizationAmount)
+	if err != nil {
+		return nil, err
+	}
+	if rows, rowsErr := result.RowsAffected(); rowsErr != nil {
+		return nil, rowsErr
+	} else if rows != 1 {
+		return nil, errors.New("video frozen balance is insufficient")
 	}
 	raw := json.RawMessage(p.UpstreamResponse)
 	if !json.Valid(raw) {

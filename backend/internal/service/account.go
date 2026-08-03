@@ -6,6 +6,7 @@ import (
 	"errors"
 	"hash/fnv"
 	"log/slog"
+	"math"
 	"reflect"
 	"sort"
 	"strconv"
@@ -117,6 +118,11 @@ const (
 
 const openAIEndpointCapabilitiesCredentialKey = "openai_capabilities"
 
+// OpenAIVideoPreauthorizationAmountCredentialKey stores the maximum upstream
+// amount, in USD, that may be accepted for one video job. The value is
+// configured per upstream account so provider pricing is never hardcoded.
+const OpenAIVideoPreauthorizationAmountCredentialKey = "video_preauthorization_amount"
+
 // GrokMediaEligibleExtraKey is an optional per-account override stored in
 // accounts.extra. true forces media routing on, false disables it, and an
 // absent/null value uses provider observations.
@@ -172,6 +178,28 @@ func (a *Account) BillingRateMultiplier() float64 {
 		return 1.0
 	}
 	return *a.RateMultiplier
+}
+
+// VideoPreauthorizationAmount returns the downstream hold required before an
+// upstream video job may be created. A configured zero/negative/non-finite
+// ceiling is treated as unavailable; a zero billing multiplier remains valid.
+func (a *Account) VideoPreauthorizationAmount() (float64, bool) {
+	if a == nil || a.Credentials == nil {
+		return 0, false
+	}
+	raw, ok := a.Credentials[OpenAIVideoPreauthorizationAmountCredentialKey]
+	if !ok || raw == nil {
+		return 0, false
+	}
+	ceiling := parseExtraFloat64(raw)
+	if ceiling <= 0 || math.IsNaN(ceiling) || math.IsInf(ceiling, 0) {
+		return 0, false
+	}
+	amount := ceiling * a.BillingRateMultiplier()
+	if amount < 0 || math.IsNaN(amount) || math.IsInf(amount, 0) {
+		return 0, false
+	}
+	return amount, true
 }
 
 func (a *Account) EffectiveLoadFactor() int {

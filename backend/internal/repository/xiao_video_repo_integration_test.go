@@ -58,15 +58,16 @@ func TestVideoRepository_BindsAccountAndSettlesHoldExactlyOnce(t *testing.T) {
 	reserve := func(jobID string, accountID int64, idempotencyKey string) *service.VideoJob {
 		t.Helper()
 		job, created, reserveErr := repo.ReserveJob(ctx, service.VideoJobReservation{
-			JobID:          jobID,
-			AccountID:      accountID,
-			Owner:          owner,
-			IdempotencyKey: idempotencyKey,
-			RequestHash:    strings.Repeat("a", 64),
-			Model:          "video-public",
-			Resolution:     "480p",
-			Duration:       4,
-			AspectRatio:    "16:9",
+			JobID:                  jobID,
+			AccountID:              accountID,
+			Owner:                  owner,
+			IdempotencyKey:         idempotencyKey,
+			RequestHash:            strings.Repeat("a", 64),
+			Model:                  "video-public",
+			Resolution:             "480p",
+			Duration:               4,
+			AspectRatio:            "16:9",
+			PreauthorizationAmount: 10,
 		})
 		require.NoError(t, reserveErr)
 		require.True(t, created)
@@ -77,12 +78,13 @@ func TestVideoRepository_BindsAccountAndSettlesHoldExactlyOnce(t *testing.T) {
 	second := reserve("vidjob_repo_two", accountTwoID, "repo-two")
 	require.Equal(t, accountOneID, first.AccountID)
 	require.Equal(t, accountTwoID, second.AccountID)
+	assertVideoBalance(t, ctx, userID, 0, 20)
 
-	first, err = repo.FinalizeJobAndHold(ctx, service.VideoJobFinalization{
+	first, err = repo.FinalizeJobAndReconcileHold(ctx, service.VideoJobFinalization{
 		JobID: first.JobID, UpstreamJobID: "same-upstream-id", Status: "running", Amount: 2, Currency: "USD", UpstreamResponse: []byte(`{"status":"running"}`),
 	})
 	require.NoError(t, err)
-	second, err = repo.FinalizeJobAndHold(ctx, service.VideoJobFinalization{
+	second, err = repo.FinalizeJobAndReconcileHold(ctx, service.VideoJobFinalization{
 		JobID: second.JobID, UpstreamJobID: "same-upstream-id", Status: "running", Amount: 3, Currency: "USD", UpstreamResponse: []byte(`{"status":"running"}`),
 	})
 	require.NoError(t, err, "upstream IDs are unique within an account, not globally")

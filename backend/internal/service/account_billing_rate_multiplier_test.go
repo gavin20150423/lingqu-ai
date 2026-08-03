@@ -25,3 +25,39 @@ func TestAccount_BillingRateMultiplier_NegativeFallsBackToOne(t *testing.T) {
 	a := Account{RateMultiplier: &v}
 	require.Equal(t, 1.0, a.BillingRateMultiplier())
 }
+
+func TestAccount_VideoPreauthorizationAmountUsesConfiguredCeilingAndMultiplier(t *testing.T) {
+	rate := 1.5
+	a := Account{
+		RateMultiplier: &rate,
+		Credentials: map[string]any{
+			OpenAIVideoPreauthorizationAmountCredentialKey: json.Number("12.25"),
+		},
+	}
+
+	amount, ok := a.VideoPreauthorizationAmount()
+	require.True(t, ok)
+	require.InDelta(t, 18.375, amount, 0.00000001)
+}
+
+func TestAccount_VideoPreauthorizationAmountRequiresPositiveFiniteCeiling(t *testing.T) {
+	for _, value := range []any{nil, 0, -1, "not-a-number"} {
+		a := Account{Credentials: map[string]any{OpenAIVideoPreauthorizationAmountCredentialKey: value}}
+		_, ok := a.VideoPreauthorizationAmount()
+		require.False(t, ok)
+	}
+}
+
+func TestAccount_VideoPreauthorizationAmountAllowsZeroBillingMultiplier(t *testing.T) {
+	rate := 0.0
+	a := Account{
+		RateMultiplier: &rate,
+		Credentials: map[string]any{
+			OpenAIVideoPreauthorizationAmountCredentialKey: 10,
+		},
+	}
+
+	amount, ok := a.VideoPreauthorizationAmount()
+	require.True(t, ok)
+	require.Zero(t, amount)
+}

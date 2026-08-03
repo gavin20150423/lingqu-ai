@@ -1682,6 +1682,22 @@
           </div>
           <p class="input-hint">{{ t('admin.accounts.openai.endpointCapabilitiesDesc') }}</p>
         </div>
+        <div v-if="openAIEndpointCapabilities.includes('video_api')">
+          <label class="input-label" for="edit-video-preauthorization-amount">
+            {{ t('admin.accounts.openai.videoPreauthorizationAmount') }}
+          </label>
+          <input
+            id="edit-video-preauthorization-amount"
+            v-model="videoPreauthorizationAmount"
+            data-testid="video-preauthorization-amount"
+            type="number"
+            min="0.00000001"
+            step="0.01"
+            inputmode="decimal"
+            class="input"
+          />
+          <p class="input-hint">{{ t('admin.accounts.openai.videoPreauthorizationAmountDesc') }}</p>
+        </div>
       </div>
 
       <div
@@ -2917,6 +2933,7 @@ const editPlanType = ref<string>('')
 const openAICompactMode = ref<OpenAICompactMode>('auto')
 const openAIResponsesMode = ref<OpenAIResponsesMode>('auto')
 const openAIEndpointCapabilities = ref<OpenAIEndpointCapability[]>(['chat_completions', 'embeddings'])
+const videoPreauthorizationAmount = ref('')
 const openaiOAuthResponsesWebSocketV2Mode = ref<OpenAIWSMode>(OPENAI_WS_MODE_OFF)
 const openaiAPIKeyResponsesWebSocketV2Mode = ref<OpenAIWSMode>(OPENAI_WS_MODE_OFF)
 const codexCLIOnlyEnabled = ref(false)
@@ -3126,6 +3143,11 @@ const toggleOpenAIEndpointCapability = (capability: OpenAIEndpointCapability, ev
 
 const applyOpenAIEndpointCapabilities = (credentials: Record<string, unknown>) => {
   const capabilities = normalizeOpenAIEndpointCapabilities(openAIEndpointCapabilities.value)
+  if (capabilities.includes('video_api')) {
+    credentials.video_preauthorization_amount = Number(videoPreauthorizationAmount.value)
+  } else {
+    delete credentials.video_preauthorization_amount
+  }
   if (capabilities.length === 2 && !capabilities.includes('video_api')) {
     delete credentials.openai_capabilities
     return
@@ -3371,6 +3393,7 @@ const syncFormFromAccount = (newAccount: Account | null) => {
   openAICompactMode.value = 'auto'
   openAIResponsesMode.value = 'auto'
   openAIEndpointCapabilities.value = ['chat_completions', 'embeddings']
+  videoPreauthorizationAmount.value = ''
   openAICompactModelMappings.value = []
   openaiOAuthResponsesWebSocketV2Mode.value = OPENAI_WS_MODE_OFF
   openaiAPIKeyResponsesWebSocketV2Mode.value = OPENAI_WS_MODE_OFF
@@ -3396,6 +3419,9 @@ const syncFormFromAccount = (newAccount: Account | null) => {
       openAIEndpointCapabilities.value = readOpenAIEndpointCapabilities(
         newAccount.credentials as Record<string, unknown> | undefined
       )
+      const videoAmount = (newAccount.credentials as Record<string, unknown> | undefined)
+        ?.video_preauthorization_amount
+      videoPreauthorizationAmount.value = videoAmount == null ? '' : String(videoAmount)
       if (!openAITextGenerationCapabilityEnabled.value) {
         openAIResponsesMode.value = 'auto'
       }
@@ -4125,6 +4151,18 @@ const handleSubmit = async () => {
   if (form.status !== 'active' && form.status !== 'inactive' && form.status !== 'error') {
     appStore.showError(t('admin.accounts.pleaseSelectStatus'))
     return
+  }
+
+  if (
+    props.account.platform === 'openai' &&
+    props.account.type === 'apikey' &&
+    openAIEndpointCapabilities.value.includes('video_api')
+  ) {
+    const amount = Number(videoPreauthorizationAmount.value)
+    if (!Number.isFinite(amount) || amount <= 0) {
+      appStore.showError(t('admin.accounts.openai.videoPreauthorizationAmountRequired'))
+      return
+    }
   }
 
   const updatePayload: Record<string, unknown> = { ...form }

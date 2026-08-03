@@ -60,6 +60,8 @@ type videoRepositoryStub struct {
 	media       map[string]*VideoMedia
 	jobs        map[string]*VideoJob
 	idempotency map[string]*VideoJob
+	balance     float64
+	frozen      float64
 }
 
 func newVideoRepositoryStub() *videoRepositoryStub {
@@ -67,6 +69,7 @@ func newVideoRepositoryStub() *videoRepositoryStub {
 		media:       make(map[string]*VideoMedia),
 		jobs:        make(map[string]*VideoJob),
 		idempotency: make(map[string]*VideoJob),
+		balance:     100,
 	}
 }
 
@@ -93,6 +96,11 @@ func (r *videoRepositoryStub) ReserveJob(_ context.Context, reservation VideoJob
 			return &copy, false, nil
 		}
 	}
+	if r.balance < reservation.PreauthorizationAmount {
+		return nil, false, ErrVideoInsufficientBalance
+	}
+	r.balance -= reservation.PreauthorizationAmount
+	r.frozen += reservation.PreauthorizationAmount
 	job := &VideoJob{
 		JobID:            reservation.JobID,
 		UpstreamJobID:    videoCreatingUpstreamPrefix + reservation.JobID,
@@ -106,8 +114,9 @@ func (r *videoRepositoryStub) ReserveJob(_ context.Context, reservation VideoJob
 		Duration:         reservation.Duration,
 		AspectRatio:      reservation.AspectRatio,
 		Status:           "pending",
+		Amount:           reservation.PreauthorizationAmount,
 		Currency:         "USD",
-		SettlementStatus: "released",
+		SettlementStatus: "held",
 		CreatedAt:        time.Now(),
 		UpdatedAt:        time.Now(),
 	}
@@ -120,9 +129,12 @@ func (r *videoRepositoryStub) ReserveJob(_ context.Context, reservation VideoJob
 	return &copy, true, nil
 }
 
-func (r *videoRepositoryStub) DeleteJobReservation(_ context.Context, jobID string) error {
+func (r *videoRepositoryStub) ReleaseJobReservation(_ context.Context, jobID string) error {
 	job := r.jobs[jobID]
-	if job != nil && strings.HasPrefix(job.UpstreamJobID, videoCreatingUpstreamPrefix) {
+	if job != nil && job.SettlementStatus == "held" &&
+		(strings.HasPrefix(job.UpstreamJobID, videoCreatingUpstreamPrefix) || strings.HasPrefix(job.UpstreamJobID, videoRetryableUpstreamPrefix)) {
+		r.balance += job.Amount
+		r.frozen -= job.Amount
 		delete(r.jobs, jobID)
 		if job.IdempotencyKey != nil {
 			delete(r.idempotency, *job.IdempotencyKey)
@@ -154,17 +166,31 @@ func (r *videoRepositoryStub) ClaimJobReservationRetry(_ context.Context, jobID 
 	return false, nil
 }
 
-func (r *videoRepositoryStub) FinalizeJobAndHold(_ context.Context, finalization VideoJobFinalization) (*VideoJob, error) {
+func (r *videoRepositoryStub) FinalizeJobAndReconcileHold(_ context.Context, finalization VideoJobFinalization) (*VideoJob, error) {
 	job := r.jobs[finalization.JobID]
 	if job == nil {
 		return nil, ErrVideoResourceNotFound
 	}
+	if finalization.Amount > job.Amount+0.00000001 {
+		return nil, ErrVideoPricingUnavailable
+	}
+	refund := job.Amount - finalization.Amount
+	r.balance += refund
+	r.frozen -= refund
 	job.UpstreamJobID = finalization.UpstreamJobID
 	job.Status = finalization.Status
 	job.Amount = finalization.Amount
 	job.Currency = finalization.Currency
 	job.UpstreamResponse = append([]byte(nil), finalization.UpstreamResponse...)
 	job.SettlementStatus = "held"
+	if finalization.Status == "completed" {
+		r.frozen -= finalization.Amount
+		job.SettlementStatus = "captured"
+	} else if finalization.Status == "failed" || finalization.Status == "canceled" {
+		r.balance += finalization.Amount
+		r.frozen -= finalization.Amount
+		job.SettlementStatus = "released"
+	}
 	job.UpdatedAt = time.Now()
 	copy := *job
 	return &copy, nil
@@ -225,10 +251,11 @@ func videoTestAccount(id, groupID int64, baseURL string) Account {
 		RateMultiplier: &rate,
 		GroupIDs:       []int64{groupID},
 		Credentials: map[string]any{
-			"base_url":            baseURL,
-			"api_key":             "upstream-secret",
-			"openai_capabilities": []any{"video_api"},
-			"model_mapping":       map[string]any{"video-public": "video-upstream-v2"},
+			"base_url":                      baseURL,
+			"api_key":                       "upstream-secret",
+			"openai_capabilities":           []any{"video_api"},
+			"model_mapping":                 map[string]any{"video-public": "video-upstream-v2"},
+			"video_preauthorization_amount": 10.0,
 		},
 	}
 }
@@ -286,7 +313,80 @@ func TestXiaoVideoCreateBindsMediaAccountAndMapsModel(t *testing.T) {
 	require.Equal(t, "https://upstream.example.test/media/up-media/content", captured["start_frame_url"])
 	require.Equal(t, int64(42), job.AccountID)
 	require.Equal(t, 3.0, job.Amount)
+	require.InDelta(t, 97.0, repo.balance, 0.00000001)
+	require.InDelta(t, 3.0, repo.frozen, 0.00000001)
 	require.NotContains(t, string(job.UpstreamResponse), "video.example.test")
+}
+
+func TestXiaoVideoCreateRejectsInsufficientBalanceBeforeCallingUpstream(t *testing.T) {
+	const groupID int64 = 7
+	repo := newVideoRepositoryStub()
+	repo.balance = 14.99
+	repo.media["vidmedia_balance"] = &VideoMedia{MediaID: "vidmedia_balance", AccountID: 42, UserID: 11, APIKeyID: 22, UpstreamURL: "https://upstream.example/media/balance", ExpiresAt: time.Now().Add(time.Hour)}
+	accounts := &videoAccountRepoStub{accounts: []Account{videoTestAccount(42, groupID, "https://upstream.example/v1")}}
+	requests := 0
+	upstream := &videoHTTPUpstreamStub{do: func(_ *http.Request, _ string, _ int64, _ int) (*http.Response, error) {
+		requests++
+		return nil, errors.New("upstream must not be called")
+	}}
+	svc := newVideoServiceForTest(repo, accounts, upstream)
+
+	_, err := svc.Create(context.Background(), VideoOwner{UserID: 11, APIKeyID: 22, GroupID: videoInt64Ptr(groupID)}, []byte(`{"model":"video-public","prompt":"no balance","start_frame_url":"https://video.example.test/v1/videos/uploads/vidmedia_balance/content"}`), "insufficient-balance")
+	require.ErrorIs(t, err, ErrVideoInsufficientBalance)
+	require.Zero(t, requests)
+	require.Empty(t, repo.jobs)
+	require.InDelta(t, 14.99, repo.balance, 0.00000001)
+	require.Zero(t, repo.frozen)
+}
+
+func TestXiaoVideoCreateRejectsMissingPreauthorizationBeforeCallingUpstream(t *testing.T) {
+	const groupID int64 = 7
+	repo := newVideoRepositoryStub()
+	repo.media["vidmedia_pricing"] = &VideoMedia{MediaID: "vidmedia_pricing", AccountID: 42, UserID: 11, APIKeyID: 22, UpstreamURL: "https://upstream.example/media/pricing", ExpiresAt: time.Now().Add(time.Hour)}
+	account := videoTestAccount(42, groupID, "https://upstream.example/v1")
+	delete(account.Credentials, OpenAIVideoPreauthorizationAmountCredentialKey)
+	accounts := &videoAccountRepoStub{accounts: []Account{account}}
+	requests := 0
+	upstream := &videoHTTPUpstreamStub{do: func(_ *http.Request, _ string, _ int64, _ int) (*http.Response, error) {
+		requests++
+		return nil, errors.New("upstream must not be called")
+	}}
+	svc := newVideoServiceForTest(repo, accounts, upstream)
+
+	_, err := svc.Create(context.Background(), VideoOwner{UserID: 11, APIKeyID: 22, GroupID: videoInt64Ptr(groupID)}, []byte(`{"model":"video-public","prompt":"missing pricing","start_frame_url":"https://video.example.test/v1/videos/uploads/vidmedia_pricing/content"}`), "missing-pricing")
+	require.ErrorIs(t, err, ErrVideoPricingUnavailable)
+	require.Zero(t, requests)
+	require.Empty(t, repo.jobs)
+}
+
+func TestXiaoVideoCreateReleasesHoldWhenUpstreamAmountExceedsCeiling(t *testing.T) {
+	const groupID int64 = 7
+	repo := newVideoRepositoryStub()
+	repo.media["vidmedia_ceiling"] = &VideoMedia{MediaID: "vidmedia_ceiling", AccountID: 42, UserID: 11, APIKeyID: 22, UpstreamURL: "https://upstream.example/media/ceiling", ExpiresAt: time.Now().Add(time.Hour)}
+	accounts := &videoAccountRepoStub{accounts: []Account{videoTestAccount(42, groupID, "https://upstream.example/v1")}}
+	posts := 0
+	deletes := 0
+	upstream := &videoHTTPUpstreamStub{do: func(req *http.Request, _ string, _ int64, _ int) (*http.Response, error) {
+		switch req.Method {
+		case http.MethodPost:
+			posts++
+			return &http.Response{StatusCode: http.StatusAccepted, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{"job_id":"up-too-expensive","status":"pending","amount":"11"}`))}, nil
+		case http.MethodDelete:
+			deletes++
+			return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{}`))}, nil
+		default:
+			return nil, errors.New("unexpected request")
+		}
+	}}
+	svc := newVideoServiceForTest(repo, accounts, upstream)
+
+	_, err := svc.Create(context.Background(), VideoOwner{UserID: 11, APIKeyID: 22, GroupID: videoInt64Ptr(groupID)}, []byte(`{"model":"video-public","prompt":"too expensive","start_frame_url":"https://video.example.test/v1/videos/uploads/vidmedia_ceiling/content"}`), "over-ceiling")
+	require.ErrorIs(t, err, ErrVideoPricingUnavailable)
+	require.Equal(t, 1, posts)
+	require.Equal(t, 1, deletes)
+	require.Empty(t, repo.jobs)
+	require.InDelta(t, 100.0, repo.balance, 0.00000001)
+	require.Zero(t, repo.frozen)
 }
 
 func TestXiaoVideoCreateRejectsCrossKeyMediaAndIdempotencyConflict(t *testing.T) {

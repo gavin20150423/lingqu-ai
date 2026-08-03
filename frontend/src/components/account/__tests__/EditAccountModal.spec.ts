@@ -811,6 +811,7 @@ describe('EditAccountModal', () => {
   it('persists the Xiao-compatible video API capability explicitly', async () => {
     const account = buildAccount()
     account.credentials.openai_capabilities = ['video_api']
+    account.credentials.video_preauthorization_amount = 25
     updateAccountMock.mockReset()
     checkMixedChannelRiskMock.mockReset()
     checkMixedChannelRiskMock.mockResolvedValue({ has_risk: false })
@@ -824,12 +825,18 @@ describe('EditAccountModal', () => {
     expect(
       wrapper.get<HTMLInputElement>('[data-testid="openai-endpoint-capability-chat_completions"]').element.checked
     ).toBe(false)
+    expect(
+      wrapper.get<HTMLInputElement>('[data-testid="video-preauthorization-amount"]').element.value
+    ).toBe('25')
+
+    await wrapper.get('[data-testid="video-preauthorization-amount"]').setValue('30.5')
 
     await wrapper.get('form#edit-account-form').trigger('submit.prevent')
 
     expect(updateAccountMock.mock.calls[0]?.[1]?.credentials?.openai_capabilities).toEqual([
       'video_api'
     ])
+    expect(updateAccountMock.mock.calls[0]?.[1]?.credentials?.video_preauthorization_amount).toBe(30.5)
   })
 
 	it('submits OpenAI quota auto-pause thresholds in extra', async () => {

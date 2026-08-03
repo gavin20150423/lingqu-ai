@@ -615,6 +615,10 @@ export default {
         capabilityChatCompletionsAuto: 'Chat Completions（自动探测）',
         capabilityEmbeddings: 'Embeddings',
         capabilityVideoAPI: '视频 API',
+        videoPreauthorizationAmount: '单任务上游费用上限（USD）',
+        videoPreauthorizationAmountDesc:
+          '创建任务前按此上限乘以账号计费倍率冻结余额；收到上游实际 amount 后自动退回差额。请填写能够覆盖该上游最高单任务费用的值。',
+        videoPreauthorizationAmountRequired: '启用视频 API 时必须填写大于 0 的单任务上游费用上限',
         responsesStatusAutoSupported: '自动探测：Responses',
         responsesStatusAutoUnsupported: '自动探测：Chat Completions',
         responsesStatusAutoUnknown: '自动探测：未探测',

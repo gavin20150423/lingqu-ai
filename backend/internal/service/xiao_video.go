@@ -35,6 +35,7 @@ var (
 	ErrVideoInsufficientBalance  = infraerrors.New(http.StatusPaymentRequired, "INSUFFICIENT_BALANCE", "insufficient balance")
 	ErrVideoJobNotCancelable     = infraerrors.New(http.StatusConflict, "VIDEO_JOB_NOT_CANCELABLE", "video job is not cancelable")
 	ErrVideoCapacityExhausted    = infraerrors.New(http.StatusTooManyRequests, "VIDEO_CAPACITY_EXHAUSTED", "video capacity is temporarily exhausted")
+	ErrVideoPricingUnavailable   = infraerrors.New(http.StatusServiceUnavailable, "VIDEO_PRICING_UNAVAILABLE", "video pricing is unavailable")
 	ErrVideoUpstreamUnavailable  = infraerrors.New(http.StatusServiceUnavailable, "VIDEO_UPSTREAM_UNAVAILABLE", "video upstream is unavailable")
 	ErrVideoMediaAccountMismatch = infraerrors.New(http.StatusUnprocessableEntity, "VIDEO_MEDIA_INVALID", "all uploaded media must belong to the same video upstream")
 )
@@ -82,15 +83,16 @@ type VideoJob struct {
 }
 
 type VideoJobReservation struct {
-	JobID          string
-	AccountID      int64
-	Owner          VideoOwner
-	IdempotencyKey string
-	RequestHash    string
-	Model          string
-	Resolution     string
-	Duration       int
-	AspectRatio    string
+	JobID                  string
+	AccountID              int64
+	Owner                  VideoOwner
+	IdempotencyKey         string
+	RequestHash            string
+	Model                  string
+	Resolution             string
+	Duration               int
+	AspectRatio            string
+	PreauthorizationAmount float64
 }
 
 type VideoJobFinalization struct {
@@ -115,8 +117,8 @@ type VideoRepository interface {
 	ReserveJob(context.Context, VideoJobReservation) (*VideoJob, bool, error)
 	MarkJobReservationRetryable(context.Context, string) error
 	ClaimJobReservationRetry(context.Context, string, time.Time) (bool, error)
-	DeleteJobReservation(context.Context, string) error
-	FinalizeJobAndHold(context.Context, VideoJobFinalization) (*VideoJob, error)
+	ReleaseJobReservation(context.Context, string) error
+	FinalizeJobAndReconcileHold(context.Context, VideoJobFinalization) (*VideoJob, error)
 	GetJobForOwner(context.Context, string, int64) (*VideoJob, error)
 	ListJobsForOwner(context.Context, int64, int) ([]*VideoJob, error)
 	ListActiveJobs(context.Context, int) ([]*VideoJob, error)
@@ -351,6 +353,7 @@ func (s *XiaoVideoService) Create(ctx context.Context, owner VideoOwner, body []
 		return nil, err
 	}
 	excluded := make(map[int64]struct{})
+	pricingUnavailable := false
 	for attempt := 0; attempt < 3; attempt++ {
 		account, release, selectErr := s.selectVideoAccount(ctx, owner, meta.Model, fixedAccountID, excluded)
 		if selectErr != nil {
@@ -361,24 +364,39 @@ func (s *XiaoVideoService) Create(ctx context.Context, owner VideoOwner, body []
 			excluded[account.ID] = struct{}{}
 			continue
 		}
+		preauthorizationAmount, pricingOK := account.VideoPreauthorizationAmount()
+		if !pricingOK {
+			release()
+			pricingUnavailable = true
+			if fixedAccountID != 0 {
+				return nil, ErrVideoPricingUnavailable
+			}
+			excluded[account.ID] = struct{}{}
+			continue
+		}
 		upstreamBody, rewriteErr := rewriteVideoModel(rewritten, account.GetMappedModel(meta.Model))
 		if rewriteErr != nil {
 			release()
 			return nil, rewriteErr
 		}
 		reserved, created, reserveErr := s.repo.ReserveJob(ctx, VideoJobReservation{
-			JobID:          jobID,
-			AccountID:      account.ID,
-			Owner:          owner,
-			IdempotencyKey: idempotencyKey,
-			RequestHash:    requestHash,
-			Model:          meta.Model,
-			Resolution:     meta.Resolution,
-			Duration:       meta.Duration,
-			AspectRatio:    meta.AspectRatio,
+			JobID:                  jobID,
+			AccountID:              account.ID,
+			Owner:                  owner,
+			IdempotencyKey:         idempotencyKey,
+			RequestHash:            requestHash,
+			Model:                  meta.Model,
+			Resolution:             meta.Resolution,
+			Duration:               meta.Duration,
+			AspectRatio:            meta.AspectRatio,
+			PreauthorizationAmount: preauthorizationAmount,
 		})
 		if reserveErr != nil {
 			release()
+			if created {
+				_ = s.repo.ReleaseJobReservation(context.Background(), jobID)
+				s.invalidateBalance(ctx, owner.UserID)
+			}
 			return nil, reserveErr
 		}
 		if !created {
@@ -425,7 +443,7 @@ func (s *XiaoVideoService) Create(ctx context.Context, owner VideoOwner, body []
 				}
 				return nil, requestErr
 			}
-			_ = s.repo.DeleteJobReservation(context.Background(), jobID)
+			_ = s.repo.ReleaseJobReservation(context.Background(), jobID)
 			if ctx.Err() != nil {
 				return nil, ctx.Err()
 			}
@@ -441,7 +459,7 @@ func (s *XiaoVideoService) Create(ctx context.Context, owner VideoOwner, body []
 			if idempotencyKey != "" {
 				s.markVideoReservationRetryable(jobID)
 			} else {
-				_ = s.repo.DeleteJobReservation(context.Background(), jobID)
+				_ = s.repo.ReleaseJobReservation(context.Background(), jobID)
 			}
 			return nil, ErrVideoUpstreamUnavailable.WithCause(readErr)
 		}
@@ -450,7 +468,7 @@ func (s *XiaoVideoService) Create(ctx context.Context, owner VideoOwner, body []
 				s.markVideoReservationRetryable(jobID)
 				return nil, upstreamVideoError(resp, raw)
 			}
-			_ = s.repo.DeleteJobReservation(context.Background(), jobID)
+			_ = s.repo.ReleaseJobReservation(context.Background(), jobID)
 			if fixedAccountID == 0 && retryableVideoStatus(resp.StatusCode) {
 				excluded[account.ID] = struct{}{}
 				continue
@@ -462,7 +480,7 @@ func (s *XiaoVideoService) Create(ctx context.Context, owner VideoOwner, body []
 			if idempotencyKey != "" {
 				s.markVideoReservationRetryable(jobID)
 			} else {
-				_ = s.repo.DeleteJobReservation(context.Background(), jobID)
+				_ = s.repo.ReleaseJobReservation(context.Background(), jobID)
 			}
 			return nil, ErrVideoUpstreamUnavailable.WithCause(err)
 		}
@@ -473,7 +491,7 @@ func (s *XiaoVideoService) Create(ctx context.Context, owner VideoOwner, body []
 			if idempotencyKey != "" {
 				s.markVideoReservationRetryable(jobID)
 			} else {
-				_ = s.repo.DeleteJobReservation(context.Background(), jobID)
+				_ = s.repo.ReleaseJobReservation(context.Background(), jobID)
 			}
 			return nil, ErrVideoUpstreamUnavailable.WithCause(errors.New("upstream job_id missing"))
 		}
@@ -485,7 +503,7 @@ func (s *XiaoVideoService) Create(ctx context.Context, owner VideoOwner, body []
 					return nil, refreshErr
 				}
 				_ = s.cancelUpstream(context.Background(), account, upstreamID)
-				_ = s.repo.DeleteJobReservation(context.Background(), jobID)
+				_ = s.repo.ReleaseJobReservation(context.Background(), jobID)
 				return nil, refreshErr
 			}
 			upstream = refreshed
@@ -495,18 +513,24 @@ func (s *XiaoVideoService) Create(ctx context.Context, owner VideoOwner, body []
 		}
 		if !isVideoStatus(status) {
 			_ = s.cancelUpstream(context.Background(), account, upstreamID)
-			_ = s.repo.DeleteJobReservation(context.Background(), jobID)
+			_ = s.repo.ReleaseJobReservation(context.Background(), jobID)
 			return nil, ErrVideoUpstreamUnavailable.WithCause(errors.New("invalid upstream video status"))
 		}
 		amount, amountErr := strconv.ParseFloat(amountText, 64)
 		if amountErr != nil || amount < 0 {
 			_ = s.cancelUpstream(context.Background(), account, upstreamID)
-			_ = s.repo.DeleteJobReservation(context.Background(), jobID)
+			_ = s.repo.ReleaseJobReservation(context.Background(), jobID)
 			return nil, ErrVideoUpstreamUnavailable
 		}
 		amount *= account.BillingRateMultiplier()
+		if amount-reserved.Amount > 0.00000001 {
+			_ = s.cancelUpstream(context.Background(), account, upstreamID)
+			_ = s.repo.ReleaseJobReservation(context.Background(), jobID)
+			s.invalidateBalance(ctx, owner.UserID)
+			return nil, ErrVideoPricingUnavailable
+		}
 		currency := defaultString(videoStringValue(upstream["currency"]), "USD")
-		job, finalizeErr := s.repo.FinalizeJobAndHold(ctx, VideoJobFinalization{
+		job, finalizeErr := s.repo.FinalizeJobAndReconcileHold(ctx, VideoJobFinalization{
 			JobID:            jobID,
 			UpstreamJobID:    upstreamID,
 			Status:           status,
@@ -516,11 +540,14 @@ func (s *XiaoVideoService) Create(ctx context.Context, owner VideoOwner, body []
 		})
 		if finalizeErr != nil {
 			_ = s.cancelUpstream(context.Background(), account, upstreamID)
-			_ = s.repo.DeleteJobReservation(context.Background(), jobID)
+			_ = s.repo.ReleaseJobReservation(context.Background(), jobID)
 			return nil, finalizeErr
 		}
 		s.invalidateBalance(ctx, owner.UserID)
 		return job, nil
+	}
+	if pricingUnavailable {
+		return nil, ErrVideoPricingUnavailable
 	}
 	return nil, ErrVideoCapacityExhausted
 }
