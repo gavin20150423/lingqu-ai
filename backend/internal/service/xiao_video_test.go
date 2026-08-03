@@ -556,7 +556,7 @@ func TestXiaoVideoCreateScopesUpstreamIdempotencyByDownstreamKey(t *testing.T) {
 	require.NotEqual(t, upstreamKeys[0], upstreamKeys[1])
 }
 
-func TestXiaoVideoCreateMapsSchedulerExhaustionToVideoCapacityError(t *testing.T) {
+func TestXiaoVideoCreateMapsAccountExhaustionToVideoCapacityError(t *testing.T) {
 	const groupID int64 = 7
 	repo := newVideoRepositoryStub()
 	accounts := &videoAccountRepoStub{}
@@ -572,6 +572,38 @@ func TestXiaoVideoCreateMapsSchedulerExhaustionToVideoCapacityError(t *testing.T
 		"no-capacity",
 	)
 	require.ErrorIs(t, err, ErrVideoCapacityExhausted)
+}
+
+func TestXiaoVideoCreateSelectsNextConfiguredAccountForModel(t *testing.T) {
+	const groupID int64 = 7
+	repo := newVideoRepositoryStub()
+	unsupported := videoTestAccount(41, groupID, "https://first.example.test/v1")
+	unsupported.Priority = 1
+	unsupported.Credentials["model_mapping"] = map[string]any{"another-video-model": "upstream-a"}
+	selected := videoTestAccount(42, groupID, "https://second.example.test/v1")
+	selected.Priority = 2
+	accounts := &videoAccountRepoStub{accounts: []Account{unsupported, selected}}
+
+	var selectedAccountID int64
+	upstream := &videoHTTPUpstreamStub{do: func(_ *http.Request, _ string, accountID int64, _ int) (*http.Response, error) {
+		selectedAccountID = accountID
+		return &http.Response{
+			StatusCode: http.StatusAccepted,
+			Header:     make(http.Header),
+			Body:       io.NopCloser(strings.NewReader(`{"job_id":"up-job-selected","status":"pending","amount":"1"}`)),
+		}, nil
+	}}
+	svc := newVideoServiceForTest(repo, accounts, upstream)
+
+	job, err := svc.Create(
+		context.Background(),
+		VideoOwner{UserID: 11, APIKeyID: 22, GroupID: videoInt64Ptr(groupID)},
+		[]byte(`{"model":"video-public","prompt":"select configured upstream"}`),
+		"select-configured-account",
+	)
+	require.NoError(t, err)
+	require.Equal(t, int64(42), selectedAccountID)
+	require.Equal(t, int64(42), job.AccountID)
 }
 
 func TestXiaoVideoListModelsMapsAliases(t *testing.T) {

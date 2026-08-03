@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -366,13 +367,25 @@ func (s *XiaoVideoService) Create(ctx context.Context, owner VideoOwner, body []
 		if selectErr != nil {
 			return nil, selectErr
 		}
-		if strings.TrimSpace(account.GetCredential("api_key")) == "" || strings.TrimSpace(account.GetCredential("base_url")) == "" {
+		hasAPIKey := strings.TrimSpace(account.GetCredential("api_key")) != ""
+		hasBaseURL := strings.TrimSpace(account.GetCredential("base_url")) != ""
+		if !hasAPIKey || !hasBaseURL {
+			slog.WarnContext(ctx, "xiao_video.account_credentials_incomplete",
+				"account_id", account.ID,
+				"attempt", attempt+1,
+				"has_api_key", hasAPIKey,
+				"has_base_url", hasBaseURL,
+			)
 			release()
 			excluded[account.ID] = struct{}{}
 			continue
 		}
 		preauthorizationAmount, pricingOK := account.VideoPreauthorizationAmount()
 		if !pricingOK {
+			slog.WarnContext(ctx, "xiao_video.account_pricing_unavailable",
+				"account_id", account.ID,
+				"attempt", attempt+1,
+			)
 			release()
 			pricingUnavailable = true
 			if fixedAccountID != 0 {
@@ -560,6 +573,11 @@ func (s *XiaoVideoService) Create(ctx context.Context, owner VideoOwner, body []
 	if pricingUnavailable {
 		return nil, ErrVideoPricingUnavailable
 	}
+	slog.WarnContext(ctx, "xiao_video.account_attempts_exhausted",
+		"group_id", derefGroupID(owner.GroupID),
+		"model", meta.Model,
+		"excluded_accounts", len(excluded),
+	)
 	return nil, ErrVideoCapacityExhausted
 }
 
@@ -892,28 +910,48 @@ func (s *XiaoVideoService) selectVideoAccount(ctx context.Context, owner VideoOw
 		}
 		return s.acquireVideoSlot(ctx, account)
 	}
-	if s.openAIGateway == nil {
-		return nil, func() {}, ErrVideoUpstreamUnavailable
+	accounts, err := s.videoAccounts(ctx, owner.GroupID, true)
+	if err != nil {
+		return nil, func() {}, ErrVideoUpstreamUnavailable.WithCause(err)
 	}
-	selection, _, err := s.openAIGateway.SelectAccountWithSchedulerForCapability(ctx, owner.GroupID, "", "", model, excluded, OpenAIUpstreamTransportHTTPSSE, OpenAIEndpointCapabilityVideoAPI, false, false, false, PlatformOpenAI)
-	if err != nil || selection == nil || selection.Account == nil {
-		if err != nil {
-			slog.WarnContext(ctx, "xiao_video.account_selection_failed",
-				"group_id", derefGroupID(owner.GroupID),
-				"model", model,
-				"error", err,
-			)
-			if errors.Is(err, ErrNoAvailableAccounts) {
-				return nil, func() {}, ErrVideoCapacityExhausted.WithCause(err)
-			}
-			return nil, func() {}, err
+	sort.SliceStable(accounts, func(i, j int) bool {
+		if accounts[i].Priority != accounts[j].Priority {
+			return accounts[i].Priority < accounts[j].Priority
 		}
-		return nil, func() {}, ErrVideoUpstreamUnavailable
+		switch {
+		case accounts[i].LastUsedAt == nil && accounts[j].LastUsedAt != nil:
+			return true
+		case accounts[i].LastUsedAt != nil && accounts[j].LastUsedAt == nil:
+			return false
+		case accounts[i].LastUsedAt != nil && accounts[j].LastUsedAt != nil && !accounts[i].LastUsedAt.Equal(*accounts[j].LastUsedAt):
+			return accounts[i].LastUsedAt.Before(*accounts[j].LastUsedAt)
+		default:
+			return accounts[i].ID < accounts[j].ID
+		}
+	})
+
+	eligible := 0
+	for i := range accounts {
+		account := &accounts[i]
+		if _, skip := excluded[account.ID]; skip || !s.accountEligibleForVideo(owner, account, model) {
+			continue
+		}
+		eligible++
+		selected, release, acquireErr := s.acquireVideoSlot(ctx, account)
+		if acquireErr == nil {
+			return selected, release, nil
+		}
+		if !errors.Is(acquireErr, ErrVideoCapacityExhausted) {
+			return nil, func() {}, acquireErr
+		}
 	}
-	if selection.Acquired && selection.ReleaseFunc != nil {
-		return selection.Account, selection.ReleaseFunc, nil
-	}
-	return s.acquireVideoSlot(ctx, selection.Account)
+	slog.WarnContext(ctx, "xiao_video.account_selection_exhausted",
+		"group_id", derefGroupID(owner.GroupID),
+		"model", model,
+		"candidate_accounts", len(accounts),
+		"eligible_accounts", eligible,
+	)
+	return nil, func() {}, ErrVideoCapacityExhausted
 }
 
 func (s *XiaoVideoService) acquireVideoSlot(ctx context.Context, account *Account) (*Account, func(), error) {
@@ -928,6 +966,10 @@ func (s *XiaoVideoService) acquireVideoSlot(ctx context.Context, account *Accoun
 		return nil, func() {}, ErrVideoUpstreamUnavailable.WithCause(err)
 	}
 	if result == nil || !result.Acquired {
+		slog.WarnContext(ctx, "xiao_video.account_slot_exhausted",
+			"account_id", account.ID,
+			"max_concurrency", account.Concurrency,
+		)
 		return nil, func() {}, ErrVideoCapacityExhausted
 	}
 	return account, result.ReleaseFunc, nil
