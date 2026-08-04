@@ -111,6 +111,8 @@
           :rate-limit-max="withdrawalRateLimitMax"
           :rate-limit-exempt-amount="withdrawalRateLimitExemptAmount"
         />
+        <ProfileTotpCard />
+        <ProfilePasskeyCard :enabled="passkeyEnabled" />
       </section>
     </div>
   </UserWorkspaceLayout>
@@ -123,6 +125,8 @@ import UserWorkspaceLayout from '@/components/layout/UserWorkspaceLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
 import ProfilePasswordForm from '@/components/user/profile/ProfilePasswordForm.vue'
 import ProfileWithdrawalCard from '@/components/user/profile/ProfileWithdrawalCard.vue'
+import ProfileTotpCard from '@/components/user/profile/ProfileTotpCard.vue'
+import ProfilePasskeyCard from '@/components/user/profile/ProfilePasskeyCard.vue'
 import { userAPI } from '@/api'
 import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
@@ -137,6 +141,7 @@ const user = computed(() => authStore.user)
 const contactQrCanvas = ref<HTMLCanvasElement | null>(null)
 const contactInfo = ref('')
 const systemDefaultThreshold = ref(0)
+const passkeyEnabled = ref(false)
 const withdrawalManagementEnabled = ref(true)
 const withdrawalRateLimitWindowDays = ref(1)
 const withdrawalRateLimitMax = ref(0)
@@ -247,6 +252,7 @@ onMounted(async () => {
       withdrawalRateLimitWindowDays.value = settings?.withdrawal_rate_limit_window_days ?? 1
       withdrawalRateLimitMax.value = settings?.withdrawal_rate_limit_max ?? 0
       withdrawalRateLimitExemptAmount.value = settings?.withdrawal_rate_limit_exempt_amount ?? 500
+      passkeyEnabled.value = settings?.passkey_enabled === true
       syncNotifyForm()
     })
     .catch((error) => {

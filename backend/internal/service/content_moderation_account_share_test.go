@@ -23,7 +23,7 @@ func TestContentModerationAccountShareScope(t *testing.T) {
 			OwnerUserID: 401,
 		},
 	}
-	svc := NewContentModerationService(nil, nil, nil, nil, nil, nil, nil)
+	svc := NewContentModerationService(nil, nil, nil, nil, nil, nil, nil, nil)
 	svc.SetAccountShareModeResolver(resolver)
 	input := ContentModerationCheckInput{
 		UserID:   501,

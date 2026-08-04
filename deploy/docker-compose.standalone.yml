@@ -15,6 +15,8 @@ services:
     image: ${SUB2API_IMAGE:-ghcr.io/gavin20150423/sub2api:0.1.155-lingqu.1}
     container_name: sub2api
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
     ulimits:
       nofile:
         soft: 100000
