@@ -57,6 +57,8 @@ const schedulerOutboxPendingDedupKeyMigration = "153_scheduler_outbox_pending_de
 const schedulerOutboxPendingDedupKeyIndex = "idx_scheduler_outbox_pending_dedup_key"
 const latestAPIKeyIPIndexMigration = "174_add_usage_logs_api_key_latest_ip_index_notx.sql"
 const latestAPIKeyIPIndex = "idx_usage_logs_api_key_latest_ip"
+const accountLeaseGroupBindingMigration = "144_account_lease_group_binding.sql"
+const accountLeasesTable = "account_leases"
 
 type migrationChecksumCompatibilityRule struct {
 	fileChecksum       string
@@ -209,6 +211,17 @@ func applyMigrationsFS(ctx context.Context, db *sql.DB, fsys fs.FS) error {
 			return fmt.Errorf("check migration %s: %w", name, rowErr)
 		}
 
+		recordOnly, err := shouldRecordMigrationWithoutExecution(ctx, lockConn, name)
+		if err != nil {
+			return fmt.Errorf("prepare migration %s: %w", name, err)
+		}
+		if recordOnly {
+			if _, err := lockConn.ExecContext(ctx, "INSERT INTO schema_migrations (filename, checksum) VALUES ($1, $2)", name, checksum); err != nil {
+				return fmt.Errorf("record no-op migration %s: %w", name, err)
+			}
+			continue
+		}
+
 		nonTx, err := validateMigrationExecutionMode(name, content)
 		if err != nil {
 			return fmt.Errorf("validate migration %s: %w", name, err)
@@ -286,6 +299,22 @@ func prepareNonTransactionalMigration(ctx context.Context, db migrationConnectio
 	default:
 		return nil
 	}
+}
+
+// shouldRecordMigrationWithoutExecution handles a released orphan migration
+// without changing its immutable SQL checksum. Installations that still have
+// the retired subsite schema execute the migration normally; installations
+// without that schema record it as an intentional no-op.
+func shouldRecordMigrationWithoutExecution(ctx context.Context, db migrationConnection, name string) (bool, error) {
+	if name != accountLeaseGroupBindingMigration {
+		return false, nil
+	}
+
+	var prerequisiteExists bool
+	if err := db.QueryRowContext(ctx, "SELECT to_regclass($1) IS NOT NULL", accountLeasesTable).Scan(&prerequisiteExists); err != nil {
+		return false, fmt.Errorf("check prerequisite table %s: %w", accountLeasesTable, err)
+	}
+	return !prerequisiteExists, nil
 }
 
 func preparePaymentOrdersOutTradeNoUniqueMigration(ctx context.Context, db migrationConnection) error {

@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"errors"
 	"io/fs"
@@ -323,6 +324,93 @@ func TestApplyMigrationsFS_ReadMigrationError(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "read migration 001_bad.sql")
 	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestApplyMigrationsFS_OrphanedAccountLeaseMigration(t *testing.T) {
+	const migrationSQL = "ALTER TABLE account_leases ADD COLUMN group_id BIGINT;"
+
+	t.Run("records_noop_when_prerequisite_table_is_absent", func(t *testing.T) {
+		db, mock, err := sqlmock.New()
+		require.NoError(t, err)
+		defer func() { _ = db.Close() }()
+
+		prepareMigrationsBootstrapExpectations(mock)
+		mock.ExpectQuery("SELECT checksum FROM schema_migrations WHERE filename = \\$1").
+			WithArgs(accountLeaseGroupBindingMigration).
+			WillReturnError(sql.ErrNoRows)
+		mock.ExpectQuery("SELECT to_regclass\\(\\$1\\) IS NOT NULL").
+			WithArgs(accountLeasesTable).
+			WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(false))
+		mock.ExpectExec("INSERT INTO schema_migrations \\(filename, checksum\\) VALUES \\(\\$1, \\$2\\)").
+			WithArgs(accountLeaseGroupBindingMigration, migrationChecksum(migrationSQL)).
+			WillReturnResult(sqlmock.NewResult(1, 1))
+		mock.ExpectExec("SELECT pg_advisory_unlock\\(\\$1\\)").
+			WithArgs(migrationsAdvisoryLockID).
+			WillReturnResult(sqlmock.NewResult(0, 1))
+
+		fsys := fstest.MapFS{
+			accountLeaseGroupBindingMigration: &fstest.MapFile{Data: []byte(migrationSQL)},
+		}
+		err = applyMigrationsFS(context.Background(), db, fsys)
+		require.NoError(t, err)
+		require.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("executes_when_prerequisite_table_exists", func(t *testing.T) {
+		db, mock, err := sqlmock.New()
+		require.NoError(t, err)
+		defer func() { _ = db.Close() }()
+
+		prepareMigrationsBootstrapExpectations(mock)
+		mock.ExpectQuery("SELECT checksum FROM schema_migrations WHERE filename = \\$1").
+			WithArgs(accountLeaseGroupBindingMigration).
+			WillReturnError(sql.ErrNoRows)
+		mock.ExpectQuery("SELECT to_regclass\\(\\$1\\) IS NOT NULL").
+			WithArgs(accountLeasesTable).
+			WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(true))
+		mock.ExpectBegin()
+		mock.ExpectExec("ALTER TABLE account_leases ADD COLUMN group_id BIGINT").
+			WillReturnResult(sqlmock.NewResult(0, 0))
+		mock.ExpectExec("INSERT INTO schema_migrations \\(filename, checksum\\) VALUES \\(\\$1, \\$2\\)").
+			WithArgs(accountLeaseGroupBindingMigration, migrationChecksum(migrationSQL)).
+			WillReturnResult(sqlmock.NewResult(1, 1))
+		mock.ExpectCommit()
+		mock.ExpectExec("SELECT pg_advisory_unlock\\(\\$1\\)").
+			WithArgs(migrationsAdvisoryLockID).
+			WillReturnResult(sqlmock.NewResult(0, 1))
+
+		fsys := fstest.MapFS{
+			accountLeaseGroupBindingMigration: &fstest.MapFile{Data: []byte(migrationSQL)},
+		}
+		err = applyMigrationsFS(context.Background(), db, fsys)
+		require.NoError(t, err)
+		require.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("fails_when_prerequisite_check_fails", func(t *testing.T) {
+		db, mock, err := sqlmock.New()
+		require.NoError(t, err)
+		defer func() { _ = db.Close() }()
+
+		prepareMigrationsBootstrapExpectations(mock)
+		mock.ExpectQuery("SELECT checksum FROM schema_migrations WHERE filename = \\$1").
+			WithArgs(accountLeaseGroupBindingMigration).
+			WillReturnError(sql.ErrNoRows)
+		mock.ExpectQuery("SELECT to_regclass\\(\\$1\\) IS NOT NULL").
+			WithArgs(accountLeasesTable).
+			WillReturnError(errors.New("lookup failed"))
+		mock.ExpectExec("SELECT pg_advisory_unlock\\(\\$1\\)").
+			WithArgs(migrationsAdvisoryLockID).
+			WillReturnResult(sqlmock.NewResult(0, 1))
+
+		fsys := fstest.MapFS{
+			accountLeaseGroupBindingMigration: &fstest.MapFile{Data: []byte(migrationSQL)},
+		}
+		err = applyMigrationsFS(context.Background(), db, fsys)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "check prerequisite table account_leases")
+		require.NoError(t, mock.ExpectationsWereMet())
+	})
 }
 
 func TestPgAdvisoryLockAndUnlock_ErrorBranches(t *testing.T) {
