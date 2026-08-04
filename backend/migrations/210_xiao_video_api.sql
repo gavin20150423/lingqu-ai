@@ -36,8 +36,6 @@ CREATE TABLE IF NOT EXISTS video_jobs (
     status VARCHAR(32) NOT NULL DEFAULT 'pending',
     amount NUMERIC(20, 8) NOT NULL,
     currency VARCHAR(16) NOT NULL DEFAULT 'USD',
-    upstream_amount NUMERIC(20, 8),
-    upstream_currency VARCHAR(16),
     settlement_status VARCHAR(16) NOT NULL DEFAULT 'held',
     upstream_response JSONB NOT NULL DEFAULT '{}'::jsonb,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -45,7 +43,6 @@ CREATE TABLE IF NOT EXISTS video_jobs (
     finished_at TIMESTAMPTZ,
     settled_at TIMESTAMPTZ,
     CONSTRAINT video_jobs_amount_nonnegative CHECK (amount >= 0),
-    CONSTRAINT video_jobs_upstream_amount_nonnegative CHECK (upstream_amount IS NULL OR upstream_amount >= 0),
     CONSTRAINT video_jobs_status_check
         CHECK (status IN ('pending', 'running', 'settling', 'completed', 'failed', 'canceled')),
     CONSTRAINT video_jobs_settlement_status_check
