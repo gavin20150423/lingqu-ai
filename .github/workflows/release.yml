@@ -68,13 +68,9 @@ jobs:
         run: |
           go version | grep -q 'go1.26.5'
 
-      - name: Run unit tests
+      - name: Run backend tests
         working-directory: backend
-        run: make test-unit
-
-      - name: Run integration tests
-        working-directory: backend
-        run: make test-integration
+        run: go test ./... -count=1
 
       - name: Verify deployment configuration and runtime limits
         run: |
