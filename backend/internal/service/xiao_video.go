@@ -655,13 +655,16 @@ func (s *XiaoVideoService) rewriteGenerationRequest(ctx context.Context, owner V
 			return nil, meta, "", 0, ErrVideoRequestInvalid
 		}
 	}
-	if rawAudio, exists := request["audio"]; exists && rawAudio != nil {
+	if rawAudio, exists := request["audio"]; exists {
 		audio, ok := rawAudio.(bool)
 		if !ok {
 			return nil, meta, "", 0, ErrVideoRequestInvalid
 		}
 		meta.Audio = audio
 	}
+	// Normalize omitted audio to false so idempotency and retries use one stable
+	// representation while preserving the legacy no-audio behavior.
+	request["audio"] = meta.Audio
 	if videoStringValue(request["image_url"]) != "" && videoStringValue(request["start_frame_url"]) != "" {
 		return nil, meta, "", 0, ErrVideoRequestInvalid
 	}
@@ -1176,6 +1179,15 @@ func rewriteVideoRequest(body []byte, model, resolution string, duration int) ([
 	return rewritten, nil
 }
 
+func seedanceSupportsGeneratedAudio(model string) bool {
+	switch strings.ToLower(strings.TrimSpace(model)) {
+	case "seedance-2.0", "seedance-2.0-fast", "seedance-2.0-mini":
+		return true
+	default:
+		return false
+	}
+}
+
 func pricedVideoModelsForAccount(account *Account, pricing []XiaoVideoPricingRule, upstream []map[string]any) map[string]map[string]any {
 	upstreamByID := make(map[string]map[string]any, len(upstream))
 	for _, item := range upstream {
@@ -1235,10 +1247,15 @@ func pricedVideoModelsForAccount(account *Account, pricing []XiaoVideoPricingRul
 		if defaultDuration > 0 {
 			model["default_duration"] = defaultDuration
 		}
-		for _, key := range []string{"default_aspect_ratio", "supports_audio", "supports_guidances"} {
+		for _, key := range []string{"default_aspect_ratio", "supports_guidances"} {
 			if value, ok := capability[key]; ok {
 				model[key] = value
 			}
+		}
+		if seedanceSupportsGeneratedAudio(publicModel) || seedanceSupportsGeneratedAudio(upstreamModel) {
+			model["supports_audio"] = true
+		} else if value, ok := capability["supports_audio"]; ok {
+			model["supports_audio"] = value
 		}
 		out[publicModel] = model
 	}
@@ -1275,13 +1292,20 @@ func mergePricedVideoModel(target, source map[string]any) {
 	}
 	sort.Strings(merged)
 	target["resolutions"] = merged
-	for _, key := range []string{"default_resolution", "default_duration", "default_aspect_ratio", "supports_audio", "supports_guidances"} {
+	for _, key := range []string{"default_resolution", "default_duration", "default_aspect_ratio", "supports_guidances"} {
 		if _, exists := target[key]; exists {
 			continue
 		}
 		if value, exists := source[key]; exists {
 			target[key] = value
 		}
+	}
+	targetAudio, targetHasAudio := target["supports_audio"]
+	sourceAudio, sourceHasAudio := source["supports_audio"]
+	if targetAudio == true || sourceAudio == true {
+		target["supports_audio"] = true
+	} else if !targetHasAudio && sourceHasAudio {
+		target["supports_audio"] = sourceAudio
 	}
 }
 

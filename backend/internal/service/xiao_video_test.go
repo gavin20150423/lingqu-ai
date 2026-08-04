@@ -299,6 +299,22 @@ func videoTestAccount(id, groupID int64, baseURL string) Account {
 	}
 }
 
+func seedanceVideoTestAccount(id, groupID int64, model string) Account {
+	account := videoTestAccount(id, groupID, "https://upstream.example.test/v1")
+	account.Credentials["model_mapping"] = map[string]any{model: model}
+	account.Credentials[XiaoVideoPricingCredentialKey] = []any{
+		map[string]any{
+			"model":                  model,
+			"resolution":             "480p",
+			"price_per_second":       0.75,
+			"audio_price_per_second": 0.25,
+			"default_resolution":     true,
+			"default_duration":       4,
+		},
+	}
+	return account
+}
+
 func newVideoServiceForTest(repo VideoRepository, accountRepo *videoAccountRepoStub, upstream HTTPUpstream) *XiaoVideoService {
 	cfg := &config.Config{VideoAPI: config.VideoAPIConfig{Enabled: true, PublicBaseURL: "https://video.example.test"}}
 	gateway := &OpenAIGatewayService{accountRepo: accountRepo}
@@ -311,6 +327,84 @@ func TestXiaoVideoAccountUsesIndependentPlatform(t *testing.T) {
 
 	xiao.Platform = PlatformOpenAI
 	require.False(t, xiao.IsXiaoAPI())
+}
+
+func TestXiaoVideoSeedanceAudioCapabilityMatrix(t *testing.T) {
+	for _, model := range []string{"seedance-2.0", "seedance-2.0-fast", "seedance-2.0-mini"} {
+		require.True(t, seedanceSupportsGeneratedAudio(model), model)
+	}
+	require.False(t, seedanceSupportsGeneratedAudio("other-video-model"))
+}
+
+func TestXiaoVideoNormalizesAndValidatesAudio(t *testing.T) {
+	svc := newVideoServiceForTest(newVideoRepositoryStub(), &videoAccountRepoStub{}, nil)
+	owner := VideoOwner{UserID: 11, APIKeyID: 22, GroupID: videoInt64Ptr(7)}
+
+	decode := func(body string) (map[string]any, string, error) {
+		rewritten, _, hash, _, err := svc.rewriteGenerationRequest(context.Background(), owner, []byte(body))
+		if err != nil {
+			return nil, "", err
+		}
+		var request map[string]any
+		require.NoError(t, json.Unmarshal(rewritten, &request))
+		return request, hash, nil
+	}
+
+	omitted, omittedHash, err := decode(`{"model":"seedance-2.0","prompt":"waves"}`)
+	require.NoError(t, err)
+	require.Equal(t, false, omitted["audio"])
+
+	explicitFalse, falseHash, err := decode(`{"model":"seedance-2.0","prompt":"waves","audio":false}`)
+	require.NoError(t, err)
+	require.Equal(t, false, explicitFalse["audio"])
+	require.Equal(t, omittedHash, falseHash)
+
+	explicitTrue, trueHash, err := decode(`{"model":"seedance-2.0","prompt":"waves","audio":true}`)
+	require.NoError(t, err)
+	require.Equal(t, true, explicitTrue["audio"])
+	require.NotEqual(t, falseHash, trueHash)
+
+	for _, invalid := range []string{
+		`{"model":"seedance-2.0","prompt":"waves","audio":"true"}`,
+		`{"model":"seedance-2.0","prompt":"waves","audio":1}`,
+		`{"model":"seedance-2.0","prompt":"waves","audio":null}`,
+	} {
+		_, _, err := decode(invalid)
+		require.ErrorIs(t, err, ErrVideoRequestInvalid)
+	}
+}
+
+func TestXiaoVideoSeedanceAudioReachesUpstream(t *testing.T) {
+	const groupID int64 = 7
+	models := []string{"seedance-2.0", "seedance-2.0-fast", "seedance-2.0-mini"}
+	for _, model := range models {
+		t.Run(model, func(t *testing.T) {
+			repo := newVideoRepositoryStub()
+			accounts := &videoAccountRepoStub{accounts: []Account{seedanceVideoTestAccount(42, groupID, model)}}
+			var captured map[string]any
+			upstream := &videoHTTPUpstreamStub{do: func(req *http.Request, _ string, _ int64, _ int) (*http.Response, error) {
+				require.NoError(t, json.NewDecoder(req.Body).Decode(&captured))
+				return &http.Response{
+					StatusCode: http.StatusAccepted,
+					Header:     make(http.Header),
+					Body:       io.NopCloser(strings.NewReader(`{"job_id":"up-audio-job","status":"pending","amount":"1","currency":"USD"}`)),
+				}, nil
+			}}
+			svc := newVideoServiceForTest(repo, accounts, upstream)
+
+			job, err := svc.Create(
+				context.Background(),
+				VideoOwner{UserID: 11, APIKeyID: 22, GroupID: videoInt64Ptr(groupID)},
+				[]byte(`{"model":"`+model+`","prompt":"Ocean waves","resolution":"480p","duration":4,"aspect_ratio":"16:9","audio":true}`),
+				"seedance-audio-"+model,
+			)
+			require.NoError(t, err)
+			require.Equal(t, model, captured["model"])
+			require.Equal(t, true, captured["audio"])
+			require.InDelta(t, 4.0, job.Amount, 0.00000001)
+			require.NotEmpty(t, job.RequestHash)
+		})
+	}
 }
 
 func TestXiaoVideoCreateBindsMediaAccountAndMapsModel(t *testing.T) {
@@ -622,6 +716,42 @@ func TestXiaoVideoListModelsMapsAliases(t *testing.T) {
 	require.Len(t, models, 1)
 	require.Equal(t, "video-public", models[0]["id"])
 	require.Equal(t, []string{"720p"}, models[0]["resolutions"])
+}
+
+func TestXiaoVideoListModelsEnablesSeedanceGeneratedAudio(t *testing.T) {
+	const groupID int64 = 7
+	tests := []struct {
+		name          string
+		publicModel   string
+		upstreamModel string
+	}{
+		{name: "seedance-2.0", publicModel: "seedance-2.0", upstreamModel: "seedance-2.0"},
+		{name: "seedance-2.0-fast", publicModel: "seedance-2.0-fast", upstreamModel: "seedance-2.0-fast"},
+		{name: "seedance-2.0-mini", publicModel: "seedance-2.0-mini", upstreamModel: "seedance-2.0-mini"},
+		{name: "dynamic public alias", publicModel: "customer-seedance", upstreamModel: "seedance-2.0"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			account := seedanceVideoTestAccount(42, groupID, tt.publicModel)
+			account.Credentials["model_mapping"] = map[string]any{tt.publicModel: tt.upstreamModel}
+			accounts := &videoAccountRepoStub{accounts: []Account{account}}
+			upstream := &videoHTTPUpstreamStub{do: func(*http.Request, string, int64, int) (*http.Response, error) {
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Header:     make(http.Header),
+					Body: io.NopCloser(strings.NewReader(`{"object":"list","data":[{"id":"` + tt.upstreamModel +
+						`","object":"model","resolutions":["480p"],"supports_audio":false}]}`)),
+				}, nil
+			}}
+			svc := newVideoServiceForTest(newVideoRepositoryStub(), accounts, upstream)
+
+			models, err := svc.ListModels(context.Background(), VideoOwner{UserID: 11, APIKeyID: 22, GroupID: videoInt64Ptr(groupID)})
+			require.NoError(t, err)
+			require.Len(t, models, 1)
+			require.Equal(t, tt.publicModel, models[0]["id"])
+			require.Equal(t, true, models[0]["supports_audio"])
+		})
+	}
 }
 
 func TestXiaoVideoOpenMediaUsesBoundAccountAndForwardsRange(t *testing.T) {
