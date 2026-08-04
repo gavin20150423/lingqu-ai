@@ -216,6 +216,7 @@ type IconName =
   | 'globe'
   | 'grid'
   | 'key'
+  | 'play'
   | 'server'
   | 'shield'
   | 'sync'
@@ -361,6 +362,7 @@ const adminNavItems = computed((): NavItem[] => {
     { path: '/admin/users', label: t('nav.users'), icon: 'users', hideInSimpleMode: true },
     { path: '/admin/groups', label: t('nav.groups'), icon: 'grid' },
     { path: '/admin/accounts', label: t('nav.accounts'), icon: 'globe' },
+    { path: '/admin/xiao-video', label: t('nav.xiaoVideo'), icon: 'play' },
     {
       path: '/admin/channels',
       label: t('nav.channelManagement'),

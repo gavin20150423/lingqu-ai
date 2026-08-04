@@ -569,6 +569,18 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/admin/xiao-video',
+    name: 'AdminXiaoVideo',
+    component: () => import('@/views/admin/XiaoVideoView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'XiaoAPI Video',
+      titleKey: 'admin.xiaoVideo.title',
+      descriptionKey: 'admin.xiaoVideo.description'
+    }
+  },
+  {
     path: '/admin/announcements',
     name: 'AdminAnnouncements',
     component: () => import('@/views/admin/AnnouncementsView.vue'),

@@ -9,8 +9,8 @@
         </button>
       </div>
       <div v-if="mappings.length > 0" class="space-y-2">
-        <div v-for="(mapping, index) in mappings" :key="index" class="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_2.5rem] items-end gap-2">
-          <label class="min-w-0 text-xs text-gray-500 dark:text-gray-400">
+        <div v-for="(mapping, index) in mappings" :key="index" class="grid grid-cols-[minmax(0,1fr)_2.5rem] items-end gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_2.5rem]">
+          <label class="col-span-2 min-w-0 text-xs text-gray-500 dark:text-gray-400 sm:col-span-1">
             {{ t('admin.accounts.xiaoapi.publicModel') }}
             <input v-model="mapping.from" type="text" class="input mt-1" :data-testid="`xiao-mapping-public-${index}`" />
           </label>
@@ -34,9 +34,9 @@
         </button>
       </div>
       <div class="overflow-x-auto">
-        <div class="min-w-[820px] divide-y divide-gray-200 border-y border-gray-200 dark:divide-dark-600 dark:border-dark-600">
-          <div v-for="(rule, index) in pricing" :key="index" class="grid grid-cols-[1.25fr_0.8fr_0.85fr_0.85fr_0.7fr_0.65fr_2.5rem] items-end gap-2 py-3">
-            <label class="min-w-0 text-xs text-gray-500 dark:text-gray-400">
+        <div class="divide-y divide-gray-200 border-y border-gray-200 dark:divide-dark-600 dark:border-dark-600">
+          <div v-for="(rule, index) in pricing" :key="index" class="grid grid-cols-2 items-end gap-2 py-3 sm:grid-cols-[1.25fr_0.8fr_0.85fr_0.85fr_0.7fr_0.65fr_2.5rem]">
+            <label class="col-span-2 min-w-0 text-xs text-gray-500 dark:text-gray-400 sm:col-span-1">
               {{ t('admin.accounts.xiaoapi.publicModel') }}
               <input v-model="rule.model" type="text" class="input mt-1" :data-testid="`xiao-price-model-${index}`" />
             </label>
@@ -60,7 +60,7 @@
               <input type="checkbox" class="rounded border-gray-300 text-primary-600 focus:ring-primary-500" :checked="rule.default_resolution" :data-testid="`xiao-price-default-${index}`" @change="setDefault(index, $event)" />
               {{ t('admin.accounts.xiaoapi.defaultResolution') }}
             </label>
-            <button type="button" class="btn btn-secondary flex h-10 w-10 items-center justify-center p-0 text-red-600" :title="t('common.delete')" @click="pricing.splice(index, 1)">
+            <button type="button" class="btn btn-secondary flex h-10 w-10 items-center justify-center justify-self-end p-0 text-red-600" :title="t('common.delete')" @click="pricing.splice(index, 1)">
               <Icon name="trash" size="sm" />
             </button>
           </div>

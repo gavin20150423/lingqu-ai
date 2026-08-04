@@ -7,6 +7,7 @@ import settings from './settings'
 import audit from './audit'
 import promptAudit from './promptAudit'
 import store from './store'
+import xiaoVideo from './xiaoVideo'
 
 export default {
   ...overview,
@@ -18,4 +19,5 @@ export default {
   ...audit,
   ...promptAudit,
   ...store,
+  ...xiaoVideo,
 }
