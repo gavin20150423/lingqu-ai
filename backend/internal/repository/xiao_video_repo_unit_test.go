@@ -112,7 +112,7 @@ func TestVideoRepository_ReserveJobInsufficientBalanceRollsBack(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
-func TestVideoRepository_FinalizeJobReconcilesPreauthorization(t *testing.T) {
+func TestVideoRepository_FinalizeJobPreservesSellingPriceAndStoresUpstreamCost(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
 	defer db.Close()
@@ -123,24 +123,24 @@ func TestVideoRepository_FinalizeJobReconcilesPreauthorization(t *testing.T) {
 		WithArgs("vidjob_reconcile").
 		WillReturnRows(sqlmock.NewRows([]string{"user_id", "upstream_job_id", "amount", "settlement_status"}).
 			AddRow(int64(11), "creating:vidjob_reconcile", 10.0, "held"))
-	mock.ExpectExec("UPDATE users").
-		WithArgs(8.0, 8.0, int64(11), 10.0).
-		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec("UPDATE video_jobs SET").
 		WithArgs("vidjob_reconcile", "up-job", "running", 2.0, "USD", "held", []byte(`{"status":"running"}`), nil, nil, "720p", 8, "16:9").
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
 	mock.ExpectQuery(regexp.QuoteMeta(videoJobSelect + ` WHERE job_id=$1`)).
 		WithArgs("vidjob_reconcile").
-		WillReturnRows(videoJobRows("vidjob_reconcile", "up-job", "running", 2, "held", now))
+		WillReturnRows(videoJobRows("vidjob_reconcile", "up-job", "running", 10, "held", now, 2.0, "USD"))
 
 	repo := NewVideoRepository(db)
 	job, err := repo.FinalizeJobAndReconcileHold(context.Background(), service.VideoJobFinalization{
-		JobID: "vidjob_reconcile", UpstreamJobID: "up-job", Status: "running", Amount: 2, Currency: "USD",
+		JobID: "vidjob_reconcile", UpstreamJobID: "up-job", Status: "running", UpstreamAmount: 2, UpstreamCurrency: "USD",
 		Resolution: "720p", Duration: 8, AspectRatio: "16:9", UpstreamResponse: []byte(`{"status":"running"}`),
 	})
 	require.NoError(t, err)
-	require.Equal(t, 2.0, job.Amount)
+	require.Equal(t, 10.0, job.Amount)
+	require.NotNil(t, job.UpstreamAmount)
+	require.Equal(t, 2.0, *job.UpstreamAmount)
+	require.Equal(t, "USD", job.UpstreamCurrency)
 	require.Equal(t, "held", job.SettlementStatus)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
@@ -222,10 +222,18 @@ func TestVideoRepository_UpdateJobAndSettleCapturesHeldAmount(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
-func videoJobRows(jobID, upstreamID, status string, amount float64, settlement string, now time.Time) *sqlmock.Rows {
+func videoJobRows(jobID, upstreamID, status string, amount float64, settlement string, now time.Time, upstream ...any) *sqlmock.Rows {
+	var upstreamAmount any
+	var upstreamCurrency any
+	if len(upstream) > 0 {
+		upstreamAmount = upstream[0]
+	}
+	if len(upstream) > 1 {
+		upstreamCurrency = upstream[1]
+	}
 	return sqlmock.NewRows([]string{
 		"job_id", "upstream_job_id", "account_id", "user_id", "api_key_id", "group_id", "idempotency_key", "request_hash",
-		"model", "resolution", "duration", "aspect_ratio", "status", "amount", "currency", "settlement_status", "upstream_response",
+		"model", "resolution", "duration", "aspect_ratio", "status", "amount", "currency", "upstream_amount", "upstream_currency", "settlement_status", "upstream_response",
 		"created_at", "updated_at", "finished_at", "settled_at",
-	}).AddRow(jobID, upstreamID, int64(42), int64(11), int64(22), int64(7), nil, "hash", "video-public", "480p", 4, "16:9", status, amount, "USD", settlement, []byte(`{}`), now, now, nil, nil)
+	}).AddRow(jobID, upstreamID, int64(42), int64(11), int64(22), int64(7), nil, "hash", "video-public", "480p", 4, "16:9", status, amount, "USD", upstreamAmount, upstreamCurrency, settlement, []byte(`{}`), now, now, nil, nil)
 }

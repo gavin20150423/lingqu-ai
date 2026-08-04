@@ -547,12 +547,6 @@ export default {
         capabilityChatCompletions: 'Chat Completions',
         capabilityChatCompletionsAuto: 'Chat Completions (auto probe)',
         capabilityEmbeddings: 'Embeddings',
-        capabilityVideoAPI: 'Video API',
-        videoPreauthorizationAmount: 'Maximum upstream cost per job (USD)',
-        videoPreauthorizationAmountDesc:
-          'Before creation, the platform holds this ceiling multiplied by the account billing rate. It refunds the difference after receiving the upstream amount. Set it high enough to cover the most expensive job this upstream permits.',
-        videoPreauthorizationAmountRequired:
-          'A maximum upstream cost greater than 0 is required when Video API is enabled.',
         responsesStatusAutoSupported: 'Auto probe: Responses',
         responsesStatusAutoUnsupported: 'Auto probe: Chat Completions',
         responsesStatusAutoUnknown: 'Auto probe: unknown',
@@ -601,6 +595,33 @@ export default {
         testModeDefault: 'Default request',
         testModeCompact: 'Compact probe',
         modelRestrictionDisabledByPassthrough: 'Automatic passthrough is enabled: model whitelist/mapping will not take effect.',
+      },
+      xiaoapi: {
+        baseUrlHint: 'Enter the configurable XiaoAPI video upstream URL',
+        apiKeyHint: 'Enter the API key issued by this video upstream',
+        modelMapping: 'Model mapping',
+        addMapping: 'Add mapping',
+        publicModel: 'Public model',
+        upstreamModel: 'Upstream model',
+        pricing: 'Video selling price (USD)',
+        addPricing: 'Add price',
+        resolution: 'Resolution',
+        pricePerSecond: 'Price / second',
+        audioPricePerSecond: 'Audio / second',
+        defaultDuration: 'Default seconds',
+        defaultResolution: 'Default',
+        baseUrlRequired: 'XiaoAPI upstream Base URL is required.',
+        validation: {
+          required: 'Add at least one video price.',
+          modelRequired: 'Every video price requires a public model.',
+          resolutionRequired: 'Every video price requires a resolution.',
+          priceInvalid: 'Price per second must be zero or greater.',
+          audioPriceInvalid: 'Audio price per second must be zero or greater.',
+          durationInvalid: 'Default duration must be an integer from 1 to 3600 seconds.',
+          duplicateRule: 'The same model and resolution cannot be priced twice.',
+          multipleDefaults: 'A model can have only one default resolution.',
+          defaultRequired: 'Select one default resolution for each model with multiple resolutions.'
+        }
       },
       grok: {
         baseUrlHint: 'Grok OAuth accounts forward to the official xAI API base URL.',

@@ -253,8 +253,8 @@ type BatchImageConfig struct {
 }
 
 // VideoAPIConfig exposes the XiaoAPI-compatible asynchronous video API.
-// Provider credentials live on OpenAI API-key accounts and are selected by
-// the normal account scheduler at request time.
+// Provider credentials and dynamic selling prices live on independent
+// xiaoapi API-key accounts selected at request time.
 type VideoAPIConfig struct {
 	Enabled                  bool   `mapstructure:"enabled"`
 	PublicBaseURL            string `mapstructure:"public_base_url"`
@@ -2161,8 +2161,7 @@ func setDefaults() {
 	viper.SetDefault("batch_image.vertex_batch_prediction_base_url", "")
 	viper.SetDefault("batch_image.vertex_gcs_base_url", "")
 
-	// XiaoAPI-compatible video API. Provider credentials live on OpenAI API-key
-	// accounts and are selected by group at request time.
+	// XiaoAPI-compatible video API. Provider credentials live on xiaoapi accounts.
 	viper.SetDefault("video_api.enabled", false)
 	viper.SetDefault("video_api.public_base_url", "")
 	viper.SetDefault("video_api.request_timeout_seconds", 30)

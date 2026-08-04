@@ -318,7 +318,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useAuthStore, useAppStore } from '@/stores'
 import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
 import Icon from '@/components/icons/Icon.vue'
@@ -327,8 +328,10 @@ import { sanitizeUrl } from '@/utils/url'
 
 const authStore = useAuthStore()
 const appStore = useAppStore()
+const { t } = useI18n()
 
 const siteName = computed(() => resolveBrandName(appStore.cachedPublicSettings?.site_name || appStore.siteName))
+const siteSubtitle = computed(() => appStore.cachedPublicSettings?.site_subtitle || 'AI API Gateway Platform')
 const siteLogo = computed(() =>
   sanitizeUrl(
     resolveBrandLogo(appStore.cachedPublicSettings?.site_logo || appStore.siteLogo) ||
@@ -340,6 +343,14 @@ const docUrl = computed(() => sanitizeUrl(appStore.cachedPublicSettings?.doc_url
 const homeContent = computed(() => appStore.cachedPublicSettings?.home_content || '')
 const hasHomeContent = computed(() => homeContent.value.trim().length > 0)
 const compactHomeEnabled = computed(() => appStore.cachedPublicSettings?.compact_home_enabled === true)
+const isDark = ref(document.documentElement.classList.contains('dark'))
+const currentYear = computed(() => new Date().getFullYear())
+
+function toggleTheme() {
+  isDark.value = !isDark.value
+  document.documentElement.classList.toggle('dark', isDark.value)
+  localStorage.setItem('theme', isDark.value ? 'dark' : 'light')
+}
 
 // Check if homeContent is a URL (for iframe display)
 const isHomeContentUrl = computed(() => {

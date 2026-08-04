@@ -27,6 +27,9 @@ services:
     image: ${SUB2API_IMAGE:-ghcr.io/gavin20150423/sub2api:0.1.155-lingqu.1}
     container_name: sub2api
     restart: unless-stopped
+    cpus: "${SUB2API_CPU_LIMIT:-2.0}"
+    mem_limit: "${SUB2API_MEMORY_LIMIT:-2g}"
+    pids_limit: ${SUB2API_PIDS_LIMIT:-512}
     security_opt:
       - no-new-privileges:true
     ulimits:
@@ -182,6 +185,15 @@ services:
       - GATEWAY_IMAGE_CONCURRENCY_OVERFLOW_MODE=${GATEWAY_IMAGE_CONCURRENCY_OVERFLOW_MODE:-reject}
       - GATEWAY_IMAGE_CONCURRENCY_WAIT_TIMEOUT_SECONDS=${GATEWAY_IMAGE_CONCURRENCY_WAIT_TIMEOUT_SECONDS:-30}
       - GATEWAY_IMAGE_CONCURRENCY_MAX_WAITING_REQUESTS=${GATEWAY_IMAGE_CONCURRENCY_MAX_WAITING_REQUESTS:-100}
+
+      # =======================================================================
+      # XiaoAPI-compatible Asynchronous Video API
+      # =======================================================================
+      - VIDEO_API_ENABLED=${VIDEO_API_ENABLED:-false}
+      - VIDEO_API_PUBLIC_BASE_URL=${VIDEO_API_PUBLIC_BASE_URL:-}
+      - VIDEO_API_REQUEST_TIMEOUT_SECONDS=${VIDEO_API_REQUEST_TIMEOUT_SECONDS:-30}
+      - VIDEO_API_RECONCILE_INTERVAL_SECONDS=${VIDEO_API_RECONCILE_INTERVAL_SECONDS:-30}
+      - VIDEO_API_RECONCILE_BATCH_SIZE=${VIDEO_API_RECONCILE_BATCH_SIZE:-20}
 
       # =======================================================================
       # SubPilot Dispatch Integration

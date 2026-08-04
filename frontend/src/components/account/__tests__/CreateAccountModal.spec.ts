@@ -340,6 +340,74 @@ describe('CreateAccountModal OpenAI long-context billing', () => {
   })
 })
 
+describe('CreateAccountModal XiaoAPI', () => {
+  beforeEach(() => {
+    createAccountMock.mockReset().mockResolvedValue({ id: 84, platform: 'xiaoapi', type: 'apikey' })
+    probeUpstreamBillingMock.mockReset().mockResolvedValue({})
+  })
+
+  async function fillXiaoAccount() {
+    const wrapper = mountModal()
+    await wrapper.get('[data-testid="platform-xiaoapi"]').trigger('click')
+    await wrapper.get('form#create-account-form input[type="text"]').setValue('Xiao video upstream')
+    await wrapper.get('input[placeholder="https://provider.example/v1"]').setValue('https://video-provider.example/api')
+    await wrapper.get('form#create-account-form input[type="password"]').setValue('upstream-secret')
+    await wrapper.get('[data-testid="xiao-price-model-0"]').setValue('video-public')
+    await wrapper.get('[data-testid="xiao-price-resolution-0"]').setValue('portrait-hd')
+    await wrapper.get('[data-testid="xiao-price-base-0"]').setValue('0.18')
+    await wrapper.get('[data-testid="xiao-price-audio-0"]').setValue('0.04')
+    await wrapper.get('[data-testid="xiao-price-duration-0"]').setValue('12')
+    return wrapper
+  }
+
+  it('submits an independent configurable upstream and frozen selling-price rules', async () => {
+    const wrapper = await fillXiaoAccount()
+    await wrapper.get('[data-testid="xiao-add-mapping"]').trigger('click')
+    await wrapper.get('[data-testid="xiao-mapping-public-0"]').setValue('video-public')
+    await wrapper.get('[data-testid="xiao-mapping-upstream-0"]').setValue('provider-video-v3')
+
+    await wrapper.get('form#create-account-form').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(createAccountMock).toHaveBeenCalledTimes(1)
+    expect(createAccountMock.mock.calls[0]?.[0]).toMatchObject({
+      name: 'Xiao video upstream',
+      platform: 'xiaoapi',
+      type: 'apikey',
+      concurrency: 2,
+      upstream_billing_probe_enabled: false,
+      credentials: {
+        base_url: 'https://video-provider.example/api',
+        api_key: 'upstream-secret',
+        model_mapping: { 'video-public': 'provider-video-v3' },
+        video_pricing: [
+          {
+            model: 'video-public',
+            resolution: 'portrait-hd',
+            price_per_second: 0.18,
+            audio_price_per_second: 0.04,
+            default_resolution: true,
+            default_duration: 12
+          }
+        ]
+      }
+    })
+    expect(probeUpstreamBillingMock).not.toHaveBeenCalled()
+  })
+
+  it('does not submit duplicate model and resolution prices', async () => {
+    const wrapper = await fillXiaoAccount()
+    await wrapper.get('[data-testid="xiao-add-pricing"]').trigger('click')
+    await wrapper.get('[data-testid="xiao-price-model-1"]').setValue('video-public')
+    await wrapper.get('[data-testid="xiao-price-resolution-1"]').setValue('portrait-hd')
+
+    await wrapper.get('form#create-account-form').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(createAccountMock).not.toHaveBeenCalled()
+  })
+})
+
 describe('CreateAccountModal priority defaults', () => {
   it('allows zero and preserves a manually entered value when the account type changes', async () => {
     const wrapper = mountModal()

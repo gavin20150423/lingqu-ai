@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"strings"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -47,8 +46,8 @@ func (r *videoRepository) ReserveJob(ctx context.Context, p service.VideoJobRese
 
 	upstreamPlaceholder := "creating:" + p.JobID
 	var idempotency any
-	if strings.TrimSpace(p.IdempotencyKey) != "" {
-		idempotency = strings.TrimSpace(p.IdempotencyKey)
+	if p.IdempotencyKey != "" {
+		idempotency = p.IdempotencyKey
 	}
 	result, err := tx.ExecContext(ctx, `
 		INSERT INTO video_jobs (
@@ -190,20 +189,14 @@ func (r *videoRepository) FinalizeJobAndReconcileHold(ctx context.Context, p ser
 	if currentSettlement != "held" {
 		return nil, errors.New("video job preauthorization is not held")
 	}
-	if p.Amount < 0 {
-		return nil, errors.New("video hold amount must be non-negative")
+	if p.UpstreamAmount < 0 {
+		return nil, errors.New("video upstream amount must be non-negative")
 	}
-	if p.Amount > preauthorizationAmount {
-		if p.Amount-preauthorizationAmount > 0.00000001 {
-			return nil, service.ErrVideoPricingUnavailable
-		}
-		p.Amount = preauthorizationAmount
-	}
-	balanceRefund := preauthorizationAmount - p.Amount
-	frozenReduction := balanceRefund
 	settlement := "held"
 	var settledAt any
 	var finishedAt any
+	var balanceRefund float64
+	var frozenReduction float64
 	if p.Status == "completed" {
 		frozenReduction = preauthorizationAmount
 		settlement = "captured"
@@ -216,18 +209,20 @@ func (r *videoRepository) FinalizeJobAndReconcileHold(ctx context.Context, p ser
 		settledAt = time.Now()
 		finishedAt = settledAt
 	}
-	result, err := tx.ExecContext(ctx, `
-		UPDATE users
-		SET balance=balance+$1,frozen_balance=COALESCE(frozen_balance,0)-$2,updated_at=NOW()
-		WHERE id=$3 AND COALESCE(frozen_balance,0)>=$4
-	`, balanceRefund, frozenReduction, userID, preauthorizationAmount)
-	if err != nil {
-		return nil, err
-	}
-	if rows, rowsErr := result.RowsAffected(); rowsErr != nil {
-		return nil, rowsErr
-	} else if rows != 1 {
-		return nil, errors.New("video frozen balance is insufficient")
+	if frozenReduction > 0 {
+		result, execErr := tx.ExecContext(ctx, `
+			UPDATE users
+			SET balance=balance+$1,frozen_balance=COALESCE(frozen_balance,0)-$2,updated_at=NOW()
+			WHERE id=$3 AND COALESCE(frozen_balance,0)>=$4
+		`, balanceRefund, frozenReduction, userID, preauthorizationAmount)
+		if execErr != nil {
+			return nil, execErr
+		}
+		if rows, rowsErr := result.RowsAffected(); rowsErr != nil {
+			return nil, rowsErr
+		} else if rows != 1 {
+			return nil, errors.New("video frozen balance is insufficient")
+		}
 	}
 	raw := json.RawMessage(p.UpstreamResponse)
 	if !json.Valid(raw) {
@@ -235,13 +230,13 @@ func (r *videoRepository) FinalizeJobAndReconcileHold(ctx context.Context, p ser
 	}
 	_, err = tx.ExecContext(ctx, `
 		UPDATE video_jobs SET
-			upstream_job_id=$2,status=$3,amount=$4,currency=$5,settlement_status=$6,
+			upstream_job_id=$2,status=$3,upstream_amount=$4,upstream_currency=$5,settlement_status=$6,
 			upstream_response=$7,updated_at=NOW(),settled_at=$8,finished_at=$9,
 			resolution=COALESCE(NULLIF($10,''),resolution),
 			duration=CASE WHEN $11 > 0 THEN $11 ELSE duration END,
 			aspect_ratio=COALESCE(NULLIF($12,''),aspect_ratio)
 		WHERE job_id=$1
-	`, p.JobID, p.UpstreamJobID, p.Status, p.Amount, p.Currency, settlement, raw, settledAt, finishedAt,
+	`, p.JobID, p.UpstreamJobID, p.Status, p.UpstreamAmount, p.UpstreamCurrency, settlement, raw, settledAt, finishedAt,
 		p.Resolution, p.Duration, p.AspectRatio)
 	if err != nil {
 		return nil, err
@@ -352,7 +347,7 @@ func (r *videoRepository) UpdateJobAndSettle(ctx context.Context, p service.Vide
 	return r.getJobByID(ctx, p.JobID)
 }
 
-const videoJobSelect = `SELECT job_id,upstream_job_id,account_id,user_id,api_key_id,group_id,idempotency_key,request_hash,model,resolution,duration,aspect_ratio,status,amount,currency,settlement_status,upstream_response,created_at,updated_at,finished_at,settled_at FROM video_jobs`
+const videoJobSelect = `SELECT job_id,upstream_job_id,account_id,user_id,api_key_id,group_id,idempotency_key,request_hash,model,resolution,duration,aspect_ratio,status,amount,currency,upstream_amount,upstream_currency,settlement_status,upstream_response,created_at,updated_at,finished_at,settled_at FROM video_jobs`
 
 type videoRowScanner interface{ Scan(...any) error }
 
@@ -360,8 +355,10 @@ func scanVideoJob(row videoRowScanner) (*service.VideoJob, error) {
 	var j service.VideoJob
 	var group sql.NullInt64
 	var idem sql.NullString
+	var upstreamAmount sql.NullFloat64
+	var upstreamCurrency sql.NullString
 	var finished, settled sql.NullTime
-	err := row.Scan(&j.JobID, &j.UpstreamJobID, &j.AccountID, &j.UserID, &j.APIKeyID, &group, &idem, &j.RequestHash, &j.Model, &j.Resolution, &j.Duration, &j.AspectRatio, &j.Status, &j.Amount, &j.Currency, &j.SettlementStatus, &j.UpstreamResponse, &j.CreatedAt, &j.UpdatedAt, &finished, &settled)
+	err := row.Scan(&j.JobID, &j.UpstreamJobID, &j.AccountID, &j.UserID, &j.APIKeyID, &group, &idem, &j.RequestHash, &j.Model, &j.Resolution, &j.Duration, &j.AspectRatio, &j.Status, &j.Amount, &j.Currency, &upstreamAmount, &upstreamCurrency, &j.SettlementStatus, &j.UpstreamResponse, &j.CreatedAt, &j.UpdatedAt, &finished, &settled)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, service.ErrVideoResourceNotFound
 	}
@@ -373,6 +370,12 @@ func scanVideoJob(row videoRowScanner) (*service.VideoJob, error) {
 	}
 	if idem.Valid {
 		j.IdempotencyKey = &idem.String
+	}
+	if upstreamAmount.Valid {
+		j.UpstreamAmount = &upstreamAmount.Float64
+	}
+	if upstreamCurrency.Valid {
+		j.UpstreamCurrency = upstreamCurrency.String
 	}
 	if finished.Valid {
 		j.FinishedAt = &finished.Time

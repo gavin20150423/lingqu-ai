@@ -108,7 +108,7 @@ func (r *videoRepositoryStub) GetMediaForOwner(_ context.Context, mediaID string
 }
 
 func (r *videoRepositoryStub) ReserveJob(_ context.Context, reservation VideoJobReservation) (*VideoJob, bool, error) {
-	key := strings.TrimSpace(reservation.IdempotencyKey)
+	key := reservation.IdempotencyKey
 	scopedKey := strconv.FormatInt(reservation.Owner.APIKeyID, 10) + ":" + key
 	if key != "" {
 		if existing := r.idempotency[scopedKey]; existing != nil {
@@ -191,16 +191,11 @@ func (r *videoRepositoryStub) FinalizeJobAndReconcileHold(_ context.Context, fin
 	if job == nil {
 		return nil, ErrVideoResourceNotFound
 	}
-	if finalization.Amount > job.Amount+0.00000001 {
-		return nil, ErrVideoPricingUnavailable
-	}
-	refund := job.Amount - finalization.Amount
-	r.balance += refund
-	r.frozen -= refund
 	job.UpstreamJobID = finalization.UpstreamJobID
 	job.Status = finalization.Status
-	job.Amount = finalization.Amount
-	job.Currency = finalization.Currency
+	upstreamAmount := finalization.UpstreamAmount
+	job.UpstreamAmount = &upstreamAmount
+	job.UpstreamCurrency = finalization.UpstreamCurrency
 	if finalization.Resolution != "" {
 		job.Resolution = finalization.Resolution
 	}
@@ -213,11 +208,11 @@ func (r *videoRepositoryStub) FinalizeJobAndReconcileHold(_ context.Context, fin
 	job.UpstreamResponse = append([]byte(nil), finalization.UpstreamResponse...)
 	job.SettlementStatus = "held"
 	if finalization.Status == "completed" {
-		r.frozen -= finalization.Amount
+		r.frozen -= job.Amount
 		job.SettlementStatus = "captured"
 	} else if finalization.Status == "failed" || finalization.Status == "canceled" {
-		r.balance += finalization.Amount
-		r.frozen -= finalization.Amount
+		r.balance += job.Amount
+		r.frozen -= job.Amount
 		job.SettlementStatus = "released"
 	}
 	job.UpdatedAt = time.Now()
@@ -277,23 +272,29 @@ func (r *videoRepositoryStub) UpdateJobAndSettle(_ context.Context, update Video
 }
 
 func videoTestAccount(id, groupID int64, baseURL string) Account {
-	rate := 1.5
 	return Account{
-		ID:             id,
-		Name:           "video-upstream",
-		Platform:       PlatformOpenAI,
-		Type:           AccountTypeAPIKey,
-		Status:         StatusActive,
-		Schedulable:    true,
-		Concurrency:    2,
-		RateMultiplier: &rate,
-		GroupIDs:       []int64{groupID},
+		ID:          id,
+		Name:        "video-upstream",
+		Platform:    PlatformXiaoAPI,
+		Type:        AccountTypeAPIKey,
+		Status:      StatusActive,
+		Schedulable: true,
+		Concurrency: 2,
+		GroupIDs:    []int64{groupID},
 		Credentials: map[string]any{
-			"base_url":                      baseURL,
-			"api_key":                       "upstream-secret",
-			"openai_capabilities":           []any{"video_api"},
-			"model_mapping":                 map[string]any{"video-public": "video-upstream-v2"},
-			"video_preauthorization_amount": 10.0,
+			"base_url":      baseURL,
+			"api_key":       "upstream-secret",
+			"model_mapping": map[string]any{"video-public": "video-upstream-v2"},
+			XiaoVideoPricingCredentialKey: []any{
+				map[string]any{
+					"model":                  "video-public",
+					"resolution":             "720p",
+					"price_per_second":       0.75,
+					"audio_price_per_second": 0.25,
+					"default_resolution":     true,
+					"default_duration":       20,
+				},
+			},
 		},
 	}
 }
@@ -304,15 +305,12 @@ func newVideoServiceForTest(repo VideoRepository, accountRepo *videoAccountRepoS
 	return NewXiaoVideoService(repo, accountRepo, gateway, upstream, nil, nil, cfg)
 }
 
-func TestVideoCapabilityRequiresExplicitAPIKeyOptIn(t *testing.T) {
-	base := Account{Platform: PlatformOpenAI, Type: AccountTypeAPIKey, Credentials: map[string]any{}}
-	require.False(t, base.SupportsOpenAIEndpointCapability(OpenAIEndpointCapabilityVideoAPI))
+func TestXiaoVideoAccountUsesIndependentPlatform(t *testing.T) {
+	xiao := videoTestAccount(42, 7, "https://upstream.example/v1")
+	require.True(t, xiao.IsXiaoAPI())
 
-	base.Credentials["openai_capabilities"] = []any{"video_api"}
-	require.True(t, base.SupportsOpenAIEndpointCapability(OpenAIEndpointCapabilityVideoAPI))
-
-	base.Type = AccountTypeOAuth
-	require.False(t, base.SupportsOpenAIEndpointCapability(OpenAIEndpointCapabilityVideoAPI))
+	xiao.Platform = PlatformOpenAI
+	require.False(t, xiao.IsXiaoAPI())
 }
 
 func TestXiaoVideoCreateBindsMediaAccountAndMapsModel(t *testing.T) {
@@ -351,6 +349,8 @@ func TestXiaoVideoCreateBindsMediaAccountAndMapsModel(t *testing.T) {
 	require.Equal(t, "https://upstream.example.test/media/up-media/content", captured["start_frame_url"])
 	require.Equal(t, int64(42), job.AccountID)
 	require.Equal(t, 3.0, job.Amount)
+	require.NotNil(t, job.UpstreamAmount)
+	require.Equal(t, 2.0, *job.UpstreamAmount)
 	require.InDelta(t, 97.0, repo.balance, 0.00000001)
 	require.InDelta(t, 3.0, repo.frozen, 0.00000001)
 	require.NotContains(t, string(job.UpstreamResponse), "video.example.test")
@@ -463,7 +463,7 @@ func TestXiaoVideoCreateRejectsMissingPreauthorizationBeforeCallingUpstream(t *t
 	repo := newVideoRepositoryStub()
 	repo.media["vidmedia_pricing"] = &VideoMedia{MediaID: "vidmedia_pricing", AccountID: 42, UserID: 11, APIKeyID: 22, UpstreamURL: "https://upstream.example/media/pricing", ExpiresAt: time.Now().Add(time.Hour)}
 	account := videoTestAccount(42, groupID, "https://upstream.example/v1")
-	delete(account.Credentials, OpenAIVideoPreauthorizationAmountCredentialKey)
+	delete(account.Credentials, XiaoVideoPricingCredentialKey)
 	accounts := &videoAccountRepoStub{accounts: []Account{account}}
 	requests := 0
 	upstream := &videoHTTPUpstreamStub{do: func(_ *http.Request, _ string, _ int64, _ int) (*http.Response, error) {
@@ -478,7 +478,7 @@ func TestXiaoVideoCreateRejectsMissingPreauthorizationBeforeCallingUpstream(t *t
 	require.Empty(t, repo.jobs)
 }
 
-func TestXiaoVideoCreateReleasesHoldWhenUpstreamAmountExceedsCeiling(t *testing.T) {
+func TestXiaoVideoCreateKeepsSellingPriceWhenUpstreamCostIsHigher(t *testing.T) {
 	const groupID int64 = 7
 	repo := newVideoRepositoryStub()
 	repo.media["vidmedia_ceiling"] = &VideoMedia{MediaID: "vidmedia_ceiling", AccountID: 42, UserID: 11, APIKeyID: 22, UpstreamURL: "https://upstream.example/media/ceiling", ExpiresAt: time.Now().Add(time.Hour)}
@@ -499,13 +499,15 @@ func TestXiaoVideoCreateReleasesHoldWhenUpstreamAmountExceedsCeiling(t *testing.
 	}}
 	svc := newVideoServiceForTest(repo, accounts, upstream)
 
-	_, err := svc.Create(context.Background(), VideoOwner{UserID: 11, APIKeyID: 22, GroupID: videoInt64Ptr(groupID)}, []byte(`{"model":"video-public","prompt":"too expensive","start_frame_url":"https://video.example.test/v1/videos/uploads/vidmedia_ceiling/content"}`), "over-ceiling")
-	require.ErrorIs(t, err, ErrVideoPricingUnavailable)
+	job, err := svc.Create(context.Background(), VideoOwner{UserID: 11, APIKeyID: 22, GroupID: videoInt64Ptr(groupID)}, []byte(`{"model":"video-public","prompt":"provider cost is independent","duration":4,"start_frame_url":"https://video.example.test/v1/videos/uploads/vidmedia_ceiling/content"}`), "cost-isolation")
+	require.NoError(t, err)
 	require.Equal(t, 1, posts)
-	require.Equal(t, 1, deletes)
-	require.Empty(t, repo.jobs)
-	require.InDelta(t, 100.0, repo.balance, 0.00000001)
-	require.Zero(t, repo.frozen)
+	require.Zero(t, deletes)
+	require.Equal(t, 3.0, job.Amount)
+	require.NotNil(t, job.UpstreamAmount)
+	require.Equal(t, 11.0, *job.UpstreamAmount)
+	require.InDelta(t, 97.0, repo.balance, 0.00000001)
+	require.InDelta(t, 3.0, repo.frozen, 0.00000001)
 }
 
 func TestXiaoVideoCreateRejectsCrossKeyMediaAndIdempotencyConflict(t *testing.T) {
@@ -619,7 +621,7 @@ func TestXiaoVideoListModelsMapsAliases(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, models, 1)
 	require.Equal(t, "video-public", models[0]["id"])
-	require.Equal(t, []any{"720p"}, models[0]["resolutions"])
+	require.Equal(t, []string{"720p"}, models[0]["resolutions"])
 }
 
 func TestXiaoVideoOpenMediaUsesBoundAccountAndForwardsRange(t *testing.T) {
@@ -629,7 +631,6 @@ func TestXiaoVideoOpenMediaUsesBoundAccountAndForwardsRange(t *testing.T) {
 	boundAccount := videoTestAccount(42, groupID, "https://upstream.example/v1")
 	boundAccount.Status = StatusDisabled
 	boundAccount.Schedulable = false
-	delete(boundAccount.Credentials, "openai_capabilities")
 	accounts := &videoAccountRepoStub{accounts: []Account{boundAccount}}
 	upstream := &videoHTTPUpstreamStub{do: func(req *http.Request, _ string, accountID int64, _ int) (*http.Response, error) {
 		require.Equal(t, int64(42), accountID)

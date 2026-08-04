@@ -24,9 +24,9 @@ func TestVideoRepository_BindsAccountAndSettlesHoldExactlyOnce(t *testing.T) {
 	require.NoError(t, integrationDB.QueryRowContext(ctx,
 		`INSERT INTO api_keys (user_id,key,name,group_id) VALUES ($1,$2,$3,$4) RETURNING id`, userID, "sk-"+suffix, suffix+"-key", groupID).Scan(&apiKeyID))
 	require.NoError(t, integrationDB.QueryRowContext(ctx,
-		`INSERT INTO accounts (name,platform,type,credentials,extra) VALUES ($1,'openai','apikey','{}','{}') RETURNING id`, suffix+"-account-1").Scan(&accountOneID))
+		`INSERT INTO accounts (name,platform,type,credentials,extra) VALUES ($1,'xiaoapi','apikey','{}','{}') RETURNING id`, suffix+"-account-1").Scan(&accountOneID))
 	require.NoError(t, integrationDB.QueryRowContext(ctx,
-		`INSERT INTO accounts (name,platform,type,credentials,extra) VALUES ($1,'openai','apikey','{}','{}') RETURNING id`, suffix+"-account-2").Scan(&accountTwoID))
+		`INSERT INTO accounts (name,platform,type,credentials,extra) VALUES ($1,'xiaoapi','apikey','{}','{}') RETURNING id`, suffix+"-account-2").Scan(&accountTwoID))
 	t.Cleanup(func() {
 		_, _ = integrationDB.ExecContext(ctx, `DELETE FROM video_jobs WHERE api_key_id=$1`, apiKeyID)
 		_, _ = integrationDB.ExecContext(ctx, `DELETE FROM video_media WHERE api_key_id=$1`, apiKeyID)
@@ -81,19 +81,22 @@ func TestVideoRepository_BindsAccountAndSettlesHoldExactlyOnce(t *testing.T) {
 	assertVideoBalance(t, ctx, userID, 0, 20)
 
 	first, err = repo.FinalizeJobAndReconcileHold(ctx, service.VideoJobFinalization{
-		JobID: first.JobID, UpstreamJobID: "same-upstream-id", Status: "running", Amount: 2, Currency: "USD",
+		JobID: first.JobID, UpstreamJobID: "same-upstream-id", Status: "running", UpstreamAmount: 2, UpstreamCurrency: "USD",
 		Resolution: "720p", Duration: 8, AspectRatio: "9:16", UpstreamResponse: []byte(`{"status":"running"}`),
 	})
 	require.NoError(t, err)
 	require.Equal(t, "720p", first.Resolution)
 	require.Equal(t, 8, first.Duration)
 	require.Equal(t, "9:16", first.AspectRatio)
+	require.Equal(t, 10.0, first.Amount)
+	require.NotNil(t, first.UpstreamAmount)
+	require.Equal(t, 2.0, *first.UpstreamAmount)
 	second, err = repo.FinalizeJobAndReconcileHold(ctx, service.VideoJobFinalization{
-		JobID: second.JobID, UpstreamJobID: "same-upstream-id", Status: "running", Amount: 3, Currency: "USD", UpstreamResponse: []byte(`{"status":"running"}`),
+		JobID: second.JobID, UpstreamJobID: "same-upstream-id", Status: "running", UpstreamAmount: 3, UpstreamCurrency: "USD", UpstreamResponse: []byte(`{"status":"running"}`),
 	})
 	require.NoError(t, err, "upstream IDs are unique within an account, not globally")
 
-	assertVideoBalance(t, ctx, userID, 15, 5)
+	assertVideoBalance(t, ctx, userID, 0, 20)
 	now := time.Now()
 	first, err = repo.UpdateJobAndSettle(ctx, service.VideoJobUpdate{
 		JobID: first.JobID, Status: "completed", Resolution: "1080p", Duration: 12, AspectRatio: "21:9",
@@ -104,22 +107,22 @@ func TestVideoRepository_BindsAccountAndSettlesHoldExactlyOnce(t *testing.T) {
 	require.Equal(t, "1080p", first.Resolution)
 	require.Equal(t, 12, first.Duration)
 	require.Equal(t, "21:9", first.AspectRatio)
-	assertVideoBalance(t, ctx, userID, 15, 3)
+	assertVideoBalance(t, ctx, userID, 0, 10)
 
 	first, err = repo.UpdateJobAndSettle(ctx, service.VideoJobUpdate{JobID: first.JobID, Status: "running", UpstreamResponse: []byte(`{"status":"running"}`)})
 	require.NoError(t, err)
 	require.Equal(t, "completed", first.Status, "a stale poll must not regress a terminal job")
-	assertVideoBalance(t, ctx, userID, 15, 3)
+	assertVideoBalance(t, ctx, userID, 0, 10)
 
 	second, err = repo.UpdateJobAndSettle(ctx, service.VideoJobUpdate{JobID: second.JobID, Status: "failed", UpstreamResponse: []byte(`{"status":"failed"}`), FinishedAt: &now})
 	require.NoError(t, err)
 	require.Equal(t, "released", second.SettlementStatus)
-	assertVideoBalance(t, ctx, userID, 18, 0)
+	assertVideoBalance(t, ctx, userID, 10, 0)
 
 	second, err = repo.UpdateJobAndSettle(ctx, service.VideoJobUpdate{JobID: second.JobID, Status: "failed", UpstreamResponse: []byte(`{"status":"failed"}`), FinishedAt: &now})
 	require.NoError(t, err)
 	require.Equal(t, "released", second.SettlementStatus)
-	assertVideoBalance(t, ctx, userID, 18, 0)
+	assertVideoBalance(t, ctx, userID, 10, 0)
 
 	_, err = repo.UpdateJobAndSettle(ctx, service.VideoJobUpdate{JobID: second.JobID, Status: "unknown"})
 	require.EqualError(t, err, "invalid video job status")

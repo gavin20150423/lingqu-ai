@@ -290,6 +290,33 @@ function buildOpenAISetupTokenAccount() {
   } as any
 }
 
+function buildXiaoAPIAccount() {
+  return {
+    ...buildAccount(),
+    id: 7,
+    name: 'Xiao video upstream',
+    platform: 'xiaoapi',
+    credentials: {
+      base_url: 'https://video-provider.example/api',
+      model_mapping: {
+        'video-public': 'provider-video-v2'
+      },
+      video_pricing: [
+        {
+          model: 'video-public',
+          resolution: '720p',
+          price_per_second: 0.12,
+          audio_price_per_second: 0.03,
+          default_resolution: true,
+          default_duration: 8
+        }
+      ]
+    },
+    credentials_status: { has_api_key: true },
+    concurrency: 2
+  } as any
+}
+
 function mountModal(account = buildAccount()) {
   return mount(EditAccountModal, {
     props: {
@@ -808,7 +835,7 @@ describe('EditAccountModal', () => {
     ])
   })
 
-  it('persists the Xiao-compatible video API capability explicitly', async () => {
+  it('removes legacy video capability data from OpenAI credentials', async () => {
     const account = buildAccount()
     account.credentials.openai_capabilities = ['video_api']
     account.credentials.video_preauthorization_amount = 25
@@ -819,24 +846,47 @@ describe('EditAccountModal', () => {
 
     const wrapper = mountModal(account)
 
-    expect(
-      wrapper.get<HTMLInputElement>('[data-testid="openai-endpoint-capability-video_api"]').element.checked
-    ).toBe(true)
-    expect(
-      wrapper.get<HTMLInputElement>('[data-testid="openai-endpoint-capability-chat_completions"]').element.checked
-    ).toBe(false)
-    expect(
-      wrapper.get<HTMLInputElement>('[data-testid="video-preauthorization-amount"]').element.value
-    ).toBe('25')
-
-    await wrapper.get('[data-testid="video-preauthorization-amount"]').setValue('30.5')
+    expect(wrapper.find('[data-testid="openai-endpoint-capability-video_api"]').exists()).toBe(false)
+    expect(wrapper.get<HTMLInputElement>('[data-testid="openai-endpoint-capability-chat_completions"]').element.checked).toBe(true)
+    expect(wrapper.get<HTMLInputElement>('[data-testid="openai-endpoint-capability-embeddings"]').element.checked).toBe(true)
 
     await wrapper.get('form#edit-account-form').trigger('submit.prevent')
 
-    expect(updateAccountMock.mock.calls[0]?.[1]?.credentials?.openai_capabilities).toEqual([
-      'video_api'
+    expect(updateAccountMock.mock.calls[0]?.[1]?.credentials).not.toHaveProperty('openai_capabilities')
+    expect(updateAccountMock.mock.calls[0]?.[1]?.credentials).not.toHaveProperty('video_preauthorization_amount')
+  })
+
+  it('updates XiaoAPI pricing and mapping without requiring the redacted API key', async () => {
+    const account = buildXiaoAPIAccount()
+    updateAccountMock.mockReset().mockResolvedValue(account)
+    checkMixedChannelRiskMock.mockReset().mockResolvedValue({ has_risk: false })
+
+    const wrapper = mountModal(account)
+
+    expect(wrapper.get<HTMLInputElement>('[data-testid="xiao-price-base-0"]').element.value).toBe('0.12')
+    await wrapper.get('[data-testid="xiao-price-base-0"]').setValue('0.25')
+    await wrapper.get('[data-testid="xiao-mapping-upstream-0"]').setValue('provider-video-v3')
+    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
+
+    expect(updateAccountMock).toHaveBeenCalledTimes(1)
+    const payload = updateAccountMock.mock.calls[0]?.[1]
+    expect(payload?.upstream_billing_probe_enabled).toBe(false)
+    expect(payload?.upstream_billing_rate_sync_enabled).toBe(false)
+    expect(payload?.credentials).not.toHaveProperty('api_key')
+    expect(payload?.credentials?.base_url).toBe('https://video-provider.example/api')
+    expect(payload?.credentials?.model_mapping).toEqual({
+      'video-public': 'provider-video-v3'
+    })
+    expect(payload?.credentials?.video_pricing).toEqual([
+      {
+        model: 'video-public',
+        resolution: '720p',
+        price_per_second: 0.25,
+        audio_price_per_second: 0.03,
+        default_resolution: true,
+        default_duration: 8
+      }
     ])
-    expect(updateAccountMock.mock.calls[0]?.[1]?.credentials?.video_preauthorization_amount).toBe(30.5)
   })
 
 	it('submits OpenAI quota auto-pause thresholds in extra', async () => {

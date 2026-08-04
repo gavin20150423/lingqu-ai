@@ -278,11 +278,7 @@ async function mountSubscriptionPlanList(planCount: number) {
   const wrapper = shallowMount(PaymentView, {
     global: {
       stubs: {
-        AppLayout: {
-          template: '<div><slot /></div>',
-        },
-        Teleport: true,
-        Transition: false,
+        ...paymentViewStubs,
       },
     },
   })

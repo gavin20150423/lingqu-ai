@@ -118,7 +118,7 @@ func TestOpenAIOAuthCreationPriorityDefaultAndExplicitZero(t *testing.T) {
 		require.NoError(t, err)
 
 		adminService := newStubAdminService()
-		handler := NewOpenAIOAuthHandler(oauthService, adminService, nil)
+		handler := NewOpenAIOAuthHandler(oauthService, adminService, nil, nil)
 		router := gin.New()
 		router.POST("/openai/create-from-oauth", handler.CreateAccountFromOAuth)
 		body := map[string]any{"session_id": auth.SessionID, "code": "code", "state": authURL.Query().Get("state")}

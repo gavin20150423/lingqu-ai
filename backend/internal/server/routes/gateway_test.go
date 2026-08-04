@@ -272,8 +272,8 @@ func TestGatewayRoutesCompositeChatCompletionsWithGrokModelUsesOpenAIGateway(t *
 	}
 }
 
-func TestGatewayRoutesOpenAIVideoGenerationReportsExecutionDisabled(t *testing.T) {
-	router := newGatewayRoutesTestRouter(service.PlatformOpenAI)
+func TestGatewayRoutesXiaoAPIVideoGenerationReportsExecutionDisabled(t *testing.T) {
+	router := newGatewayRoutesTestRouter(service.PlatformXiaoAPI)
 	for _, path := range []string{"/v1/videos/generations", "/videos/generations"} {
 		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{"model":"video-public","prompt":"waves"}`))
 		req.Header.Set("Content-Type", "application/json")
@@ -286,11 +286,11 @@ func TestGatewayRoutesOpenAIVideoGenerationReportsExecutionDisabled(t *testing.T
 	}
 }
 
-func TestGatewayRoutesOpenAIVideoGenerationReportsMissingGroupPermission(t *testing.T) {
+func TestGatewayRoutesXiaoAPIVideoGenerationReportsMissingGroupPermission(t *testing.T) {
 	router := newGatewayRoutesTestRouterWithConfig(&config.Config{
 		Gateway:  config.GatewayConfig{MaxBodySize: 1024 * 1024, TextMaxBodySize: 1024 * 1024},
 		VideoAPI: config.VideoAPIConfig{Enabled: true, PublicBaseURL: "https://video.example.test"},
-	}, service.PlatformOpenAI)
+	}, service.PlatformXiaoAPI)
 	for _, path := range []string{"/v1/videos/generations", "/videos/generations"} {
 		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{"model":"video-public","prompt":"waves"}`))
 		req.Header.Set("Content-Type", "application/json")
@@ -301,6 +301,18 @@ func TestGatewayRoutesOpenAIVideoGenerationReportsMissingGroupPermission(t *test
 		require.Equal(t, http.StatusForbidden, w.Code, "path=%s", path)
 		require.Contains(t, w.Body.String(), "VIDEO_GENERATION_DISABLED")
 	}
+}
+
+func TestGatewayRoutesOpenAIVideoGenerationIsRejectedAtPlatformGate(t *testing.T) {
+	router := newGatewayRoutesTestRouter(service.PlatformOpenAI)
+	req := httptest.NewRequest(http.MethodPost, "/v1/videos/generations", strings.NewReader(`{"model":"video-public","prompt":"waves"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Prefer", "respond-async")
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+	require.Equal(t, http.StatusNotFound, w.Code)
+	require.Contains(t, w.Body.String(), "Videos API is not supported for this platform")
 }
 
 func TestGatewayRoutesUnsupportedOpenAIVideoOperationsAreRejectedAtPlatformGate(t *testing.T) {

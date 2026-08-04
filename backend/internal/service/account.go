@@ -4,6 +4,7 @@ package service
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"hash/fnv"
 	"log/slog"
 	"math"
@@ -105,9 +106,6 @@ const (
 	// entitlement probe was forbidden. Video status lookups intentionally do not
 	// require this capability so already-submitted requests remain queryable.
 	OpenAIEndpointCapabilityGrokMediaGeneration OpenAIEndpointCapability = "grok_media_generation"
-	// OpenAIEndpointCapabilityVideoAPI marks an OpenAI API-key account whose
-	// custom base URL exposes the XiaoAPI-compatible video contract.
-	OpenAIEndpointCapabilityVideoAPI OpenAIEndpointCapability = "video_api"
 	// OpenAIEndpointCapabilityResponses 表示上游确实提供 /v1/responses 端点。
 	// 与其他能力不同：支持状态来自 accounts.extra 的自动探测标记
 	// （openai_responses_supported / openai_responses_mode），而非
@@ -118,10 +116,18 @@ const (
 
 const openAIEndpointCapabilitiesCredentialKey = "openai_capabilities"
 
-// OpenAIVideoPreauthorizationAmountCredentialKey stores the maximum upstream
-// amount, in USD, that may be accepted for one video job. The value is
-// configured per upstream account so provider pricing is never hardcoded.
-const OpenAIVideoPreauthorizationAmountCredentialKey = "video_preauthorization_amount"
+const XiaoVideoPricingCredentialKey = "video_pricing"
+
+// XiaoVideoPricingRule is one downstream selling-price rule. Model names are
+// public names; account model_mapping is applied only when forwarding upstream.
+type XiaoVideoPricingRule struct {
+	Model               string  `json:"model"`
+	Resolution          string  `json:"resolution"`
+	PricePerSecond      float64 `json:"price_per_second"`
+	AudioPricePerSecond float64 `json:"audio_price_per_second,omitempty"`
+	DefaultResolution   bool    `json:"default_resolution,omitempty"`
+	DefaultDuration     int     `json:"default_duration,omitempty"`
+}
 
 // GrokMediaEligibleExtraKey is an optional per-account override stored in
 // accounts.extra. true forces media routing on, false disables it, and an
@@ -180,26 +186,122 @@ func (a *Account) BillingRateMultiplier() float64 {
 	return *a.RateMultiplier
 }
 
-// VideoPreauthorizationAmount returns the downstream hold required before an
-// upstream video job may be created. A configured zero/negative/non-finite
-// ceiling is treated as unavailable; a zero billing multiplier remains valid.
-func (a *Account) VideoPreauthorizationAmount() (float64, bool) {
+// XiaoVideoPricingRules decodes and validates dynamic model/resolution prices.
+func (a *Account) XiaoVideoPricingRules() ([]XiaoVideoPricingRule, error) {
 	if a == nil || a.Credentials == nil {
-		return 0, false
+		return nil, errors.New("xiaoapi video pricing is not configured")
 	}
-	raw, ok := a.Credentials[OpenAIVideoPreauthorizationAmountCredentialKey]
+	raw, ok := a.Credentials[XiaoVideoPricingCredentialKey]
 	if !ok || raw == nil {
-		return 0, false
+		return nil, errors.New("xiaoapi video pricing is not configured")
 	}
-	ceiling := parseExtraFloat64(raw)
-	if ceiling <= 0 || math.IsNaN(ceiling) || math.IsInf(ceiling, 0) {
-		return 0, false
+	encoded, err := json.Marshal(raw)
+	if err != nil {
+		return nil, fmt.Errorf("encode xiaoapi video pricing: %w", err)
 	}
-	amount := ceiling * a.BillingRateMultiplier()
+	decoder := json.NewDecoder(strings.NewReader(string(encoded)))
+	decoder.DisallowUnknownFields()
+	var rules []XiaoVideoPricingRule
+	if err := decoder.Decode(&rules); err != nil {
+		return nil, fmt.Errorf("decode xiaoapi video pricing: %w", err)
+	}
+	if len(rules) == 0 {
+		return nil, errors.New("xiaoapi video pricing must contain at least one rule")
+	}
+	if len(rules) > 1000 {
+		return nil, errors.New("xiaoapi video pricing must not contain more than 1000 rules")
+	}
+	seen := make(map[string]struct{}, len(rules))
+	defaultResolutionByModel := make(map[string]struct{})
+	for i := range rules {
+		rule := &rules[i]
+		rule.Model = strings.TrimSpace(rule.Model)
+		rule.Resolution = strings.TrimSpace(rule.Resolution)
+		if rule.Model == "" || len(rule.Model) > 128 {
+			return nil, fmt.Errorf("xiaoapi video pricing rule %d has an invalid model", i+1)
+		}
+		if rule.Resolution == "" || len(rule.Resolution) > 64 {
+			return nil, fmt.Errorf("xiaoapi video pricing rule %d has an invalid resolution", i+1)
+		}
+		if rule.PricePerSecond < 0 || math.IsNaN(rule.PricePerSecond) || math.IsInf(rule.PricePerSecond, 0) {
+			return nil, fmt.Errorf("xiaoapi video pricing rule %d has an invalid price_per_second", i+1)
+		}
+		if rule.AudioPricePerSecond < 0 || math.IsNaN(rule.AudioPricePerSecond) || math.IsInf(rule.AudioPricePerSecond, 0) {
+			return nil, fmt.Errorf("xiaoapi video pricing rule %d has an invalid audio_price_per_second", i+1)
+		}
+		if rule.DefaultDuration < 0 || rule.DefaultDuration > 3600 {
+			return nil, fmt.Errorf("xiaoapi video pricing rule %d has an invalid default_duration", i+1)
+		}
+		key := rule.Model + "\x00" + rule.Resolution
+		if _, exists := seen[key]; exists {
+			return nil, fmt.Errorf("xiaoapi video pricing contains duplicate model/resolution %q/%q", rule.Model, rule.Resolution)
+		}
+		seen[key] = struct{}{}
+		if rule.DefaultResolution {
+			if _, exists := defaultResolutionByModel[rule.Model]; exists {
+				return nil, fmt.Errorf("xiaoapi video pricing model %q has more than one default resolution", rule.Model)
+			}
+			defaultResolutionByModel[rule.Model] = struct{}{}
+		}
+	}
+	return rules, nil
+}
+
+// XiaoVideoPrice resolves omitted defaults and returns the exact downstream
+// amount to freeze and eventually capture. A configured zero price is valid.
+func (a *Account) XiaoVideoPrice(model, resolution string, duration int, audio bool) (float64, string, int, bool) {
+	rules, err := a.XiaoVideoPricingRules()
+	if err != nil {
+		return 0, "", 0, false
+	}
+	model = strings.TrimSpace(model)
+	resolution = strings.TrimSpace(resolution)
+	candidates := make([]XiaoVideoPricingRule, 0)
+	for _, rule := range rules {
+		if rule.Model == model {
+			candidates = append(candidates, rule)
+		}
+	}
+	if len(candidates) == 0 {
+		return 0, "", 0, false
+	}
+	var selected *XiaoVideoPricingRule
+	if resolution != "" {
+		for i := range candidates {
+			if candidates[i].Resolution == resolution {
+				selected = &candidates[i]
+				break
+			}
+		}
+	} else {
+		for i := range candidates {
+			if candidates[i].DefaultResolution {
+				selected = &candidates[i]
+				break
+			}
+		}
+		if selected == nil && len(candidates) == 1 {
+			selected = &candidates[0]
+		}
+	}
+	if selected == nil {
+		return 0, "", 0, false
+	}
+	if duration == 0 {
+		duration = selected.DefaultDuration
+	}
+	if duration <= 0 {
+		return 0, "", 0, false
+	}
+	rate := selected.PricePerSecond
+	if audio {
+		rate += selected.AudioPricePerSecond
+	}
+	amount := float64(duration) * rate
 	if amount < 0 || math.IsNaN(amount) || math.IsInf(amount, 0) {
-		return 0, false
+		return 0, "", 0, false
 	}
-	return amount, true
+	return amount, selected.Resolution, duration, true
 }
 
 func (a *Account) EffectiveLoadFactor() int {
@@ -303,6 +405,10 @@ func (a *Account) IsGemini() bool {
 
 func (a *Account) IsGrok() bool {
 	return a.Platform == PlatformGrok
+}
+
+func (a *Account) IsXiaoAPI() bool {
+	return a != nil && a.Platform == PlatformXiaoAPI
 }
 
 func (a *Account) IsGrokOAuth() bool {
@@ -1489,8 +1595,6 @@ func (a *Account) SupportsOpenAIEndpointCapability(capability OpenAIEndpointCapa
 			// forwarding gate itself fails closed if that probe is unavailable or
 			// cannot produce positive paid-entitlement evidence.
 			return eligible || reason == "billing_unobserved"
-		case OpenAIEndpointCapabilityVideoAPI:
-			return false
 		default:
 			return false
 		}
@@ -1525,12 +1629,6 @@ func (a *Account) SupportsOpenAIEndpointCapability(capability OpenAIEndpointCapa
 		if a.Type != AccountTypeAPIKey {
 			return false
 		}
-	case OpenAIEndpointCapabilityVideoAPI:
-		if a.Platform != PlatformOpenAI || a.Type != AccountTypeAPIKey {
-			return false
-		}
-		configured, found := a.openAIEndpointCapabilitySet()
-		return found && configured[string(OpenAIEndpointCapabilityVideoAPI)]
 	default:
 		return false
 	}

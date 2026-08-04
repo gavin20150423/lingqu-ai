@@ -26,38 +26,64 @@ func TestAccount_BillingRateMultiplier_NegativeFallsBackToOne(t *testing.T) {
 	require.Equal(t, 1.0, a.BillingRateMultiplier())
 }
 
-func TestAccount_VideoPreauthorizationAmountUsesConfiguredCeilingAndMultiplier(t *testing.T) {
-	rate := 1.5
-	a := Account{
-		RateMultiplier: &rate,
-		Credentials: map[string]any{
-			OpenAIVideoPreauthorizationAmountCredentialKey: json.Number("12.25"),
+func TestAccount_XiaoVideoPriceUsesDynamicResolutionDurationAndAudioRates(t *testing.T) {
+	a := Account{Credentials: map[string]any{
+		XiaoVideoPricingCredentialKey: []any{
+			map[string]any{
+				"model":                  "video-public",
+				"resolution":             "720p",
+				"price_per_second":       0.75,
+				"audio_price_per_second": 0.25,
+				"default_resolution":     true,
+				"default_duration":       8,
+			},
 		},
-	}
+	}}
 
-	amount, ok := a.VideoPreauthorizationAmount()
+	amount, resolution, duration, ok := a.XiaoVideoPrice("video-public", "", 0, true)
 	require.True(t, ok)
-	require.InDelta(t, 18.375, amount, 0.00000001)
+	require.Equal(t, "720p", resolution)
+	require.Equal(t, 8, duration)
+	require.InDelta(t, 8.0, amount, 0.00000001)
+
+	amount, resolution, duration, ok = a.XiaoVideoPrice("video-public", "720p", 4, false)
+	require.True(t, ok)
+	require.Equal(t, "720p", resolution)
+	require.Equal(t, 4, duration)
+	require.InDelta(t, 3.0, amount, 0.00000001)
 }
 
-func TestAccount_VideoPreauthorizationAmountRequiresPositiveFiniteCeiling(t *testing.T) {
-	for _, value := range []any{nil, 0, -1, "not-a-number"} {
-		a := Account{Credentials: map[string]any{OpenAIVideoPreauthorizationAmountCredentialKey: value}}
-		_, ok := a.VideoPreauthorizationAmount()
-		require.False(t, ok)
-	}
-}
-
-func TestAccount_VideoPreauthorizationAmountAllowsZeroBillingMultiplier(t *testing.T) {
-	rate := 0.0
-	a := Account{
-		RateMultiplier: &rate,
-		Credentials: map[string]any{
-			OpenAIVideoPreauthorizationAmountCredentialKey: 10,
+func TestAccount_XiaoVideoPricingRejectsInvalidAndAmbiguousRules(t *testing.T) {
+	tests := []any{
+		nil,
+		[]any{},
+		[]any{map[string]any{"model": "video-public", "resolution": "720p", "price_per_second": -1}},
+		[]any{
+			map[string]any{"model": "video-public", "resolution": "720p", "price_per_second": 1},
+			map[string]any{"model": "video-public", "resolution": "720p", "price_per_second": 2},
 		},
 	}
+	for _, pricing := range tests {
+		a := Account{Credentials: map[string]any{XiaoVideoPricingCredentialKey: pricing}}
+		_, err := a.XiaoVideoPricingRules()
+		require.Error(t, err)
+	}
+}
 
-	amount, ok := a.VideoPreauthorizationAmount()
+func TestAccount_XiaoVideoPriceAllowsFreeConfiguredPrice(t *testing.T) {
+	a := Account{Credentials: map[string]any{
+		XiaoVideoPricingCredentialKey: []any{
+			map[string]any{
+				"model":              "video-public",
+				"resolution":         "480p",
+				"price_per_second":   0,
+				"default_resolution": true,
+				"default_duration":   4,
+			},
+		},
+	}}
+
+	amount, _, _, ok := a.XiaoVideoPrice("video-public", "", 0, false)
 	require.True(t, ok)
 	require.Zero(t, amount)
 }

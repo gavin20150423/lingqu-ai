@@ -67,7 +67,7 @@ func RegisterGatewayRoutes(
 		}
 	}
 	modelsHandler := func(c *gin.Context) {
-		if getGroupPlatform(c) == service.PlatformOpenAI && h.XiaoVideo != nil && h.XiaoVideo.EnabledFor(c) {
+		if getGroupPlatform(c) == service.PlatformXiaoAPI && h.XiaoVideo != nil && h.XiaoVideo.EnabledFor(c) {
 			h.XiaoVideo.Models(c)
 			return
 		}
@@ -116,7 +116,7 @@ func RegisterGatewayRoutes(
 		h.AsyncImage.Get(c)
 	}
 	videoGenerationHandler := func(c *gin.Context) {
-		if getGroupPlatform(c) == service.PlatformOpenAI && h.XiaoVideo != nil {
+		if getGroupPlatform(c) == service.PlatformXiaoAPI && h.XiaoVideo != nil {
 			h.XiaoVideo.Create(c)
 			return
 		}
@@ -131,6 +131,16 @@ func RegisterGatewayRoutes(
 				"message": "Videos API is not supported for this platform",
 			},
 		})
+	}
+	xiaoVideoOnly := func(next gin.HandlerFunc) gin.HandlerFunc {
+		return func(c *gin.Context) {
+			if getGroupPlatform(c) != service.PlatformXiaoAPI || h.XiaoVideo == nil {
+				service.MarkOpsClientBusinessLimited(c, service.OpsClientBusinessLimitedReasonLocalFeatureGate)
+				c.JSON(http.StatusNotFound, gin.H{"error": gin.H{"type": "not_found_error", "message": "XiaoAPI video endpoint is not supported for this platform"}})
+				return
+			}
+			next(c)
+		}
 	}
 	videoStatusHandler := func(c *gin.Context) {
 		// Video status requests do not carry a model, so composite groups cannot
@@ -284,12 +294,12 @@ func RegisterGatewayRoutes(
 		gateway.DELETE("/images/batches/:id", h.BatchImage.DeleteRecord)
 		gateway.DELETE("/images/batches/:id/outputs", h.BatchImage.DeleteOutputs)
 		gateway.POST("/videos/generations", videoGenerationHandler)
-		gateway.POST("/videos/uploads", h.XiaoVideo.Upload)
-		gateway.GET("/videos/uploads/:media_id/content", h.XiaoVideo.MediaContent)
-		gateway.GET("/videos/jobs", h.XiaoVideo.List)
-		gateway.GET("/videos/jobs/:job_id", h.XiaoVideo.Get)
-		gateway.DELETE("/videos/jobs/:job_id", h.XiaoVideo.Cancel)
-		gateway.GET("/videos/jobs/:job_id/content", h.XiaoVideo.Content)
+		gateway.POST("/videos/uploads", xiaoVideoOnly(h.XiaoVideo.Upload))
+		gateway.GET("/videos/uploads/:media_id/content", xiaoVideoOnly(h.XiaoVideo.MediaContent))
+		gateway.GET("/videos/jobs", xiaoVideoOnly(h.XiaoVideo.List))
+		gateway.GET("/videos/jobs/:job_id", xiaoVideoOnly(h.XiaoVideo.Get))
+		gateway.DELETE("/videos/jobs/:job_id", xiaoVideoOnly(h.XiaoVideo.Cancel))
+		gateway.GET("/videos/jobs/:job_id/content", xiaoVideoOnly(h.XiaoVideo.Content))
 		gateway.POST("/videos/edits", videoEditHandler)
 		gateway.POST("/videos/extensions", videoExtensionHandler)
 		gateway.GET("/videos/:request_id", videoStatusHandler)

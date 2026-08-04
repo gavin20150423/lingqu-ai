@@ -43,6 +43,8 @@
                     ? 'https://cloudcode-pa.googleapis.com'
                     : account.platform === 'grok'
                       ? 'https://api.x.ai/v1'
+                      : account.platform === 'xiaoapi'
+                        ? 'https://provider.example/v1'
                       : 'https://api.anthropic.com'
             "
           />
@@ -72,14 +74,22 @@
                     ? 'sk-...'
                     : account.platform === 'grok'
                       ? 'xai-...'
+                      : account.platform === 'xiaoapi'
+                        ? 'provider-key...'
                       : 'sk-ant-...'
             "
           />
           <p class="input-hint">{{ t('admin.accounts.leaveEmptyToKeep') }}</p>
         </div>
 
-        <!-- Model Restriction Section (不适用于 Antigravity) -->
-        <div v-if="account.platform !== 'antigravity'" class="border-t border-gray-200 pt-4 dark:border-dark-600">
+        <XiaoVideoConfigEditor
+          v-if="account.platform === 'xiaoapi'"
+          v-model:pricing="xiaoVideoPricing"
+          v-model:mappings="modelMappings"
+        />
+
+        <!-- Model Restriction Section (不适用于 Antigravity/XiaoAPI) -->
+        <div v-if="account.platform !== 'antigravity' && account.platform !== 'xiaoapi'" class="border-t border-gray-200 pt-4 dark:border-dark-600">
           <label class="input-label">{{ t('admin.accounts.modelRestriction') }}</label>
 
           <div
@@ -1682,26 +1692,10 @@
           </div>
           <p class="input-hint">{{ t('admin.accounts.openai.endpointCapabilitiesDesc') }}</p>
         </div>
-        <div v-if="openAIEndpointCapabilities.includes('video_api')">
-          <label class="input-label" for="edit-video-preauthorization-amount">
-            {{ t('admin.accounts.openai.videoPreauthorizationAmount') }}
-          </label>
-          <input
-            id="edit-video-preauthorization-amount"
-            v-model="videoPreauthorizationAmount"
-            data-testid="video-preauthorization-amount"
-            type="number"
-            min="0.00000001"
-            step="0.01"
-            inputmode="decimal"
-            class="input"
-          />
-          <p class="input-hint">{{ t('admin.accounts.openai.videoPreauthorizationAmountDesc') }}</p>
-        </div>
       </div>
 
       <div
-        v-if="account?.type === 'apikey'"
+        v-if="account?.type === 'apikey' && account.platform !== 'xiaoapi'"
         class="flex items-center justify-between gap-4 border-t border-gray-200 pt-4 dark:border-dark-600"
       >
         <div>
@@ -2699,6 +2693,7 @@ import ProxySelector from '@/components/common/ProxySelector.vue'
 import ProxyAdBanner from '@/components/common/ProxyAdBanner.vue'
 import GroupSelector from '@/components/common/GroupSelector.vue'
 import ModelWhitelistSelector from '@/components/account/ModelWhitelistSelector.vue'
+import XiaoVideoConfigEditor from '@/components/account/XiaoVideoConfigEditor.vue'
 import QuotaLimitCard from '@/components/account/QuotaLimitCard.vue'
 import GrokBaseUrlPresets from '@/components/account/GrokBaseUrlPresets.vue'
 import HeaderOverrideEditor from '@/components/account/HeaderOverrideEditor.vue'
@@ -2720,6 +2715,12 @@ import {
 } from '@/components/account/credentialsBuilder'
 import { formatDateTime, formatDateTimeLocalInput, parseDateTimeLocalInput } from '@/utils/format'
 import { createStableObjectKeyResolver } from '@/utils/stableObjectKey'
+import {
+  normalizeXiaoVideoPricing,
+  readXiaoVideoPricing,
+  validateXiaoVideoPricing,
+  type XiaoVideoPricingRule
+} from '@/components/account/xiaoVideoPricing'
 import { VERTEX_LOCATION_OPTIONS } from '@/constants/account'
 import {
   OPENAI_WS_MODE_CTX_POOL,
@@ -2769,6 +2770,7 @@ const baseUrlHint = computed(() => {
   if (!props.account) return t('admin.accounts.baseUrlHint')
   if (props.account.platform === 'openai') return t('admin.accounts.openai.baseUrlHint')
   if (props.account.platform === 'gemini') return t('admin.accounts.gemini.baseUrlHint')
+  if (props.account.platform === 'xiaoapi') return t('admin.accounts.xiaoapi.baseUrlHint')
   if (props.account.platform === 'grok') return ''
   return t('admin.accounts.baseUrlHint')
 })
@@ -2808,6 +2810,7 @@ const isBedrockAPIKeyMode = computed(() =>
   (props.account?.credentials as Record<string, unknown>)?.auth_mode === 'apikey'
 )
 const modelMappings = ref<ModelMapping[]>([])
+const xiaoVideoPricing = ref<XiaoVideoPricingRule[]>([])
 const openAICompactModelMappings = ref<ModelMapping[]>([])
 const modelRestrictionMode = ref<'whitelist' | 'mapping'>('whitelist')
 const allowedModels = ref<string[]>([])
@@ -2933,7 +2936,6 @@ const editPlanType = ref<string>('')
 const openAICompactMode = ref<OpenAICompactMode>('auto')
 const openAIResponsesMode = ref<OpenAIResponsesMode>('auto')
 const openAIEndpointCapabilities = ref<OpenAIEndpointCapability[]>(['chat_completions', 'embeddings'])
-const videoPreauthorizationAmount = ref('')
 const openaiOAuthResponsesWebSocketV2Mode = ref<OpenAIWSMode>(OPENAI_WS_MODE_OFF)
 const openaiAPIKeyResponsesWebSocketV2Mode = ref<OpenAIWSMode>(OPENAI_WS_MODE_OFF)
 const codexCLIOnlyEnabled = ref(false)
@@ -3085,8 +3087,7 @@ const openAITextEndpointCapabilityLabel = computed(() => {
 })
 const openAIEndpointCapabilityOptions = computed<{ value: OpenAIEndpointCapability; label: string }[]>(() => [
   { value: 'chat_completions', label: openAITextEndpointCapabilityLabel.value },
-  { value: 'embeddings', label: t('admin.accounts.openai.capabilityEmbeddings') },
-  { value: 'video_api', label: t('admin.accounts.openai.capabilityVideoAPI') }
+  { value: 'embeddings', label: t('admin.accounts.openai.capabilityEmbeddings') }
 ])
 const openAITextGenerationCapabilityEnabled = computed(() =>
   openAIEndpointCapabilities.value.includes('chat_completions')
@@ -3095,7 +3096,7 @@ const openAITextGenerationCapabilityEnabled = computed(() =>
 const normalizeOpenAIEndpointCapabilities = (
   values: OpenAIEndpointCapability[]
 ): OpenAIEndpointCapability[] => {
-  const allowed: OpenAIEndpointCapability[] = ['chat_completions', 'embeddings', 'video_api']
+  const allowed: OpenAIEndpointCapability[] = ['chat_completions', 'embeddings']
   const selected = allowed.filter((value) => values.includes(value))
   return selected.length > 0 ? selected : ['chat_completions', 'embeddings']
 }
@@ -3105,7 +3106,7 @@ const readOpenAIEndpointCapabilities = (credentials?: Record<string, unknown>): 
   if (Array.isArray(raw)) {
     return normalizeOpenAIEndpointCapabilities(
       raw.filter((value): value is OpenAIEndpointCapability =>
-        value === 'chat_completions' || value === 'embeddings' || value === 'video_api'
+        value === 'chat_completions' || value === 'embeddings'
       )
     )
   }
@@ -3143,12 +3144,8 @@ const toggleOpenAIEndpointCapability = (capability: OpenAIEndpointCapability, ev
 
 const applyOpenAIEndpointCapabilities = (credentials: Record<string, unknown>) => {
   const capabilities = normalizeOpenAIEndpointCapabilities(openAIEndpointCapabilities.value)
-  if (capabilities.includes('video_api')) {
-    credentials.video_preauthorization_amount = Number(videoPreauthorizationAmount.value)
-  } else {
-    delete credentials.video_preauthorization_amount
-  }
-  if (capabilities.length === 2 && !capabilities.includes('video_api')) {
+  delete credentials.video_preauthorization_amount
+  if (capabilities.length === 2) {
     delete credentials.openai_capabilities
     return
   }
@@ -3230,6 +3227,7 @@ const defaultBaseUrl = computed(() => {
   if (props.account?.platform === 'openai') return 'https://api.openai.com'
   if (props.account?.platform === 'gemini') return 'https://generativelanguage.googleapis.com'
   if (props.account?.platform === 'grok') return 'https://api.x.ai/v1'
+  if (props.account?.platform === 'xiaoapi') return ''
   return 'https://api.anthropic.com'
 })
 
@@ -3311,7 +3309,11 @@ const loadModelRestrictionFromMapping = (rawMapping?: Record<string, unknown>) =
 }
 
 const buildModelRestrictionMapping = () =>
-  buildModelMappingObject('combined', allowedModels.value, modelMappings.value)
+  buildModelMappingObject(
+    props.account?.platform === 'xiaoapi' ? 'mapping' : 'combined',
+    allowedModels.value,
+    modelMappings.value
+  )
 
 const applyOpenAIModelMappingCredentials = (credentials: Record<string, unknown>) => {
   const shouldApplyModelMapping = !openaiPassthroughEnabled.value
@@ -3393,7 +3395,9 @@ const syncFormFromAccount = (newAccount: Account | null) => {
   openAICompactMode.value = 'auto'
   openAIResponsesMode.value = 'auto'
   openAIEndpointCapabilities.value = ['chat_completions', 'embeddings']
-  videoPreauthorizationAmount.value = ''
+  xiaoVideoPricing.value = readXiaoVideoPricing(
+    (newAccount.credentials as Record<string, unknown> | undefined)?.video_pricing
+  )
   openAICompactModelMappings.value = []
   openaiOAuthResponsesWebSocketV2Mode.value = OPENAI_WS_MODE_OFF
   openaiAPIKeyResponsesWebSocketV2Mode.value = OPENAI_WS_MODE_OFF
@@ -3419,9 +3423,6 @@ const syncFormFromAccount = (newAccount: Account | null) => {
       openAIEndpointCapabilities.value = readOpenAIEndpointCapabilities(
         newAccount.credentials as Record<string, unknown> | undefined
       )
-      const videoAmount = (newAccount.credentials as Record<string, unknown> | undefined)
-        ?.video_preauthorization_amount
-      videoPreauthorizationAmount.value = videoAmount == null ? '' : String(videoAmount)
       if (!openAITextGenerationCapabilityEnabled.value) {
         openAIResponsesMode.value = 'auto'
       }
@@ -4153,14 +4154,14 @@ const handleSubmit = async () => {
     return
   }
 
-  if (
-    props.account.platform === 'openai' &&
-    props.account.type === 'apikey' &&
-    openAIEndpointCapabilities.value.includes('video_api')
-  ) {
-    const amount = Number(videoPreauthorizationAmount.value)
-    if (!Number.isFinite(amount) || amount <= 0) {
-      appStore.showError(t('admin.accounts.openai.videoPreauthorizationAmountRequired'))
+  if (props.account.platform === 'xiaoapi') {
+    if (!editBaseUrl.value.trim()) {
+      appStore.showError(t('admin.accounts.xiaoapi.baseUrlRequired'))
+      return
+    }
+    const pricingError = validateXiaoVideoPricing(xiaoVideoPricing.value)
+    if (pricingError) {
+      appStore.showError(t(`admin.accounts.xiaoapi.validation.${pricingError}`))
       return
     }
   }
@@ -4181,8 +4182,8 @@ const handleSubmit = async () => {
     }
     updatePayload.auto_pause_on_expired = autoPauseOnExpired.value
     if (props.account.type === 'apikey') {
-      updatePayload.upstream_billing_probe_enabled = upstreamBillingAutoProbeEnabled.value
-      updatePayload.upstream_billing_rate_sync_enabled = upstreamBillingRateSyncEnabled.value
+      updatePayload.upstream_billing_probe_enabled = props.account.platform === 'xiaoapi' ? false : upstreamBillingAutoProbeEnabled.value
+      updatePayload.upstream_billing_rate_sync_enabled = props.account.platform === 'xiaoapi' ? false : upstreamBillingRateSyncEnabled.value
       if (upstreamBillingRateSyncEnabled.value) {
         delete updatePayload.rate_multiplier
       }
@@ -4233,6 +4234,9 @@ const handleSubmit = async () => {
         } else {
           delete newCredentials.compact_model_mapping
         }
+      }
+      if (props.account.platform === 'xiaoapi') {
+        newCredentials.video_pricing = normalizeXiaoVideoPricing(xiaoVideoPricing.value)
       }
 
       // Add pool mode if enabled

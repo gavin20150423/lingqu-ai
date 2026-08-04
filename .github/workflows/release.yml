@@ -51,6 +51,36 @@ jobs:
           path: backend/cmd/server/VERSION
           retention-days: 1
 
+  test-backend:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: backend/go.mod
+          check-latest: false
+          cache-dependency-path: backend/go.sum
+
+      - name: Verify Go version
+        run: |
+          go version | grep -q 'go1.26.5'
+
+      - name: Run unit tests
+        working-directory: backend
+        run: make test-unit
+
+      - name: Run integration tests
+        working-directory: backend
+        run: make test-integration
+
+      - name: Verify deployment configuration and runtime limits
+        run: |
+          /bin/sh deploy/tests/docker-compose-security-test.sh
+          /bin/sh deploy/tests/docker-runtime-resources-test.sh
+
   build-frontend:
     runs-on: ubuntu-latest
     steps:
@@ -73,6 +103,9 @@ jobs:
         run: pnpm install --frozen-lockfile
         working-directory: frontend
 
+      - name: Lint, typecheck, and test critical frontend flows
+        run: make test-frontend
+
       - name: Build frontend
         run: pnpm run build
         working-directory: frontend
@@ -85,7 +118,7 @@ jobs:
           retention-days: 1
 
   release:
-    needs: [update-version, build-frontend]
+    needs: [update-version, test-backend, build-frontend]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
