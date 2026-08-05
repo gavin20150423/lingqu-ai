@@ -2,23 +2,27 @@ import { describe, expect, it } from 'vitest'
 
 import enAdminAccounts from '../locales/en/admin/accounts'
 import enAdminChannels from '../locales/en/admin/channels'
+import enAdminConversations from '../locales/en/admin/conversations'
 import enAdminOps from '../locales/en/admin/ops'
 import enAdminOverview from '../locales/en/admin/overview'
 import enAdminResources from '../locales/en/admin/resources'
 import enAdminSettings from '../locales/en/admin/settings'
 import enAdminXiaoVideo from '../locales/en/admin/xiaoVideo'
 import enCommon from '../locales/en/common'
+import enConversations from '../locales/en/conversations'
 import enDashboard from '../locales/en/dashboard'
 import enLanding from '../locales/en/landing'
 import enMisc from '../locales/en/misc'
 import zhAdminAccounts from '../locales/zh/admin/accounts'
 import zhAdminChannels from '../locales/zh/admin/channels'
+import zhAdminConversations from '../locales/zh/admin/conversations'
 import zhAdminOps from '../locales/zh/admin/ops'
 import zhAdminOverview from '../locales/zh/admin/overview'
 import zhAdminResources from '../locales/zh/admin/resources'
 import zhAdminSettings from '../locales/zh/admin/settings'
 import zhAdminXiaoVideo from '../locales/zh/admin/xiaoVideo'
 import zhCommon from '../locales/zh/common'
+import zhConversations from '../locales/zh/conversations'
 import zhDashboard from '../locales/zh/dashboard'
 import zhLanding from '../locales/zh/landing'
 import zhMisc from '../locales/zh/misc'
@@ -44,14 +48,15 @@ function collisions(modules: Modules): string[] {
 }
 
 const roots: Record<string, Modules> = {
-  zh: { landing: zhLanding, common: zhCommon, dashboard: zhDashboard, misc: zhMisc },
-  en: { landing: enLanding, common: enCommon, dashboard: enDashboard, misc: enMisc }
+  zh: { landing: zhLanding, common: zhCommon, conversations: zhConversations, dashboard: zhDashboard, misc: zhMisc },
+  en: { landing: enLanding, common: enCommon, conversations: enConversations, dashboard: enDashboard, misc: enMisc }
 }
 
 const admins: Record<string, Modules> = {
   zh: {
     overview: zhAdminOverview,
     channels: zhAdminChannels,
+    conversations: zhAdminConversations,
     accounts: zhAdminAccounts,
     resources: zhAdminResources,
     ops: zhAdminOps,
@@ -61,6 +66,7 @@ const admins: Record<string, Modules> = {
   en: {
     overview: enAdminOverview,
     channels: enAdminChannels,
+    conversations: enAdminConversations,
     accounts: enAdminAccounts,
     resources: enAdminResources,
     ops: enAdminOps,
