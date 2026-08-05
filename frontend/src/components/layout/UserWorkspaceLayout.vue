@@ -351,6 +351,12 @@ const currentSection = computed(() => {
       description: '创建、管理并追踪你的图像生成任务。'
     },
     {
+      match: (path: string) => path === '/videos' || path === '/docs/video-api',
+      kicker: 'Video workspace',
+      title: route.path === '/docs/video-api' ? '视频 API 文档' : '视频创作',
+      description: '创建、管理并接入平台的视频生成任务。'
+    },
+    {
       match: (path: string) => path === '/monitor' || path === '/available-channels',
       kicker: 'Service health',
       title: '服务状态',
@@ -411,6 +417,8 @@ const baseNavItems = [
   { path: '/store', activePaths: ['/store'], label: '商城', icon: 'gift' },
   { path: '/conversations', activePaths: ['/conversations'], label: '工单', icon: 'chat' },
   { path: '/images', activePaths: ['/images'], label: '图工坊', icon: 'image' },
+  { path: '/videos', activePaths: ['/videos'], label: '视频创作', icon: 'play' },
+  { path: '/docs/video-api', activePaths: ['/docs/video-api'], label: '视频 API', icon: 'book' },
   { path: '/monitor', activePaths: ['/monitor', '/available-channels'], label: '状态', icon: 'server' },
   { path: '/billing', activePaths: ['/billing', '/purchase', '/payment', '/subscriptions', '/orders', '/redeem'], label: '账单', icon: 'creditCard' }
 ] as const
@@ -423,6 +431,8 @@ const baseBusinessNavItems = [
   { path: '/store', activePaths: ['/store'], label: '发卡商城', icon: 'gift' },
   { path: '/conversations', activePaths: ['/conversations'], label: '工单服务', icon: 'chat' },
   { path: '/images', activePaths: ['/images'], label: '图工坊', icon: 'image' },
+  { path: '/videos', activePaths: ['/videos'], label: '视频创作', icon: 'play' },
+  { path: '/docs/video-api', activePaths: ['/docs/video-api'], label: '视频 API', icon: 'book' },
   { path: '/monitor', activePaths: ['/monitor', '/available-channels'], label: '状态', icon: 'server' },
   { path: '/billing', activePaths: ['/billing', '/purchase', '/payment', '/subscriptions', '/orders', '/redeem'], label: '账单', icon: 'creditCard' }
 ] as const

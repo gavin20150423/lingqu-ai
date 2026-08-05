@@ -239,6 +239,26 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/videos',
+    name: 'VideoStudio',
+    component: () => import('@/views/user/VideoStudioView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      title: '视频创作'
+    }
+  },
+  {
+    path: '/docs/video-api',
+    name: 'VideoAPIDocs',
+    component: () => import('@/views/user/VideoAPIDocsView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      title: '视频 API 文档'
+    }
+  },
+  {
     path: '/usage',
     name: 'Usage',
     component: () => import('@/views/user/UsageView.vue'),

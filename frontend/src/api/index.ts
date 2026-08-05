@@ -27,6 +27,16 @@ export { communityAPI } from './community'
 export { accountsAPI } from './accounts'
 export { accountShareAPI } from './accountShare'
 export { storeAPI } from './store'
+export { videoAPI } from './video'
+export type {
+  CreateVideoRequest,
+  CreatedVideoJob,
+  UploadedVideoMedia,
+  VideoGuidances,
+  VideoJob,
+  VideoJobStatus,
+  VideoModel,
+} from './video'
 
 // Admin APIs
 export { adminAPI } from './admin'
