@@ -133,8 +133,8 @@ type UserMonitorView struct {
 	PrimaryModel         string
 	PrimaryStatus        string
 	PrimaryLatencyMs     *int
-	PrimaryPingLatencyMs *int    // 主模型最近一次 ping 延迟
-	Availability7d       float64 // 0-100
+	PrimaryPingLatencyMs *int     // 主模型最近一次 ping 延迟
+	Availability7d       *float64 // 0-100; nil when the window has no samples
 	ExtraModels          []ExtraModelStatus
 	Timeline             []UserMonitorTimelinePoint // 主模型最近 N 个历史点（按 checked_at DESC，最新在前）
 }
@@ -168,9 +168,9 @@ type ModelDetail struct {
 	Model           string
 	LatestStatus    string
 	LatestLatencyMs *int
-	Availability7d  float64 // 0-100
-	Availability15d float64
-	Availability30d float64
+	Availability7d  *float64 // 0-100; nil when the window has no samples
+	Availability15d *float64
+	Availability30d *float64
 	AvgLatency7dMs  *int
 }
 
@@ -221,6 +221,6 @@ type ChannelMonitorAvailability struct {
 type MonitorStatusSummary struct {
 	PrimaryStatus    string // 空字符串表示无历史
 	PrimaryLatencyMs *int
-	Availability7d   float64 // 0-100，无历史时为 0
+	Availability7d   *float64 // 0-100; nil when the window has no samples
 	ExtraModels      []ExtraModelStatus
 }

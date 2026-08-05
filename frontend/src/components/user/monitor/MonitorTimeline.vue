@@ -56,6 +56,7 @@ const { t } = useI18n()
 const { statusLabel, formatLatency, formatRelativeTime } = useChannelMonitorFormat()
 const hoveredBar = ref<Bar | null>(null)
 const hoveredIndex = ref(0)
+const TIMELINE_WINDOW_MS = 60 * 60 * 1000
 
 interface Bar {
   colorClass: string
@@ -85,6 +86,10 @@ const displayBars = computed<Bar[]>(() => {
   // bar represents "now". Pad the left with empty placeholders to keep the
   // bar count stable at `length`.
   const real = [...(props.buckets ?? [])]
+    .filter((point) => {
+      const checkedAt = Date.parse(point.checked_at)
+      return !Number.isNaN(checkedAt) && checkedAt >= Date.now() - TIMELINE_WINDOW_MS
+    })
     .slice(0, props.length)
     .reverse()
 

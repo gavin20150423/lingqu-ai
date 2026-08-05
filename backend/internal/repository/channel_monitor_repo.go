@@ -431,6 +431,29 @@ func (r *channelMonitorRepository) ListLatestForMonitorIDs(ctx context.Context, 
 //
 // 返回值：map[monitorID] -> []*ChannelMonitorHistoryEntry（不含 message，减少网络开销）。
 // 空 ids / 空 primaryModels 返回空 map，不报错。
+const listRecentHistoryForMonitorsQuery = `
+	WITH targets AS (
+	    SELECT unnest($1::bigint[]) AS monitor_id,
+	           unnest($2::text[])   AS model
+	),
+	ranked AS (
+	    SELECT h.monitor_id,
+	           h.status,
+	           h.latency_ms,
+	           h.ping_latency_ms,
+	           h.checked_at,
+	           ROW_NUMBER() OVER (PARTITION BY h.monitor_id ORDER BY h.checked_at DESC) AS rn
+	    FROM channel_monitor_histories h
+	    JOIN targets t
+	      ON t.monitor_id = h.monitor_id AND t.model = h.model
+	    WHERE h.checked_at >= NOW() - INTERVAL '1 hour'
+	)
+	SELECT monitor_id, status, latency_ms, ping_latency_ms, checked_at
+	FROM ranked
+	WHERE rn <= $3
+	ORDER BY monitor_id, checked_at DESC
+`
+
 func (r *channelMonitorRepository) ListRecentHistoryForMonitors(
 	ctx context.Context,
 	ids []int64,
@@ -444,28 +467,7 @@ func (r *channelMonitorRepository) ListRecentHistoryForMonitors(
 	}
 	perMonitorLimit = clampTimelineLimit(perMonitorLimit)
 
-	const q = `
-		WITH targets AS (
-		    SELECT unnest($1::bigint[]) AS monitor_id,
-		           unnest($2::text[])   AS model
-		),
-		ranked AS (
-		    SELECT h.monitor_id,
-		           h.status,
-		           h.latency_ms,
-		           h.ping_latency_ms,
-		           h.checked_at,
-		           ROW_NUMBER() OVER (PARTITION BY h.monitor_id ORDER BY h.checked_at DESC) AS rn
-		    FROM channel_monitor_histories h
-		    JOIN targets t
-		      ON t.monitor_id = h.monitor_id AND t.model = h.model
-		)
-		SELECT monitor_id, status, latency_ms, ping_latency_ms, checked_at
-		FROM ranked
-		WHERE rn <= $3
-		ORDER BY monitor_id, checked_at DESC
-	`
-	rows, err := r.db.QueryContext(ctx, q, pq.Array(pairIDs), pq.Array(pairModels), perMonitorLimit)
+	rows, err := r.db.QueryContext(ctx, listRecentHistoryForMonitorsQuery, pq.Array(pairIDs), pq.Array(pairModels), perMonitorLimit)
 	if err != nil {
 		return nil, fmt.Errorf("query recent history batch: %w", err)
 	}

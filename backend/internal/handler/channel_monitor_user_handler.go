@@ -49,7 +49,7 @@ type channelMonitorUserListItem struct {
 	PrimaryStatus        string                               `json:"primary_status"`
 	PrimaryLatencyMs     *int                                 `json:"primary_latency_ms"`
 	PrimaryPingLatencyMs *int                                 `json:"primary_ping_latency_ms"`
-	Availability7d       float64                              `json:"availability_7d"`
+	Availability7d       *float64                             `json:"availability_7d"`
 	ExtraModels          []dto.ChannelMonitorExtraModelStatus `json:"extra_models"`
 	Timeline             []channelMonitorUserTimelinePoint    `json:"timeline"`
 }
@@ -72,13 +72,13 @@ type channelMonitorUserDetailResponse struct {
 }
 
 type channelMonitorUserModelStat struct {
-	Model           string  `json:"model"`
-	LatestStatus    string  `json:"latest_status"`
-	LatestLatencyMs *int    `json:"latest_latency_ms"`
-	Availability7d  float64 `json:"availability_7d"`
-	Availability15d float64 `json:"availability_15d"`
-	Availability30d float64 `json:"availability_30d"`
-	AvgLatency7dMs  *int    `json:"avg_latency_7d_ms"`
+	Model           string   `json:"model"`
+	LatestStatus    string   `json:"latest_status"`
+	LatestLatencyMs *int     `json:"latest_latency_ms"`
+	Availability7d  *float64 `json:"availability_7d"`
+	Availability15d *float64 `json:"availability_15d"`
+	Availability30d *float64 `json:"availability_30d"`
+	AvgLatency7dMs  *int     `json:"avg_latency_7d_ms"`
 }
 
 func userMonitorViewToItem(v *service.UserMonitorView) channelMonitorUserListItem {

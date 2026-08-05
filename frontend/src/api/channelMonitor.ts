@@ -30,7 +30,7 @@ export interface UserMonitorView {
   primary_status: MonitorStatus
   primary_latency_ms: number | null
   primary_ping_latency_ms: number | null
-  availability_7d: number
+  availability_7d: number | null
   extra_models: UserMonitorExtraModel[]
   timeline: MonitorTimelinePoint[]
 }
@@ -43,9 +43,9 @@ export interface UserMonitorModelDetail {
   model: string
   latest_status: MonitorStatus
   latest_latency_ms: number | null
-  availability_7d: number
-  availability_15d: number
-  availability_30d: number
+  availability_7d: number | null
+  availability_15d: number | null
+  availability_30d: number | null
   avg_latency_7d_ms: number | null
 }
 

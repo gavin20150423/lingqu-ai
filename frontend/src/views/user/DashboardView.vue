@@ -63,7 +63,7 @@
           <div class="business-dashboard__monitor-list">
             <div v-for="monitor in monitors.slice(0, 3)" :key="monitor.id">
               <span>{{ monitor.name }}</span>
-              <strong>{{ monitor.availability_7d.toFixed(1) }}%</strong>
+              <strong>{{ formatMonitorAvailability(monitor.availability_7d) }}</strong>
             </div>
             <p v-if="monitors.length === 0">
               {{ dashboardLoading ? '正在读取服务状态' : '暂无服务监控数据' }}
@@ -273,10 +273,17 @@ const serviceStatusLabel = computed(() => {
   return serviceHealthy.value ? '服务运行正常' : '部分服务异常'
 })
 const availabilityRate = computed(() => {
-  if (monitors.value.length === 0) return '--'
-  const average = monitors.value.reduce((sum, item) => sum + item.availability_7d, 0) / monitors.value.length
+  const available = monitors.value
+    .map(item => item.availability_7d)
+    .filter((value): value is number => value !== null)
+  if (available.length === 0) return '--'
+  const average = available.reduce((sum, value) => sum + value, 0) / available.length
   return `${average.toFixed(1)}%`
 })
+
+function formatMonitorAvailability(value: number | null): string {
+  return value === null ? '--' : `${value.toFixed(1)}%`
+}
 const availabilityPoints = computed(() => {
   const timeline = monitors.value[0]?.timeline?.slice(-28) || []
   if (timeline.length === 0) return Array.from({ length: 28 }, () => 'neutral')
