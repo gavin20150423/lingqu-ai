@@ -5,10 +5,12 @@ import ProfileView from '@/views/user/ProfileView.vue'
 const {
   fetchPublicSettingsMock,
   refreshUserMock,
+  showErrorMock,
   authState
 } = vi.hoisted(() => ({
   fetchPublicSettingsMock: vi.fn(),
   refreshUserMock: vi.fn(),
+  showErrorMock: vi.fn(),
   authState: {
     user: null as Record<string, unknown> | null,
     refreshUser: vi.fn()
@@ -21,7 +23,8 @@ vi.mock('@/stores/auth', () => ({
 
 vi.mock('@/stores/app', () => ({
   useAppStore: () => ({
-    fetchPublicSettings: fetchPublicSettingsMock
+    fetchPublicSettings: fetchPublicSettingsMock,
+    showError: showErrorMock
   })
 }))
 
@@ -43,6 +46,7 @@ describe('ProfileView', () => {
   beforeEach(() => {
     refreshUserMock.mockReset()
     fetchPublicSettingsMock.mockReset()
+    showErrorMock.mockReset()
     refreshUserMock.mockResolvedValue(undefined)
     authState.refreshUser = refreshUserMock
     authState.user = {
