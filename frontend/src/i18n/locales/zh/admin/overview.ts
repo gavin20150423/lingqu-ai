@@ -103,9 +103,10 @@ export default {
         saved: 'S3 配置已保存'
       },
       imageStorage: {
-        title: '异步生图对象存储',
-        description: '开启后，异步生图接口可用，生成结果转存到对象存储，只把短链接写入 Redis。与备份共用同一套 S3 客户端，保存后立即生效，无需重启。',
-        enabled: '启用异步生图',
+        title: '异步生图存储',
+        description: '异步生图始终可用。默认将结果保存在服务器持久化目录；开启 S3 后改用对象存储，保存后立即生效，无需重启。',
+        enabled: '使用 S3 对象存储',
+        localFallback: '当前使用服务器本地持久化存储，图片通过本平台地址访问。',
         reuseBackupS3: '复用上方备份的 S3 配置（只用不同的存储桶/前缀）',
         bucket: '存储桶',
         bucketInherited: '留空则沿用备份存储桶',
@@ -113,7 +114,7 @@ export default {
         publicBaseUrl: '公开访问域名',
         publicBaseUrlPlaceholder: '留空则返回预签名临时链接',
         presignExpiryHours: '预签名链接有效期（小时）',
-        saved: '异步生图对象存储配置已保存'
+        saved: '异步生图存储配置已保存'
       },
       schedule: {
         title: '定时备份',

@@ -103,9 +103,10 @@ export default {
         saved: 'S3 configuration saved'
       },
       imageStorage: {
-        title: 'Async image object storage',
-        description: 'Enables the asynchronous image endpoints and offloads generated images to object storage, keeping only short links in Redis. Shares the S3 client with backups and takes effect on save — no restart needed.',
-        enabled: 'Enable async image tasks',
+        title: 'Async image storage',
+        description: 'Async image tasks are always available. Results use persistent server storage by default; enable S3 here to use object storage instead. Changes apply without a restart.',
+        enabled: 'Use S3 object storage',
+        localFallback: 'Persistent server storage is active. Images are served from this platform address.',
         reuseBackupS3: 'Reuse the backup S3 configuration above (different bucket/prefix only)',
         bucket: 'Bucket',
         bucketInherited: 'Leave empty to use the backup bucket',
@@ -113,7 +114,7 @@ export default {
         publicBaseUrl: 'Public base URL',
         publicBaseUrlPlaceholder: 'Leave empty to return presigned links',
         presignExpiryHours: 'Presigned link TTL (hours)',
-        saved: 'Async image object storage saved'
+        saved: 'Async image storage saved'
       },
       schedule: {
         title: 'Scheduled Backup',

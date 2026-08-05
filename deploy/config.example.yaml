@@ -1319,6 +1319,7 @@ video_api:
   reconcile_batch_size: 20
 
 image_storage:
+  # S3 是可选项。关闭或配置不完整时，异步生图会自动使用服务器本地持久化目录。
   enabled: false
   # S3 兼容端点。AWS 官方可留空；R2 形如 https://<account_id>.r2.cloudflarestorage.com
   endpoint: ""
@@ -1338,3 +1339,10 @@ image_storage:
   presign_expiry_hours: 24
   # 当上游返回的是图片 url 时，下载该图片再转存的字节上限（默认 32MB）
   max_download_bytes: 33554432
+  # 本地降级目录。Docker 默认数据卷已挂载 /app/data，因此升级容器不会丢失。
+  local_directory: "./data/image-storage"
+  # 本地图片通过当前平台同域提供访问。
+  local_base_url: "/v1/images/files"
+  # 本地结果保留时长，应长于异步任务的 24 小时 TTL。
+  local_retention_hours: 48
+  local_cleanup_interval_minutes: 60
