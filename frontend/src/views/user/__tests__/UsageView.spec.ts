@@ -53,6 +53,9 @@ const messages: Record<string, string> = {
   'usage.ws': 'WS',
   'usage.stream': 'Stream',
   'usage.sync': 'Sync',
+  'usage.latency': 'Latency',
+  'usage.latencyFirstToken': 'First token',
+  'usage.latencyDuration': 'Total',
   'usage.exporting': 'Exporting',
   'usage.exportCsv': 'Export CSV',
   'usage.failedToLoad': 'Failed to load',
@@ -206,6 +209,25 @@ describe('user UsageView', () => {
     expect(query).toHaveBeenCalled()
     expect(getStatsByDateRange).toHaveBeenCalled()
     expect(list).toHaveBeenCalledWith(1, 100)
+  })
+
+  it('renders first-token and total duration in one latency column', async () => {
+    const wrapper = mountUsageView()
+    await flushPromises()
+
+    const latencyHeaders = wrapper.findAll('th').filter((header) => header.text() === 'Latency')
+    expect(latencyHeaders).toHaveLength(1)
+
+    const healthBars = wrapper.findAll('[data-testid="usage-latency-bar"]')
+    expect(healthBars).toHaveLength(1)
+    const healthBar = healthBars[0]
+    const latencyText = healthBar.element.parentElement?.textContent ?? ''
+    expect(latencyText).toContain('First token')
+    expect(latencyText).toContain('Total')
+    expect(latencyText).toContain('12ms')
+    expect(latencyText).toContain('345ms')
+    expect(healthBar.classes()).toContain('from-emerald-500')
+    expect(healthBar.classes()).toContain('to-emerald-500')
   })
 
   it('exports csv with current filters and without admin-only fields', async () => {
