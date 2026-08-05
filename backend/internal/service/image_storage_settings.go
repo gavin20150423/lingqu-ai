@@ -253,7 +253,7 @@ func (s *ImageStorageSettingService) toImageStorageConfig(ctx context.Context, i
 		ForcePathStyle:  in.ForcePathStyle,
 	}
 
-	if in.ReuseBackupS3 {
+	if in.Enabled && in.ReuseBackupS3 {
 		backupCfg, err := s.backupCredentials(ctx)
 		if err != nil {
 			return nil, err
