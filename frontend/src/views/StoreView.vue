@@ -1,5 +1,5 @@
 <template>
-  <AppLayout>
+  <UserWorkspaceLayout>
     <div class="store-page mx-auto w-full max-w-6xl space-y-5">
       <section class="store-hero overflow-hidden rounded-lg border border-gray-200 bg-white dark:border-dark-700 dark:bg-dark-900">
         <div class="grid gap-5 p-5 md:grid-cols-[1.4fr_0.8fr] md:p-6">
@@ -343,7 +343,7 @@
         </div>
       </Transition>
     </Teleport>
-  </AppLayout>
+  </UserWorkspaceLayout>
 </template>
 
 <script setup lang="ts">
@@ -357,7 +357,7 @@ import { storeAPI } from '@/api/store'
 import { extractI18nErrorMessage } from '@/utils/apiError'
 import { useClipboard } from '@/composables/useClipboard'
 import { isMobileDevice } from '@/utils/device'
-import AppLayout from '@/components/layout/AppLayout.vue'
+import UserWorkspaceLayout from '@/components/layout/UserWorkspaceLayout.vue'
 import DeliveredFilesList from '@/components/store/DeliveredFilesList.vue'
 import PaymentMethodSelector from '@/components/payment/PaymentMethodSelector.vue'
 import PaymentStatusPanel from '@/components/payment/PaymentStatusPanel.vue'

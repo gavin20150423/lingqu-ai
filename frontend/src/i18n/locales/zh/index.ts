@@ -5,6 +5,7 @@ import batchImage from './batchImage'
 import admin from './admin'
 import misc from './misc'
 import store from './store'
+import conversations from './conversations'
 
 export default {
   ...landing,
@@ -12,6 +13,7 @@ export default {
   ...dashboard,
   ...batchImage,
   ...store,
+  ...conversations,
   admin,
   ...misc,
 }

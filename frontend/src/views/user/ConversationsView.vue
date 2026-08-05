@@ -1,5 +1,5 @@
 <template>
-  <AppLayout>
+  <UserWorkspaceLayout>
     <div class="flex min-h-[calc(100vh-8rem)] flex-col gap-4 xl:h-[calc(100vh-8rem)] xl:min-h-0 xl:overflow-hidden">
       <section class="card p-4">
         <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -227,7 +227,7 @@
         </div>
       </template>
     </BaseDialog>
-  </AppLayout>
+  </UserWorkspaceLayout>
 </template>
 
 <script setup lang="ts">
@@ -246,7 +246,7 @@ import type {
   SelectOption
 } from '@/types'
 
-import AppLayout from '@/components/layout/AppLayout.vue'
+import UserWorkspaceLayout from '@/components/layout/UserWorkspaceLayout.vue'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import Icon from '@/components/icons/Icon.vue'

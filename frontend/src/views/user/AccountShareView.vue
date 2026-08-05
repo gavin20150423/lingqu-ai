@@ -1,5 +1,5 @@
 <template>
-  <AppLayout>
+  <UserWorkspaceLayout>
     <div class="mx-auto flex w-full max-w-[1680px] flex-col gap-5">
       <div class="lg:hidden">
         <h1 class="text-2xl font-semibold text-gray-950 dark:text-white">账号广场</h1>
@@ -2566,7 +2566,7 @@
       @confirm="confirmForceEdit"
       @cancel="cancelForceEdit"
     />
-  </AppLayout>
+  </UserWorkspaceLayout>
 </template>
 
 <script setup lang="ts">
@@ -2586,7 +2586,7 @@ import {
   openAIAccountLevelLabel,
   openAIAccountLevelOptions
 } from '@/utils/openaiAccountLevels'
-import AppLayout from '@/components/layout/AppLayout.vue'
+import UserWorkspaceLayout from '@/components/layout/UserWorkspaceLayout.vue'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import Icon from '@/components/icons/Icon.vue'
