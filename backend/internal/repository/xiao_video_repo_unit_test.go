@@ -145,6 +145,42 @@ func TestVideoRepository_FinalizeJobPreservesSellingPriceAndStoresUpstreamCost(t
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestVideoRepository_FinalizeCompletedJobCapturesAndRecordsUsage(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	now := time.Now().UTC()
+	mock.ExpectBegin()
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT user_id,upstream_job_id,amount,settlement_status FROM video_jobs WHERE job_id=$1 FOR UPDATE`)).
+		WithArgs("vidjob_direct_complete").
+		WillReturnRows(sqlmock.NewRows([]string{"user_id", "upstream_job_id", "amount", "settlement_status"}).
+			AddRow(int64(11), "creating:vidjob_direct_complete", 10.0, "held"))
+	mock.ExpectExec("UPDATE users").
+		WithArgs(0.0, 10.0, int64(11), 10.0).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("UPDATE video_jobs SET").
+		WithArgs("vidjob_direct_complete", "up-job", "completed", 2.0, "USD", "captured", []byte(`{"status":"completed"}`), sqlmock.AnyArg(), sqlmock.AnyArg(), "", 0, "").
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("INSERT INTO usage_logs").
+		WithArgs("vidjob_direct_complete", service.BillingTypeBalance, service.RequestTypeSync).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+	mock.ExpectQuery(regexp.QuoteMeta(videoJobSelect + ` WHERE job_id=$1`)).
+		WithArgs("vidjob_direct_complete").
+		WillReturnRows(videoJobRows("vidjob_direct_complete", "up-job", "completed", 10, "captured", now, 2.0, "USD"))
+
+	repo := NewVideoRepository(db)
+	job, err := repo.FinalizeJobAndReconcileHold(context.Background(), service.VideoJobFinalization{
+		JobID: "vidjob_direct_complete", UpstreamJobID: "up-job", Status: "completed",
+		UpstreamAmount: 2, UpstreamCurrency: "USD", UpstreamResponse: []byte(`{"status":"completed"}`),
+	})
+	require.NoError(t, err)
+	require.Equal(t, "completed", job.Status)
+	require.Equal(t, "captured", job.SettlementStatus)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestVideoRepository_ReleaseJobReservationRefundsAndDeletes(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
@@ -205,6 +241,9 @@ func TestVideoRepository_UpdateJobAndSettleCapturesHeldAmount(t *testing.T) {
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec("UPDATE video_jobs SET").
 		WithArgs("vidjob_capture", "completed", []byte(`{"status":"completed"}`), sqlmock.AnyArg(), "captured", sqlmock.AnyArg(), "1080p", 12, "21:9").
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("INSERT INTO usage_logs").
+		WithArgs("vidjob_capture", service.BillingTypeBalance, service.RequestTypeSync).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
 	mock.ExpectQuery(regexp.QuoteMeta(videoJobSelect + ` WHERE job_id=$1`)).

@@ -108,21 +108,36 @@ func TestVideoRepository_BindsAccountAndSettlesHoldExactlyOnce(t *testing.T) {
 	require.Equal(t, 12, first.Duration)
 	require.Equal(t, "21:9", first.AspectRatio)
 	assertVideoBalance(t, ctx, userID, 0, 10)
+	assertCapturedVideoUsage(t, ctx, first, groupID)
 
 	first, err = repo.UpdateJobAndSettle(ctx, service.VideoJobUpdate{JobID: first.JobID, Status: "running", UpstreamResponse: []byte(`{"status":"running"}`)})
 	require.NoError(t, err)
 	require.Equal(t, "completed", first.Status, "a stale poll must not regress a terminal job")
 	assertVideoBalance(t, ctx, userID, 0, 10)
+	assertCapturedVideoUsage(t, ctx, first, groupID)
 
 	second, err = repo.UpdateJobAndSettle(ctx, service.VideoJobUpdate{JobID: second.JobID, Status: "failed", UpstreamResponse: []byte(`{"status":"failed"}`), FinishedAt: &now})
 	require.NoError(t, err)
 	require.Equal(t, "released", second.SettlementStatus)
 	assertVideoBalance(t, ctx, userID, 10, 0)
+	assertVideoUsageCount(t, ctx, second.JobID, apiKeyID, 0)
 
 	second, err = repo.UpdateJobAndSettle(ctx, service.VideoJobUpdate{JobID: second.JobID, Status: "failed", UpstreamResponse: []byte(`{"status":"failed"}`), FinishedAt: &now})
 	require.NoError(t, err)
 	require.Equal(t, "released", second.SettlementStatus)
 	assertVideoBalance(t, ctx, userID, 10, 0)
+	assertVideoUsageCount(t, ctx, second.JobID, apiKeyID, 0)
+
+	third := reserve("vidjob_repo_direct_complete", accountOneID, "repo-direct-complete")
+	third, err = repo.FinalizeJobAndReconcileHold(ctx, service.VideoJobFinalization{
+		JobID: third.JobID, UpstreamJobID: "direct-complete-upstream", Status: "completed",
+		UpstreamAmount: 2.5, UpstreamCurrency: "USD", Resolution: "720p", Duration: 6,
+		AspectRatio: "16:9", UpstreamResponse: []byte(`{"status":"completed"}`),
+	})
+	require.NoError(t, err)
+	require.Equal(t, "captured", third.SettlementStatus)
+	assertVideoBalance(t, ctx, userID, 0, 0)
+	assertCapturedVideoUsage(t, ctx, third, groupID)
 
 	_, err = repo.UpdateJobAndSettle(ctx, service.VideoJobUpdate{JobID: second.JobID, Status: "unknown"})
 	require.EqualError(t, err, "invalid video job status")
@@ -134,4 +149,47 @@ func assertVideoBalance(t *testing.T, ctx context.Context, userID int64, wantBal
 	require.NoError(t, integrationDB.QueryRowContext(ctx, `SELECT balance,frozen_balance FROM users WHERE id=$1`, userID).Scan(&balance, &frozen))
 	require.InDelta(t, wantBalance, balance, 0.00000001)
 	require.InDelta(t, wantFrozen, frozen, 0.00000001)
+}
+
+func assertVideoUsageCount(t *testing.T, ctx context.Context, jobID string, apiKeyID int64, want int) {
+	t.Helper()
+	var count int
+	require.NoError(t, integrationDB.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM usage_logs WHERE request_id=$1 AND api_key_id=$2`, jobID, apiKeyID).Scan(&count))
+	require.Equal(t, want, count)
+}
+
+func assertCapturedVideoUsage(t *testing.T, ctx context.Context, job *service.VideoJob, groupID int64) {
+	t.Helper()
+	var userID, apiKeyID, accountID, storedGroupID int64
+	var model, requestedModel, billingMode, resolution, inboundEndpoint, upstreamEndpoint string
+	var videoCount, duration, billingType, requestType int
+	var totalCost, actualCost, rateMultiplier float64
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `
+		SELECT user_id,api_key_id,account_id,group_id,model,requested_model,billing_mode,
+		       video_count,video_resolution,video_duration_seconds,total_cost,actual_cost,
+		       rate_multiplier,billing_type,request_type,inbound_endpoint,upstream_endpoint
+		FROM usage_logs WHERE request_id=$1 AND api_key_id=$2
+	`, job.JobID, job.APIKeyID).Scan(
+		&userID, &apiKeyID, &accountID, &storedGroupID, &model, &requestedModel, &billingMode,
+		&videoCount, &resolution, &duration, &totalCost, &actualCost, &rateMultiplier,
+		&billingType, &requestType, &inboundEndpoint, &upstreamEndpoint,
+	))
+	require.Equal(t, job.UserID, userID)
+	require.Equal(t, job.APIKeyID, apiKeyID)
+	require.Equal(t, job.AccountID, accountID)
+	require.Equal(t, groupID, storedGroupID)
+	require.Equal(t, job.Model, model)
+	require.Equal(t, job.Model, requestedModel)
+	require.Equal(t, "video", billingMode)
+	require.Equal(t, 1, videoCount)
+	require.Equal(t, job.Resolution, resolution)
+	require.Equal(t, job.Duration, duration)
+	require.InDelta(t, job.Amount, totalCost, 0.00000001)
+	require.InDelta(t, job.Amount, actualCost, 0.00000001)
+	require.InDelta(t, 1, rateMultiplier, 0.00000001)
+	require.Equal(t, int(service.BillingTypeBalance), billingType)
+	require.Equal(t, int(service.RequestTypeSync), requestType)
+	require.Equal(t, "/v1/videos/generations", inboundEndpoint)
+	require.Equal(t, "/v1/videos/generations", upstreamEndpoint)
 }

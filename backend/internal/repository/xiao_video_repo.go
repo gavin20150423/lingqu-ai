@@ -241,6 +241,11 @@ func (r *videoRepository) FinalizeJobAndReconcileHold(ctx context.Context, p ser
 	if err != nil {
 		return nil, err
 	}
+	if settlement == "captured" {
+		if err = insertCapturedVideoUsageLog(ctx, tx, p.JobID); err != nil {
+			return nil, err
+		}
+	}
 	if err = tx.Commit(); err != nil {
 		return nil, err
 	}
@@ -303,6 +308,7 @@ func (r *videoRepository) UpdateJobAndSettle(ctx context.Context, p service.Vide
 		return job, nil
 	}
 	settlement := job.SettlementStatus
+	captured := false
 	var settledAt any = job.SettledAt
 	if settlement == "held" && p.Status == "completed" {
 		res, execErr := tx.ExecContext(ctx, `UPDATE users SET frozen_balance=COALESCE(frozen_balance,0)-$1,updated_at=NOW() WHERE id=$2 AND COALESCE(frozen_balance,0)>=$1`, job.Amount, job.UserID)
@@ -313,6 +319,7 @@ func (r *videoRepository) UpdateJobAndSettle(ctx context.Context, p service.Vide
 			return nil, errors.New("video frozen balance is insufficient")
 		}
 		settlement = "captured"
+		captured = true
 		settledAt = time.Now()
 	} else if settlement == "held" && (p.Status == "failed" || p.Status == "canceled") {
 		res, execErr := tx.ExecContext(ctx, `UPDATE users SET balance=balance+$1,frozen_balance=COALESCE(frozen_balance,0)-$1,updated_at=NOW() WHERE id=$2 AND COALESCE(frozen_balance,0)>=$1`, job.Amount, job.UserID)
@@ -341,10 +348,35 @@ func (r *videoRepository) UpdateJobAndSettle(ctx context.Context, p service.Vide
 	if err != nil {
 		return nil, err
 	}
+	if captured {
+		if err = insertCapturedVideoUsageLog(ctx, tx, p.JobID); err != nil {
+			return nil, err
+		}
+	}
 	if err = tx.Commit(); err != nil {
 		return nil, err
 	}
 	return r.getJobByID(ctx, p.JobID)
+}
+
+func insertCapturedVideoUsageLog(ctx context.Context, tx *sql.Tx, jobID string) error {
+	_, err := tx.ExecContext(ctx, `
+		INSERT INTO usage_logs (
+			user_id, api_key_id, account_id, request_id, model, requested_model, group_id,
+			total_cost, actual_cost, rate_multiplier, billing_type, request_type,
+			video_count, video_resolution, video_duration_seconds, billing_mode,
+			inbound_endpoint, upstream_endpoint, created_at
+		)
+		SELECT
+			user_id, api_key_id, account_id, job_id, model, model, group_id,
+			amount, amount, 1, $2, $3,
+			1, resolution, duration, 'video',
+			'/v1/videos/generations', '/v1/videos/generations', created_at
+		FROM video_jobs
+		WHERE job_id=$1 AND status='completed' AND settlement_status='captured'
+		ON CONFLICT (request_id, api_key_id) DO NOTHING
+	`, jobID, service.BillingTypeBalance, service.RequestTypeSync)
+	return err
 }
 
 const videoJobSelect = `SELECT job_id,upstream_job_id,account_id,user_id,api_key_id,group_id,idempotency_key,request_hash,model,resolution,duration,aspect_ratio,status,amount,currency,upstream_amount,upstream_currency,settlement_status,upstream_response,created_at,updated_at,finished_at,settled_at FROM video_jobs`
