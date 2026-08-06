@@ -6,27 +6,36 @@ import { describe, expect, it } from 'vitest'
 import layoutSource from '@/components/layout/UserWorkspaceLayout.vue?raw'
 import routerSource from '@/router/index.ts?raw'
 import studioSource from '../VideoStudioView.vue?raw'
+import historySource from '../VideoHistoryView.vue?raw'
 import docsSource from '../VideoAPIDocsView.vue?raw'
+import tabsSource from '@/components/video/VideoWorkspaceTabs.vue?raw'
 
 const testDirectory = dirname(fileURLToPath(import.meta.url))
 const themeSource = readFileSync(resolve(testDirectory, '../../../styles/user-themes.css'), 'utf8')
 
 describe('video user workspace navigation', () => {
-  it('keeps creation and API docs directly after the image workshop in both themes', () => {
-    const expectedOrder = /path: '\/images'[\s\S]*?path: '\/videos'[\s\S]*?path: '\/docs\/video-api'[\s\S]*?path: '\/monitor'/g
+  it('keeps one video workspace entry directly after the image workshop in both themes', () => {
+    const expectedOrder = /path: '\/images'[\s\S]*?path: '\/videos'[\s\S]*?path: '\/monitor'/g
     expect(layoutSource.match(expectedOrder)).toHaveLength(2)
-    expect(layoutSource).toContain("label: '视频创作', icon: 'play'")
-    expect(layoutSource).toContain("label: '视频 API', icon: 'book'")
+    expect(layoutSource.match(/label: '视频工作台', icon: 'play'/g)).toHaveLength(2)
+    expect(layoutSource).toContain("{ path: '/videos/history', label: '历史任务' }")
+    expect(layoutSource).toContain('aria-label="视频工作台导航"')
   })
 
-  it('registers authenticated user routes for both pages', () => {
+  it('registers authenticated user routes for all three pages', () => {
     expect(routerSource).toMatch(/path: '\/videos'[\s\S]*?requiresAuth: true[\s\S]*?requiresAdmin: false/)
+    expect(routerSource).toMatch(/path: '\/videos\/history'[\s\S]*?requiresAuth: true[\s\S]*?requiresAdmin: false/)
     expect(routerSource).toMatch(/path: '\/docs\/video-api'[\s\S]*?requiresAuth: true[\s\S]*?requiresAdmin: false/)
   })
 
-  it('uses the user workspace shell and current platform origin', () => {
+  it('uses the user workspace shell, shared tabs and current platform origin', () => {
     expect(studioSource).toMatch(/<template>\s*<UserWorkspaceLayout>/)
+    expect(historySource).toMatch(/<template>\s*<UserWorkspaceLayout>/)
     expect(docsSource).toMatch(/<template>\s*<UserWorkspaceLayout>/)
+    expect(studioSource).toContain('<VideoWorkspaceTabs />')
+    expect(historySource).toContain('<VideoWorkspaceTabs />')
+    expect(docsSource).toContain('<VideoWorkspaceTabs />')
+    expect(tabsSource).toContain("path: '/videos/history'")
     expect(docsSource).toContain('window.location.origin')
     expect(docsSource).not.toContain('sub2.pokexiao.com')
   })
@@ -36,20 +45,24 @@ describe('video user workspace navigation', () => {
     expect(docsSource).not.toContain(':global(.user-workspace')
     expect(themeSource).toContain(".user-workspace[data-user-theme='business'] .video-studio")
     expect(themeSource).toContain(".user-workspace[data-user-theme='business'] .video-docs")
+    expect(themeSource).toContain(".user-workspace[data-user-theme='business'] .video-history")
   })
 
-  it('uses a searchable keyboard-accessible model picker in the compact workspace', () => {
-    expect(studioSource).toContain('id="video-model-search"')
-    expect(studioSource).toContain('role="combobox"')
-    expect(studioSource).toContain('aria-controls="video-model-options"')
-    expect(studioSource).toContain('@keydown="handleModelSearchKeydown"')
-    expect(studioSource).toContain("event.key === 'ArrowDown'")
-    expect(studioSource).toContain("event.key === 'Enter'")
-    expect(studioSource).toContain('class="video-model-menu"')
-    expect(studioSource).toContain('class="video-studio__setup"')
-    expect(studioSource).toMatch(/\.video-studio__workspace \{ grid-template-columns: minmax\(0,1fr\) minmax\(18rem,20rem\)/)
-    expect(studioSource).toContain('@media (max-width: 1280px)')
-    expect(studioSource).toContain('@media (max-width: 680px)')
-    expect(studioSource).not.toContain('class="video-studio__models"')
+  it('keeps the Key above a directly visible model matrix', () => {
+    expect(studioSource.indexOf('class="video-key-bar"')).toBeLessThan(studioSource.indexOf('class="video-model-shelf"'))
+    expect(studioSource).toContain('class="video-model-grid"')
+    expect(studioSource).toContain('role="radiogroup"')
+    expect(studioSource).toContain('class="video-model-card"')
+    expect(studioSource).not.toContain('role="combobox"')
+    expect(studioSource).not.toContain('class="video-model-menu"')
+    expect(studioSource).not.toContain('aria-label="最近任务"')
+  })
+
+  it('moves jobs to history and warns that output is not permanent storage', () => {
+    expect(historySource).toContain('videoAPI.listJobs(key.key, 100)')
+    expect(historySource).toContain('videoAPI.fetchContent')
+    expect(historySource).toContain('当前接口没有承诺固定保存天数')
+    expect(historySource).toContain('请立即下载')
+    expect(docsSource).toContain('当前接口不承诺固定保存天数')
   })
 })

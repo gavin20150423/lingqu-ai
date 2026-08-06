@@ -37,7 +37,7 @@
             <Icon :name="item.icon" size="sm" />
             <span>{{ item.label }}</span>
             <Icon
-              :name="item.path === '/billing' && isNavActive(item) ? 'chevronDown' : 'chevronRight'"
+              :name="['/billing', '/videos'].includes(item.path) && isNavActive(item) ? 'chevronDown' : 'chevronRight'"
               size="xs"
             />
           </router-link>
@@ -51,6 +51,21 @@
               :key="`rail-billing-${child.path}`"
               :to="child.path"
               :class="{ 'user-workspace__rail-sublink--active': isBillingNavActive(child) }"
+              class="user-workspace__rail-sublink"
+            >
+              <span>{{ child.label }}</span>
+            </router-link>
+          </nav>
+          <nav
+            v-if="item.path === '/videos' && isNavActive(item)"
+            class="user-workspace__rail-subnav"
+            aria-label="视频工作台导航"
+          >
+            <router-link
+              v-for="child in videoNavItems"
+              :key="`rail-video-${child.path}`"
+              :to="child.path"
+              :class="{ 'user-workspace__rail-sublink--active': isVideoNavActive(child) }"
               class="user-workspace__rail-sublink"
             >
               <span>{{ child.label }}</span>
@@ -135,6 +150,20 @@
                 :key="`mobile-billing-${child.path}`"
                 :to="child.path"
                 :class="{ 'user-workspace__mobile-sublink--active': isBillingNavActive(child) }"
+                @click="mobileMenuOpen = false"
+              >
+                {{ child.label }}
+              </router-link>
+            </div>
+            <div
+              v-if="theme === 'business' && item.path === '/videos' && isNavActive(item)"
+              class="user-workspace__mobile-subnav"
+            >
+              <router-link
+                v-for="child in videoNavItems"
+                :key="`mobile-video-${child.path}`"
+                :to="child.path"
+                :class="{ 'user-workspace__mobile-sublink--active': isVideoNavActive(child) }"
                 @click="mobileMenuOpen = false"
               >
                 {{ child.label }}
@@ -351,9 +380,9 @@ const currentSection = computed(() => {
       description: '创建、管理并追踪你的图像生成任务。'
     },
     {
-      match: (path: string) => path === '/videos' || path === '/docs/video-api',
+      match: (path: string) => path === '/docs/video-api' || path === '/videos' || path.startsWith('/videos/'),
       kicker: 'Video workspace',
-      title: route.path === '/docs/video-api' ? '视频 API 文档' : '视频创作',
+      title: '视频工作台',
       description: '创建、管理并接入平台的视频生成任务。'
     },
     {
@@ -417,8 +446,7 @@ const baseNavItems = [
   { path: '/store', activePaths: ['/store'], label: '商城', icon: 'gift' },
   { path: '/conversations', activePaths: ['/conversations'], label: '工单', icon: 'chat' },
   { path: '/images', activePaths: ['/images'], label: '图工坊', icon: 'image' },
-  { path: '/videos', activePaths: ['/videos'], label: '视频创作', icon: 'play' },
-  { path: '/docs/video-api', activePaths: ['/docs/video-api'], label: '视频 API', icon: 'book' },
+  { path: '/videos', activePaths: ['/videos', '/docs/video-api'], label: '视频工作台', icon: 'play' },
   { path: '/monitor', activePaths: ['/monitor', '/available-channels'], label: '状态', icon: 'server' },
   { path: '/billing', activePaths: ['/billing', '/purchase', '/payment', '/subscriptions', '/orders', '/redeem'], label: '账单', icon: 'creditCard' }
 ] as const
@@ -431,8 +459,7 @@ const baseBusinessNavItems = [
   { path: '/store', activePaths: ['/store'], label: '发卡商城', icon: 'gift' },
   { path: '/conversations', activePaths: ['/conversations'], label: '工单服务', icon: 'chat' },
   { path: '/images', activePaths: ['/images'], label: '图工坊', icon: 'image' },
-  { path: '/videos', activePaths: ['/videos'], label: '视频创作', icon: 'play' },
-  { path: '/docs/video-api', activePaths: ['/docs/video-api'], label: '视频 API', icon: 'book' },
+  { path: '/videos', activePaths: ['/videos', '/docs/video-api'], label: '视频工作台', icon: 'play' },
   { path: '/monitor', activePaths: ['/monitor', '/available-channels'], label: '状态', icon: 'server' },
   { path: '/billing', activePaths: ['/billing', '/purchase', '/payment', '/subscriptions', '/orders', '/redeem'], label: '账单', icon: 'creditCard' }
 ] as const
@@ -455,6 +482,12 @@ const billingNavItems = [
   { path: '/redeem', label: '兑换码' }
 ] as const
 
+const videoNavItems = [
+  { path: '/videos', label: '视频创作' },
+  { path: '/videos/history', label: '历史任务' },
+  { path: '/docs/video-api', label: 'API 文档' }
+] as const
+
 const displayName = computed(() => {
   if (!user.value) return ''
   return user.value.username || user.value.email?.split('@')[0] || ''
@@ -467,6 +500,10 @@ const userInitials = computed(() => {
 
 function isNavActive(item: { activePaths: readonly string[] }): boolean {
   return item.activePaths.some(path => route.path === path || route.path.startsWith(`${path}/`))
+}
+
+function isVideoNavActive(item: { path: string }): boolean {
+  return item.path === '/videos' ? route.path === '/videos' : route.path === item.path || route.path.startsWith(`${item.path}/`)
 }
 
 function isBillingNavActive(item: (typeof billingNavItems)[number]): boolean {

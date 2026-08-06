@@ -416,7 +416,8 @@
 
 /* Video workspace and API docs share the same restrained business treatment. */
 .user-workspace[data-user-theme='business'] .video-studio,
-.user-workspace[data-user-theme='business'] .video-docs {
+.user-workspace[data-user-theme='business'] .video-docs,
+.user-workspace[data-user-theme='business'] .video-history {
   color: #202a33;
 }
 

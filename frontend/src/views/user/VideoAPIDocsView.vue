@@ -1,13 +1,14 @@
 <template>
   <UserWorkspaceLayout>
     <div class="video-docs">
+      <VideoWorkspaceTabs />
+
       <header class="video-docs__header">
         <div>
           <span><Icon name="book" size="sm" /> 视频 API · v1.1 + Seedance 音频升级</span>
           <h1>视频接口接入文档</h1>
           <p>兼容 OpenAI 风格的 Bearer 鉴权，通过你的平台统一接入上游视频模型。</p>
         </div>
-        <router-link to="/videos"><Icon name="play" size="sm" /> 打开视频创作</router-link>
       </header>
 
       <div class="video-docs__layout">
@@ -111,6 +112,7 @@
             </div>
             <CodeBlock title="轮询任务" :code="pollExample" />
             <p class="video-doc-note"><Icon name="clock" size="sm" /> 建议每 5 秒查询一次，长任务逐步退避到 30 秒。状态为 <code>pending</code>、<code>running</code>、<code>settling</code>、<code>completed</code>、<code>failed</code> 或 <code>canceled</code>。</p>
+            <p class="video-doc-note video-doc-note--warning"><Icon name="exclamationTriangle" size="sm" /> 成品内容不是永久存储，当前接口不承诺固定保存天数。任务完成后请立即下载，并保存到自己的设备或对象存储。</p>
             <p class="video-doc-note video-doc-note--warning"><Icon name="lock" size="sm" /> 浏览器的 <code>&lt;video&gt;</code> 标签不能附加 Bearer 头。前端应先用 fetch 携带 Key 获取 Blob，再把对象 URL 交给播放器；不要把 Key 放进 URL。</p>
           </section>
 
@@ -161,6 +163,7 @@
 <script setup lang="ts">
 import { computed, defineComponent, h, ref } from 'vue'
 import UserWorkspaceLayout from '@/components/layout/UserWorkspaceLayout.vue'
+import VideoWorkspaceTabs from '@/components/video/VideoWorkspaceTabs.vue'
 import Icon from '@/components/icons/Icon.vue'
 
 const copiedValue = ref('')
