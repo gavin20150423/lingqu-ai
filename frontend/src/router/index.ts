@@ -249,6 +249,16 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/videos/history',
+    name: 'VideoHistory',
+    component: () => import('@/views/user/VideoHistoryView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      title: '视频历史任务'
+    }
+  },
+  {
     path: '/docs/video-api',
     name: 'VideoAPIDocs',
     component: () => import('@/views/user/VideoAPIDocsView.vue'),
