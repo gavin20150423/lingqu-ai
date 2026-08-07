@@ -42,6 +42,25 @@ export function isDataUrl(value: unknown): value is string {
   return typeof value === 'string' && value.startsWith('data:')
 }
 
+/** Resolve local image paths returned by providers that store generated files on the API server. */
+export function resolveImageUrl(value: unknown, baseUrl?: string): string | null {
+  const raw = typeof value === 'string' ? value.trim() : ''
+  if (!raw) return null
+  if (raw.startsWith('data:') || /^https?:\/\//i.test(raw)) return raw
+  if (!raw.startsWith('/')) return null
+
+  const configuredBaseUrl = typeof baseUrl === 'string' ? baseUrl.trim() : ''
+  const browserOrigin = typeof window !== 'undefined' ? window.location.origin : ''
+  const resolutionBase = configuredBaseUrl || browserOrigin
+  if (!resolutionBase) return null
+
+  try {
+    return new URL(raw, resolutionBase).toString()
+  } catch {
+    return null
+  }
+}
+
 export function normalizeBase64Image(value: string, fallbackMime: string): string {
   return value.startsWith('data:') ? value : `data:${fallbackMime};base64,${value}`
 }

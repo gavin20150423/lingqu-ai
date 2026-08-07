@@ -10,12 +10,12 @@ import {
   getApiErrorMessage,
   getDataUrlDecodedByteSize,
   getDataUrlEncodedByteSize,
-  isDataUrl,
   isHttpUrl,
   mergeActualParams,
   MIME_MAP,
   normalizeBase64Image,
   pickActualParams,
+  resolveImageUrl,
 } from './imageApiShared'
 
 const PROMPT_REWRITE_GUARD_PREFIX = 'Use the following text as the complete prompt. Do not rewrite it:'
@@ -329,7 +329,7 @@ function getResponsesImageResultBase64(result: ResponsesOutputItem['result']): s
   return b64.trim() ? b64 : undefined
 }
 
-async function parseImagesApiResponse(payload: ImageApiResponse, mime: string, signal?: AbortSignal): Promise<CallApiResult> {
+async function parseImagesApiResponse(payload: ImageApiResponse, mime: string, signal?: AbortSignal, baseUrl?: string): Promise<CallApiResult> {
   const data = payload.data
   if (!Array.isArray(data) || !data.length) {
     const err = new Error('接口没有返回图片数据，请查看原始响应内容确认服务商实际返回的数据结构。如果使用的是中转或兼容接口，建议创建并使用「自定义服务商」配置。')
@@ -338,7 +338,8 @@ async function parseImagesApiResponse(payload: ImageApiResponse, mime: string, s
   }
 
   const images: string[] = []
-  const rawImageUrls = data.map((item) => item.url).filter(isHttpUrl)
+  const resolvedImageUrls = data.map((item) => resolveImageUrl(item.url, baseUrl))
+  const rawImageUrls = resolvedImageUrls.filter((url): url is string => Boolean(url) && isHttpUrl(url))
   const revisedPrompts: Array<string | undefined> = []
   try {
     for (const item of data) {
@@ -349,8 +350,9 @@ async function parseImagesApiResponse(payload: ImageApiResponse, mime: string, s
         continue
       }
 
-      if (isHttpUrl(item.url) || isDataUrl(item.url)) {
-        images.push(await fetchImageUrlAsDataUrl(item.url, mime, signal))
+      const imageUrl = resolveImageUrl(item.url, baseUrl)
+      if (imageUrl) {
+        images.push(await fetchImageUrlAsDataUrl(imageUrl, mime, signal))
         revisedPrompts.push(typeof item.revised_prompt === 'string' ? item.revised_prompt : undefined)
       }
     }
@@ -395,6 +397,7 @@ async function parseImagesApiStreamResponse(
   response: Response,
   mime: string,
   onPartialImage?: CallApiOptions['onPartialImage'],
+  baseUrl?: string,
 ): Promise<CallApiResult> {
   const completedItems: ImageResponseItem[] = []
   let resultPayload: ImageApiResponse | null = null
@@ -424,7 +427,7 @@ async function parseImagesApiStreamResponse(
   })
 
   if (resultPayload) {
-    return parseImagesApiResponse(resultPayload, mime)
+    return parseImagesApiResponse(resultPayload, mime, undefined, baseUrl)
   }
 
   if (!completedItems.length) {
@@ -752,7 +755,7 @@ async function callImagesApiSingle(opts: CallApiOptions, profile: ApiProfile, cu
     }
 
     if (profile.streamImages && isEventStreamResponse(response)) {
-      return parseImagesApiStreamResponse(response, mime, opts.onPartialImage)
+      return parseImagesApiStreamResponse(response, mime, opts.onPartialImage, profile.baseUrl)
     }
 
     const payload = await response.json() as ImageApiResponse
@@ -764,11 +767,11 @@ async function callImagesApiSingle(opts: CallApiOptions, profile: ApiProfile, cu
         profile,
         taskId,
         mime,
-        (resultPayload) => parseImagesApiResponse(resultPayload as ImageApiResponse, mime),
+        (resultPayload) => parseImagesApiResponse(resultPayload as ImageApiResponse, mime, undefined, profile.baseUrl),
       )
     }
 
-    return parseImagesApiResponse(payload, mime, controller.signal)
+    return parseImagesApiResponse(payload, mime, controller.signal, profile.baseUrl)
   } finally {
     clearTimeout(timeoutId)
   }
@@ -957,10 +960,12 @@ async function createCustomMultipartBody(mapping: CustomProviderSubmitMapping, o
   return formData
 }
 
-async function extractCustomImages(payload: unknown, result: CustomProviderResultMapping, mime: string, signal?: AbortSignal): Promise<CallApiResult> {
+async function extractCustomImages(payload: unknown, result: CustomProviderResultMapping, mime: string, signal?: AbortSignal, baseUrl?: string): Promise<CallApiResult> {
   const images: string[] = []
   const imageUrls = (result.imageUrlPaths ?? []).flatMap((path) =>
-    getAllByPath(payload, path).filter((value): value is string => isHttpUrl(value) || isDataUrl(value)),
+    getAllByPath(payload, path)
+      .map((value) => resolveImageUrl(value, baseUrl))
+      .filter((value): value is string => Boolean(value)),
   )
   const rawImageUrls = imageUrls.filter(isHttpUrl)
   try {
@@ -1077,7 +1082,7 @@ async function pollCustomTaskResult(
     }
     if (state === 'success') {
       try {
-        return await extractCustomImages(taskPayload, poll.result, mime, signal)
+        return await extractCustomImages(taskPayload, poll.result, mime, signal, profile.baseUrl)
       } catch (err) {
         if (!signal?.aborted && isRecoverablePollingError(err)) continue
         throw err
@@ -1122,7 +1127,7 @@ export async function getOpenAICompatibleQueuedImageResult(
           revisedPrompts: imageResults.map((result) => result.revisedPrompt),
         }
       }
-      return parseImagesApiResponse(resultPayload as ImageApiResponse, mime)
+      return parseImagesApiResponse(resultPayload as ImageApiResponse, mime, undefined, profile.baseUrl)
     },
   )
 }
@@ -1152,7 +1157,7 @@ async function callCustomHttpImageApi(opts: CallApiOptions, profile: ApiProfile,
       ;(err as any).rawResponsePayload = JSON.stringify(submitPayload, null, 2)
       throw err
     }
-    if (!taskId) return extractCustomImages(submitPayload, submitMapping.result ?? {}, mime, controller.signal)
+    if (!taskId) return extractCustomImages(submitPayload, submitMapping.result ?? {}, mime, controller.signal, profile.baseUrl)
     if (!customProvider.poll) throw new Error('异步接口返回了 task_id，但服务商配置缺少 poll')
     opts.onCustomTaskEnqueued?.({ taskId })
     if (timeoutId) {
