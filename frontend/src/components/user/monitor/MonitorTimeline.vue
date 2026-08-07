@@ -82,35 +82,41 @@ const STATUS_COLOR: Record<string, string> = {
 }
 
 const displayBars = computed<Bar[]>(() => {
-  // Real points come newest-first; convert to oldest-first so the rightmost
-  // bar represents "now". Pad the left with empty placeholders to keep the
-  // bar count stable at `length`.
+  const windowEnd = Date.now()
+  const windowStart = windowEnd - TIMELINE_WINDOW_MS
   const real = [...(props.buckets ?? [])]
-    .filter((point) => {
-      const checkedAt = Date.parse(point.checked_at)
-      return !Number.isNaN(checkedAt) && checkedAt >= Date.now() - TIMELINE_WINDOW_MS
-    })
-    .slice(0, props.length)
-    .reverse()
+    .map(point => ({ point, checkedAt: Date.parse(point.checked_at) }))
+    .filter(({ checkedAt }) => !Number.isNaN(checkedAt) && checkedAt >= windowStart && checkedAt <= windowEnd)
+    .sort((a, b) => a.checkedAt - b.checkedAt)
 
-  const padCount = Math.max(0, props.length - real.length)
+  const bucketCount = Math.max(1, props.length)
+  const bucketWidth = TIMELINE_WINDOW_MS / bucketCount
   const bars: Bar[] = []
+  let pointIndex = 0
+  let latestPoint: MonitorTimelinePoint | null = null
 
-  for (let i = 0; i < padCount; i += 1) {
-    bars.push({
-      colorClass: STATUS_COLOR.empty,
-      heightPct: STATUS_HEIGHT.empty,
-      title: '空闲',
-    })
-  }
+  for (let i = 0; i < bucketCount; i += 1) {
+    const bucketEnd = windowStart + (i + 1) * bucketWidth
+    while (pointIndex < real.length && real[pointIndex].checkedAt <= bucketEnd) {
+      latestPoint = real[pointIndex].point
+      pointIndex += 1
+    }
 
-  for (const point of real) {
-    const status = point.status as keyof typeof STATUS_HEIGHT
+    if (!latestPoint) {
+      bars.push({
+        colorClass: STATUS_COLOR.empty,
+        heightPct: STATUS_HEIGHT.empty,
+        title: '空闲',
+      })
+      continue
+    }
+
+    const status = latestPoint.status as keyof typeof STATUS_HEIGHT
     const colorClass = STATUS_COLOR[status] ?? STATUS_COLOR.empty
     const heightPct = STATUS_HEIGHT[status] ?? STATUS_HEIGHT.empty
-    const latency = formatLatency(point.latency_ms)
-    const relative = formatRelativeTime(point.checked_at)
-    const label = statusLabel(point.status)
+    const latency = formatLatency(latestPoint.latency_ms)
+    const relative = formatRelativeTime(latestPoint.checked_at)
+    const label = statusLabel(latestPoint.status)
     bars.push({
       colorClass,
       heightPct,

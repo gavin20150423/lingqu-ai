@@ -37,7 +37,7 @@ describe('MonitorTimeline', () => {
     expect(bars.every(bar => bar.classes().includes('bg-gray-300'))).toBe(true)
   })
 
-  it('keeps samples that are inside the last hour', () => {
+  it('carries a sample forward across the remaining time buckets', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-08-05T10:00:00Z'))
 
@@ -49,6 +49,10 @@ describe('MonitorTimeline', () => {
       },
     })
 
-    expect(wrapper.findAll('.monitor-timeline__bar--ok')).toHaveLength(1)
+    const bars = wrapper.findAll('.monitor-timeline__bar')
+    expect(bars).toHaveLength(3)
+    expect(bars[0].classes()).toContain('bg-gray-300')
+    expect(bars[1].classes()).toContain('monitor-timeline__bar--ok')
+    expect(bars[2].classes()).toContain('monitor-timeline__bar--ok')
   })
 })
