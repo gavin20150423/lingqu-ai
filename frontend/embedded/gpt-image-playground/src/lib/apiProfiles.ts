@@ -625,7 +625,10 @@ export function normalizeSystemApiSettings(input: Partial<AppSettings> | unknown
     timeout: active.timeout,
     apiMode: active.apiMode || DEFAULT_API_MODE,
     apiProxy: active.apiProxy,
-    responseFormatB64Json: active.responseFormatB64Json,
+    // The hosted workspace must be able to persist generated images locally.
+    // Upstream image URLs are often short-lived or omit CORS headers, so use
+    // the OpenAI-compatible base64 response by default for the system profile.
+    responseFormatB64Json: active.responseFormatB64Json ?? true,
     streamImages: false,
     streamPartialImages: DEFAULT_STREAM_PARTIAL_IMAGES,
   })

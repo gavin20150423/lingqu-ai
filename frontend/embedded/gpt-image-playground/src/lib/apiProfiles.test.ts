@@ -57,6 +57,16 @@ describe('normalizeSystemApiSettings', () => {
     expect(settings.apiKey).toBe('profile-key')
     expect(settings.profiles[0].apiKey).toBe('profile-key')
   })
+
+  it('requests base64 image responses for the hosted system profile by default', () => {
+    const settings = normalizeSystemApiSettings({
+      baseUrl: 'https://api.example.com/v1',
+      apiKey: 'test-key',
+      model: 'gpt-image-2',
+    })
+
+    expect(settings.profiles[0].responseFormatB64Json).toBe(true)
+  })
 })
 
 describe('mergeImportedSettings', () => {
