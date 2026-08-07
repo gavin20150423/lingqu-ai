@@ -621,6 +621,7 @@ func TestFrontendServer_Middleware(t *testing.T) {
 			"/dashboard",
 			"/users/123",
 			"/settings/profile",
+			"/videos/history",
 		}
 
 		for _, path := range spaPaths {
@@ -707,6 +708,7 @@ func TestEmbeddedFrontendBypassesBareVideoAPIRoutes(t *testing.T) {
 	} {
 		require.True(t, shouldBypassEmbeddedFrontend(path), "path=%s", path)
 	}
+	assert.False(t, shouldBypassEmbeddedFrontend("/videos/history"))
 }
 
 func TestNewFrontendServer(t *testing.T) {
@@ -783,7 +785,7 @@ func TestServeEmbeddedFrontend(t *testing.T) {
 		router := gin.New()
 		router.Use(middleware)
 
-		spaPaths := []string{"/dashboard", "/users/123", "/settings"}
+		spaPaths := []string{"/dashboard", "/users/123", "/settings", "/videos/history"}
 
 		for _, path := range spaPaths {
 			t.Run(path, func(t *testing.T) {

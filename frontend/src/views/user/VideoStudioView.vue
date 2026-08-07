@@ -359,7 +359,7 @@ const promptCues = [
 const resolution = ref('')
 const aspectRatio = ref('')
 const durationIndex = ref(0)
-const audio = ref(false)
+const audio = ref(true)
 const promptEnhance = ref<'AUTO' | 'ON' | 'OFF'>('AUTO')
 const startFrame = ref<MediaSelection | null>(null)
 const endFrame = ref<MediaSelection | null>(null)
@@ -600,7 +600,7 @@ watch(selectedCapability, (capability) => {
   const durationValue = capability.defaultDuration
   durationIndex.value = Math.max(0, durationsFor(capability, resolution.value).indexOf(durationValue))
   aspectRatio.value = capability.defaultAspectRatio
-  audio.value = false; promptEnhance.value = 'AUTO'; formError.value = ''
+  audio.value = true; promptEnhance.value = 'AUTO'; formError.value = ''
   if (capability.requiresStartFrame) creationMode.value = 'frames'
   else if (!availableModes.value.some((item) => item.value === creationMode.value)) creationMode.value = 'text'
   releaseAllMedia()

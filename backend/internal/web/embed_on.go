@@ -477,6 +477,11 @@ func tryServeOverrideFile(c *gin.Context, overrideDir, cleanPath string) bool {
 
 func shouldBypassEmbeddedFrontend(path string) bool {
 	trimmed := strings.TrimSpace(path)
+	// /videos/history is a frontend route. Keep it out of the generic video
+	// API bypass, otherwise Gin treats "history" as a request_id on refresh.
+	if trimmed == "/videos/history" {
+		return false
+	}
 	return strings.HasPrefix(trimmed, "/api/") ||
 		strings.HasPrefix(trimmed, "/v1/") ||
 		strings.HasPrefix(trimmed, "/v1beta/") ||
