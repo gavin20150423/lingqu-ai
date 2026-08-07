@@ -4,7 +4,7 @@
 # Copy this file to /etc/sub2api/config.yaml and modify as needed
 # 复制此文件到 /etc/sub2api/config.yaml 并根据需要修改
 #
-# Documentation / 文档: https://github.com/gavin20150423/lingqu-ai
+# Documentation / 文档: https://github.com/Wei-Shaw/sub2api
 
 # =============================================================================
 # Server Configuration
@@ -181,7 +181,7 @@ security:
     # 默认 CSP 策略（如果静态资源托管在其他域名，请自行覆盖）
     # Note: __CSP_NONCE__ will be replaced with 'nonce-xxx' at request time for inline script security
     # 注意：__CSP_NONCE__ 会在请求时被替换为 'nonce-xxx'，用于内联脚本安全
-    policy: "default-src 'self'; script-src 'self' __CSP_NONCE__ https://challenges.cloudflare.com https://*.alicdn.com https://static.cloudflareinsights.com https://turing.captcha.qcloud.com https://*.stripe.com https://static.airwallex.com https://checkout.airwallex.com https://static-demo.airwallex.com https://checkout-demo.airwallex.com; style-src 'self' 'unsafe-inline' https://*.captcha.gtimg.com https://fonts.googleapis.com https://*.alicdn.com https://static.airwallex.com https://checkout.airwallex.com https://static-demo.airwallex.com https://checkout-demo.airwallex.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https:; frame-src 'self' https://challenges.cloudflare.com https://turing.captcha.qcloud.com https://*.stripe.com https://checkout.airwallex.com https://checkout-demo.airwallex.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+    policy: "default-src 'self'; worker-src 'self' blob:; script-src 'self' __CSP_NONCE__ https://challenges.cloudflare.com https://*.alicdn.com https://static.cloudflareinsights.com https://turing.captcha.qcloud.com https://turing.captcha.gtimg.com https://ca.turing.captcha.qcloud.com https://global.turing.captcha.gtimg.com https://www.tycaptcha.com https://cloudcache.tencentcs.com https://*.stripe.com https://static.airwallex.com https://checkout.airwallex.com https://static-demo.airwallex.com https://checkout-demo.airwallex.com; style-src 'self' 'unsafe-inline' https://*.captcha.gtimg.com https://fonts.googleapis.com https://*.alicdn.com https://static.airwallex.com https://checkout.airwallex.com https://static-demo.airwallex.com https://checkout-demo.airwallex.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://turing.captcha.qcloud.com https://www.tycaptcha.com https://rce.tencentrio.com https:; frame-src https://challenges.cloudflare.com https://turing.captcha.qcloud.com https://ca.turing.captcha.qcloud.com https://www.tycaptcha.com https://*.stripe.com https://checkout.airwallex.com https://checkout-demo.airwallex.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
   proxy_probe:
     # Allow skipping TLS verification for proxy probe (debug only)
     # 允许代理探测时跳过 TLS 证书验证（仅用于调试）
@@ -198,25 +198,12 @@ security:
 # 网关配置
 # =============================================================================
 gateway:
-  # Optional SubPilot external dispatch integration.
-  subpilot:
-    enabled: false
-    base_url: ""
-    timeout_ms: 80
-    fail_open: true
-    # Used for runtime config and trusted SubPilot requests.
-    shared_secret: ""
-    # Must match SubPilot's SUB2API_PROBE_SECRET for delegated account probes.
-    # Falls back to shared_secret when empty.
-    probe_secret: ""
   # Timeout for waiting upstream response headers (seconds)
   # 等待上游响应头超时时间（秒）
   response_header_timeout: 600
   # OpenAI/Codex upstream response header timeout (seconds, 0=disabled)
   # OpenAI/Codex 等待上游响应头超时时间（秒，0=禁用本地响应头超时）
   openai_response_header_timeout: 0
-  # /responses/compact response-header timeout; 0 inherits the regular OpenAI timeout.
-  openai_compact_response_header_timeout: 120
   # Native OpenAI HTTP Responses first semantic output timeout (seconds, 0=disabled)
   # Includes response-header wait; does not apply to passthrough or WebSocket transports.
   # A timed-out request may already have incurred upstream usage; account failover can therefore duplicate upstream billing.
@@ -1272,15 +1259,6 @@ gemini:
 # Update Configuration (在线更新配置)
 # =============================================================================
 update:
-  # Built-in binary self-update switch.
-  # Lingqu AI Docker deployments should keep this disabled and upgrade by changing the image tag.
-  # 应用内二进制自更新开关。灵渠AI Docker 部署请保持关闭，通过修改镜像 tag 升级。
-  enabled: false
-
-  # GitHub repository used for update checks when enabled is true.
-  # 启用应用内更新时使用的 GitHub 发布仓库。
-  repo: "gavin20150423/lingqu-ai"
-
   # Proxy URL for accessing GitHub (used for online updates and pricing data)
   # 用于访问 GitHub 的代理地址（用于在线更新和定价数据获取）
   # Supports: http, https, socks5, socks5h
@@ -1307,19 +1285,7 @@ update:
 #
 # 换其它厂商对象存储：只要它兼容 S3 API 即可直接用；如需完全自定义，实现
 # service.ImageStorage 接口（Save(ctx, key, contentType, data) -> url）即可。
-# XiaoAPI-compatible asynchronous video API.
-# Upstream Base URLs, API keys, model mappings, and prices are configured per
-# XiaoAPI API-key account. Bind the account to a xiaoapi group to make it eligible.
-video_api:
-  enabled: false
-  # Public downstream origin used in uploaded-media URLs. No trailing slash.
-  public_base_url: ""
-  request_timeout_seconds: 30
-  reconcile_interval_seconds: 30
-  reconcile_batch_size: 20
-
 image_storage:
-  # S3 是可选项。关闭或配置不完整时，异步生图会自动使用服务器本地持久化目录。
   enabled: false
   # S3 兼容端点。AWS 官方可留空；R2 形如 https://<account_id>.r2.cloudflarestorage.com
   endpoint: ""
@@ -1339,10 +1305,3 @@ image_storage:
   presign_expiry_hours: 24
   # 当上游返回的是图片 url 时，下载该图片再转存的字节上限（默认 32MB）
   max_download_bytes: 33554432
-  # 本地降级目录。Docker 默认数据卷已挂载 /app/data，因此升级容器不会丢失。
-  local_directory: "./data/image-storage"
-  # 本地图片通过当前平台同域提供访问。
-  local_base_url: "/v1/images/files"
-  # 本地结果保留时长，应长于异步任务的 24 小时 TTL。
-  local_retention_hours: 48
-  local_cleanup_interval_minutes: 60
