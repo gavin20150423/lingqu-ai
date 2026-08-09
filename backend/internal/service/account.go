@@ -116,7 +116,29 @@ const (
 
 const openAIEndpointCapabilitiesCredentialKey = "openai_capabilities"
 
-const XiaoVideoPricingCredentialKey = "video_pricing"
+const (
+	XiaoVideoPricingCredentialKey  = "video_pricing"
+	XiaoVideoProtocolCredentialKey = "video_protocol"
+
+	XiaoVideoProtocolNative     = "native"
+	XiaoVideoProtocolOpenAISora = "openai_sora"
+)
+
+// XiaoVideoProtocol returns the upstream wire protocol. Existing accounts
+// predate this setting and therefore keep the native XiaoAPI contract.
+func (a *Account) XiaoVideoProtocol() string {
+	if a == nil {
+		return XiaoVideoProtocolNative
+	}
+	switch strings.ToLower(strings.TrimSpace(a.GetCredential(XiaoVideoProtocolCredentialKey))) {
+	case "", XiaoVideoProtocolNative:
+		return XiaoVideoProtocolNative
+	case XiaoVideoProtocolOpenAISora:
+		return XiaoVideoProtocolOpenAISora
+	default:
+		return ""
+	}
+}
 
 // XiaoVideoPricingRule is one downstream selling-price rule. Model names are
 // public names; account model_mapping is applied only when forwarding upstream.

@@ -116,13 +116,26 @@
                 </label>
 
                 <label class="min-w-0">
+                  <span class="input-label">{{ t('admin.xiaoVideo.protocol') }}</span>
+                  <select
+                    v-model="form.protocol"
+                    class="input"
+                    data-testid="xiao-protocol"
+                    @change="applyProtocolDefaults"
+                  >
+                    <option value="native">{{ t('admin.xiaoVideo.protocolNative') }}</option>
+                    <option value="openai_sora">{{ t('admin.xiaoVideo.protocolOpenAISora') }}</option>
+                  </select>
+                </label>
+
+                <label class="min-w-0">
                   <span class="input-label">{{ t('admin.xiaoVideo.baseUrl') }}</span>
                   <input
                     v-model="form.baseUrl"
                     type="url"
                     class="input font-mono"
                     autocomplete="url"
-                    placeholder="https://video-upstream.example.com"
+                    :placeholder="form.protocol === 'openai_sora' ? AISTARTLAB_BASE_URL : 'https://video-upstream.example.com'"
                     data-testid="xiao-base-url"
                   />
                 </label>
@@ -204,14 +217,159 @@
             </section>
 
             <section class="min-w-0 pb-2">
-              <div class="mb-5 flex items-center gap-3">
-                <span class="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
-                  <Icon name="dollar" size="md" />
-                </span>
-                <h2 class="text-base font-semibold text-gray-900 dark:text-white">
-                  {{ t('admin.xiaoVideo.modelsAndPricing') }}
-                </h2>
+              <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
+                <div class="flex items-center gap-3">
+                  <span class="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+                    <Icon name="dollar" size="md" />
+                  </span>
+                  <h2 class="text-base font-semibold text-gray-900 dark:text-white">
+                    {{ t('admin.xiaoVideo.modelsAndPricing') }}
+                  </h2>
+                </div>
+                <button
+                  type="button"
+                  class="btn btn-secondary inline-flex items-center gap-2"
+                  :disabled="fetchingModels || saving || deleting"
+                  data-testid="xiao-fetch-models"
+                  @click="fetchUpstreamModels"
+                >
+                  <Icon name="refresh" size="sm" :class="{ 'animate-spin': fetchingModels }" />
+                  {{ fetchingModels ? t('admin.xiaoVideo.fetchingModels') : t('admin.xiaoVideo.fetchModels') }}
+                </button>
               </div>
+
+              <div
+                v-if="modelPickerOpen"
+                class="mb-5 border-y border-gray-200 bg-gray-50/60 py-4 dark:border-dark-600 dark:bg-dark-800/30"
+                data-testid="xiao-model-picker"
+              >
+                <div class="flex flex-wrap items-start justify-between gap-3 px-1">
+                  <div>
+                    <p class="text-sm font-medium text-gray-900 dark:text-white">
+                      {{ t('admin.xiaoVideo.fetchedModels', { count: upstreamModels.length }) }}
+                    </p>
+                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      {{ t('admin.xiaoVideo.fetchedModelsHint') }}
+                    </p>
+                    <p v-if="pricingNoteLabel" class="mt-2 text-xs font-medium text-amber-700 dark:text-amber-300" data-testid="xiao-pricing-note">
+                      {{ pricingNoteLabel }}
+                    </p>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <span class="inline-flex items-center rounded-full bg-white px-2.5 py-1 text-xs font-medium text-gray-600 ring-1 ring-inset ring-gray-200 dark:bg-dark-700 dark:text-gray-300 dark:ring-dark-600">
+                      {{ pricingSourceLabel }}
+                    </span>
+                    <button
+                      type="button"
+                      class="flex h-8 w-8 items-center justify-center text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+                      :title="t('common.close')"
+                      data-testid="xiao-close-model-picker"
+                      @click="modelPickerOpen = false"
+                    >
+                      <Icon name="x" size="sm" />
+                    </button>
+                  </div>
+                </div>
+
+                <div class="mt-4 grid items-end gap-3 px-1 md:grid-cols-[minmax(14rem,1fr)_10rem_auto]">
+                  <label class="relative min-w-[14rem] flex-1">
+                    <Icon name="search" size="sm" class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input
+                      v-model="modelSearch"
+                      type="search"
+                      class="input pl-9"
+                      :placeholder="t('admin.xiaoVideo.searchModels')"
+                      data-testid="xiao-model-search"
+                    />
+                  </label>
+                  <label class="min-w-0">
+                    <span class="input-label">{{ t('admin.xiaoVideo.markupMultiplier') }}</span>
+                    <div class="relative">
+                      <input
+                        v-model.number="markupMultiplier"
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.05"
+                        class="input pr-8 tabular-nums"
+                        data-testid="xiao-markup-multiplier"
+                      />
+                      <span class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">×</span>
+                    </div>
+                  </label>
+                  <div class="flex flex-wrap items-center gap-2">
+                    <button type="button" class="btn btn-secondary text-sm" @click="selectVisibleModels">
+                      {{ t('admin.xiaoVideo.selectVisible') }}
+                    </button>
+                    <button type="button" class="btn btn-secondary text-sm" @click="selectedUpstreamModels = []">
+                      {{ t('admin.xiaoVideo.clearSelection') }}
+                    </button>
+                  </div>
+                </div>
+
+                <p class="mt-2 px-1 text-xs text-gray-500 dark:text-gray-400">
+                  {{ hasConvertiblePricing ? t('admin.xiaoVideo.markupMultiplierHint') : t('admin.xiaoVideo.noConvertiblePricing') }}
+                </p>
+
+                <div class="mt-3 max-h-80 overflow-y-auto border-y border-gray-200 dark:border-dark-600">
+                  <label
+                    v-for="model in filteredUpstreamModels"
+                    :key="model"
+                    class="flex min-h-14 flex-wrap items-center gap-3 border-b border-gray-100 px-2 py-2.5 last:border-b-0 hover:bg-white dark:border-dark-700 dark:hover:bg-dark-700/50 sm:flex-nowrap"
+                    :class="{ 'cursor-pointer': canImportUpstreamModel(model), 'opacity-60': !canImportUpstreamModel(model) }"
+                  >
+                    <input
+                      type="checkbox"
+                      class="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                      :checked="selectedUpstreamModels.includes(model)"
+                      :disabled="!canImportUpstreamModel(model)"
+                      :data-testid="`xiao-upstream-model-${model}`"
+                      @change="toggleUpstreamModel(model, $event)"
+                    />
+                    <span class="min-w-0 flex-1 break-all font-mono text-xs font-medium text-gray-700 dark:text-gray-200 sm:w-44 sm:flex-none">{{ model }}</span>
+                    <span class="grid w-full grid-cols-2 gap-3 pl-7 sm:min-w-0 sm:flex-1 sm:pl-0">
+                      <span class="min-w-0">
+                        <span class="block text-[11px] text-gray-400">{{ t('admin.xiaoVideo.upstreamCost') }}</span>
+                        <span class="mt-0.5 block break-words text-xs font-medium leading-5 tabular-nums text-gray-700 dark:text-gray-200" :title="modelCostSummary(model)">
+                          {{ modelCostSummary(model) }}
+                        </span>
+                      </span>
+                      <span class="min-w-0">
+                        <span class="block text-[11px] text-gray-400">{{ t('admin.xiaoVideo.suggestedPrice') }}</span>
+                        <span class="mt-0.5 block break-words text-xs font-semibold leading-5 tabular-nums text-amber-700 dark:text-amber-300" :title="modelSuggestedSummary(model)">
+                          {{ modelSuggestedSummary(model) }}
+                        </span>
+                      </span>
+                    </span>
+                    <span v-if="configuredUpstreamModels.has(model) && canImportUpstreamModel(model)" class="flex-shrink-0 text-xs text-amber-600 dark:text-amber-300">
+                      {{ t('admin.xiaoVideo.modelPricingMissing') }}
+                    </span>
+                    <span v-else-if="configuredUpstreamModels.has(model)" class="flex-shrink-0 text-xs text-emerald-600 dark:text-emerald-400">
+                      {{ t('admin.xiaoVideo.modelConfigured') }}
+                    </span>
+                  </label>
+                  <div v-if="filteredUpstreamModels.length === 0" class="px-3 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                    {{ t('admin.xiaoVideo.noMatchingModels') }}
+                  </div>
+                </div>
+
+                <div class="mt-4 flex flex-wrap items-center justify-between gap-3 px-1">
+                  <span class="text-xs text-gray-500 dark:text-gray-400">
+                    {{ t('admin.xiaoVideo.selectedModels', { count: selectedUpstreamModels.length }) }}
+                  </span>
+                  <button
+                    type="button"
+                    class="btn btn-primary inline-flex items-center gap-2"
+                    :disabled="selectedUpstreamModels.length === 0"
+                    data-testid="xiao-import-models"
+                    @click="importSelectedModels"
+                  >
+                    <Icon name="plus" size="sm" />
+                    {{ t('admin.xiaoVideo.importModels', { count: selectedUpstreamModels.length }) }}
+                  </button>
+                </div>
+              </div>
+
               <XiaoVideoConfigEditor v-model:pricing="pricing" v-model:mappings="mappings" />
             </section>
 
@@ -275,12 +433,17 @@ import {
 import { isValidWildcardPattern } from '@/composables/useModelWhitelist'
 import { useAppStore } from '@/stores/app'
 import type { Account, AdminGroup } from '@/types'
+import type { UpstreamModelSpec } from '@/api/admin/accounts'
 
 type EditableStatus = 'active' | 'inactive' | 'error'
+type VideoProtocol = 'native' | 'openai_sora'
+
+const AISTARTLAB_BASE_URL = 'https://api.video.aistarslab.com/openai'
 
 interface XiaoVideoForm {
   name: string
   notes: string
+  protocol: VideoProtocol
   baseUrl: string
   apiKey: string
   concurrency: number
@@ -303,12 +466,22 @@ const detailsLoading = ref(false)
 const saving = ref(false)
 const testing = ref(false)
 const deleting = ref(false)
+const fetchingModels = ref(false)
+const modelPickerOpen = ref(false)
+const upstreamModels = ref<string[]>([])
+const upstreamModelSpecs = ref<UpstreamModelSpec[]>([])
+const upstreamPricingSource = ref('none')
+const upstreamPricingNote = ref('')
+const selectedUpstreamModels = ref<string[]>([])
+const modelSearch = ref('')
+const markupMultiplier = ref(1.3)
 const baseline = ref('')
 let selectionRequest = 0
 
 const form = reactive<XiaoVideoForm>({
   name: '',
   notes: '',
+  protocol: 'native',
   baseUrl: '',
   apiKey: '',
   concurrency: 1,
@@ -318,6 +491,38 @@ const form = reactive<XiaoVideoForm>({
 
 const isCreating = computed(() => selectedId.value === null)
 const isDirty = computed(() => baseline.value !== formSnapshot())
+const configuredUpstreamModels = computed(() => new Set(
+  mappings.value.map((mapping) => mapping.to.trim()).filter(Boolean)
+))
+const filteredUpstreamModels = computed(() => {
+  const query = modelSearch.value.trim().toLowerCase()
+  if (!query) return upstreamModels.value
+  return upstreamModels.value.filter((model) => model.toLowerCase().includes(query))
+})
+const specsByModel = computed(() => {
+  const grouped = new Map<string, UpstreamModelSpec[]>()
+  for (const spec of upstreamModelSpecs.value) {
+    const id = spec.id.trim()
+    if (!id) continue
+    grouped.set(id, [...(grouped.get(id) ?? []), spec])
+  }
+  return grouped
+})
+const hasConvertiblePricing = computed(() =>
+  upstreamModelSpecs.value.some((spec) => internalCostPerSecond(spec) !== null)
+)
+const pricingSourceLabel = computed(() => {
+  if (upstreamPricingSource.value === 'aistartlab_config') return t('admin.xiaoVideo.pricingSourceAIStartLab')
+  if (upstreamModelSpecs.value.some((spec) => spec.upstream_cost !== undefined)) {
+    return t('admin.xiaoVideo.pricingSourceModelList')
+  }
+  return t('admin.xiaoVideo.pricingSourceNone')
+})
+const pricingNoteLabel = computed(() => {
+  if (upstreamPricingNote.value === 'aistartlab_config_unavailable') return t('admin.xiaoVideo.pricingNoteAIStartLabUnavailable')
+  if (upstreamPricingNote.value === 'incomplete_pricing') return t('admin.xiaoVideo.pricingNoteIncomplete')
+  return ''
+})
 
 function formSnapshot(): string {
   return JSON.stringify({
@@ -366,6 +571,7 @@ function resetForm() {
   Object.assign(form, {
     name: '',
     notes: '',
+    protocol: 'native' as VideoProtocol,
     baseUrl: '',
     apiKey: '',
     concurrency: 1,
@@ -375,6 +581,7 @@ function resetForm() {
   mappings.value = []
   pricing.value = [createXiaoVideoPricingRule()]
   hasExistingApiKey.value = false
+  resetUpstreamModelPicker()
   setBaseline()
 }
 
@@ -383,6 +590,7 @@ function syncForm(account: Account) {
   Object.assign(form, {
     name: account.name,
     notes: account.notes ?? '',
+    protocol: credentials.video_protocol === 'openai_sora' ? 'openai_sora' : 'native',
     baseUrl: typeof credentials.base_url === 'string' ? credentials.base_url : '',
     apiKey: '',
     concurrency: account.concurrency || 1,
@@ -392,6 +600,7 @@ function syncForm(account: Account) {
   mappings.value = readMappings(credentials.model_mapping)
   pricing.value = readXiaoVideoPricing(credentials.video_pricing)
   hasExistingApiKey.value = account.credentials_status?.has_api_key ?? typeof credentials.api_key === 'string'
+  resetUpstreamModelPicker()
   setBaseline()
 }
 
@@ -467,6 +676,288 @@ function toggleGroup(groupId: number, event: Event) {
   }
 }
 
+function applyProtocolDefaults() {
+  if (form.protocol === 'openai_sora' && !form.baseUrl.trim()) {
+    form.baseUrl = AISTARTLAB_BASE_URL
+  }
+}
+
+function resetUpstreamModelPicker() {
+  fetchingModels.value = false
+  modelPickerOpen.value = false
+  upstreamModels.value = []
+  upstreamModelSpecs.value = []
+  upstreamPricingSource.value = 'none'
+  upstreamPricingNote.value = ''
+  selectedUpstreamModels.value = []
+  modelSearch.value = ''
+}
+
+function savedConnectionMatchesForm(): boolean {
+  if (!selectedAccount.value) return false
+  const credentials = (selectedAccount.value.credentials ?? {}) as Record<string, unknown>
+  const savedBaseURL = typeof credentials.base_url === 'string' ? credentials.base_url.trim() : ''
+  const savedProtocol = credentials.video_protocol === 'openai_sora' ? 'openai_sora' : 'native'
+  return savedBaseURL === form.baseUrl.trim() && savedProtocol === form.protocol
+}
+
+async function fetchUpstreamModels() {
+  if (fetchingModels.value) return
+  if (!validBaseUrl(form.baseUrl.trim())) {
+    appStore.showError(t('admin.xiaoVideo.validation.baseUrlInvalid'))
+    return
+  }
+
+  const apiKey = form.apiKey.trim()
+  const canUseSavedCredentials = Boolean(selectedAccount.value && !apiKey && savedConnectionMatchesForm())
+  if (!apiKey && !canUseSavedCredentials) {
+    appStore.showError(t('admin.xiaoVideo.fetchModelsApiKeyRequired'))
+    return
+  }
+
+  fetchingModels.value = true
+  try {
+    const result = canUseSavedCredentials && selectedAccount.value
+      ? await adminAPI.accounts.syncUpstreamModels(selectedAccount.value.id)
+      : await adminAPI.accounts.syncUpstreamModelsPreview({
+          platform: 'xiaoapi',
+          type: 'apikey',
+          base_url: form.baseUrl.trim(),
+          api_key: apiKey,
+          video_protocol: form.protocol
+        })
+    const models = [...new Set(result.models.map((model) => model.trim()).filter(Boolean))]
+      .sort((left, right) => left.localeCompare(right))
+    if (models.length === 0) {
+      appStore.showInfo(t('admin.xiaoVideo.noUpstreamModels'))
+      return
+    }
+    upstreamModels.value = models
+    upstreamModelSpecs.value = (result.model_specs ?? []).filter((spec) =>
+      typeof spec.id === 'string' && models.includes(spec.id.trim())
+    )
+    upstreamPricingSource.value = result.pricing_source ?? 'none'
+    upstreamPricingNote.value = result.pricing_note ?? ''
+    selectedUpstreamModels.value = models.filter(canImportUpstreamModel)
+    modelSearch.value = ''
+    modelPickerOpen.value = true
+  } catch (error) {
+    appStore.showError(errorMessage(error, t('admin.xiaoVideo.fetchModelsFailed')))
+  } finally {
+    fetchingModels.value = false
+  }
+}
+
+function toggleUpstreamModel(model: string, event: Event) {
+  const checked = (event.target as HTMLInputElement).checked
+  if (checked && !selectedUpstreamModels.value.includes(model)) {
+    selectedUpstreamModels.value = [...selectedUpstreamModels.value, model]
+  } else if (!checked) {
+    selectedUpstreamModels.value = selectedUpstreamModels.value.filter((item) => item !== model)
+  }
+}
+
+function selectVisibleModels() {
+  const selected = new Set(selectedUpstreamModels.value)
+  filteredUpstreamModels.value.forEach((model) => {
+    if (canImportUpstreamModel(model)) selected.add(model)
+  })
+  selectedUpstreamModels.value = [...selected]
+}
+
+function nextPublicModelName(upstreamModel: string, usedNames: Set<string>): string {
+  let candidate = upstreamModel
+  let suffix = 2
+  while (usedNames.has(candidate)) {
+    candidate = `${upstreamModel}-${suffix}`
+    suffix += 1
+  }
+  usedNames.add(candidate)
+  return candidate
+}
+
+function internalCostPerSecond(spec: UpstreamModelSpec): number | null {
+  const rawCost = Number(spec.upstream_cost)
+  if (!Number.isFinite(rawCost) || rawCost < 0) return null
+
+  const currency = spec.cost_currency?.trim().toUpperCase()
+  const currencyFactor = currency === 'USD'
+    ? 1
+    : currency === 'CREDITS' && upstreamPricingSource.value === 'aistartlab_config' ? 0.01 : null
+  if (currencyFactor === null) return null
+
+  const unit = spec.cost_unit?.trim().toLowerCase()
+  if (unit === 'second') return rawCost * currencyFactor
+  const duration = Number(spec.default_duration)
+  if (unit === 'request' && Number.isFinite(duration) && duration > 0) {
+    return rawCost * currencyFactor / duration
+  }
+  return null
+}
+
+function formatPrice(value: number): string {
+  return value.toFixed(6).replace(/\.?0+$/, '')
+}
+
+function formatSpecCost(spec: UpstreamModelSpec): string {
+  if (!Number.isFinite(Number(spec.upstream_cost))) return ''
+  const resolution = spec.resolution?.trim()
+  const currency = spec.cost_currency?.trim().toUpperCase()
+  const unit = spec.cost_unit?.trim().toLowerCase()
+  const amount = formatPrice(Number(spec.upstream_cost))
+  const value = currency === 'USD'
+    ? `$${amount}`
+    : currency === 'CREDITS'
+      ? `${amount} ${t('admin.xiaoVideo.credits')}`
+      : `${amount} ${currency || t('admin.xiaoVideo.unknownCurrency')}`
+  const suffix = unit === 'second'
+    ? t('admin.xiaoVideo.perSecondSuffix')
+    : unit === 'request'
+      ? t('admin.xiaoVideo.perRequestSuffix')
+      : unit ? `/${unit}` : ''
+  const internalCost = internalCostPerSecond(spec)
+  const converted = internalCost === null
+    ? ''
+    : t('admin.xiaoVideo.internalCostEquivalent', { price: formatPrice(internalCost) })
+  return [resolution, `${value}${suffix}`, converted].filter(Boolean).join(' · ')
+}
+
+function effectiveModelSpecs(model: string): UpstreamModelSpec[] {
+  const specs = specsByModel.value.get(model) ?? []
+  const detailed = specs.filter((spec) =>
+    Boolean(spec.resolution?.trim()) || Number.isFinite(Number(spec.upstream_cost))
+  )
+  return detailed.length > 0 ? detailed : specs
+}
+
+function modelCostSummary(model: string): string {
+  const summaries = effectiveModelSpecs(model).map(formatSpecCost).filter(Boolean)
+  return summaries.length > 0 ? summaries.join(' / ') : t('admin.xiaoVideo.costUnavailable')
+}
+
+function suggestedPrice(spec: UpstreamModelSpec): number | null {
+  const internalCost = internalCostPerSecond(spec)
+  if (internalCost === null) return null
+  const multiplier = Number(markupMultiplier.value)
+  if (!Number.isFinite(multiplier) || multiplier < 0) return null
+  return Number((internalCost * multiplier).toFixed(6))
+}
+
+function modelSuggestedSummary(model: string): string {
+  const summaries = effectiveModelSpecs(model).flatMap((spec) => {
+    const price = suggestedPrice(spec)
+    if (price === null) return []
+    return [[spec.resolution?.trim(), `$${formatPrice(price)}${t('admin.xiaoVideo.perSecondSuffix')}`]
+      .filter(Boolean).join(' · ')]
+  })
+  return summaries.length > 0 ? summaries.join(' / ') : t('admin.xiaoVideo.manualPricingRequired')
+}
+
+function pricingSpecsForImport(model: string): UpstreamModelSpec[] {
+  const specs = effectiveModelSpecs(model)
+  const byResolution = new Map<string, UpstreamModelSpec>()
+  for (const spec of specs) {
+    const resolution = spec.resolution?.trim() || '720p'
+    const current = byResolution.get(resolution)
+    if (!current || (internalCostPerSecond(spec) !== null && internalCostPerSecond(current) === null)) {
+      byResolution.set(resolution, spec)
+    }
+  }
+  return [...byResolution.values()].filter((spec) => {
+    const duration = Number(spec.default_duration)
+    return suggestedPrice(spec) !== null && Number.isInteger(duration) && duration > 0
+  })
+}
+
+function mappedPublicModels(upstreamModel: string): string[] {
+  return mappings.value.flatMap((mapping) => {
+    const publicModel = mapping.from.trim()
+    return publicModel && mapping.to.trim() === upstreamModel ? [publicModel] : []
+  })
+}
+
+function canImportUpstreamModel(upstreamModel: string): boolean {
+  const publicModels = mappedPublicModels(upstreamModel)
+  if (publicModels.length === 0) return true
+  const specs = pricingSpecsForImport(upstreamModel)
+  if (specs.length === 0) return false
+  return publicModels.some((publicModel) => specs.some((spec) => {
+    const resolution = spec.resolution?.trim() || '720p'
+    return !pricing.value.some((rule) => rule.model.trim() === publicModel && rule.resolution.trim() === resolution)
+  }))
+}
+
+function appendSuggestedPricing(publicModel: string, specs: UpstreamModelSpec[]): number {
+  const explicitDefaultIndex = specs.findIndex((spec) => spec.default_resolution === true)
+  let hasDefault = pricing.value.some((rule) => rule.model.trim() === publicModel && rule.default_resolution)
+  let added = 0
+
+  for (const [index, spec] of specs.entries()) {
+    const resolution = spec.resolution?.trim() || '720p'
+    const existing = pricing.value.find((rule) =>
+      rule.model.trim() === publicModel && rule.resolution.trim() === resolution
+    )
+    const preferredDefault = explicitDefaultIndex >= 0 ? index === explicitDefaultIndex : index === 0
+    if (existing) {
+      if (!hasDefault && preferredDefault) {
+        existing.default_resolution = true
+        hasDefault = true
+      }
+      continue
+    }
+
+    const price = suggestedPrice(spec)
+    if (price === null) continue
+    let rule = pricing.value.find((item) => !item.model.trim())
+    if (!rule) {
+      rule = createXiaoVideoPricingRule()
+      pricing.value.push(rule)
+    }
+    rule.model = publicModel
+    rule.resolution = resolution
+    rule.price_per_second = price
+    rule.default_duration = Number(spec.default_duration)
+    rule.default_resolution = !hasDefault && preferredDefault
+    if (rule.default_resolution) hasDefault = true
+    added += 1
+  }
+  return added
+}
+
+function importSelectedModels() {
+  const selected = selectedUpstreamModels.value.filter(canImportUpstreamModel)
+  if (selected.length === 0) {
+    appStore.showInfo(t('admin.xiaoVideo.noModelsToImport'))
+    return
+  }
+
+  const usedPublicNames = new Set(mappings.value.map((mapping) => mapping.from.trim()).filter(Boolean))
+  let added = 0
+  let withoutPricing = 0
+  for (const upstreamModel of selected) {
+    let publicModels = mappedPublicModels(upstreamModel)
+    if (publicModels.length === 0) {
+      const publicModel = nextPublicModelName(upstreamModel, usedPublicNames)
+      mappings.value.push({ from: publicModel, to: upstreamModel })
+      publicModels = [publicModel]
+    }
+    added += 1
+    const specs = pricingSpecsForImport(upstreamModel)
+    if (specs.length === 0) {
+      withoutPricing += 1
+      continue
+    }
+    publicModels.forEach((publicModel) => appendSuggestedPricing(publicModel, specs))
+  }
+
+  selectedUpstreamModels.value = []
+  modelPickerOpen.value = false
+  appStore.showSuccess(t('admin.xiaoVideo.modelsImported', { count: added }))
+  if (withoutPricing > 0) {
+    appStore.showInfo(t('admin.xiaoVideo.importedWithoutPricing', { count: withoutPricing }))
+  }
+}
+
 function validBaseUrl(value: string): boolean {
   try {
     const url = new URL(value)
@@ -496,6 +987,40 @@ function buildMappings(): Record<string, string> | null {
     value[mapping.from.trim()] = mapping.to.trim()
   }
   return Object.keys(value).length > 0 ? value : null
+}
+
+function buildVideoCapabilityMap(): Record<string, Record<string, unknown>> {
+  const result: Record<string, Record<string, unknown>> = {}
+  for (const spec of upstreamModelSpecs.value) {
+    const model = spec.id.trim()
+    if (!model || !spec.durations?.length && !spec.aspect_ratios?.length && !spec.max_references) continue
+    const current = result[model] ?? {}
+    const durations = new Set<number>(Array.isArray(current.durations) ? current.durations as number[] : [])
+    for (const duration of spec.durations ?? []) {
+      if (Number.isInteger(duration) && duration > 0) durations.add(duration)
+    }
+    const aspectRatios = new Set<string>(Array.isArray(current.aspect_ratios) ? current.aspect_ratios as string[] : [])
+    for (const ratio of spec.aspect_ratios ?? []) {
+      if (typeof ratio === 'string' && ratio.trim()) aspectRatios.add(ratio.trim())
+    }
+    const maxReferences = {
+      ...(current.max_references as Record<string, number> | undefined),
+      ...(spec.max_references ?? {})
+    }
+    result[model] = {
+      ...current,
+      ...(durations.size ? { durations: [...durations].sort((a, b) => a - b) } : {}),
+      ...(aspectRatios.size ? { aspect_ratios: [...aspectRatios] } : {}),
+      ...(spec.default_aspect_ratio ? { default_aspect_ratio: spec.default_aspect_ratio } : {}),
+      ...(spec.supports_audio ? { supports_audio: true } : {}),
+      ...(spec.supports_guidances ? { supports_guidances: true } : {}),
+      ...(spec.supports_start_frame ? { supports_start_frame: true } : {}),
+      ...(spec.requires_start_frame ? { requires_start_frame: true } : {}),
+      ...(spec.supports_end_frame ? { supports_end_frame: true } : {}),
+      ...(Object.values(maxReferences).some((value) => Number(value) > 0) ? { max_references: maxReferences } : {})
+    }
+  }
+  return result
 }
 
 function validateForm(): boolean {
@@ -533,8 +1058,11 @@ function buildCredentials(): Record<string, unknown> {
   const credentials: Record<string, unknown> = {
     ...currentCredentials,
     base_url: form.baseUrl.trim(),
+    video_protocol: form.protocol,
     video_pricing: normalizeXiaoVideoPricing(pricing.value)
   }
+  const videoCapabilities = buildVideoCapabilityMap()
+  if (Object.keys(videoCapabilities).length > 0) credentials.video_capabilities = videoCapabilities
   if (form.apiKey.trim()) credentials.api_key = form.apiKey.trim()
   const mapping = buildMappings()
   if (mapping) credentials.model_mapping = mapping

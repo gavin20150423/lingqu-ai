@@ -65,4 +65,17 @@ describe('video user workspace navigation', () => {
     expect(historySource).toContain('请立即下载')
     expect(docsSource).toContain('当前接口不承诺固定保存天数')
   })
+
+  it('shows model limits before generation and detailed diagnostics for failed jobs', () => {
+    expect(studioSource).toContain('当前模型限制')
+    expect(studioSource).toContain('XiaoAPI 规则')
+    expect(studioSource).toContain('AIStartLab 的素材必须是公网 HTTP(S) URL')
+    expect(studioSource).toContain('素材边界')
+    expect(studioSource).toContain('参考视频和参考音频不能同时使用')
+    expect(historySource).toContain('生成失败 · 可排障信息')
+    expect(historySource).toContain('任务编号')
+    expect(historySource).toContain('错误编号')
+    expect(historySource).toContain('请求追踪号')
+    expect(historySource).toContain('copyDiagnostics(job)')
+  })
 })

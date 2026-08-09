@@ -245,6 +245,45 @@ func TestBuildUpstreamModelsRequestsForAPIKeyAccounts(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "https://gateway.example.com/antigravity/v1/models", antigravityReq.URL.String())
 	require.Equal(t, "antigravity-key", antigravityReq.Header.Get("x-api-key"))
+
+	xiaoReq, err := svc.buildXiaoVideoUpstreamModelsRequest(ctx, &Account{
+		Platform: PlatformXiaoAPI,
+		Type:     AccountTypeAPIKey,
+		Credentials: map[string]any{
+			"api_key":  "video-key",
+			"base_url": "https://api.video.aistarslab.com/openai",
+		},
+	})
+	require.NoError(t, err)
+	require.Equal(t, "https://api.video.aistarslab.com/openai/v1/models", xiaoReq.URL.String())
+	require.Equal(t, "Bearer video-key", xiaoReq.Header.Get("Authorization"))
+}
+
+func TestFetchUpstreamSupportedModelsSupportsXiaoVideo(t *testing.T) {
+	t.Parallel()
+
+	upstream := &httpUpstreamRecorder{resp: &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Content-Type": []string{"application/json"}},
+		Body:       io.NopCloser(strings.NewReader(`{"object":"list","data":[{"id":"12:provider-video"},{"id":"7:fast-video"},{"id":"12:provider-video"}]}`)),
+	}}
+	svc := &AccountTestService{httpUpstream: upstream, cfg: upstreamModelSyncTestConfig()}
+
+	models, err := svc.FetchUpstreamSupportedModels(context.Background(), &Account{
+		ID:          42,
+		Platform:    PlatformXiaoAPI,
+		Type:        AccountTypeAPIKey,
+		Concurrency: 3,
+		Credentials: map[string]any{
+			"api_key":  "video-key",
+			"base_url": "https://api.video.aistarslab.com/openai",
+		},
+	})
+	require.NoError(t, err)
+	require.Equal(t, []string{"12:provider-video", "7:fast-video"}, models)
+	require.NotNil(t, upstream.lastReq)
+	require.Equal(t, "https://api.video.aistarslab.com/openai/v1/models", upstream.lastReq.URL.String())
+	require.Equal(t, "Bearer video-key", upstream.lastReq.Header.Get("Authorization"))
 }
 
 func TestBuildUpstreamModelsRequestSupportsGrokOAuth(t *testing.T) {

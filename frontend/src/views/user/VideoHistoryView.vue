@@ -74,7 +74,7 @@
         </div>
 
         <div v-else class="video-history__rows">
-          <article v-for="job in filteredJobs" :key="job.job_id" class="video-history-row">
+          <article v-for="job in filteredJobs" :key="job.job_id" class="video-history-row" :class="{ 'video-history-row--expanded': expandedJobId === job.job_id }">
             <div class="video-history-row__status">
               <span :class="`video-status video-status--${job.status}`">{{ statusLabel(job.status) }}</span>
               <time>{{ formatJobTime(job.created_at) }}</time>
@@ -86,6 +86,21 @@
               <button v-if="job.status === 'completed'" type="button" title="播放" :disabled="contentLoadingId === job.job_id" @click="playJob(job)"><Icon name="play" size="sm" /></button>
               <button v-if="job.status === 'completed'" type="button" title="下载" :disabled="contentLoadingId === job.job_id" @click="downloadJob(job)"><Icon name="download" size="sm" /></button>
               <button v-if="isActiveStatus(job.status)" type="button" title="取消任务" :disabled="cancelingJobId === job.job_id" @click="cancelJob(job)"><Icon name="x" size="sm" /></button>
+              <button v-if="job.status === 'failed'" type="button" :title="expandedJobId === job.job_id ? '收起失败详情' : '查看失败详情'" :aria-expanded="expandedJobId === job.job_id" @click="toggleFailure(job)"><Icon :name="expandedJobId === job.job_id ? 'chevronUp' : 'chevronDown'" size="sm" /></button>
+            </div>
+            <div v-if="job.status === 'failed' && expandedJobId === job.job_id" class="video-failure-detail">
+              <header><div><Icon name="exclamationCircle" size="sm" /><strong>生成失败 · 可排障信息</strong></div><button type="button" title="复制全部诊断信息" @click="copyDiagnostics(job)"><Icon name="copy" size="sm" /></button></header>
+              <div class="video-failure-detail__grid">
+                <div><span>任务编号</span><code>{{ job.job_id }}</code><button type="button" title="复制任务编号" @click="copyText(job.job_id)"><Icon name="copy" size="xs" /></button></div>
+                <div><span>错误编号</span><code>{{ job.error?.code || 'VIDEO_GENERATION_FAILED' }}</code><button type="button" title="复制错误编号" @click="copyText(job.error?.code || 'VIDEO_GENERATION_FAILED')"><Icon name="copy" size="xs" /></button></div>
+                <div><span>失败阶段</span><strong>{{ failureStageLabel(job.error?.stage) }}</strong></div>
+                <div><span>上游错误</span><code>{{ job.error?.upstream_code || '未返回上游错误码' }}</code></div>
+                <div v-if="job.error?.request_id"><span>请求追踪号</span><code>{{ job.error.request_id }}</code><button type="button" title="复制请求追踪号" @click="copyText(job.error.request_id)"><Icon name="copy" size="xs" /></button></div>
+                <div><span>失败时间</span><strong>{{ formatJobTime(job.error?.failed_at || job.finished_at || job.updated_at) }}</strong></div>
+                <div><span>模型参数</span><strong>{{ job.model }} · {{ job.resolution }} · {{ job.duration }} 秒 · {{ job.aspect_ratio }}</strong></div>
+                <div><span>费用状态</span><strong>{{ settlementDetailLabel(job) }}</strong></div>
+              </div>
+              <p class="video-failure-detail__message">{{ failureMessage(job) }}</p>
             </div>
           </article>
         </div>
@@ -119,8 +134,10 @@ const contentLoadingId = ref('')
 const cancelingJobId = ref('')
 const previewUrl = ref('')
 const previewJob = ref<VideoJob | null>(null)
+const expandedJobId = ref('')
 let pollTimer: number | undefined
 let jobsRequest = 0
+let failureSelectionInitialized = false
 
 const filters = [
   { value: 'all', label: '全部' },
@@ -155,6 +172,11 @@ function settlementLabel(status: VideoJobStatus) {
   if (status === 'failed' || status === 'canceled') return '已释放'
   return '处理中'
 }
+function settlementDetailLabel(job: VideoJob) {
+  if (job.settlement_status === 'released') return formatAmount(job) + ' 预授权已释放，失败任务未扣费'
+  if (job.settlement_status === 'captured') return formatAmount(job) + ' 已结算'
+  return formatAmount(job) + ' 费用状态待确认'
+}
 function formatJobTime(value: string) {
   const date = new Date(value)
   return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat('zh-CN', {
@@ -169,6 +191,55 @@ function shortJobId(id: string) { return id.length > 18 ? `${id.slice(0, 10)}…
 function errorMessage(error: unknown) {
   if (error instanceof VideoAPIError) return `${error.message}${error.requestId ? `（请求 ID：${error.requestId}）` : ''}`
   return error instanceof Error ? error.message : '请求失败，请稍后重试'
+}
+
+function failureStageLabel(stage?: string) {
+  return ({ validation: '参数校验', queued: '排队', processing: '上游生成', content: '成品回收', settlement: '费用结算', upstream_generation: '上游生成' } as Record<string, string>)[stage || ''] || stage || '上游生成'
+}
+function failureMessage(job: VideoJob) {
+  const messages: Record<string, string> = {
+    VIDEO_REQUEST_INVALID: '视频请求参数无效',
+    VIDEO_MODEL_INVALID: '当前模型不支持',
+    VIDEO_PROMPT_INVALID: '提示词不符合当前模型要求',
+    VIDEO_RESOLUTION_INVALID: '当前分辨率不受模型支持',
+    VIDEO_DURATION_INVALID: '当前时长不受模型支持',
+    VIDEO_ASPECT_RATIO_INVALID: '当前画面比例不受模型支持',
+    VIDEO_MEDIA_INVALID: '参考素材不符合要求',
+    VIDEO_OPTION_UNSUPPORTED: '当前模型不支持所选生成选项',
+    VIDEO_CAPACITY_EXHAUSTED: '上游视频容量暂时不足，请稍后重试',
+    CONTENT_POLICY_VIOLATION: '内容安全检查未通过，请调整提示词或参考素材',
+    SAFETY_FILTER_TRIGGERED: '内容安全检查未通过，请调整提示词或参考素材',
+    MODERATION_FAILED: '内容安全检查未通过，请调整提示词或参考素材',
+    RATE_LIMIT_EXCEEDED: '上游请求过于频繁，请稍后重试',
+    INTERNAL_ERROR: '上游生成服务内部错误，请稍后重试',
+  }
+  return messages[job.error?.upstream_code || ''] || '视频生成失败，请稍后重试；如持续失败，请提供任务编号和错误编号联系客服。'
+}
+function toggleFailure(job: VideoJob) {
+  expandedJobId.value = expandedJobId.value === job.job_id ? '' : job.job_id
+}
+async function copyText(value: string) {
+  if (!value) return
+  try {
+    await navigator.clipboard.writeText(value)
+    appStore.showSuccess('已复制')
+  } catch {
+    appStore.showError('复制失败，请手动选择文本')
+  }
+}
+async function copyDiagnostics(job: VideoJob) {
+  const lines = [
+    '任务编号: ' + job.job_id,
+    '错误编号: ' + (job.error?.code || 'VIDEO_GENERATION_FAILED'),
+    '失败阶段: ' + failureStageLabel(job.error?.stage),
+    '上游错误: ' + (job.error?.upstream_code || '未返回上游错误码'),
+    job.error?.request_id ? '请求追踪号: ' + job.error.request_id : '',
+    '失败时间: ' + formatJobTime(job.error?.failed_at || job.finished_at || job.updated_at),
+    '模型参数: ' + [job.model, job.resolution, job.duration + 's', job.aspect_ratio].join(' / '),
+    '费用状态: ' + settlementDetailLabel(job),
+    '错误说明: ' + failureMessage(job),
+  ].filter(Boolean).join('\n')
+  await copyText(lines)
 }
 
 async function loadKeys() {
@@ -193,7 +264,22 @@ async function loadJobs() {
   loadingJobs.value = true
   try {
     const nextJobs = await videoAPI.listJobs(key.key, 100)
-    if (requestId === jobsRequest) jobs.value = nextJobs
+    if (requestId === jobsRequest) {
+      jobs.value = nextJobs
+      if (!failureSelectionInitialized) {
+        const requestedJobID = typeof route.query.job_id === 'string' ? route.query.job_id : ''
+        const requestedJob = nextJobs.find((job) => job.job_id === requestedJobID)
+        const requestedFailure = nextJobs.find((job) => job.job_id === requestedJobID && job.status === 'failed')
+        if (!requestedJob || !isActiveStatus(requestedJob.status)) {
+          const failure = requestedFailure || nextJobs.find((job) => job.status === 'failed')
+          expandedJobId.value = failure?.job_id || ''
+          failureSelectionInitialized = Boolean(failure) || !nextJobs.some((job) => isActiveStatus(job.status))
+        }
+      }
+      if (expandedJobId.value && !nextJobs.some((job) => job.job_id === expandedJobId.value && job.status === 'failed')) {
+        expandedJobId.value = ''
+      }
+    }
   } catch (error) {
     if (requestId === jobsRequest) appStore.showError(errorMessage(error))
   } finally {
@@ -255,6 +341,8 @@ watch(selectedKeyId, () => {
   try { if (selectedKeyId.value) window.localStorage.setItem(selectedIdStorageKey(), selectedKeyId.value) }
   catch { /* History still works without persisted selection. */ }
   closePreview()
+  expandedJobId.value = ''
+  failureSelectionInitialized = false
   void loadJobs().then(schedulePolling)
 })
 onMounted(loadKeys)
@@ -326,6 +414,7 @@ onBeforeUnmount(() => { clearPolling(); closePreview() })
 .video-history-row { display: grid; grid-template-columns: 8.5rem minmax(12rem, 1.2fr) minmax(8rem, .8fr) 6rem auto; min-height: 4.4rem; align-items: center; gap: .8rem; border-bottom: 1px solid #e1e8eb; padding: .55rem 1rem; }
 .video-history-row:last-child { border-bottom: 0; }
 .video-history-row:hover { background: #f8fbfc; }
+.video-history-row--expanded { background: #fffafa; }
 .video-history-row__status, .video-history-row__model, .video-history-row__spec, .video-history-row__amount { display: grid; min-width: 0; gap: .2rem; }
 .video-history-row__status { justify-items: start; }
 .video-history-row time, .video-history-row small, .video-history-row span { color: var(--history-muted); font-size: .52rem; }
@@ -343,6 +432,17 @@ onBeforeUnmount(() => { clearPolling(); closePreview() })
 .video-status--completed { background: #e4f6ee; color: #27765d; }
 .video-status--failed { background: #fff0ef; color: #ad423a; }
 .video-status--canceled { background: #edf1f2; color: #6d7d84; }
+.video-failure-detail { grid-column: 1 / -1; margin: .1rem 0 .3rem; border: 1px solid #efc3bf; border-radius: 7px; background: #fff8f7; padding: .65rem .75rem; }
+.video-failure-detail > header { display: flex; align-items: center; justify-content: space-between; gap: .5rem; border-bottom: 1px solid #f1d8d5; padding-bottom: .45rem; }
+.video-failure-detail > header > div { display: inline-flex; align-items: center; gap: .35rem; color: #a13f38; }
+.video-failure-detail > header strong { font-size: .62rem; }
+.video-failure-detail > header button, .video-failure-detail__grid button { display: inline-grid; width: 1.6rem; height: 1.6rem; place-items: center; border: 1px solid #e3c5c1; border-radius: 5px; background: #fff; color: #8b5d58; }
+.video-failure-detail__grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .35rem .8rem; padding-top: .55rem; }
+.video-failure-detail__grid > div { display: grid; grid-template-columns: 4.4rem minmax(0, 1fr) auto; align-items: center; gap: .35rem; min-width: 0; }
+.video-failure-detail__grid span { color: #9a7773; font-size: .52rem; }
+.video-failure-detail__grid strong, .video-failure-detail__grid code { overflow: hidden; color: #674944; font-family: Consolas, monospace; font-size: .54rem; text-overflow: ellipsis; white-space: nowrap; }
+.video-failure-detail__grid strong { font-family: inherit; }
+.video-failure-detail__message { margin: .55rem 0 0; border-top: 1px solid #f1d8d5; padding-top: .5rem; color: #8d5049; font-size: .56rem; line-height: 1.5; }
 
 @media (max-width: 900px) {
   .video-history__toolbar { grid-template-columns: 1fr minmax(16rem, 1fr) 2.25rem; }
@@ -369,5 +469,7 @@ onBeforeUnmount(() => { clearPolling(); closePreview() })
   .video-history-row__spec { grid-column: 1; grid-row: 3; }
   .video-history-row__amount { grid-column: 2; grid-row: 2 / 4; text-align: right; }
   .video-history-row__actions { grid-column: 1 / -1; grid-row: 4; justify-content: flex-start; }
+  .video-failure-detail { grid-row: 5; }
+  .video-failure-detail__grid { grid-template-columns: 1fr; }
 }
 </style>

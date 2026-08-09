@@ -213,6 +213,25 @@
 .video-audio-toggle input:checked + i { border-color: var(--video-cyan); background: var(--video-cyan); }
 .video-audio-toggle input:checked + i::after { transform: translateX(1rem); }
 
+.video-capability {
+  display: grid; gap: .65rem; margin-top: .8rem; border: 1px solid #9edce0; border-radius: 8px;
+  background: #effbfc; padding: .72rem .75rem; color: #155a67;
+}
+.video-capability header { display: grid; grid-template-columns: 1.75rem minmax(0, 1fr) auto; align-items: center; gap: .5rem; border-bottom: 1px solid #b9e6e9; padding-bottom: .55rem; }
+.video-capability header > span { display: grid; width: 1.75rem; height: 1.75rem; place-items: center; border-radius: 50%; background: #fff; color: #188b99; }
+.video-capability header > div { display: grid; min-width: 0; gap: .1rem; }
+.video-capability header strong { color: #104a57; font-size: .65rem; }
+.video-capability header small { overflow: hidden; color: #3193a0; font-size: .52rem; text-overflow: ellipsis; white-space: nowrap; }
+.video-capability header em { border-radius: 5px; background: #fff; padding: .22rem .34rem; color: #188795; font-size: .48rem; font-style: normal; font-weight: 850; }
+.video-capability dl { display: grid; gap: .28rem; margin: 0; }
+.video-capability dl > div { display: grid; grid-template-columns: 4.2rem minmax(0, 1fr); gap: .45rem; }
+.video-capability dt { color: #18788a; font-size: .53rem; font-weight: 850; }
+.video-capability dd { margin: 0; color: #185566; font-size: .53rem; line-height: 1.5; }
+.video-capability__section { display: grid; gap: .26rem; border-top: 1px solid #b9e6e9; padding-top: .58rem; }
+.video-capability__section > strong { color: #12677a; font-size: .62rem; }
+.video-capability__section p { margin: 0; padding-left: .8rem; color: #286271; font-size: .52rem; line-height: 1.55; text-indent: -.8rem; }
+.video-capability__section p::before { color: #2aa5ad; content: '· '; font-weight: 900; }
+
 .video-jobs { display: grid; gap: .45rem; border: 1px solid var(--video-line); border-radius: 12px; background: #fff; padding: .9rem 1.05rem 1.05rem; }
 .video-panel-title { display: flex; align-items: center; justify-content: space-between; gap: .5rem; border-bottom: 1px solid var(--video-line); padding-bottom: .65rem; }
 .video-panel-title > div { display: flex; align-items: baseline; gap: .5rem; }

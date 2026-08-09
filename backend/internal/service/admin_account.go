@@ -528,6 +528,9 @@ func validateXiaoAPIAccount(account *Account) error {
 	if strings.TrimSpace(account.GetCredential("api_key")) == "" {
 		return infraerrors.BadRequest("XIAOAPI_API_KEY_REQUIRED", "xiaoapi api_key is required")
 	}
+	if account.XiaoVideoProtocol() == "" {
+		return infraerrors.BadRequest("XIAOAPI_VIDEO_PROTOCOL_INVALID", "xiaoapi video_protocol must be native or openai_sora")
+	}
 	rawBaseURL := strings.TrimSpace(account.GetCredential("base_url"))
 	baseURL, err := url.Parse(rawBaseURL)
 	if err != nil || baseURL.Host == "" || (baseURL.Scheme != "http" && baseURL.Scheme != "https") || baseURL.RawQuery != "" || baseURL.Fragment != "" {

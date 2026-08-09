@@ -3,6 +3,12 @@ import type { VideoModel } from '@/api/video'
 export type VideoCreationMode = 'text' | 'frames' | 'references'
 export type ReferenceKind = 'image' | 'video' | 'audio'
 
+export const videoMediaLimits = {
+  image: { formats: 'PNG / JPG / WEBP', maxMiB: 10, minWidth: 300, maxWidth: 6000, minAspectRatio: 0.4, maxAspectRatio: 2.5 },
+  video: { formats: 'MP4 / MOV', maxMiB: 99, minDuration: 2, maxDuration: 15, maxTotalDuration: 15 },
+  audio: { formats: 'MP3 / WAV', maxMiB: 15, minDuration: 2, maxDuration: 15 },
+} as const
+
 export interface VideoModelCapability {
   id: string
   label: string
@@ -19,13 +25,17 @@ export interface VideoModelCapability {
   supportsEndFrame: boolean
   supportsPromptEnhance: boolean
   maxReferences: Record<ReferenceKind, number>
+  capabilitySource: 'xiaoapi' | 'aistartlab' | 'mixed' | 'unknown'
+  usesXiaoAPIRules: boolean
 }
+
+type KnownVideoModelCapability = Omit<VideoModelCapability, 'capabilitySource' | 'usesXiaoAPIRules'>
 
 const seedanceRatios = ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9', '9:21']
 const range = (start: number, end: number, step = 1) =>
   Array.from({ length: Math.floor((end - start) / step) + 1 }, (_, index) => start + index * step)
 
-const knownCapabilities: Record<string, VideoModelCapability> = {
+const knownCapabilities: Record<string, KnownVideoModelCapability> = {
   'seedance-2.0': {
     id: 'seedance-2.0', label: 'Seedance 2.0',
     resolutions: ['480p', '720p', '1080p'], durations: range(4, 15),
@@ -62,7 +72,7 @@ const knownCapabilities: Record<string, VideoModelCapability> = {
     id: 'grok-imagine-1.5', label: 'Grok Imagine 1.5',
     resolutions: ['400p', '544p', '720p', '960p'], durations: range(3, 15),
     aspectRatios: { '400p': ['16:9', '9:16'], '544p': ['1:1'], '720p': ['16:9', '9:16'], '960p': ['1:1'] },
-    defaultResolution: '720p', defaultDuration: 5, defaultAspectRatio: '16:9', promptLimit: 5000,
+    defaultResolution: '720p', defaultDuration: 6, defaultAspectRatio: '16:9', promptLimit: 5000,
     supportsAudio: true, supportsStartFrame: true, requiresStartFrame: true, supportsEndFrame: false,
     supportsPromptEnhance: false, maxReferences: { image: 0, video: 0, audio: 0 },
   },
@@ -82,29 +92,61 @@ const knownCapabilities: Record<string, VideoModelCapability> = {
   },
 }
 
+const capabilityAliases: Record<string, string> = {
+  'happyhorse-1.1': 'happy-horse-1.1',
+  'happy-horse': 'happy-horse-1.1',
+  'grok-imagine-video-1.5': 'grok-imagine-1.5',
+  'grok-imagine-video': 'grok-imagine-1.5',
+}
+
+function capabilitySource(model: VideoModel): VideoModelCapability['capabilitySource'] {
+  if (!model.capability_source || model.capability_source === 'native') return 'xiaoapi'
+  if (model.capability_source === 'openai_sora') return 'aistartlab'
+  if (model.capability_source === 'mixed') return 'mixed'
+  return 'unknown'
+}
+
 function fallbackCapability(model: VideoModel): VideoModelCapability {
-  const resolutions = model.resolutions.length ? model.resolutions : [model.default_resolution || '720p']
+  const resolutions = model.resolutions.length
+    ? model.resolutions
+    : model.default_resolution ? [model.default_resolution] : []
+  const modelDurations = (model.durations ?? []).filter((value) => Number.isInteger(value) && value > 0)
+  const defaultDuration = Number(model.default_duration) > 0 ? Number(model.default_duration) : modelDurations[0] || 0
+  const durations = modelDurations.length ? [...new Set(modelDurations)].sort((a, b) => a - b) : (defaultDuration > 0 ? [defaultDuration] : [])
+  const ratios = (model.aspect_ratios ?? []).filter((value) => typeof value === 'string' && value.trim())
+  const maxReferences = {
+    image: Math.max(0, Number(model.max_references?.image) || 0),
+    video: Math.max(0, Number(model.max_references?.video) || 0),
+    audio: Math.max(0, Number(model.max_references?.audio) || 0),
+  }
   return {
     id: model.id,
     label: model.id,
     resolutions,
-    durations: [model.default_duration || 5],
-    aspectRatios: { '*': [model.default_aspect_ratio || '16:9'] },
+    durations,
+    aspectRatios: { '*': ratios.length ? ratios : [model.default_aspect_ratio || '16:9'] },
     defaultResolution: model.default_resolution || resolutions[0],
-    defaultDuration: model.default_duration || 5,
+    defaultDuration,
     defaultAspectRatio: model.default_aspect_ratio || '16:9',
     promptLimit: 5000,
     supportsAudio: model.supports_audio === true,
-    supportsStartFrame: true,
-    requiresStartFrame: false,
-    supportsEndFrame: false,
+    supportsStartFrame: model.supports_start_frame === true,
+    requiresStartFrame: model.requires_start_frame === true,
+    supportsEndFrame: model.supports_end_frame === true,
     supportsPromptEnhance: false,
-    maxReferences: { image: model.supports_guidances ? 1 : 0, video: 0, audio: 0 },
+    maxReferences: Object.values(maxReferences).some((count) => count > 0)
+      ? maxReferences
+      : { image: model.supports_guidances ? 1 : 0, video: 0, audio: 0 },
+    capabilitySource: capabilitySource(model),
+    usesXiaoAPIRules: false,
   }
 }
 
 export function resolveVideoCapability(model: VideoModel): VideoModelCapability {
-  const known = knownCapabilities[model.id]
+  const source = capabilitySource(model)
+  const known = source === 'xiaoapi'
+    ? knownCapabilities[model.id] || knownCapabilities[capabilityAliases[model.id]]
+    : undefined
   if (!known) return fallbackCapability(model)
   const available = new Set(model.resolutions)
   const resolutions = known.resolutions.filter((resolution) => available.size === 0 || available.has(resolution))
@@ -113,11 +155,14 @@ export function resolveVideoCapability(model: VideoModel): VideoModelCapability 
     : resolutions.includes(known.defaultResolution) ? known.defaultResolution : resolutions[0]
   return {
     ...known,
+    id: model.id,
     resolutions,
     defaultResolution,
     defaultDuration: model.default_duration || known.defaultDuration,
     defaultAspectRatio: model.default_aspect_ratio || known.defaultAspectRatio,
     supportsAudio: model.supports_audio === true || known.supportsAudio,
+    capabilitySource: 'xiaoapi',
+    usesXiaoAPIRules: true,
   }
 }
 

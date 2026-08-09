@@ -26,6 +26,8 @@ func TestPublicVideoJobDoesNotLeakUpstreamIdentifiers(t *testing.T) {
 		Currency:         "USD",
 		CreatedAt:        now,
 		UpdatedAt:        now,
+		FinishedAt:       &now,
+		SettlementStatus: "released",
 		UpstreamResponse: []byte(`{"job_id":"secret-upstream-job","internal_job_id":"internal-secret","account_id":999,"error":{"message":"provider https://secret.example failed"}}`),
 	}
 	raw, err := json.Marshal(publicVideoJob(job))
@@ -36,6 +38,36 @@ func TestPublicVideoJobDoesNotLeakUpstreamIdentifiers(t *testing.T) {
 	require.NotContains(t, response, "secret.example")
 	require.NotContains(t, response, "account_id")
 	require.Contains(t, response, "VIDEO_GENERATION_FAILED")
+	require.Contains(t, response, "vidjob_public")
+	require.Contains(t, response, `"finished_at"`)
+	require.Contains(t, response, `"settlement_status":"released"`)
+}
+
+func TestPublicVideoFailureIncludesSafeDiagnostics(t *testing.T) {
+	now := time.Now().UTC()
+	job := &service.VideoJob{
+		JobID: "vidjob_diagnostic", Status: "failed", UpdatedAt: now,
+		UpstreamResponse: []byte(`{"status":"failed","stage":"processing","error":{"code":"VIDEO_RESOLUTION_INVALID","message":"private text","request_id":"req_123"}}`),
+	}
+	failure := publicVideoFailure(job)
+	require.Equal(t, "VIDEO_GENERATION_FAILED", failure["code"])
+	require.Equal(t, "VIDEO_RESOLUTION_INVALID", failure["upstream_code"])
+	require.Equal(t, "processing", failure["stage"])
+	require.Equal(t, "req_123", failure["request_id"])
+	require.Equal(t, "resolution is not supported by this model", failure["message"])
+}
+
+func TestPublicVideoFailureRejectsUnsafeDiagnostics(t *testing.T) {
+	now := time.Now().UTC()
+	job := &service.VideoJob{
+		JobID: "vidjob_safe", Status: "failed", UpdatedAt: now,
+		UpstreamResponse: []byte(`{"error":{"code":"SECRET_ACCOUNT_999","request_id":"https://secret.example/id","message":"account 999 failed"}}`),
+	}
+	raw, err := json.Marshal(publicVideoFailure(job))
+	require.NoError(t, err)
+	require.NotContains(t, string(raw), "secret.example")
+	require.NotContains(t, string(raw), "account 999")
+	require.NotContains(t, string(raw), "SECRET_ACCOUNT_999")
 }
 
 func TestVideoErrorSanitizesUpstreamBody(t *testing.T) {

@@ -255,13 +255,154 @@ func publicVideoJob(job *service.VideoJob) map[string]any {
 		"updated_at":   job.UpdatedAt.Format(time.RFC3339),
 		"status_url":   "/v1/videos/jobs/" + job.JobID,
 	}
+	if job.FinishedAt != nil {
+		out["finished_at"] = job.FinishedAt.Format(time.RFC3339)
+	}
+	if strings.TrimSpace(job.SettlementStatus) != "" {
+		out["settlement_status"] = job.SettlementStatus
+	}
 	if job.Status == "completed" {
 		out["content_url"] = "/v1/videos/jobs/" + job.JobID + "/content"
 	}
 	if job.Status == "failed" {
-		out["error"] = map[string]any{"code": "VIDEO_GENERATION_FAILED", "message": "video generation failed"}
+		out["error"] = publicVideoFailure(job)
 	}
 	return out
+}
+
+func publicVideoFailure(job *service.VideoJob) map[string]any {
+	failedAt := job.UpdatedAt
+	if job.FinishedAt != nil {
+		failedAt = *job.FinishedAt
+	}
+	failure := map[string]any{
+		"code":      "VIDEO_GENERATION_FAILED",
+		"message":   "video generation failed; use the task ID and error code for troubleshooting",
+		"stage":     "upstream_generation",
+		"task_id":   job.JobID,
+		"failed_at": failedAt.Format(time.RFC3339),
+	}
+	var payload map[string]any
+	if json.Unmarshal(job.UpstreamResponse, &payload) != nil {
+		return failure
+	}
+	errorPayload, _ := payload["error"].(map[string]any)
+	if len(errorPayload) == 0 {
+		errorPayload, _ = payload["last_error"].(map[string]any)
+	}
+	code := firstVideoString(errorPayload, "code", "error_code")
+	if code == "" {
+		code = firstVideoString(payload, "error_code", "code")
+	}
+	if safeCode := safePublicVideoCode(code); safeCode != "" {
+		failure["upstream_code"] = safeCode
+	}
+	if stage := safePublicVideoStage(firstVideoString(errorPayload, "stage"), firstVideoString(payload, "stage")); stage != "" {
+		failure["stage"] = stage
+	}
+	if requestID := safePublicVideoIdentifier(
+		firstVideoString(errorPayload, "request_id", "requestId", "trace_id", "traceId"),
+		firstVideoString(payload, "request_id", "requestId", "trace_id", "traceId"),
+	); requestID != "" {
+		failure["request_id"] = requestID
+	}
+	if message := safePublicVideoMessage(code); message != "" {
+		failure["message"] = message
+	}
+	return failure
+}
+
+func firstVideoString(values map[string]any, keys ...string) string {
+	for _, key := range keys {
+		if value, ok := values[key].(string); ok && strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
+}
+
+func safePublicVideoCode(value string) string {
+	value = strings.ToUpper(strings.TrimSpace(value))
+	if len(value) < 2 || len(value) > 64 {
+		return ""
+	}
+	for _, character := range value {
+		if (character < 'A' || character > 'Z') && (character < '0' || character > '9') && character != '_' && character != '-' {
+			return ""
+		}
+	}
+	switch value {
+	case "VIDEO_REQUEST_INVALID", "VIDEO_RESOURCE_NOT_FOUND", "VIDEO_JOB_NOT_CANCELABLE",
+		"VIDEO_MODEL_INVALID", "VIDEO_PROMPT_INVALID", "VIDEO_RESOLUTION_INVALID",
+		"VIDEO_DURATION_INVALID", "VIDEO_ASPECT_RATIO_INVALID", "VIDEO_MEDIA_INVALID",
+		"VIDEO_OPTION_UNSUPPORTED", "VIDEO_CAPACITY_EXHAUSTED", "VIDEO_GENERATION_FAILED",
+		"CONTENT_POLICY_VIOLATION", "SAFETY_FILTER_TRIGGERED", "MODERATION_FAILED",
+		"RATE_LIMIT_EXCEEDED", "INTERNAL_ERROR":
+		return value
+	default:
+		return ""
+	}
+}
+
+func safePublicVideoIdentifier(values ...string) string {
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if len(value) < 3 || len(value) > 128 {
+			continue
+		}
+		valid := true
+		for _, character := range value {
+			if (character < 'A' || character > 'Z') && (character < 'a' || character > 'z') && (character < '0' || character > '9') && !strings.ContainsRune("._:-", character) {
+				valid = false
+				break
+			}
+		}
+		if valid {
+			return value
+		}
+	}
+	return ""
+}
+
+func safePublicVideoStage(values ...string) string {
+	for _, value := range values {
+		switch strings.ToLower(strings.TrimSpace(value)) {
+		case "validation", "queued", "processing", "content", "settlement", "upstream_generation":
+			return strings.ToLower(strings.TrimSpace(value))
+		}
+	}
+	return ""
+}
+
+func safePublicVideoMessage(code string) string {
+	switch strings.ToUpper(strings.TrimSpace(code)) {
+	case "VIDEO_REQUEST_INVALID":
+		return "video request is invalid"
+	case "VIDEO_MODEL_INVALID":
+		return "model is not supported"
+	case "VIDEO_PROMPT_INVALID":
+		return "prompt is invalid"
+	case "VIDEO_RESOLUTION_INVALID":
+		return "resolution is not supported by this model"
+	case "VIDEO_DURATION_INVALID":
+		return "duration is not supported by this model"
+	case "VIDEO_ASPECT_RATIO_INVALID":
+		return "aspect ratio is not supported by this model"
+	case "VIDEO_MEDIA_INVALID":
+		return "video media is invalid"
+	case "VIDEO_OPTION_UNSUPPORTED":
+		return "video option is not supported by this model"
+	case "VIDEO_CAPACITY_EXHAUSTED":
+		return "video capacity is temporarily exhausted"
+	case "CONTENT_POLICY_VIOLATION", "SAFETY_FILTER_TRIGGERED", "MODERATION_FAILED":
+		return "video generation was rejected by content safety checks"
+	case "RATE_LIMIT_EXCEEDED":
+		return "video generation rate limit was exceeded"
+	case "INTERNAL_ERROR":
+		return "video generation failed because of an upstream internal error"
+	default:
+		return ""
+	}
 }
 
 func proxyVideoResponse(c *gin.Context, resp *http.Response, stream bool) {

@@ -171,7 +171,7 @@ export default {
     modelPlaza: 'Model Plaza',
     subscriptions: 'Subscriptions',
     accounts: 'Accounts',
-    xiaoVideo: 'XiaoAPI Video',
+    xiaoVideo: 'Video Account Settings',
     proxies: 'Proxies',
     redeemCodes: 'Redeem Codes',
     ops: 'Ops',

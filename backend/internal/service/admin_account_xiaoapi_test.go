@@ -42,6 +42,7 @@ func TestValidateXiaoAPIAccountRejectsInvalidConfiguration(t *testing.T) {
 		{name: "oauth", mutate: func(account *Account) { account.Type = AccountTypeOAuth }, reason: "XIAOAPI_ACCOUNT_TYPE_INVALID"},
 		{name: "missing api key", mutate: func(account *Account) { delete(account.Credentials, "api_key") }, reason: "XIAOAPI_API_KEY_REQUIRED"},
 		{name: "invalid base url", mutate: func(account *Account) { account.Credentials["base_url"] = "provider.local/v1" }, reason: "XIAOAPI_BASE_URL_INVALID"},
+		{name: "invalid video protocol", mutate: func(account *Account) { account.Credentials[XiaoVideoProtocolCredentialKey] = "unknown" }, reason: "XIAOAPI_VIDEO_PROTOCOL_INVALID"},
 		{name: "missing pricing", mutate: func(account *Account) { delete(account.Credentials, XiaoVideoPricingCredentialKey) }, reason: "XIAOAPI_VIDEO_PRICING_INVALID"},
 	}
 

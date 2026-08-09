@@ -73,3 +73,25 @@ func TestAccountTestServiceXiaoAPIUsesReadOnlyModelsProbe(t *testing.T) {
 	require.Contains(t, recorder.Body.String(), `"type":"test_complete"`)
 	require.Contains(t, recorder.Body.String(), `"success":true`)
 }
+
+func TestAccountTestServiceXiaoAPIOpenAISoraUsesCompatibleModelsProbe(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	account := &Account{
+		ID: 42, Platform: PlatformXiaoAPI, Type: AccountTypeAPIKey, Concurrency: 2,
+		Credentials: map[string]any{
+			"base_url":                     "https://api.video.aistarslab.com/openai",
+			"api_key":                      "provider-secret",
+			XiaoVideoProtocolCredentialKey: XiaoVideoProtocolOpenAISora,
+			XiaoVideoPricingCredentialKey:  []any{map[string]any{"model": "public-video", "resolution": "720p", "price_per_second": 1, "default_duration": 5}},
+		},
+	}
+	upstream := &xiaoAccountTestUpstream{resp: &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{"object":"list","data":[{"id":"12:provider-video"}]}`))}}
+	svc := NewAccountTestService(&xiaoAccountTestRepo{account: account}, nil, nil, nil, nil, upstream, &config.Config{}, nil)
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodPost, "/api/v1/admin/accounts/42/test", nil)
+
+	require.NoError(t, svc.TestAccountConnection(c, account.ID, "", "", AccountTestModeDefault))
+	require.Equal(t, "https://api.video.aistarslab.com/openai/v1/models", upstream.request.URL.String())
+	require.Contains(t, recorder.Body.String(), `"success":true`)
+}

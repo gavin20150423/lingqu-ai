@@ -31,7 +31,7 @@
               <div><dt>幂等键</dt><dd>1-128 个可打印 ASCII 字符，同一请求重试时必须复用</dd></div>
             </dl>
             <CodeBlock title="查询当前 Key 可用模型" :code="modelsExample" />
-            <p class="video-doc-note"><Icon name="infoCircle" size="sm" /> 客户端应始终以 <code>GET /v1/models</code> 实际返回为准，不要假设不同 Key 拥有相同模型。</p>
+            <p class="video-doc-note"><Icon name="infoCircle" size="sm" /> 客户端应始终以 <code>GET /v1/models</code> 实际返回为准，并读取 <code>capability_source</code> 区分 XiaoAPI（<code>native</code>）与 AIStartLab（<code>openai_sora</code>）。</p>
           </section>
 
           <section id="generate" class="video-doc-section">
@@ -64,6 +64,7 @@
             </div>
             <CodeBlock title="使用上传结果作为首帧" :code="frameExample" />
             <p class="video-doc-note"><Icon name="infoCircle" size="sm" /> <code>image_url</code> 是旧兼容别名，不能和 <code>start_frame_url</code> 同时使用；新接入统一使用后者。</p>
+            <p class="video-doc-note video-doc-note--warning"><Icon name="exclamationTriangle" size="sm" /> 本节为原生 XiaoAPI 素材接口；AIStartLab 的 OpenAI Sora 兼容协议不提供该上传端点。</p>
           </section>
 
           <section id="references" class="video-doc-section">
@@ -82,11 +83,12 @@
               <li>LTX：支持首帧、尾帧、生成音轨和提示词增强，不支持 guidances。</li>
               <li>首帧或尾帧不能与 <code>guidances.image_reference</code> 同时使用。</li>
             </ul>
+            <p class="video-doc-note video-doc-note--warning"><Icon name="exclamationTriangle" size="sm" /> 上述首尾帧、参考素材和组合限制均为 XiaoAPI 规则，不适用于 AIStartLab。</p>
           </section>
 
           <section id="models" class="video-doc-section">
             <div class="video-doc-section__heading">
-              <span>05</span><div><h2>模型能力矩阵</h2><p>平台实际返回的分辨率还会受管理员定价配置约束。</p></div>
+              <span>05</span><div><h2>XiaoAPI 模型能力矩阵</h2><p>仅适用于 <code>capability_source=native</code>；分辨率还会受管理员定价配置约束。</p></div>
             </div>
             <div class="video-doc-table-wrap">
               <table class="video-model-table">
@@ -97,6 +99,7 @@
               </table>
             </div>
             <p class="video-doc-note"><Icon name="infoCircle" size="sm" /> Seedance 2.0 的 1080p 最长 12 秒；Seedance 720p 不支持 9:21；Grok 544p / 960p 仅支持 1:1。</p>
+            <p class="video-doc-note video-doc-note--warning"><Icon name="exclamationTriangle" size="sm" /> AIStartLab 模型不使用此矩阵，只采用接口返回的分辨率、默认时长和其他上游元数据。</p>
           </section>
 
           <section id="jobs" class="video-doc-section">
@@ -153,6 +156,7 @@
               </table>
             </div>
             <p class="video-doc-note"><Icon name="shield" size="sm" /> 排查问题时提供 <code>X-Request-Id</code>、HTTP 状态、错误码和发生时间，不要发送完整 API Key。</p>
+            <p class="video-doc-note"><Icon name="infoCircle" size="sm" /> 异步任务进入 <code>failed</code> 后，任务响应还会提供 <code>task_id</code>、<code>failed_at</code>、失败阶段，以及经过白名单过滤的 <code>upstream_code</code> 和 <code>request_id</code>；不会返回上游账号、上游任务 ID 或原始错误正文。</p>
           </section>
         </main>
       </div>

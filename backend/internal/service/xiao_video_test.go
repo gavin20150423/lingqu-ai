@@ -329,6 +329,148 @@ func TestXiaoVideoAccountUsesIndependentPlatform(t *testing.T) {
 	require.False(t, xiao.IsXiaoAPI())
 }
 
+func TestXiaoVideoOpenAISoraProtocolAdapter(t *testing.T) {
+	account := videoTestAccount(42, 7, "https://api.video.aistarslab.com/openai")
+	account.Credentials[XiaoVideoProtocolCredentialKey] = XiaoVideoProtocolOpenAISora
+
+	body, err := rewriteVideoRequestForAccount(
+		&account,
+		[]byte(`{"model":"public-video","prompt":"Ocean waves","aspect_ratio":"16:9","start_frame_url":"https://example.test/start.jpg","end_frame_url":"https://example.test/end.jpg"}`),
+		"12:provider-video",
+		"720p",
+		5,
+	)
+	require.NoError(t, err)
+	var payload map[string]any
+	require.NoError(t, json.Unmarshal(body, &payload))
+	require.Equal(t, "12:provider-video", payload["model"])
+	require.Equal(t, "5", payload["seconds"])
+	require.Equal(t, "16:9", payload["size"])
+	require.Equal(t, float64(1), payload["n"])
+	metadata := payload["metadata"].(map[string]any)
+	require.Equal(t, "720p", metadata["resolution"])
+	require.Equal(t, "frames2video", metadata["mode_type"])
+	require.Equal(t, []any{"https://example.test/start.jpg", "https://example.test/end.jpg"}, metadata["images"])
+
+	normalized, err := decodeVideoUpstreamResponse(&account, []byte(`{"id":"task-1","status":"in_progress","seconds":"5","size":"16:9","metadata":{"resolution":"720p"}}`))
+	require.NoError(t, err)
+	require.Equal(t, "task-1", normalized["job_id"])
+	require.Equal(t, "running", normalized["status"])
+	require.Equal(t, "5", normalized["duration"])
+	require.Equal(t, "16:9", normalized["aspect_ratio"])
+	require.Equal(t, "720p", normalized["resolution"])
+	require.Equal(t, "0", normalized["amount"])
+	require.Equal(t, "CREDITS", normalized["currency"])
+}
+
+func TestXiaoVideoOpenAISoraEndToEndCompatibility(t *testing.T) {
+	const groupID int64 = 7
+	repo := newVideoRepositoryStub()
+	account := videoTestAccount(42, groupID, "https://api.video.aistarslab.com/openai")
+	account.Credentials[XiaoVideoProtocolCredentialKey] = XiaoVideoProtocolOpenAISora
+	account.Credentials["model_mapping"] = map[string]any{"video-public": "12:provider-video"}
+	accounts := &videoAccountRepoStub{accounts: []Account{account}}
+	requests := 0
+	upstream := &videoHTTPUpstreamStub{do: func(req *http.Request, _ string, accountID int64, _ int) (*http.Response, error) {
+		require.Equal(t, int64(42), accountID)
+		requests++
+		switch requests {
+		case 1:
+			require.Equal(t, "Bearer upstream-secret", req.Header.Get("Authorization"))
+			require.Equal(t, http.MethodPost, req.Method)
+			require.Equal(t, "/openai/v1/videos", req.URL.Path)
+			var payload map[string]any
+			require.NoError(t, json.NewDecoder(req.Body).Decode(&payload))
+			require.Equal(t, "12:provider-video", payload["model"])
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     make(http.Header),
+				Body:       io.NopCloser(strings.NewReader(`{"id":"task-1","status":"queued","seconds":"5","size":"16:9"}`)),
+			}, nil
+		case 2:
+			require.Equal(t, "Bearer upstream-secret", req.Header.Get("Authorization"))
+			require.Equal(t, http.MethodGet, req.Method)
+			require.Equal(t, "/openai/v1/videos/task-1", req.URL.Path)
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     make(http.Header),
+				Body:       io.NopCloser(strings.NewReader(`{"id":"task-1","status":"completed","seconds":"5","size":"16:9","metadata":{"resolution":"720p","result_url":"https://cdn.example.test/result.mp4"}}`)),
+			}, nil
+		case 3:
+			require.Equal(t, http.MethodGet, req.Method)
+			require.Equal(t, "https://cdn.example.test/result.mp4", req.URL.String())
+			require.Empty(t, req.Header.Get("Authorization"))
+			require.Equal(t, "bytes=0-99", req.Header.Get("Range"))
+			return &http.Response{
+				StatusCode: http.StatusPartialContent,
+				Header:     http.Header{"Content-Range": []string{"bytes 0-99/1000"}},
+				Body:       io.NopCloser(strings.NewReader("video")),
+			}, nil
+		default:
+			t.Fatalf("unexpected upstream request %d", requests)
+			return nil, nil
+		}
+	}}
+	svc := newVideoServiceForTest(repo, accounts, upstream)
+	owner := VideoOwner{UserID: 11, APIKeyID: 22, GroupID: videoInt64Ptr(groupID)}
+
+	job, err := svc.Create(context.Background(), owner, []byte(`{"model":"video-public","prompt":"Ocean waves","resolution":"720p","duration":5,"aspect_ratio":"16:9"}`), "aistartlab-1")
+	require.NoError(t, err)
+	require.Equal(t, "task-1", job.UpstreamJobID)
+	require.Equal(t, "pending", job.Status)
+	require.InDelta(t, 3.75, job.Amount, 0.00000001)
+	require.NotNil(t, job.UpstreamAmount)
+	require.Zero(t, *job.UpstreamAmount)
+
+	job, err = svc.Get(context.Background(), owner, job.JobID)
+	require.NoError(t, err)
+	require.Equal(t, "completed", job.Status)
+	require.Equal(t, "720p", job.Resolution)
+	require.Equal(t, 5, job.Duration)
+
+	content, err := svc.OpenContent(context.Background(), owner, job.JobID, "bytes=0-99", "")
+	require.NoError(t, err)
+	require.Equal(t, http.StatusPartialContent, content.StatusCode)
+	require.Equal(t, "bytes 0-99/1000", content.Header.Get("Content-Range"))
+	require.NoError(t, content.Body.Close())
+	require.Equal(t, 3, requests)
+}
+
+func TestOpenAISoraResultURLRejectsUnsafeValues(t *testing.T) {
+	value, ok := openAISoraResultURL([]byte(`{"metadata":{"result_url":"https://cdn.example.test/result.mp4"}}`))
+	require.True(t, ok)
+	require.Equal(t, "https://cdn.example.test/result.mp4", value)
+
+	for _, raw := range []string{
+		`{}`,
+		`{"metadata":{"result_url":"javascript:alert(1)"}}`,
+		`{"metadata":{"result_url":"/relative.mp4"}}`,
+	} {
+		_, ok := openAISoraResultURL([]byte(raw))
+		require.False(t, ok)
+	}
+}
+
+func TestXiaoVideoOpenAISoraRejectsUnsupportedOperations(t *testing.T) {
+	const groupID int64 = 7
+	repo := newVideoRepositoryStub()
+	account := videoTestAccount(42, groupID, "https://api.video.aistarslab.com/openai")
+	account.Credentials[XiaoVideoProtocolCredentialKey] = XiaoVideoProtocolOpenAISora
+	accounts := &videoAccountRepoStub{accounts: []Account{account}}
+	svc := newVideoServiceForTest(repo, accounts, &videoHTTPUpstreamStub{do: func(*http.Request, string, int64, int) (*http.Response, error) {
+		t.Fatal("unsupported operations must not reach upstream")
+		return nil, nil
+	}})
+	owner := VideoOwner{UserID: 11, APIKeyID: 22, GroupID: videoInt64Ptr(groupID)}
+
+	_, err := svc.Upload(context.Background(), owner, strings.NewReader("media"), "multipart/form-data; boundary=x")
+	require.ErrorIs(t, err, ErrVideoUploadUnsupported)
+
+	repo.jobs["vidjob-ai"] = &VideoJob{JobID: "vidjob-ai", UpstreamJobID: "task-ai", AccountID: 42, UserID: 11, APIKeyID: 22, Status: "pending", Amount: 1, Currency: "USD", SettlementStatus: "held"}
+	_, err = svc.Cancel(context.Background(), owner, "vidjob-ai")
+	require.ErrorIs(t, err, ErrVideoJobNotCancelable)
+}
+
 func TestXiaoVideoSeedanceAudioCapabilityMatrix(t *testing.T) {
 	for _, model := range []string{"seedance-2.0", "seedance-2.0-fast", "seedance-2.0-mini"} {
 		require.True(t, seedanceSupportsGeneratedAudio(model), model)
@@ -716,6 +858,57 @@ func TestXiaoVideoListModelsMapsAliases(t *testing.T) {
 	require.Len(t, models, 1)
 	require.Equal(t, "video-public", models[0]["id"])
 	require.Equal(t, []string{"720p"}, models[0]["resolutions"])
+	require.Equal(t, XiaoVideoProtocolNative, models[0]["capability_source"])
+}
+
+func TestPricedVideoModelsUsesStoredAIStartLabCapabilities(t *testing.T) {
+	account := videoTestAccount(42, 7, "https://api.video.aistarslab.com/openai")
+	account.Credentials[XiaoVideoProtocolCredentialKey] = XiaoVideoProtocolOpenAISora
+	account.Credentials["model_mapping"] = map[string]any{"public-seedance": "47:seedance-2.0"}
+	account.Credentials[xiaoVideoCapabilitiesCredentialKey] = map[string]any{
+		"47:seedance-2.0": map[string]any{
+			"durations":            []any{4, 5, 6},
+			"aspect_ratios":        []any{"16:9", "9:16"},
+			"default_aspect_ratio": "16:9",
+			"supports_guidances":   true,
+			"supports_start_frame": true,
+			"max_references":       map[string]any{"image": 9, "video": 3, "audio": 3},
+		},
+	}
+	rules := []XiaoVideoPricingRule{{Model: "public-seedance", Resolution: "720p", PricePerSecond: 1, DefaultResolution: true, DefaultDuration: 4}}
+	models := pricedVideoModelsForAccount(&account, rules, []map[string]any{{"id": "47:seedance-2.0"}})
+	require.Contains(t, models, "public-seedance")
+	model := models["public-seedance"]
+	require.Equal(t, []string{"720p"}, model["resolutions"])
+	require.Equal(t, []any{float64(4), float64(5), float64(6)}, model["durations"])
+	require.Equal(t, true, model["supports_guidances"])
+	require.Equal(t, true, model["supports_start_frame"])
+	require.Equal(t, false, model["supports_audio"])
+	require.Equal(t, map[string]any{"image": float64(9), "video": float64(3), "audio": float64(3)}, model["max_references"])
+}
+
+func TestPreferredVideoUpstreamModelKeepsLegacyBareMappingsDeterministic(t *testing.T) {
+	t.Parallel()
+
+	require.Equal(t, "47:seedance-2.0", preferredVideoUpstreamModel([]string{
+		"51:seedance-2.0",
+		"47:seedance-2.0",
+		"48:seedance-2.0",
+	}))
+	require.Equal(t, "48:seedance-2.0", preferredVideoUpstreamModel([]string{
+		"51:seedance-2.0",
+		"48:seedance-2.0",
+	}))
+}
+
+func TestMergePricedVideoModelMarksMixedCapabilitySource(t *testing.T) {
+	target := map[string]any{"resolutions": []string{"720p"}, "capability_source": XiaoVideoProtocolNative}
+	source := map[string]any{"resolutions": []string{"1080p"}, "capability_source": XiaoVideoProtocolOpenAISora}
+
+	mergePricedVideoModel(target, source)
+
+	require.Equal(t, "mixed", target["capability_source"])
+	require.Equal(t, []string{"1080p", "720p"}, target["resolutions"])
 }
 
 func TestXiaoVideoListModelsEnablesSeedanceGeneratedAudio(t *testing.T) {

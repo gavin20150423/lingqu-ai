@@ -12,12 +12,19 @@ export interface VideoModel {
   id: string
   object: 'model'
   owned_by: string
+  capability_source?: 'native' | 'openai_sora' | 'mixed' | string
   resolutions: string[]
   default_resolution?: string
   default_duration?: number
   default_aspect_ratio?: string
+  durations?: number[]
+  aspect_ratios?: string[]
   supports_audio?: boolean
   supports_guidances?: boolean
+  supports_start_frame?: boolean
+  requires_start_frame?: boolean
+  supports_end_frame?: boolean
+  max_references?: { image?: number; video?: number; audio?: number }
 }
 
 export interface UploadedVideoMedia {
@@ -60,6 +67,16 @@ export interface CreatedVideoJob {
   status_url: string
 }
 
+export interface VideoJobError {
+  code: string
+  message: string
+  stage?: string
+  upstream_code?: string
+  request_id?: string
+  failed_at?: string
+  task_id?: string
+}
+
 export interface VideoJob {
   job_id: string
   status: VideoJobStatus
@@ -71,9 +88,11 @@ export interface VideoJob {
   currency: string
   created_at: string
   updated_at: string
+  finished_at?: string
+  settlement_status?: string
   status_url: string
   content_url?: string
-  error?: { code: string; message: string }
+  error?: VideoJobError
 }
 
 interface ListEnvelope<T> {

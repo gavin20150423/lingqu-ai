@@ -94,11 +94,13 @@
           <section v-if="creationMode === 'frames'" class="video-media-band" aria-label="首尾帧">
             <MediaInput
               label="首帧"
-              hint="PNG / JPEG / WebP，最大 10 MiB"
+              :hint="isAIStartLab ? '粘贴公开的 HTTP(S) 图片链接' : 'PNG / JPEG / WebP，最大 10 MiB'"
               accept="image/png,image/jpeg,image/webp"
+              :remote="isAIStartLab"
               :required="selectedCapability?.requiresStartFrame"
               :item="startFrame"
               @select="setSingleMedia('start', $event)"
+              @select-url="setSingleMediaUrl('start', $event)"
               @remove="clearSingleMedia('start')"
             />
             <MediaInput
@@ -106,8 +108,10 @@
               label="尾帧"
               hint="让镜头自然过渡到目标构图"
               accept="image/png,image/jpeg,image/webp"
+              :remote="isAIStartLab"
               :item="endFrame"
               @select="setSingleMedia('end', $event)"
+              @select-url="setSingleMediaUrl('end', $event)"
               @remove="clearSingleMedia('end')"
             />
           </section>
@@ -115,7 +119,13 @@
           <section v-if="creationMode === 'references'" class="video-reference-section" aria-label="参考素材">
             <div class="video-reference-row" v-if="referenceLimit('image') > 0">
               <div><strong>参考图片</strong><span>最多 {{ referenceLimit('image') }} 张</span></div>
-              <label class="video-add-media">
+              <RemoteMediaInput
+                v-if="isAIStartLab"
+                kind="image"
+                placeholder="粘贴公开图片 URL"
+                @select-url="addReferenceUrl('image', $event)"
+              />
+              <label v-else class="video-add-media">
                 <Icon name="plus" size="sm" /><span>添加图片</span>
                 <input type="file" multiple accept="image/png,image/jpeg,image/webp" @change="addReferenceFiles('image', $event)" />
               </label>
@@ -126,7 +136,13 @@
 
             <div class="video-reference-row" v-if="referenceLimit('video') > 0">
               <div><strong>参考视频</strong><span>MP4 / MOV，最大 100 MiB</span></div>
-              <label class="video-add-media">
+              <RemoteMediaInput
+                v-if="isAIStartLab"
+                kind="video"
+                placeholder="粘贴公开视频 URL"
+                @select-url="addReferenceUrl('video', $event)"
+              />
+              <label v-else class="video-add-media">
                 <Icon name="plus" size="sm" /><span>添加视频</span>
                 <input type="file" multiple accept="video/mp4,video/quicktime" @change="addReferenceFiles('video', $event)" />
               </label>
@@ -137,7 +153,13 @@
 
             <div class="video-reference-row" v-if="referenceLimit('audio') > 0">
               <div><strong>参考音频</strong><span>MP3 / WAV，需同时提供图片或视频</span></div>
-              <label class="video-add-media">
+              <RemoteMediaInput
+                v-if="isAIStartLab"
+                kind="audio"
+                placeholder="粘贴公开音频 URL"
+                @select-url="addReferenceUrl('audio', $event)"
+              />
+              <label v-else class="video-add-media">
                 <Icon name="plus" size="sm" /><span>添加音频</span>
                 <input type="file" accept="audio/mpeg,audio/wav,audio/x-wav" @change="addReferenceFiles('audio', $event)" />
               </label>
@@ -256,6 +278,37 @@
                 <i aria-hidden="true"></i>
               </label>
             </section>
+
+            <section v-if="selectedCapability" class="video-capability" aria-labelledby="video-capability-title">
+              <header>
+                <span><Icon name="infoCircle" size="sm" /></span>
+                <div><strong id="video-capability-title">{{ selectedCapability.usesXiaoAPIRules ? '当前模型限制' : '当前可用参数' }}</strong><small>{{ selectedCapability.label }}</small></div>
+                <em>{{ capabilitySourceLabel }}</em>
+              </header>
+              <dl>
+                <div><dt>输出</dt><dd>{{ capabilityOutput }}</dd></div>
+                <div><dt>画面比例</dt><dd>{{ aspectRatioOptions.join(' / ') }}</dd></div>
+                <div><dt>成品音频</dt><dd>{{ selectedCapability.supportsAudio ? '支持生成同步音轨' : '不支持生成音轨' }}</dd></div>
+                <div><dt>首尾帧</dt><dd>{{ frameSupportLabel }}</dd></div>
+                <div><dt>参考素材</dt><dd>{{ referenceSupportLabel }}</dd></div>
+                <div><dt>提示词</dt><dd>{{ selectedCapability.usesXiaoAPIRules ? `最多 ${selectedCapability.promptLimit} 字` : `本站输入最多 ${selectedCapability.promptLimit} 字，上游限制以 AIStartLab 为准` }}</dd></div>
+              </dl>
+              <div v-if="selectedCapability.usesXiaoAPIRules" class="video-capability__section">
+                <strong>素材边界</strong>
+                <p>图片 / 首尾帧：{{ videoMediaLimits.image.formats }}，单个 ≤ {{ videoMediaLimits.image.maxMiB }} MiB，宽高 {{ videoMediaLimits.image.minWidth }}-{{ videoMediaLimits.image.maxWidth }} px，比例 {{ videoMediaLimits.image.minAspectRatio }}-{{ videoMediaLimits.image.maxAspectRatio }}</p>
+                <p v-if="selectedCapability.maxReferences.video > 0">视频：{{ videoMediaLimits.video.formats }}，单段 {{ videoMediaLimits.video.minDuration }}-{{ videoMediaLimits.video.maxDuration }} 秒，合计 ≤ {{ videoMediaLimits.video.maxTotalDuration }} 秒，单个 ≤ {{ videoMediaLimits.video.maxMiB }} MiB</p>
+                <p v-if="selectedCapability.maxReferences.audio > 0">音频：{{ videoMediaLimits.audio.formats }}，时长 {{ videoMediaLimits.audio.minDuration }}-{{ videoMediaLimits.audio.maxDuration }} 秒，单个 ≤ {{ videoMediaLimits.audio.maxMiB }} MiB</p>
+              </div>
+              <div v-if="selectedCapability.usesXiaoAPIRules" class="video-capability__section">
+                <strong>组合提醒</strong>
+                <p v-for="note in capabilityNotes" :key="note">{{ note }}</p>
+              </div>
+              <div v-else class="video-capability__section">
+                <strong>{{ selectedCapability.capabilitySource === 'aistartlab' ? 'AIStartLab 参数说明' : '上游参数说明' }}</strong>
+                <p>这里只展示上游模型元数据与本站价格配置中明确提供的参数；AIStartLab 的素材必须是公网 HTTP(S) URL，XiaoAPI 的本地文件边界不适用于它。</p>
+                <p v-if="selectedCapability.capabilitySource === 'mixed'">该模型同时来自多种上游，提交时仅使用双方都能安全支持的基础参数。</p>
+              </div>
+            </section>
             </aside>
           </div>
         </section>
@@ -279,6 +332,7 @@ import {
   createIdempotencyKey,
   durationsFor,
   resolveVideoCapability,
+  videoMediaLimits,
   type ReferenceKind,
   type VideoCreationMode,
   type VideoModelCapability,
@@ -287,7 +341,8 @@ import {
 interface MediaSelection {
   id: string
   kind: ReferenceKind
-  file: File
+  file: File | null
+  remoteUrl?: string
   previewUrl: string
   uploaded: UploadedVideoMedia | null
   status: 'ready' | 'uploading' | 'uploaded' | 'error'
@@ -297,20 +352,38 @@ interface MediaSelection {
 const MediaInput = defineComponent({
   props: {
     label: { type: String, required: true }, hint: { type: String, required: true },
-    accept: { type: String, required: true }, required: Boolean,
+    accept: { type: String, required: true }, required: Boolean, remote: Boolean,
     item: { type: Object as PropType<MediaSelection | null>, default: null },
   },
-  emits: ['select', 'remove'],
+  emits: ['select', 'select-url', 'remove'],
   setup(props, { emit }) {
+    const remoteUrl = ref('')
+    const selectRemote = () => {
+      const value = remoteUrl.value.trim()
+      if (!/^https?:\/\/[^\s]+$/i.test(value)) return
+      emit('select-url', value)
+      remoteUrl.value = ''
+    }
     return () => h('div', { class: 'video-media-input' }, [
       h('div', { class: 'video-media-input__copy' }, [
         h('strong', props.label), props.required ? h('em', '必需') : null, h('span', props.hint),
       ]),
       props.item
         ? h('div', { class: 'video-media-input__selected' }, [
-            h('span', props.item.file.name),
+            h('span', props.item.file?.name || props.item.remoteUrl || ''),
             h('button', { type: 'button', title: '移除', onClick: () => emit('remove') }, [h(Icon, { name: 'x', size: 'sm' })]),
           ])
+        : props.remote
+          ? h('div', { class: 'video-remote-media-input' }, [
+              h('input', {
+                value: remoteUrl.value,
+                type: 'url',
+                placeholder: 'https://…',
+                onInput: (event: Event) => { remoteUrl.value = (event.target as HTMLInputElement).value },
+                onKeydown: (event: KeyboardEvent) => { if (event.key === 'Enter') { event.preventDefault(); selectRemote() } },
+              }),
+              h('button', { type: 'button', onClick: selectRemote }, '使用链接'),
+            ])
         : h('label', { class: 'video-media-input__add' }, [
             h(Icon, { name: 'upload', size: 'sm' }), h('span', '选择文件'),
             h('input', {
@@ -326,6 +399,33 @@ const MediaInput = defineComponent({
   },
 })
 
+const RemoteMediaInput = defineComponent({
+  props: {
+    kind: { type: String as PropType<ReferenceKind>, required: true },
+    placeholder: { type: String, required: true },
+  },
+  emits: ['select-url'],
+  setup(props, { emit }) {
+    const value = ref('')
+    const submit = () => {
+      const url = value.value.trim()
+      if (!/^https?:\/\/[^\s]+$/i.test(url)) return
+      emit('select-url', url)
+      value.value = ''
+    }
+    return () => h('div', { class: 'video-remote-reference-input' }, [
+      h('input', {
+        value: value.value,
+        type: 'url',
+        placeholder: props.placeholder,
+        onInput: (event: Event) => { value.value = (event.target as HTMLInputElement).value },
+        onKeydown: (event: KeyboardEvent) => { if (event.key === 'Enter') { event.preventDefault(); submit() } },
+      }),
+      h('button', { type: 'button', onClick: submit }, [h(Icon, { name: 'plus', size: 'xs' }), h('span', '添加')]),
+    ])
+  },
+})
+
 const MediaChip = defineComponent({
   props: { item: { type: Object as PropType<MediaSelection>, required: true } },
   emits: ['remove'],
@@ -334,7 +434,7 @@ const MediaChip = defineComponent({
       props.item.kind === 'image'
         ? h('img', { src: props.item.previewUrl, alt: '' })
         : h('span', { class: 'video-media-chip__type' }, props.item.kind === 'video' ? '视频' : '音频'),
-      h('span', { title: props.item.file.name }, props.item.file.name),
+      h('span', { title: props.item.file?.name || props.item.remoteUrl }, props.item.file?.name || props.item.remoteUrl || ''),
       h('button', { type: 'button', title: '移除', onClick: () => emit('remove') }, [h(Icon, { name: 'x', size: 'xs' })]),
     ])
   },
@@ -377,16 +477,16 @@ let workspaceRequest = 0
 
 const videoKeys = computed(() => apiKeys.value.filter((key) => key.status === 'active' && key.group?.platform === 'xiaoapi'))
 const selectedKey = computed(() => videoKeys.value.find((key) => String(key.id) === selectedKeyId.value) || null)
-const capabilities = computed(() => models.value.map(resolveVideoCapability).filter((item) => item.resolutions.length > 0))
+const capabilities = computed(() => models.value.map(resolveVideoCapability).filter((item) => item.resolutions.length > 0 && item.durations.length > 0))
 const selectedCapability = computed<VideoModelCapability | null>(() => capabilities.value.find((item) => item.id === selectedModelId.value) || null)
+const isAIStartLab = computed(() => selectedCapability.value?.capabilitySource === 'aistartlab')
 const durationOptions = computed(() => selectedCapability.value ? durationsFor(selectedCapability.value, resolution.value) : [5])
 const duration = computed(() => durationOptions.value[durationIndex.value] || durationOptions.value[0] || 5)
 const aspectRatioOptions = computed(() => selectedCapability.value ? aspectRatiosFor(selectedCapability.value, resolution.value) : ['16:9'])
 const availableModes = computed(() => {
   const capability = selectedCapability.value
-  const modes: Array<{ value: VideoCreationMode; label: string; icon: 'sparkles' | 'image' | 'grid' }> = [
-    { value: 'text', label: '文生视频', icon: 'sparkles' },
-  ]
+  const modes: Array<{ value: VideoCreationMode; label: string; icon: 'sparkles' | 'image' | 'grid' }> = []
+  if (!capability?.requiresStartFrame) modes.push({ value: 'text', label: '文生视频', icon: 'sparkles' })
   if (capability?.supportsStartFrame) modes.push({ value: 'frames', label: capability.supportsEndFrame ? '首尾帧' : '首帧驱动', icon: 'image' })
   if (capability && Object.values(capability.maxReferences).some((count) => count > 0)) {
     modes.push({ value: 'references', label: '参考素材', icon: 'grid' })
@@ -394,8 +494,58 @@ const availableModes = computed(() => {
   return modes
 })
 const selectedModeLabel = computed(() => availableModes.value.find((item) => item.value === creationMode.value)?.label || '文生视频')
-const canSubmit = computed(() => Boolean(selectedKey.value && selectedCapability.value && prompt.value.trim()))
+const canSubmit = computed(() => Boolean(
+  selectedKey.value
+  && selectedCapability.value
+  && prompt.value.trim()
+  && (!selectedCapability.value.requiresStartFrame || startFrame.value),
+))
 const retryingSameRequest = computed(() => Boolean(pendingIdempotencyKey.value && pendingRequestBody.value))
+const capabilitySourceLabel = computed(() => {
+  switch (selectedCapability.value?.capabilitySource) {
+    case 'xiaoapi': return 'XiaoAPI 规则'
+    case 'aistartlab': return 'AIStartLab 元数据'
+    case 'mixed': return '混合上游'
+    default: return '上游元数据'
+  }
+})
+const capabilityOutput = computed(() => {
+  const capability = selectedCapability.value
+  if (!capability) return ''
+  const durations = durationOptions.value
+  const consecutive = durations.every((value, index) => index === 0 || value === durations[index - 1] + 1)
+  const durationText = consecutive && durations.length > 2
+    ? `${durations[0]}-${durations[durations.length - 1]} 秒`
+    : `${durations.join(' / ')} 秒`
+  const evenOnly = durations.length > 2 && durations.every((value) => value % 2 === 0) && !consecutive
+  return `分辨率：${capability.resolutions.join(' / ')} · 当前分辨率时长：${durationText}${evenOnly ? '（偶数）' : ''}`
+})
+const frameSupportLabel = computed(() => {
+  const capability = selectedCapability.value
+  if (!capability?.supportsStartFrame) return '不支持首尾帧'
+  if (capability.requiresStartFrame) return '必须上传首帧'
+  if (capability.supportsEndFrame) return '支持首帧和尾帧，尾帧需先传首帧'
+  return '支持首帧'
+})
+const referenceSupportLabel = computed(() => {
+  const limits = selectedCapability.value?.maxReferences
+  if (!limits || !Object.values(limits).some((count) => count > 0)) return '不支持参考图片、视频或音频'
+  const parts = [
+    limits.image > 0 ? `图片最多 ${limits.image} 张` : '图片不支持',
+    limits.video > 0 ? `视频最多 ${limits.video} 个` : '视频不支持',
+    limits.audio > 0 ? `音频最多 ${limits.audio} 个` : '音频不支持',
+  ]
+  return parts.join(' · ')
+})
+const capabilityNotes = computed(() => {
+  const capability = selectedCapability.value
+  if (!capability) return []
+  const notes = ['分辨率、画面比例和时长以上方当前可选项为准；提示词里尽量不要重复写横屏、竖屏或分辨率。']
+  if (capability.supportsEndFrame) notes.push('首帧或尾帧不能与参考素材同时使用；上传尾帧前必须先上传首帧。')
+  if (capability.maxReferences.audio > 0) notes.push('参考音频必须搭配参考图片或参考视频，且参考视频和参考音频不能同时使用。')
+  if (capability.requiresStartFrame) notes.push('该模型不支持纯文本直出，提交前必须上传首帧。')
+  return notes
+})
 
 function selectedIdStorageKey() { return 'lingqu:video-studio:selected-key-id' }
 function appendPromptCue(value: string) {
@@ -422,6 +572,12 @@ function createMedia(file: File, kind: ReferenceKind): MediaSelection {
     kind, file, previewUrl: URL.createObjectURL(file), uploaded: null, status: 'ready', error: '',
   }
 }
+function createRemoteMedia(url: string, kind: ReferenceKind): MediaSelection {
+  return {
+    id: `${kind}-remote-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    kind, file: null, remoteUrl: url, previewUrl: kind === 'image' ? url : '', uploaded: null, status: 'uploaded', error: '',
+  }
+}
 function releaseMedia(item: MediaSelection | null) { if (item?.previewUrl) URL.revokeObjectURL(item.previewUrl) }
 function releaseAllMedia() {
   releaseMedia(startFrame.value); releaseMedia(endFrame.value)
@@ -433,9 +589,10 @@ function validateMediaFile(file: File, kind: ReferenceKind): string {
   const allowed = kind === 'image'
     ? ['image/png', 'image/jpeg', 'image/webp']
     : kind === 'video' ? ['video/mp4', 'video/quicktime'] : ['audio/mpeg', 'audio/wav', 'audio/x-wav']
-  const max = kind === 'image' ? 10 << 20 : kind === 'video' ? 100 << 20 : 15 << 20
+  const maxMiB = videoMediaLimits[kind].maxMiB
+  const max = maxMiB << 20
   if (!allowed.includes(file.type)) return `${file.name} 的格式不受支持`
-  if (file.size > max) return `${file.name} 超出 ${kind === 'image' ? 10 : kind === 'video' ? 100 : 15} MiB 限制`
+  if (file.size > max) return `${file.name} 超出 ${maxMiB} MiB 限制`
   return ''
 }
 function setSingleMedia(target: 'start' | 'end', file: File) {
@@ -445,6 +602,14 @@ function setSingleMedia(target: 'start' | 'end', file: File) {
   releaseMedia(current)
   if (target === 'start') startFrame.value = createMedia(file, 'image')
   else endFrame.value = createMedia(file, 'image')
+  formError.value = ''
+}
+function setSingleMediaUrl(target: 'start' | 'end', url: string) {
+  const current = target === 'start' ? startFrame.value : endFrame.value
+  releaseMedia(current)
+  const selection = createRemoteMedia(url, 'image')
+  if (target === 'start') startFrame.value = selection
+  else endFrame.value = selection
   formError.value = ''
 }
 function clearSingleMedia(target: 'start' | 'end') {
@@ -466,6 +631,15 @@ function addReferenceFiles(kind: ReferenceKind, event: Event) {
   if (errors.length) formError.value = errors[0]
   list.value.push(...files.filter((file) => !validateMediaFile(file, kind)).map((file) => createMedia(file, kind)))
   input.value = ''
+}
+function addReferenceUrl(kind: ReferenceKind, url: string) {
+  const list = referenceList(kind)
+  if (list.value.length >= referenceLimit(kind)) {
+    formError.value = `${kind === 'image' ? '参考图片' : kind === 'video' ? '参考视频' : '参考音频'} 已达到数量上限`
+    return
+  }
+  list.value.push(createRemoteMedia(url, kind))
+  formError.value = ''
 }
 function removeReference(kind: ReferenceKind, id: string) {
   const list = referenceList(kind)
@@ -511,8 +685,12 @@ async function loadWorkspace() {
 
 async function ensureUploaded(item: MediaSelection): Promise<UploadedVideoMedia> {
   if (item.uploaded) return item.uploaded
+  if (item.remoteUrl) {
+    return { media_id: `external-${item.id}`, url: item.remoteUrl, type: item.kind, expires_at: '' }
+  }
   const key = selectedKey.value
   if (!key) throw new Error('请先选择视频 Key')
+  if (!item.file) throw new Error('素材文件不存在，请重新选择')
   item.status = 'uploading'; item.error = ''
   try {
     item.uploaded = await videoAPI.upload(key.key, item.file)
@@ -527,11 +705,17 @@ async function buildRequest() {
   const capability = selectedCapability.value
   if (!capability) throw new Error('请选择可用模型')
   if (!prompt.value.trim()) throw new Error('请填写画面描述')
-  if (creationMode.value === 'frames' && capability.requiresStartFrame && !startFrame.value) {
+  if (capability.requiresStartFrame && !startFrame.value) {
     throw new Error(`${capability.label} 必须提供一张首帧`)
   }
   if (creationMode.value === 'references' && referenceAudios.value.length > 0 && referenceImages.value.length + referenceVideos.value.length === 0) {
     throw new Error('参考音频必须同时搭配至少一张参考图片或一个参考视频')
+  }
+  if (creationMode.value === 'references' && referenceAudios.value.length > 0 && referenceVideos.value.length > 0) {
+    throw new Error('参考视频和参考音频不能同时使用')
+  }
+  if (creationMode.value === 'frames' && endFrame.value && !startFrame.value) {
+    throw new Error('上传尾帧前必须先上传首帧')
   }
   uploading.value = true
   try {
@@ -660,6 +844,9 @@ onBeforeUnmount(releaseAllMedia)
 .video-media-input { display: flex; min-height: 4.2rem; align-items: center; justify-content: space-between; gap: .7rem; border: 1px dashed #a69b90; border-radius: 7px; background: #fbfaf7; padding: .65rem; }
 .video-media-input__copy { display: flex; min-width: 0; flex-wrap: wrap; align-items: center; gap: .3rem; }.video-media-input__copy strong { font-size: .73rem; }.video-media-input__copy em { border-radius: 3px; background: #ffe4eb; padding: .1rem .25rem; color: #a92852; font-size: .58rem; font-style: normal; }.video-media-input__copy span { width: 100%; color: #7e756c; font-size: .62rem; }
 .video-media-input__add, .video-add-media { display: inline-flex; flex: 0 0 auto; cursor: pointer; align-items: center; gap: .28rem; border: 1px solid #b8aea3; border-radius: 5px; background: #fff; padding: .48rem .58rem; font-size: .66rem; font-weight: 900; }.video-media-input input, .video-add-media input { display: none; }
+.video-remote-media-input, .video-remote-reference-input { display: flex; min-width: 0; align-items: center; gap: .3rem; }
+.video-remote-media-input input, .video-remote-reference-input input { width: min(16rem, 100%); min-height: 2rem; border: 1px solid #b8aea3; border-radius: 5px; background: #fff; padding: 0 .5rem; color: inherit; font-size: .63rem; }
+.video-remote-media-input button, .video-remote-reference-input button { display: inline-flex; min-height: 2rem; flex: 0 0 auto; align-items: center; gap: .2rem; border: 1px solid #08799a; border-radius: 5px; background: #e1f8ff; padding: 0 .5rem; color: #076582; font-size: .62rem; font-weight: 900; }
 .video-media-input__selected { display: flex; min-width: 0; align-items: center; gap: .35rem; }.video-media-input__selected span { max-width: 8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .65rem; }.video-media-input__selected button { display: grid; width: 1.8rem; height: 1.8rem; place-items: center; border: 0; background: transparent; }
 .video-reference-section { display: grid; gap: .48rem; margin-bottom: .8rem; border-block: 1px solid #ddd5cc; padding: .7rem 0; }
 .video-reference-row { display: flex; align-items: center; justify-content: space-between; gap: .7rem; }.video-reference-row > div { display: grid; }.video-reference-row strong { font-size: .72rem; }.video-reference-row span { color: #80776e; font-size: .61rem; }

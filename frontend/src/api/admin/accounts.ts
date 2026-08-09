@@ -526,6 +526,28 @@ export async function getAvailableModels(id: number): Promise<ClaudeModel[]> {
 
 export interface SyncUpstreamModelsResult {
   models: string[]
+  model_specs?: UpstreamModelSpec[]
+  pricing_source?: 'none' | 'model_list' | 'aistartlab_config' | string
+  pricing_note?: 'aistartlab_config_unavailable' | 'incomplete_pricing' | string
+}
+
+export interface UpstreamModelSpec {
+  id: string
+  resolution?: string
+  upstream_cost?: number
+  cost_currency?: string
+  cost_unit?: string
+  default_duration?: number
+  default_resolution?: boolean
+  durations?: number[]
+  aspect_ratios?: string[]
+  default_aspect_ratio?: string
+  supports_audio?: boolean
+  supports_guidances?: boolean
+  supports_start_frame?: boolean
+  requires_start_frame?: boolean
+  supports_end_frame?: boolean
+  max_references?: Record<string, number>
 }
 
 /**
@@ -543,6 +565,7 @@ export interface SyncUpstreamPreviewParams {
   type: string
   base_url?: string
   api_key: string
+  video_protocol?: string
 }
 
 /**
