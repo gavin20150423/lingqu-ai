@@ -415,8 +415,9 @@ func (s *XiaoVideoService) Create(ctx context.Context, owner VideoOwner, body []
 			excluded[account.ID] = struct{}{}
 			continue
 		}
-		preauthorizationAmount, resolvedResolution, resolvedDuration, pricingOK := account.XiaoVideoPrice(
+		preauthorizationAmount, resolvedResolution, resolvedDuration, pricingOK := account.XiaoVideoPriceWithReferenceVideo(
 			meta.Model, meta.Resolution, meta.Duration, meta.Audio,
+			meta.ReferenceVideo,
 		)
 		if !pricingOK {
 			slog.WarnContext(ctx, "xiao_video.account_pricing_unavailable",
@@ -630,11 +631,12 @@ func (s *XiaoVideoService) Create(ctx context.Context, owner VideoOwner, body []
 }
 
 type videoGenerationMeta struct {
-	Model       string
-	Resolution  string
-	AspectRatio string
-	Duration    int
-	Audio       bool
+	Model          string
+	Resolution     string
+	AspectRatio    string
+	Duration       int
+	Audio          bool
+	ReferenceVideo bool
 }
 
 func (s *XiaoVideoService) rewriteGenerationRequest(ctx context.Context, owner VideoOwner, body []byte) ([]byte, videoGenerationMeta, string, int64, error) {
@@ -662,9 +664,10 @@ func (s *XiaoVideoService) rewriteGenerationRequest(ctx context.Context, owner V
 		}
 	}
 	meta := videoGenerationMeta{
-		Model:       videoStringValue(request["model"]),
-		Resolution:  videoStringValue(request["resolution"]),
-		AspectRatio: videoStringValue(request["aspect_ratio"]),
+		Model:          videoStringValue(request["model"]),
+		Resolution:     videoStringValue(request["resolution"]),
+		AspectRatio:    videoStringValue(request["aspect_ratio"]),
+		ReferenceVideo: requestContainsReferenceVideo(request),
 	}
 	if prompt := videoStringValue(request["prompt"]); meta.Model == "" || prompt == "" {
 		return nil, meta, "", 0, ErrVideoRequestInvalid
@@ -750,6 +753,34 @@ func (s *XiaoVideoService) rewriteGenerationRequest(ctx context.Context, owner V
 	}
 	digest := sha256.Sum256(rewritten)
 	return rewritten, meta, hex.EncodeToString(digest[:]), fixedAccountID, nil
+}
+
+// requestContainsReferenceVideo identifies the AIStartLab reference-video
+// shape without treating start/end frame images as video references.
+func requestContainsReferenceVideo(request map[string]any) bool {
+	guidances, ok := request["guidances"].(map[string]any)
+	if !ok {
+		return false
+	}
+	if items, ok := guidances["video_reference_base"].([]any); ok && len(items) > 0 {
+		return true
+	}
+	for _, rawItems := range guidances {
+		items, ok := rawItems.([]any)
+		if !ok {
+			continue
+		}
+		for _, rawItem := range items {
+			item, ok := rawItem.(map[string]any)
+			if !ok {
+				continue
+			}
+			if _, ok := item["video"].(map[string]any); ok {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (s *XiaoVideoService) mapMediaURL(ctx context.Context, owner VideoOwner, value string) (string, int64, error) {
@@ -1615,6 +1646,9 @@ func pricedVideoModelsForAccount(account *Account, pricing []XiaoVideoPricingRul
 			"capability_source": account.XiaoVideoProtocol(),
 			"resolutions":       resolutions,
 		}
+		if multiplier := account.XiaoVideoReferenceVideoMultiplier(); multiplier > 1 {
+			model["reference_video_multiplier"] = multiplier
+		}
 		if defaultResolution != "" {
 			model["default_resolution"] = defaultResolution
 		}
@@ -1660,6 +1694,27 @@ func videoStringSet(value any) map[string]struct{} {
 	return out
 }
 
+func videoFloatValue(value any) float64 {
+	switch number := value.(type) {
+	case float64:
+		return number
+	case float32:
+		return float64(number)
+	case int:
+		return float64(number)
+	case int64:
+		return float64(number)
+	case json.Number:
+		parsed, _ := number.Float64()
+		return parsed
+	case string:
+		parsed, _ := strconv.ParseFloat(strings.TrimSpace(number), 64)
+		return parsed
+	default:
+		return 0
+	}
+}
+
 func mergePricedVideoModel(target, source map[string]any) {
 	resolutions := videoStringSet(target["resolutions"])
 	for resolution := range videoStringSet(source["resolutions"]) {
@@ -1685,6 +1740,9 @@ func mergePricedVideoModel(target, source map[string]any) {
 		if value, exists := source[key]; exists {
 			target[key] = value
 		}
+	}
+	if sourceMultiplier := videoFloatValue(source["reference_video_multiplier"]); sourceMultiplier > videoFloatValue(target["reference_video_multiplier"]) {
+		target["reference_video_multiplier"] = sourceMultiplier
 	}
 	for _, key := range []string{"durations", "aspect_ratios"} {
 		if key == "durations" {

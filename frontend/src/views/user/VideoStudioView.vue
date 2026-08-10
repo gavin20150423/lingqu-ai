@@ -6,7 +6,7 @@
       <div v-if="!selectedKey && !loadingKeys" class="video-studio__empty">
         <span><Icon name="key" size="xl" /></span>
         <strong>{{ videoKeys.length ? '选择一个视频 Key 开始创作' : '还没有可用的视频 Key' }}</strong>
-        <p>{{ videoKeys.length ? '模型和历史任务会按照所选 Key 隔离。' : '先创建 XiaoAPI 分组 Key，再回到这里使用视频工作台。' }}</p>
+        <p>{{ videoKeys.length ? '模型和历史任务会按照所选 Key 隔离。' : '先创建视频分组 Key，再回到这里使用视频工作台。' }}</p>
         <router-link v-if="videoKeys.length === 0" to="/keys?create=1">创建 Key</router-link>
       </div>
 
@@ -19,7 +19,7 @@
             </div>
             <div class="video-key-select">
               <select id="video-key-select" v-model="selectedKeyId" :disabled="loadingKeys || videoKeys.length === 0">
-                <option value="">选择 XiaoAPI 分组 Key</option>
+                <option value="">选择视频分组 Key</option>
                 <option v-for="key in videoKeys" :key="key.id" :value="String(key.id)">
                   {{ key.name }} · {{ key.group?.name || '视频分组' }}
                 </option>
@@ -62,6 +62,41 @@
                 </span>
                 <Icon v-if="selectedModelId === item.id" name="checkCircle" size="sm" />
               </button>
+            </div>
+          </section>
+
+          <section v-if="selectedCapability" class="video-capability video-capability--shelf" aria-labelledby="video-capability-title">
+            <header>
+              <span><Icon name="infoCircle" size="sm" /></span>
+              <div><strong id="video-capability-title">{{ selectedCapability.usesXiaoAPIRules ? '模型限制' : '模型能力' }}</strong><small>{{ selectedCapability.label }}</small></div>
+            </header>
+            <div class="video-capability__lead">
+              <Icon name="infoCircle" size="xs" />
+              <span>提交前确认以下参数和素材要求，避免任务被上游拒绝。</span>
+            </div>
+            <dl>
+              <div v-if="selectedCapability.referenceVideoMultiplier > 1"><dt>参考视频计费</dt><dd>基础价格 × {{ selectedCapability.referenceVideoMultiplier }} 计费</dd></div>
+              <div><dt>输出</dt><dd>{{ capabilityOutput }}</dd></div>
+              <div><dt>画面比例</dt><dd>{{ aspectRatioOptions.join(' / ') }}</dd></div>
+              <div><dt>成品音频</dt><dd>{{ selectedCapability.supportsAudio ? '支持生成同步音轨' : '不支持生成音轨' }}</dd></div>
+              <div><dt>首尾帧</dt><dd>{{ frameSupportLabel }}</dd></div>
+              <div><dt>参考素材</dt><dd>{{ referenceSupportLabel }}</dd></div>
+              <div><dt>提示词</dt><dd>{{ selectedCapability.usesXiaoAPIRules ? `最多 ${selectedCapability.promptLimit} 字` : `本站输入最多 ${selectedCapability.promptLimit} 字，上游限制以 AIStartLab 为准` }}</dd></div>
+            </dl>
+            <div v-if="selectedCapability.usesXiaoAPIRules" class="video-capability__section">
+              <strong>素材要求</strong>
+              <p>图片 / 首尾帧：{{ videoMediaLimits.image.formats }}，单个 ≤ {{ videoMediaLimits.image.maxMiB }} MiB，宽高 {{ videoMediaLimits.image.minWidth }}-{{ videoMediaLimits.image.maxWidth }} px，比例 {{ videoMediaLimits.image.minAspectRatio }}-{{ videoMediaLimits.image.maxAspectRatio }}</p>
+              <p v-if="selectedCapability.maxReferences.video > 0">视频：{{ videoMediaLimits.video.formats }}，单段 {{ videoMediaLimits.video.minDuration }}-{{ videoMediaLimits.video.maxDuration }} 秒，合计 ≤ {{ videoMediaLimits.video.maxTotalDuration }} 秒，单个 ≤ {{ videoMediaLimits.video.maxMiB }} MiB</p>
+              <p v-if="selectedCapability.maxReferences.audio > 0">音频：{{ videoMediaLimits.audio.formats }}，时长 {{ videoMediaLimits.audio.minDuration }}-{{ videoMediaLimits.audio.maxDuration }} 秒，单个 ≤ {{ videoMediaLimits.audio.maxMiB }} MiB</p>
+            </div>
+            <div v-if="selectedCapability.usesXiaoAPIRules" class="video-capability__section">
+              <strong>提交提醒</strong>
+              <p v-for="note in capabilityNotes" :key="note">{{ note }}</p>
+            </div>
+            <div v-else class="video-capability__section">
+              <strong>{{ selectedCapability.capabilitySource === 'aistartlab' ? 'AIStartLab 参数说明' : '上游参数说明' }}</strong>
+              <p>这里只展示上游模型元数据与本站价格配置中明确提供的参数；AIStartLab 的素材必须是公网 HTTP(S) URL，本地文件要求不适用于它。</p>
+              <p v-if="selectedCapability.capabilitySource === 'mixed'">该模型同时来自多种上游，提交时仅使用双方都能安全支持的基础参数。</p>
             </div>
           </section>
 
@@ -279,36 +314,6 @@
               </label>
             </section>
 
-            <section v-if="selectedCapability" class="video-capability" aria-labelledby="video-capability-title">
-              <header>
-                <span><Icon name="infoCircle" size="sm" /></span>
-                <div><strong id="video-capability-title">{{ selectedCapability.usesXiaoAPIRules ? '当前模型限制' : '当前可用参数' }}</strong><small>{{ selectedCapability.label }}</small></div>
-                <em>{{ capabilitySourceLabel }}</em>
-              </header>
-              <dl>
-                <div><dt>输出</dt><dd>{{ capabilityOutput }}</dd></div>
-                <div><dt>画面比例</dt><dd>{{ aspectRatioOptions.join(' / ') }}</dd></div>
-                <div><dt>成品音频</dt><dd>{{ selectedCapability.supportsAudio ? '支持生成同步音轨' : '不支持生成音轨' }}</dd></div>
-                <div><dt>首尾帧</dt><dd>{{ frameSupportLabel }}</dd></div>
-                <div><dt>参考素材</dt><dd>{{ referenceSupportLabel }}</dd></div>
-                <div><dt>提示词</dt><dd>{{ selectedCapability.usesXiaoAPIRules ? `最多 ${selectedCapability.promptLimit} 字` : `本站输入最多 ${selectedCapability.promptLimit} 字，上游限制以 AIStartLab 为准` }}</dd></div>
-              </dl>
-              <div v-if="selectedCapability.usesXiaoAPIRules" class="video-capability__section">
-                <strong>素材边界</strong>
-                <p>图片 / 首尾帧：{{ videoMediaLimits.image.formats }}，单个 ≤ {{ videoMediaLimits.image.maxMiB }} MiB，宽高 {{ videoMediaLimits.image.minWidth }}-{{ videoMediaLimits.image.maxWidth }} px，比例 {{ videoMediaLimits.image.minAspectRatio }}-{{ videoMediaLimits.image.maxAspectRatio }}</p>
-                <p v-if="selectedCapability.maxReferences.video > 0">视频：{{ videoMediaLimits.video.formats }}，单段 {{ videoMediaLimits.video.minDuration }}-{{ videoMediaLimits.video.maxDuration }} 秒，合计 ≤ {{ videoMediaLimits.video.maxTotalDuration }} 秒，单个 ≤ {{ videoMediaLimits.video.maxMiB }} MiB</p>
-                <p v-if="selectedCapability.maxReferences.audio > 0">音频：{{ videoMediaLimits.audio.formats }}，时长 {{ videoMediaLimits.audio.minDuration }}-{{ videoMediaLimits.audio.maxDuration }} 秒，单个 ≤ {{ videoMediaLimits.audio.maxMiB }} MiB</p>
-              </div>
-              <div v-if="selectedCapability.usesXiaoAPIRules" class="video-capability__section">
-                <strong>组合提醒</strong>
-                <p v-for="note in capabilityNotes" :key="note">{{ note }}</p>
-              </div>
-              <div v-else class="video-capability__section">
-                <strong>{{ selectedCapability.capabilitySource === 'aistartlab' ? 'AIStartLab 参数说明' : '上游参数说明' }}</strong>
-                <p>这里只展示上游模型元数据与本站价格配置中明确提供的参数；AIStartLab 的素材必须是公网 HTTP(S) URL，XiaoAPI 的本地文件边界不适用于它。</p>
-                <p v-if="selectedCapability.capabilitySource === 'mixed'">该模型同时来自多种上游，提交时仅使用双方都能安全支持的基础参数。</p>
-              </div>
-            </section>
             </aside>
           </div>
         </section>
@@ -501,14 +506,6 @@ const canSubmit = computed(() => Boolean(
   && (!selectedCapability.value.requiresStartFrame || startFrame.value),
 ))
 const retryingSameRequest = computed(() => Boolean(pendingIdempotencyKey.value && pendingRequestBody.value))
-const capabilitySourceLabel = computed(() => {
-  switch (selectedCapability.value?.capabilitySource) {
-    case 'xiaoapi': return 'XiaoAPI 规则'
-    case 'aistartlab': return 'AIStartLab 元数据'
-    case 'mixed': return '混合上游'
-    default: return '上游元数据'
-  }
-})
 const capabilityOutput = computed(() => {
   const capability = selectedCapability.value
   if (!capability) return ''

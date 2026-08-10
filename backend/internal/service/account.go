@@ -119,6 +119,10 @@ const openAIEndpointCapabilitiesCredentialKey = "openai_capabilities"
 const (
 	XiaoVideoPricingCredentialKey  = "video_pricing"
 	XiaoVideoProtocolCredentialKey = "video_protocol"
+	// XiaoVideoReferenceVideoMultiplierCredentialKey optionally overrides the
+	// provider-specific reference-video surcharge for an account. AIStartLab
+	// accounts use 1.5 automatically when this value is omitted.
+	XiaoVideoReferenceVideoMultiplierCredentialKey = "reference_video_multiplier"
 
 	XiaoVideoProtocolNative     = "native"
 	XiaoVideoProtocolOpenAISora = "openai_sora"
@@ -138,6 +142,37 @@ func (a *Account) XiaoVideoProtocol() string {
 	default:
 		return ""
 	}
+}
+
+// XiaoVideoReferenceVideoMultiplier returns the surcharge applied when a
+// request includes a reference video. AIStartLab documents a fixed 1.5x
+// charge for reference videos; other XiaoAPI-compatible providers keep the
+// base price unless an account-level override is configured.
+func (a *Account) XiaoVideoReferenceVideoMultiplier() float64 {
+	if a == nil {
+		return 1.0
+	}
+	if a.Credentials != nil {
+		if value, ok := a.Credentials[XiaoVideoReferenceVideoMultiplierCredentialKey]; ok {
+			var multiplier float64
+			switch typed := value.(type) {
+			case float64:
+				multiplier = typed
+			case float32:
+				multiplier = float64(typed)
+			default:
+				multiplier, _ = strconv.ParseFloat(strings.TrimSpace(a.GetCredential(XiaoVideoReferenceVideoMultiplierCredentialKey)), 64)
+			}
+			if multiplier >= 1 && !math.IsInf(multiplier, 0) && !math.IsNaN(multiplier) {
+				return multiplier
+			}
+		}
+	}
+	baseURL := strings.ToLower(strings.TrimSpace(a.GetCredential("base_url")))
+	if strings.Contains(baseURL, "aistarslab.com") {
+		return 1.5
+	}
+	return 1.0
 }
 
 // XiaoVideoPricingRule is one downstream selling-price rule. Model names are
@@ -272,6 +307,12 @@ func (a *Account) XiaoVideoPricingRules() ([]XiaoVideoPricingRule, error) {
 // XiaoVideoPrice resolves omitted defaults and returns the exact downstream
 // amount to freeze and eventually capture. A configured zero price is valid.
 func (a *Account) XiaoVideoPrice(model, resolution string, duration int, audio bool) (float64, string, int, bool) {
+	return a.XiaoVideoPriceWithReferenceVideo(model, resolution, duration, audio, false)
+}
+
+// XiaoVideoPriceWithReferenceVideo resolves the downstream amount, including
+// the provider surcharge for a reference-video request when applicable.
+func (a *Account) XiaoVideoPriceWithReferenceVideo(model, resolution string, duration int, audio, referenceVideo bool) (float64, string, int, bool) {
 	rules, err := a.XiaoVideoPricingRules()
 	if err != nil {
 		return 0, "", 0, false
@@ -320,6 +361,9 @@ func (a *Account) XiaoVideoPrice(model, resolution string, duration int, audio b
 		rate += selected.AudioPricePerSecond
 	}
 	amount := float64(duration) * rate
+	if referenceVideo {
+		amount *= a.XiaoVideoReferenceVideoMultiplier()
+	}
 	if amount < 0 || math.IsNaN(amount) || math.IsInf(amount, 0) {
 		return 0, "", 0, false
 	}

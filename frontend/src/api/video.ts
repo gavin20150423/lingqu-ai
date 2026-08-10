@@ -25,6 +25,7 @@ export interface VideoModel {
   requires_start_frame?: boolean
   supports_end_frame?: boolean
   max_references?: { image?: number; video?: number; audio?: number }
+  reference_video_multiplier?: number
 }
 
 export interface UploadedVideoMedia {

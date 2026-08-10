@@ -516,6 +516,27 @@ func TestXiaoVideoNormalizesAndValidatesAudio(t *testing.T) {
 	}
 }
 
+func TestXiaoVideoDetectsReferenceVideoGuidance(t *testing.T) {
+	svc := newVideoServiceForTest(newVideoRepositoryStub(), &videoAccountRepoStub{}, nil)
+	owner := VideoOwner{UserID: 11, APIKeyID: 22, GroupID: videoInt64Ptr(7)}
+
+	_, meta, _, _, err := svc.rewriteGenerationRequest(
+		context.Background(),
+		owner,
+		[]byte(`{"model":"seedance-2.0","prompt":"waves","guidances":{"video_reference_base":[{"video":{"url":"https://example.test/reference.mp4","type":"UPLOADED"}}]}}`),
+	)
+	require.NoError(t, err)
+	require.True(t, meta.ReferenceVideo)
+
+	_, meta, _, _, err = svc.rewriteGenerationRequest(
+		context.Background(),
+		owner,
+		[]byte(`{"model":"seedance-2.0","prompt":"waves","guidances":{"image_reference":[{"image":{"url":"https://example.test/reference.png","type":"UPLOADED"}}]}}`),
+	)
+	require.NoError(t, err)
+	require.False(t, meta.ReferenceVideo)
+}
+
 func TestXiaoVideoSeedanceAudioReachesUpstream(t *testing.T) {
 	const groupID int64 = 7
 	models := []string{"seedance-2.0", "seedance-2.0-fast", "seedance-2.0-mini"}

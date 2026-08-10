@@ -87,3 +87,40 @@ func TestAccount_XiaoVideoPriceAllowsFreeConfiguredPrice(t *testing.T) {
 	require.True(t, ok)
 	require.Zero(t, amount)
 }
+
+func TestAccount_XiaoVideoPriceAppliesReferenceVideoMultiplier(t *testing.T) {
+	pricing := []any{
+		map[string]any{
+			"model":              "video-public",
+			"resolution":         "720p",
+			"price_per_second":   0.75,
+			"default_resolution": true,
+			"default_duration":   4,
+		},
+	}
+
+	aistarslab := Account{Credentials: map[string]any{
+		"base_url":                    "https://api.video.aistarslab.com/openai",
+		XiaoVideoPricingCredentialKey: pricing,
+	}}
+	amount, _, _, ok := aistarslab.XiaoVideoPriceWithReferenceVideo("video-public", "720p", 4, false, true)
+	require.True(t, ok)
+	require.InDelta(t, 4.5, amount, 0.00000001)
+	amount, _, _, ok = aistarslab.XiaoVideoPriceWithReferenceVideo("video-public", "720p", 4, false, false)
+	require.True(t, ok)
+	require.InDelta(t, 3.0, amount, 0.00000001)
+
+	otherProvider := Account{Credentials: map[string]any{
+		"base_url":                    "https://upstream.example/v1",
+		XiaoVideoPricingCredentialKey: pricing,
+	}}
+	amount, _, _, ok = otherProvider.XiaoVideoPriceWithReferenceVideo("video-public", "720p", 4, false, true)
+	require.True(t, ok)
+	require.InDelta(t, 3.0, amount, 0.00000001)
+
+	overridden := otherProvider
+	overridden.Credentials[XiaoVideoReferenceVideoMultiplierCredentialKey] = 1.25
+	amount, _, _, ok = overridden.XiaoVideoPriceWithReferenceVideo("video-public", "720p", 4, false, true)
+	require.True(t, ok)
+	require.InDelta(t, 3.75, amount, 0.00000001)
+}

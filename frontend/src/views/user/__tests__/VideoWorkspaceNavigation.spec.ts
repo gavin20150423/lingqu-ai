@@ -67,10 +67,13 @@ describe('video user workspace navigation', () => {
   })
 
   it('shows model limits before generation and detailed diagnostics for failed jobs', () => {
-    expect(studioSource).toContain('当前模型限制')
-    expect(studioSource).toContain('XiaoAPI 规则')
+    expect(studioSource).toContain('模型限制')
+    expect(studioSource).not.toContain('XiaoAPI 规则')
+    expect(studioSource).toContain('提交前确认以下参数和素材要求')
+    expect(studioSource).toContain('素材要求')
+    expect(studioSource.indexOf('class="video-model-shelf"')).toBeLessThan(studioSource.indexOf('video-capability--shelf'))
+    expect(studioSource.indexOf('video-capability--shelf')).toBeLessThan(studioSource.indexOf('class="video-studio__workspace"'))
     expect(studioSource).toContain('AIStartLab 的素材必须是公网 HTTP(S) URL')
-    expect(studioSource).toContain('素材边界')
     expect(studioSource).toContain('参考视频和参考音频不能同时使用')
     expect(historySource).toContain('生成失败 · 可排障信息')
     expect(historySource).toContain('任务编号')

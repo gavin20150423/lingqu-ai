@@ -25,6 +25,7 @@ export interface VideoModelCapability {
   supportsEndFrame: boolean
   supportsPromptEnhance: boolean
   maxReferences: Record<ReferenceKind, number>
+  referenceVideoMultiplier: number
   capabilitySource: 'xiaoapi' | 'aistartlab' | 'mixed' | 'unknown'
   usesXiaoAPIRules: boolean
 }
@@ -42,7 +43,7 @@ const knownCapabilities: Record<string, KnownVideoModelCapability> = {
     aspectRatios: { '480p': seedanceRatios, '720p': seedanceRatios.slice(0, -1), '1080p': seedanceRatios },
     defaultResolution: '720p', defaultDuration: 8, defaultAspectRatio: '16:9', promptLimit: 5000,
     supportsAudio: true, supportsStartFrame: true, requiresStartFrame: false, supportsEndFrame: true,
-    supportsPromptEnhance: false, maxReferences: { image: 4, video: 3, audio: 1 },
+    supportsPromptEnhance: false, maxReferences: { image: 4, video: 3, audio: 1 }, referenceVideoMultiplier: 1,
   },
   'seedance-2.0-fast': {
     id: 'seedance-2.0-fast', label: 'Seedance 2.0 Fast',
@@ -50,7 +51,7 @@ const knownCapabilities: Record<string, KnownVideoModelCapability> = {
     aspectRatios: { '480p': seedanceRatios, '720p': seedanceRatios.slice(0, -1) },
     defaultResolution: '720p', defaultDuration: 8, defaultAspectRatio: '16:9', promptLimit: 5000,
     supportsAudio: true, supportsStartFrame: true, requiresStartFrame: false, supportsEndFrame: true,
-    supportsPromptEnhance: false, maxReferences: { image: 4, video: 3, audio: 1 },
+    supportsPromptEnhance: false, maxReferences: { image: 4, video: 3, audio: 1 }, referenceVideoMultiplier: 1,
   },
   'seedance-2.0-mini': {
     id: 'seedance-2.0-mini', label: 'Seedance 2.0 Mini',
@@ -58,7 +59,7 @@ const knownCapabilities: Record<string, KnownVideoModelCapability> = {
     aspectRatios: { '*': ['16:9', '1:1', '9:16'] },
     defaultResolution: '720p', defaultDuration: 8, defaultAspectRatio: '16:9', promptLimit: 5000,
     supportsAudio: true, supportsStartFrame: true, requiresStartFrame: false, supportsEndFrame: true,
-    supportsPromptEnhance: false, maxReferences: { image: 4, video: 3, audio: 1 },
+    supportsPromptEnhance: false, maxReferences: { image: 4, video: 3, audio: 1 }, referenceVideoMultiplier: 1,
   },
   'happy-horse-1.1': {
     id: 'happy-horse-1.1', label: 'Happy Horse 1.1',
@@ -66,7 +67,7 @@ const knownCapabilities: Record<string, KnownVideoModelCapability> = {
     aspectRatios: { '*': ['16:9', '4:3', '1:1', '3:4', '9:16'] },
     defaultResolution: '720p', defaultDuration: 5, defaultAspectRatio: '16:9', promptLimit: 2500,
     supportsAudio: true, supportsStartFrame: true, requiresStartFrame: false, supportsEndFrame: false,
-    supportsPromptEnhance: true, maxReferences: { image: 9, video: 0, audio: 0 },
+    supportsPromptEnhance: true, maxReferences: { image: 9, video: 0, audio: 0 }, referenceVideoMultiplier: 1,
   },
   'grok-imagine-1.5': {
     id: 'grok-imagine-1.5', label: 'Grok Imagine 1.5',
@@ -74,21 +75,21 @@ const knownCapabilities: Record<string, KnownVideoModelCapability> = {
     aspectRatios: { '400p': ['16:9', '9:16'], '544p': ['1:1'], '720p': ['16:9', '9:16'], '960p': ['1:1'] },
     defaultResolution: '720p', defaultDuration: 6, defaultAspectRatio: '16:9', promptLimit: 5000,
     supportsAudio: true, supportsStartFrame: true, requiresStartFrame: true, supportsEndFrame: false,
-    supportsPromptEnhance: false, maxReferences: { image: 0, video: 0, audio: 0 },
+    supportsPromptEnhance: false, maxReferences: { image: 0, video: 0, audio: 0 }, referenceVideoMultiplier: 1,
   },
   'ltx-2.3-pro': {
     id: 'ltx-2.3-pro', label: 'LTX 2.3 Pro',
     resolutions: ['1080p', '1440p', '2160p'], durations: [6, 8, 10], aspectRatios: { '*': ['16:9'] },
     defaultResolution: '1080p', defaultDuration: 6, defaultAspectRatio: '16:9', promptLimit: 5000,
     supportsAudio: true, supportsStartFrame: true, requiresStartFrame: false, supportsEndFrame: true,
-    supportsPromptEnhance: true, maxReferences: { image: 0, video: 0, audio: 0 },
+    supportsPromptEnhance: true, maxReferences: { image: 0, video: 0, audio: 0 }, referenceVideoMultiplier: 1,
   },
   'ltx-2.3-fast': {
     id: 'ltx-2.3-fast', label: 'LTX 2.3 Fast',
     resolutions: ['1080p', '1440p', '2160p'], durations: range(6, 20, 2), aspectRatios: { '*': ['16:9'] },
     defaultResolution: '1080p', defaultDuration: 6, defaultAspectRatio: '16:9', promptLimit: 5000,
     supportsAudio: true, supportsStartFrame: true, requiresStartFrame: false, supportsEndFrame: true,
-    supportsPromptEnhance: true, maxReferences: { image: 0, video: 0, audio: 0 },
+    supportsPromptEnhance: true, maxReferences: { image: 0, video: 0, audio: 0 }, referenceVideoMultiplier: 1,
   },
 }
 
@@ -137,6 +138,9 @@ function fallbackCapability(model: VideoModel): VideoModelCapability {
     maxReferences: Object.values(maxReferences).some((count) => count > 0)
       ? maxReferences
       : { image: model.supports_guidances ? 1 : 0, video: 0, audio: 0 },
+    referenceVideoMultiplier: Number(model.reference_video_multiplier) > 1
+      ? Number(model.reference_video_multiplier)
+      : 1,
     capabilitySource: capabilitySource(model),
     usesXiaoAPIRules: false,
   }
@@ -161,6 +165,9 @@ export function resolveVideoCapability(model: VideoModel): VideoModelCapability 
     defaultDuration: model.default_duration || known.defaultDuration,
     defaultAspectRatio: model.default_aspect_ratio || known.defaultAspectRatio,
     supportsAudio: model.supports_audio === true || known.supportsAudio,
+    referenceVideoMultiplier: Number(model.reference_video_multiplier) > 1
+      ? Number(model.reference_video_multiplier)
+      : 1,
     capabilitySource: 'xiaoapi',
     usesXiaoAPIRules: true,
   }
