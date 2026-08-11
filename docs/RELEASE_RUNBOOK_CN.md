@@ -42,7 +42,7 @@ git log -1 --oneline
 - 目标版本标签在远端尚不存在。
 - 当前环境具备向可写仓库推送提交和标签的权限。
 
-缺少 GitHub 推送权限不是切换发布方式的理由。遇到该情况必须停止发布，向维护者报告需要配置 GitHub SSH Key、PAT 或由有权限的人员推送。
+GitHub 非交互认证失败不是切换发布方式的理由。本机已经配置 SSH key 时，必须先确认当前进程实际使用了正确的 `IdentityFile`，并检查 SSH agent、密钥口令会话、`GIT_SSH_COMMAND` 和 Git remote 配置。不得仅凭一次 `Permission denied (publickey)` 就认定本机没有 GitHub 凭据。仍无法认证时必须停止发布，报告当前进程的认证问题，由维护者恢复正常 SSH 会话或在可用终端中完成推送。
 
 ## 3. 触发 GitHub Actions
 
@@ -117,7 +117,7 @@ git push lingqu v<version>
 
 ### 事件
 
-发布 `0.1.172-lingqu.8` 时，本地环境无法向 GitHub 可写仓库推送，服务器也没有 GHCR/GitHub 发布凭据。执行者错误地把认证失败视为可以切换发布路径，采用了：
+发布 `0.1.172-lingqu.8` 时，本机实际已经存在可访问 GitHub 的 SSH key，SSH 配置也为 `github.com` 指定了该 key。当前自动化进程的非交互认证没有成功，且没有接入可用的 SSH agent 会话。执行者没有继续排查和接入本机已有的正常认证环境，反而错误地把当前进程的认证失败解释成缺少 GitHub 发布能力，并据此切换了发布路径。服务器没有 GHCR/GitHub 推送凭据与此无关：正式发布本来就应由本机推送标签并触发 GitHub Actions，服务器只负责拉取 Actions 生成的 GHCR 镜像。错误采用的步骤为：
 
 1. 本地交叉编译 Linux amd64 二进制。
 2. 将二进制上传到生产服务器。
@@ -138,8 +138,8 @@ git push lingqu v<version>
 
 ### 必须完成的纠正动作
 
-1. 恢复对 `gavin20150423/lingqu-ai` 的推送权限。
-2. 推送目标提交和 `v0.1.172-lingqu.8` 标签。
+1. 使用本机已有的 GitHub SSH key，在具备正常密钥解密/agent 会话的终端中验证 `github.com` 认证；如果自动化进程无法继承该会话，必须停止并明确报告，不能改走其他发布路径。
+2. 使用本机正常 SSH 环境推送目标提交和 `v0.1.172-lingqu.8` 标签到 `gavin20150423/lingqu-ai`。
 3. 等待 `Release` Actions 全部成功。
 4. 确认 `ghcr.io/gavin20150423/sub2api:0.1.172-lingqu.8` 可拉取。
 5. 备份 Compose，将生产镜像从本地 `.8` 替换为 GHCR `.8`。
