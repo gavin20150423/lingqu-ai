@@ -2491,12 +2491,25 @@ func (h *OpenAIGatewayHandler) handleFailoverExhausted(c *gin.Context, failoverE
 		)
 		return
 	}
-	copyFailoverRetryAfter(c, failoverErr.ResponseHeaders)
 	if failoverErr.IsCredentialFailure() {
 		status, message := credentialFailoverClientResponse(failoverErr)
 		h.handleStreamingAwareError(c, status, "upstream_error", message, streamStarted)
 		return
 	}
+	if isUpstreamPoolRateLimitExhausted(failoverErr) {
+		clearUpstreamPoolRetryAfter(c)
+		h.handleStreamingAwareErrorWithCode(
+			c,
+			upstreamPoolExhaustedStatus,
+			"upstream_error",
+			upstreamPoolExhaustedCode,
+			upstreamPoolExhaustedMessage,
+			streamStarted,
+			false,
+		)
+		return
+	}
+	copyFailoverRetryAfter(c, failoverErr.ResponseHeaders)
 	statusCode := failoverErr.StatusCode
 	responseBody := failoverErr.ResponseBody
 	if service.IsOpenAISilentRefusalErrorBody(responseBody) {
@@ -2536,6 +2549,27 @@ func (h *OpenAIGatewayHandler) handleFailoverExhausted(c *gin.Context, failoverE
 	// 使用默认的错误映射
 	status, errType, errMsg := h.mapUpstreamError(statusCode)
 	h.handleStreamingAwareError(c, status, errType, errMsg, streamStarted)
+}
+
+const (
+	upstreamPoolExhaustedStatus  = http.StatusServiceUnavailable
+	upstreamPoolExhaustedCode    = "upstream_pool_exhausted"
+	upstreamPoolExhaustedMessage = "Upstream account pool is temporarily unavailable"
+)
+
+// An exhausted internal account pool is not an aggregate rate limit. Returning
+// the last account's 429 would make a downstream gateway cool this whole
+// service as one account, even though another internal account may recover at
+// any time.
+func isUpstreamPoolRateLimitExhausted(failoverErr *service.UpstreamFailoverError) bool {
+	return failoverErr != nil && failoverErr.StatusCode == http.StatusTooManyRequests
+}
+
+func clearUpstreamPoolRetryAfter(c *gin.Context) {
+	if c == nil {
+		return
+	}
+	c.Writer.Header().Del("Retry-After")
 }
 
 func credentialFailoverClientResponse(failoverErr *service.UpstreamFailoverError) (int, string) {

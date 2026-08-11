@@ -380,13 +380,24 @@ func (h *GatewayHandler) handleCCFailoverExhausted(c *gin.Context, lastErr *serv
 	if streamStarted {
 		return
 	}
-	if lastErr != nil {
-		copyFailoverRetryAfter(c, lastErr.ResponseHeaders)
-	}
 	if lastErr != nil && lastErr.IsCredentialFailure() {
 		status, message := credentialFailoverClientResponse(lastErr)
 		h.chatCompletionsErrorResponse(c, status, "server_error", message)
 		return
+	}
+	if isUpstreamPoolRateLimitExhausted(lastErr) {
+		clearUpstreamPoolRetryAfter(c)
+		c.JSON(upstreamPoolExhaustedStatus, gin.H{
+			"error": gin.H{
+				"type":    "upstream_error",
+				"code":    upstreamPoolExhaustedCode,
+				"message": upstreamPoolExhaustedMessage,
+			},
+		})
+		return
+	}
+	if lastErr != nil {
+		copyFailoverRetryAfter(c, lastErr.ResponseHeaders)
 	}
 	statusCode := http.StatusBadGateway
 	if lastErr != nil && lastErr.StatusCode > 0 {

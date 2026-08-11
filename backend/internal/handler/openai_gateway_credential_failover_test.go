@@ -64,7 +64,7 @@ func TestGatewayChatAntigravityCredentialFailureReturnsActionableMessage(t *test
 	require.NotContains(t, strings.ToLower(recorder.Body.String()), "refresh_token")
 }
 
-func TestGatewayChatInferenceExhaustionRestoresRetryAfter(t *testing.T) {
+func TestGatewayChatInferenceRateLimitExhaustionReturnsPoolUnavailable(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	recorder := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(recorder)
@@ -74,8 +74,9 @@ func TestGatewayChatInferenceExhaustionRestoresRetryAfter(t *testing.T) {
 		ResponseHeaders: http.Header{"Retry-After": []string{"45"}},
 	}, false)
 
-	require.Equal(t, http.StatusTooManyRequests, recorder.Code)
-	require.Equal(t, "45", recorder.Header().Get("Retry-After"))
+	require.Equal(t, http.StatusServiceUnavailable, recorder.Code)
+	require.Empty(t, recorder.Header().Get("Retry-After"))
+	require.Contains(t, recorder.Body.String(), upstreamPoolExhaustedCode)
 }
 
 func TestCredentialFailoverExhaustionReturnsFixedSafe503(t *testing.T) {
@@ -100,7 +101,7 @@ func TestCredentialFailoverExhaustionReturnsFixedSafe503(t *testing.T) {
 	require.NotContains(t, recorder.Body.String(), "must-not-leak")
 }
 
-func TestInferenceFailoverExhaustionRestoresRetryAfter(t *testing.T) {
+func TestInferenceRateLimitExhaustionReturnsPoolUnavailable(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	recorder := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(recorder)
@@ -111,8 +112,9 @@ func TestInferenceFailoverExhaustionRestoresRetryAfter(t *testing.T) {
 		ResponseHeaders: http.Header{"Retry-After": []string{"17"}},
 	}, false)
 
-	require.Equal(t, http.StatusTooManyRequests, recorder.Code)
-	require.Equal(t, "17", recorder.Header().Get("Retry-After"))
+	require.Equal(t, http.StatusServiceUnavailable, recorder.Code)
+	require.Empty(t, recorder.Header().Get("Retry-After"))
+	require.Contains(t, recorder.Body.String(), upstreamPoolExhaustedCode)
 }
 
 func TestFailoverExhaustionRejectsSecretBearingRetryAfter(t *testing.T) {
@@ -126,7 +128,7 @@ func TestFailoverExhaustionRejectsSecretBearingRetryAfter(t *testing.T) {
 		ResponseHeaders: http.Header{"Retry-After": []string{"refresh_token=must-not-leak"}},
 	}, false)
 
-	require.Equal(t, http.StatusTooManyRequests, recorder.Code)
+	require.Equal(t, http.StatusServiceUnavailable, recorder.Code)
 	require.Empty(t, recorder.Header().Get("Retry-After"))
 	require.NotContains(t, recorder.Body.String(), "must-not-leak")
 }
@@ -144,11 +146,11 @@ func TestFailoverExhaustionRejectsFarFutureRetryAfterDate(t *testing.T) {
 		},
 	}, false)
 
-	require.Equal(t, http.StatusTooManyRequests, recorder.Code)
+	require.Equal(t, http.StatusServiceUnavailable, recorder.Code)
 	require.Empty(t, recorder.Header().Get("Retry-After"))
 }
 
-func TestFailoverExhaustionAllowsBoundedRetryAfterDate(t *testing.T) {
+func TestFailoverExhaustionStripsBoundedRetryAfterDateFromInternal429(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	recorder := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(recorder)
@@ -160,8 +162,25 @@ func TestFailoverExhaustionAllowsBoundedRetryAfterDate(t *testing.T) {
 		ResponseHeaders: http.Header{"Retry-After": []string{retryAfter}},
 	}, false)
 
-	require.Equal(t, http.StatusTooManyRequests, recorder.Code)
-	require.Equal(t, retryAfter, recorder.Header().Get("Retry-After"))
+	require.Equal(t, http.StatusServiceUnavailable, recorder.Code)
+	require.Empty(t, recorder.Header().Get("Retry-After"))
+}
+
+func TestGatewayResponsesRateLimitExhaustionReturnsPoolUnavailable(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+
+	(&GatewayHandler{}).handleResponsesFailoverExhausted(c, &service.UpstreamFailoverError{
+		StatusCode: http.StatusTooManyRequests,
+		ResponseHeaders: http.Header{
+			"Retry-After": []string{"30"},
+		},
+	}, false)
+
+	require.Equal(t, http.StatusServiceUnavailable, recorder.Code)
+	require.Empty(t, recorder.Header().Get("Retry-After"))
+	require.Contains(t, recorder.Body.String(), upstreamPoolExhaustedCode)
 }
 
 func TestOpsClassificationTreatsCredentialFailureAsAuthNotInference(t *testing.T) {

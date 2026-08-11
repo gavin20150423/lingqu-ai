@@ -368,13 +368,18 @@ func (h *GatewayHandler) handleResponsesFailoverExhausted(c *gin.Context, lastEr
 	if streamStarted {
 		return // Can't write error after stream started
 	}
-	if lastErr != nil {
-		copyFailoverRetryAfter(c, lastErr.ResponseHeaders)
-	}
 	if lastErr != nil && lastErr.IsCredentialFailure() {
 		status, message := credentialFailoverClientResponse(lastErr)
 		h.responsesErrorResponse(c, status, "server_error", message)
 		return
+	}
+	if isUpstreamPoolRateLimitExhausted(lastErr) {
+		clearUpstreamPoolRetryAfter(c)
+		h.responsesErrorResponse(c, upstreamPoolExhaustedStatus, upstreamPoolExhaustedCode, upstreamPoolExhaustedMessage)
+		return
+	}
+	if lastErr != nil {
+		copyFailoverRetryAfter(c, lastErr.ResponseHeaders)
 	}
 	statusCode := http.StatusBadGateway
 	if lastErr != nil && lastErr.StatusCode > 0 {
