@@ -1886,6 +1886,17 @@ func (s *openAIWSFailoverHandlerAccountRepoStub) SetRateLimited(ctx context.Cont
 	return nil
 }
 
+func (s *openAIWSFailoverHandlerAccountRepoStub) SetTempUnschedulable(_ context.Context, id int64, until time.Time, reason string) error {
+	for i := range s.accounts {
+		if s.accounts[i].ID == id {
+			s.accounts[i].TempUnschedulableUntil = &until
+			s.accounts[i].TempUnschedulableReason = reason
+			break
+		}
+	}
+	return nil
+}
+
 type openAIWSUsageHandlerUsageLogRepoStub struct {
 	service.UsageLogRepository
 	created chan *service.UsageLog
