@@ -46,6 +46,9 @@ func (s *GatewayService) shouldRetryUpstreamError(account *Account, statusCode i
 // from entering credential retry loops. The response body is restored by the
 // detector so subsequent logging/error handling sees the original payload.
 func (s *GatewayService) shouldRetryUpstreamResponse(account *Account, resp *http.Response) bool {
+	if isUpstreamRequestValidationResponse(resp) {
+		return false
+	}
 	if isUpstreamContentPolicyResponse(resp) {
 		return false
 	}
@@ -53,6 +56,9 @@ func (s *GatewayService) shouldRetryUpstreamResponse(account *Account, resp *htt
 }
 
 func (s *GatewayService) shouldFailoverUpstreamResponse(resp *http.Response) bool {
+	if isUpstreamRequestValidationResponse(resp) {
+		return false
+	}
 	if isUpstreamContentPolicyResponse(resp) {
 		return false
 	}

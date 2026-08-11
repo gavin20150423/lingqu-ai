@@ -32,6 +32,68 @@ func TestIsUpstreamContentPolicyBody(t *testing.T) {
 	}
 }
 
+func TestIsUpstreamRequestValidationBody(t *testing.T) {
+	tests := []struct {
+		name   string
+		status int
+		body   string
+		want   bool
+	}{
+		{"missing messages from Claude", http.StatusInternalServerError, "{\"error\":{\"message\":\"field messages is required (request id: req-1)\",\"type\":\"new_api_error\"},\"type\":\"error\"}", true},
+		{"missing model from Claude", http.StatusInternalServerError, "{\"error\":{\"message\":\"field model is required\",\"type\":\"new_api_error\"}}", true},
+		{"wrong error type", http.StatusInternalServerError, "{\"error\":{\"message\":\"field messages is required\",\"type\":\"invalid_request_error\"}}", false},
+		{"ordinary upstream 500", http.StatusInternalServerError, "{\"error\":{\"message\":\"temporary failure\",\"type\":\"new_api_error\"}}", false},
+		{"already valid client status", http.StatusBadRequest, "{\"error\":{\"message\":\"field messages is required\",\"type\":\"new_api_error\"}}", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isUpstreamRequestValidationBody(tt.status, []byte(tt.body)); got != tt.want {
+				t.Fatalf("isUpstreamRequestValidationBody() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestRequestValidationResponseSkipsRetryAndFailover(t *testing.T) {
+	svc := &GatewayService{}
+	account := &Account{Type: AccountTypeAPIKey}
+	body := "{\"error\":{\"message\":\"field messages is required (request id: req-1)\",\"type\":\"new_api_error\"}}"
+
+	retryResp := &http.Response{StatusCode: http.StatusInternalServerError, Body: io.NopCloser(strings.NewReader(body))}
+	if svc.shouldRetryUpstreamResponse(account, retryResp) {
+		t.Fatal("request validation error must not retry")
+	}
+	failoverResp := &http.Response{StatusCode: http.StatusInternalServerError, Body: io.NopCloser(strings.NewReader(body))}
+	if svc.shouldFailoverUpstreamResponse(failoverResp) {
+		t.Fatal("request validation error must not fail over")
+	}
+}
+
+func TestHandleErrorResponseReturnsRequestValidationBodyAsBadRequest(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	svc := &GatewayService{}
+	account := &Account{ID: 1, Name: "test", Type: AccountTypeAPIKey, Platform: PlatformAnthropic}
+	body := []byte("{\"error\":{\"message\":\"field messages is required (request id: req-1)\",\"type\":\"new_api_error\"},\"type\":\"error\"}")
+	resp := &http.Response{
+		StatusCode: http.StatusInternalServerError,
+		Header:     make(http.Header),
+		Body:       io.NopCloser(bytes.NewReader(body)),
+	}
+
+	_, err := svc.handleErrorResponse(t.Context(), resp, c, account, "claude-opus-5")
+	if err == nil {
+		t.Fatal("expected upstream request validation error")
+	}
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d; body=%s", recorder.Code, http.StatusBadRequest, recorder.Body.String())
+	}
+	if strings.TrimSpace(recorder.Body.String()) != string(body) {
+		t.Fatalf("response body = %s, want %s", recorder.Body.String(), body)
+	}
+}
+
 func TestIsUpstreamContentPolicyResponseRestoresBody(t *testing.T) {
 	body := `{"error":{"message":"request rejected by content policy"}}` + strings.Repeat("x", upstreamContentPolicyInspectLimit)
 	resp := &http.Response{StatusCode: http.StatusForbidden, Body: io.NopCloser(strings.NewReader(body))}

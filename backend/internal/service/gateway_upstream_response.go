@@ -378,6 +378,7 @@ func (s *GatewayService) handleErrorResponse(ctx context.Context, resp *http.Res
 	upstreamMsg := strings.TrimSpace(extractUpstreamErrorMessage(body))
 	upstreamMsg = sanitizeUpstreamErrorMessage(upstreamMsg)
 	contentPolicyDenied := isUpstreamContentPolicyBody(resp.StatusCode, body)
+	requestValidationError := isUpstreamRequestValidationBody(resp.StatusCode, body)
 
 	// Print a compact upstream request fingerprint when we hit the Claude Code OAuth
 	// credential scope error. This avoids requiring env-var tweaks in a fixed deploy.
@@ -422,6 +423,11 @@ func (s *GatewayService) handleErrorResponse(ctx context.Context, resp *http.Res
 			},
 		})
 		return nil, fmt.Errorf("upstream content policy denied request")
+	}
+	if requestValidationError {
+		MarkResponseCommitted(c)
+		c.Data(http.StatusBadRequest, "application/json", body)
+		return nil, fmt.Errorf("upstream request validation error: %s", upstreamMsg)
 	}
 
 	// 处理上游错误，标记账号状态
