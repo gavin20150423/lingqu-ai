@@ -762,12 +762,14 @@ type GatewayService struct {
 	accountShareModeService *AccountShareModeService
 }
 
+//nolint:unused // Retained for staged community account routing integration.
 type communityRoutingAccountRepository interface {
 	ResolveCommunityAccountID(ctx context.Context, apiKeyID int64, requestedModel string, excludedIDs map[int64]struct{}) (int64, bool, error)
 	CommunityUsageMultiplier(ctx context.Context, apiKeyID, accountID int64) (float64, bool, error)
 	RecordCommunityRequestSettlement(ctx context.Context, apiKeyID, accountID int64, requestID string, amount float64) (bool, error)
 }
 
+//nolint:unused // Retained for staged community account routing integration.
 func (s *GatewayService) resolveCommunityAccount(ctx context.Context, requestedModel string, excludedIDs map[int64]struct{}) (*Account, bool, error) {
 	apiKeyID, _ := ctx.Value(ctxkey.APIKeyID).(int64)
 	resolver, ok := s.accountRepo.(communityRoutingAccountRepository)

@@ -1080,6 +1080,7 @@ func (s *ShopService) markShopFulfillmentFailedInTx(ctx context.Context, tx *dbe
 	return nil
 }
 
+//nolint:unused // Retained for staged platform-payment reconciliation.
 func (s *ShopService) failPendingPlatformPayment(ctx context.Context, paymentOrderID int64, reason string, releaseNow bool) error {
 	tx, err := s.entClient.Tx(ctx)
 	if err != nil {

@@ -14,7 +14,7 @@ import (
 func TestVideoRepository_CreateMediaPersistsOwnershipAndAccount(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	media := &service.VideoMedia{
 		MediaID:         "vidmedia_test",
@@ -39,7 +39,7 @@ func TestVideoRepository_CreateMediaPersistsOwnershipAndAccount(t *testing.T) {
 func TestVideoRepository_ReserveJobHoldsBeforeReturning(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	now := time.Now().UTC()
 	groupID := int64(7)
@@ -81,7 +81,7 @@ func TestVideoRepository_ReserveJobHoldsBeforeReturning(t *testing.T) {
 func TestVideoRepository_ReserveJobInsufficientBalanceRollsBack(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	reservation := service.VideoJobReservation{
 		JobID:                  "vidjob_no_balance",
@@ -115,7 +115,7 @@ func TestVideoRepository_ReserveJobInsufficientBalanceRollsBack(t *testing.T) {
 func TestVideoRepository_FinalizeJobPreservesSellingPriceAndStoresUpstreamCost(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	now := time.Now().UTC()
 	mock.ExpectBegin()
@@ -148,7 +148,7 @@ func TestVideoRepository_FinalizeJobPreservesSellingPriceAndStoresUpstreamCost(t
 func TestVideoRepository_FinalizeCompletedJobCapturesAndRecordsUsage(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	now := time.Now().UTC()
 	mock.ExpectBegin()
@@ -184,7 +184,7 @@ func TestVideoRepository_FinalizeCompletedJobCapturesAndRecordsUsage(t *testing.
 func TestVideoRepository_ReleaseJobReservationRefundsAndDeletes(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	mock.ExpectBegin()
 	mock.ExpectQuery("SELECT user_id,amount,upstream_job_id,settlement_status").
@@ -207,7 +207,7 @@ func TestVideoRepository_ReleaseJobReservationRefundsAndDeletes(t *testing.T) {
 func TestVideoRepository_UpdateJobAndSettleDoesNotRegressTerminalState(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	now := time.Now().UTC()
 	mock.ExpectBegin()
@@ -229,7 +229,7 @@ func TestVideoRepository_UpdateJobAndSettleDoesNotRegressTerminalState(t *testin
 func TestVideoRepository_UpdateJobAndSettleCapturesHeldAmount(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	now := time.Now().UTC()
 	mock.ExpectBegin()

@@ -275,7 +275,7 @@ func (s *AccountTestService) testXiaoAPIAccountConnection(c *gin.Context, accoun
 	if err != nil {
 		return s.sendErrorAndEnd(c, fmt.Sprintf("Request failed: %s", err.Error()))
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	body, readErr := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
 	if readErr != nil {
 		return s.sendErrorAndEnd(c, fmt.Sprintf("Failed to read response: %s", readErr.Error()))

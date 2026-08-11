@@ -259,6 +259,7 @@ func receiptCodeStorageConfigured(cfg config.ReceiptCodeStorageConfig) bool {
 		strings.TrimSpace(cfg.SecretAccessKey) != ""
 }
 
+//nolint:unused // Retained for staged receipt-code provider integration.
 func (s *ReceiptCodeService) ensureConfigured(ctx context.Context) error {
 	if s == nil || s.storeFactory == nil {
 		return ErrReceiptCodeStorageNotConfigured

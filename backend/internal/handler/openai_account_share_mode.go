@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+//nolint:unused // Retained for staged account-share routing integration.
 func openAIAccountShareModeRequestContext(c *gin.Context, apiKey *service.APIKey) context.Context {
 	if c == nil || c.Request == nil {
 		return context.Background()
@@ -28,6 +29,7 @@ func openAIAccountShareModeRequestContext(c *gin.Context, apiKey *service.APIKey
 	return service.WithAccountShareModeRequest(ctx, userID, apiKey.ID)
 }
 
+//nolint:unused // Retained for staged account-share routing integration.
 func openAICompatibleRoutingPlatform(apiKey *service.APIKey) string {
 	if apiKey != nil && apiKey.Group != nil && apiKey.Group.Platform == service.PlatformGrok {
 		return service.PlatformGrok
@@ -35,6 +37,7 @@ func openAICompatibleRoutingPlatform(apiKey *service.APIKey) string {
 	return service.PlatformOpenAI
 }
 
+//nolint:unused // Retained for staged account-share routing integration.
 func openAICompatibleRequestContext(ctx context.Context, apiKey *service.APIKey) context.Context {
 	if openAICompatibleRoutingPlatform(apiKey) != service.PlatformGrok {
 		return ctx
@@ -47,6 +50,8 @@ func openAICompatibleRequestContext(ctx context.Context, apiKey *service.APIKey)
 
 // openAIResponsesDispatchContext removes the routing-only deadline before the
 // upstream attempt while retaining request cancellation and route-scoped values.
+//
+//nolint:unused // Retained for staged account-share routing integration.
 func openAIResponsesDispatchContext(c *gin.Context, routingCtx context.Context, apiKey *service.APIKey) context.Context {
 	ctx := context.Background()
 	if c != nil && c.Request != nil {
@@ -56,6 +61,7 @@ func openAIResponsesDispatchContext(c *gin.Context, routingCtx context.Context, 
 	return openAICompatibleRequestContext(ctx, apiKey)
 }
 
+//nolint:unused // Retained for staged account-share routing integration.
 func (h *OpenAIGatewayHandler) handleAccountShareModeSelectionError(c *gin.Context, err error, streamStarted bool) bool {
 	switch {
 	case errors.Is(err, service.ErrAccountShareModeGroupUnbound):
@@ -75,6 +81,7 @@ func (h *OpenAIGatewayHandler) handleAccountShareModeSelectionError(c *gin.Conte
 	}
 }
 
+//nolint:unused // Retained for staged account-share routing integration.
 func (h *OpenAIGatewayHandler) handleAccountShareModeAnthropicError(c *gin.Context, err error, streamStarted bool) bool {
 	switch {
 	case errors.Is(err, service.ErrAccountShareModeGroupUnbound):

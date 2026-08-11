@@ -373,6 +373,7 @@ func TestAuthService_Register_AliasDuplicateRejected(t *testing.T) {
 	repo := &userRepoStub{aliasExists: true}
 	service := newAuthService(repo, map[string]string{
 		SettingKeyRegistrationEnabled: "true",
+		SettingKeyEmailAliasRestrictionEnabled: "false",
 	}, nil, nil)
 
 	_, _, err := service.Register(context.Background(), "some.one+bulk294@gmail.com", "password")

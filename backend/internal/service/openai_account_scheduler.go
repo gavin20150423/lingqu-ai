@@ -2247,6 +2247,7 @@ func (s *OpenAIGatewayService) selectAccountWithSchedulerOnce(
 	})
 }
 
+//nolint:unused // Retained for staged community account routing integration.
 func effectiveExcludedIDsOrNil(excludedIDs map[int64]struct{}) map[int64]struct{} {
 	if len(excludedIDs) == 0 {
 		return nil
@@ -2254,6 +2255,7 @@ func effectiveExcludedIDsOrNil(excludedIDs map[int64]struct{}) map[int64]struct{
 	return excludedIDs
 }
 
+//nolint:unused // Retained for staged community account routing integration.
 func (s *OpenAIGatewayService) selectCommunityOpenAIAccount(
 	ctx context.Context,
 	requestedModel string,

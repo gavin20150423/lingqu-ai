@@ -3367,6 +3367,7 @@ func accountShareListingProxyFromService(proxy *Proxy) *AccountShareListingProxy
 	}
 }
 
+//nolint:unused // Retained for staged account-share proxy validation.
 func (s *AccountShareModeService) ensureProxyVisibleToUser(ctx context.Context, ownerUserID, proxyID int64) error {
 	_, err := s.loadVisibleActiveProxyForUser(ctx, ownerUserID, proxyID)
 	return err

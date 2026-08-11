@@ -1342,6 +1342,7 @@ func decodeWeChatPaymentOAuthContext(raw string) (wechatPaymentOAuthContext, err
 	return ctx, nil
 }
 
+//nolint:unused // Retained for the WeChat payment compatibility path.
 func parseWeChatPaymentPlanID(raw string) int64 {
 	id, _ := strconv.ParseInt(strings.TrimSpace(raw), 10, 64)
 	return id

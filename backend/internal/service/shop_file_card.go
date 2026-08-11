@@ -113,6 +113,7 @@ type shopSQLQueryer interface {
 	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
 }
 
+//nolint:unused // Retained for staged SQL-backed file-card imports.
 type shopSQLExecer interface {
 	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
 }
@@ -405,6 +406,7 @@ func (s *ShopService) writeOrderFileCardArchive(ctx context.Context, orderID int
 	return fmt.Sprintf("shop-order-%d-files.zip", orderID), nil
 }
 
+//nolint:unused // Retained for staged SQL-backed file-card imports.
 func (s *ShopService) importOneFileCard(ctx context.Context, store ShopFileCardObjectStore, cfg ShopFileCardStorageConfig, productID int64, upload ShopFileCardUpload) (*ShopCardKeyDTO, string, error) {
 	item, err := s.prepareFileCardUpload(cfg, productID, upload)
 	if err != nil {
@@ -672,6 +674,7 @@ func (s *ShopService) buildFileCardStorageKey(cfg ShopFileCardStorageConfig, pro
 	return normalizeShopFileCardOSSPrefix(cfg.Prefix) + fmt.Sprintf("product-%d/%s/%s%s", productID, date, random, ext)
 }
 
+//nolint:unused // Retained for staged SQL-backed file-card imports.
 func (s *ShopService) insertFileCardKey(ctx context.Context, productID int64, storageKey, filename, contentType string, byteSize int64, sha string) (*ShopCardKeyDTO, error) {
 	queryer, ok := s.entClient.Driver().(shopSQLQueryer)
 	if !ok {

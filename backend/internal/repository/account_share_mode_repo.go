@@ -997,7 +997,6 @@ func (r *accountShareModeRepository) fillMySpendHourlyLedgerTotals(ctx context.C
 	if membershipID > 0 {
 		where = append(where, fmt.Sprintf("(ubl.metadata->>'membership_id')::bigint = $%d", next))
 		args = append(args, membershipID)
-		next++
 	}
 	query := fmt.Sprintf(`
 		SELECT
@@ -3619,6 +3618,7 @@ func (r *accountShareModeRepository) accountShareAccountUnavailableInTx(ctx cont
 	return unavailable, nil
 }
 
+//nolint:unused // Retained for staged account-share availability reconciliation.
 func (r *accountShareModeRepository) accountShareAccountPermanentlyUnavailableInTx(ctx context.Context, tx *sql.Tx, accountID int64, now time.Time) (bool, error) {
 	if accountID <= 0 {
 		return false, nil
@@ -5050,6 +5050,7 @@ func accountShareListingSupportsImageGenerationSQL() string {
 	)`
 }
 
+//nolint:unused // Retained for staged account-share availability reconciliation.
 func accountShareAccountUnavailableOrMissingConditionSQL(nowExpr string) string {
 	return fmt.Sprintf(`(
 		a.id IS NULL
@@ -6079,6 +6080,7 @@ func ensureAccountShareProxyCapacityInTx(ctx context.Context, tx *sql.Tx, ownerU
 	return nil
 }
 
+//nolint:unused // Retained for staged account-share availability reconciliation.
 func existsInTx(ctx context.Context, tx *sql.Tx, query string, args ...any) (bool, error) {
 	var value int
 	err := tx.QueryRowContext(ctx, query, args...).Scan(&value)

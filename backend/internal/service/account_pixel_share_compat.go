@@ -635,7 +635,7 @@ func credentialFieldExists(ctx context.Context, repository any, key, value strin
 func (s *AccountService) OpenAIAgentIdentityRuntimeIDExists(ctx context.Context, runtimeID string) (bool, error) {
 	runtimeID = strings.TrimSpace(runtimeID)
 	if runtimeID == "" {
-		return false, errors.New("Agent Identity runtime id is required")
+		return false, errors.New("agent identity runtime id is required")
 	}
 	if s == nil || s.accountRepo == nil {
 		return false, errors.New("account repository is required for Agent Identity duplicate detection")
@@ -850,6 +850,7 @@ func (a *Account) anthropic5hResetAt() (time.Time, bool) {
 	return anthropicQuotaResetAtFromExtra(a.Extra, "anthropic_5h_reset_at", "session_window_reset_at")
 }
 
+//nolint:unused // Retained for staged Codex quota compatibility handling.
 func isCodexQuotaWindowProtected(extra map[string]any, usedPercentKey, resetAtKey string, limitPercent float64, now time.Time) bool {
 	_, ok := codexQuotaProtectedWindowResetAt(extra, usedPercentKey, resetAtKey, limitPercent, now)
 	return ok

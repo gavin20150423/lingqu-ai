@@ -371,6 +371,7 @@ func TestAPIContracts(t *testing.T) {
 						"video_price_720p": null,
 						"video_price_1080p": null,
 						"web_search_price_per_call": null,
+						"auto_assign_accounts_by_rate": false,
 						"allow_image_generation": false,
 						"allow_batch_image_generation": false,
 						"batch_image_discount_multiplier": 0,
@@ -856,7 +857,7 @@ func TestAPIContracts(t *testing.T) {
 					"force_email_on_third_party_signup": false,
 					"default_concurrency": 5,
 					"default_balance": 1.25,
-					"default_platform_quotas": {"anthropic":{"daily":null,"weekly":null,"monthly":null},"antigravity":{"daily":null,"weekly":null,"monthly":null},"gemini":{"daily":null,"weekly":null,"monthly":null},"grok":{"daily":null,"weekly":null,"monthly":null},"openai":{"daily":null,"weekly":null,"monthly":null}},
+					"default_platform_quotas": {"anthropic":{"daily":null,"weekly":null,"monthly":null},"antigravity":{"daily":null,"weekly":null,"monthly":null},"gemini":{"daily":null,"weekly":null,"monthly":null},"grok":{"daily":null,"weekly":null,"monthly":null},"openai":{"daily":null,"weekly":null,"monthly":null},"xiaoapi":{"daily":null,"weekly":null,"monthly":null}},
 					"auth_source_default_email_platform_quotas": null,
 					"auth_source_default_github_platform_quotas": null,
 					"auth_source_default_google_platform_quotas": null,
@@ -1161,7 +1162,7 @@ func TestAPIContracts(t *testing.T) {
 					"purchase_subscription_url": "",
 					"table_default_page_size": 20,
 					"table_page_size_options": [10, 20, 50],
-					"default_platform_quotas": {"anthropic":{"daily":null,"weekly":null,"monthly":null},"antigravity":{"daily":null,"weekly":null,"monthly":null},"gemini":{"daily":null,"weekly":null,"monthly":null},"grok":{"daily":null,"weekly":null,"monthly":null},"openai":{"daily":null,"weekly":null,"monthly":null}},
+					"default_platform_quotas": {"anthropic":{"daily":null,"weekly":null,"monthly":null},"antigravity":{"daily":null,"weekly":null,"monthly":null},"gemini":{"daily":null,"weekly":null,"monthly":null},"grok":{"daily":null,"weekly":null,"monthly":null},"openai":{"daily":null,"weekly":null,"monthly":null},"xiaoapi":{"daily":null,"weekly":null,"monthly":null}},
 					"auth_source_default_email_platform_quotas": null,
 					"auth_source_default_github_platform_quotas": null,
 					"auth_source_default_google_platform_quotas": null,
@@ -2070,6 +2071,18 @@ func (stubProxyRepo) ListActive(ctx context.Context) ([]service.Proxy, error) {
 
 func (stubProxyRepo) ListActiveWithAccountCount(ctx context.Context) ([]service.ProxyWithAccountCount, error) {
 	return nil, errors.New("not implemented")
+}
+
+func (stubProxyRepo) ListActiveVisibleWithAccountCount(ctx context.Context, userID int64) ([]service.ProxyWithAccountCount, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (stubProxyRepo) GetVisibleByID(ctx context.Context, userID, id int64) (*service.Proxy, error) {
+	return nil, service.ErrProxyNotFound
+}
+
+func (stubProxyRepo) FindVisibleActiveByEndpoint(ctx context.Context, userID int64, protocol, host string, port int, username, password string) (*service.Proxy, error) {
+	return nil, service.ErrProxyNotFound
 }
 
 func (stubProxyRepo) ExistsByHostPortAuth(ctx context.Context, host string, port int, username, password string) (bool, error) {

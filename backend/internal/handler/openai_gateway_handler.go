@@ -536,6 +536,15 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 			}
 			continue
 		}
+		if slotResult == openAISlotAcquireAccountInvalidated {
+			failedAccountIDs[account.ID] = struct{}{}
+			if switchCount >= maxAccountSwitches {
+				h.handleStreamingAwareError(c, http.StatusServiceUnavailable, "api_error", "Selected account is no longer available, please retry", streamStarted)
+				return
+			}
+			switchCount++
+			continue
+		}
 		if slotResult != openAISlotAcquireOK {
 			return
 		}
@@ -1403,6 +1412,9 @@ const (
 	// 未写任何响应；调用方应经 recordOpenAIProfitVeto 把该账号加入本请求排除集
 	// 后重新选号，全池耗尽由下一轮选号返回标准 no available accounts。
 	openAISlotAcquireProfitVetoed
+	// openAISlotAcquireAccountInvalidated：选号后账号已消失或不再符合调度条件。
+	// 槽位已释放且未写响应；调用方应排除账号后重新选号。
+	openAISlotAcquireAccountInvalidated
 )
 
 // openAIWSTurnPricing 持有 WebSocket 连接内「当前 turn」的计费定价时刻。
@@ -1487,6 +1499,9 @@ func (h *OpenAIGatewayHandler) acquireResponsesAccountSlot(
 					release()
 				}
 				reqLog.Info("openai.account_selection_invalidated_before_dispatch", zap.Int64("account_id", account.ID), zap.Error(err))
+				if errors.Is(err, service.ErrNoAvailableAccounts) || errors.Is(err, service.ErrAccountNotFound) {
+					return nil, openAISlotAcquireAccountInvalidated
+				}
 				h.handleStreamingAwareError(c, http.StatusServiceUnavailable, "api_error", "Selected account is no longer available, please retry", *streamStarted)
 				return nil, openAISlotAcquireFailed
 			}

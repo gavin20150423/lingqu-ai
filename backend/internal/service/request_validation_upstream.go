@@ -12,7 +12,7 @@ import (
 
 const upstreamRequestValidationInspectLimit = 128 * 1024
 
-var upstreamRequiredFieldPattern = regexp.MustCompile("(?i)^field\\s+[^\\s]+\\s+is\\s+required(?:\\s|\\(|$)")
+var upstreamRequiredFieldPattern = regexp.MustCompile(`(?i)^field\s+[^\s]+\s+is\s+required(?:\s|\(|$)`)
 
 // isUpstreamRequestValidationBody identifies the Claude upstream response
 // shape used for malformed messages requests. Although the upstream returned

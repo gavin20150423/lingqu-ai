@@ -207,10 +207,11 @@ func (r *videoRepositoryStub) FinalizeJobAndReconcileHold(_ context.Context, fin
 	}
 	job.UpstreamResponse = append([]byte(nil), finalization.UpstreamResponse...)
 	job.SettlementStatus = "held"
-	if finalization.Status == "completed" {
+	switch finalization.Status {
+	case "completed":
 		r.frozen -= job.Amount
 		job.SettlementStatus = "captured"
-	} else if finalization.Status == "failed" || finalization.Status == "canceled" {
+	case "failed", "canceled":
 		r.balance += job.Amount
 		r.frozen -= job.Amount
 		job.SettlementStatus = "released"
@@ -347,7 +348,8 @@ func TestXiaoVideoOpenAISoraProtocolAdapter(t *testing.T) {
 	require.Equal(t, "5", payload["seconds"])
 	require.Equal(t, "16:9", payload["size"])
 	require.Equal(t, float64(1), payload["n"])
-	metadata := payload["metadata"].(map[string]any)
+	metadata, ok := payload["metadata"].(map[string]any)
+	require.True(t, ok)
 	require.Equal(t, "720p", metadata["resolution"])
 	require.Equal(t, "frames2video", metadata["mode_type"])
 	require.Equal(t, []any{"https://example.test/start.jpg", "https://example.test/end.jpg"}, metadata["images"])

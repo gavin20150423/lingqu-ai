@@ -410,7 +410,7 @@ func proxyVideoResponse(c *gin.Context, resp *http.Response, stream bool) {
 		videoError(c, service.ErrVideoUpstreamUnavailable)
 		return
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	for _, name := range []string{"Content-Type", "Content-Length", "Content-Range", "Accept-Ranges", "Content-Disposition", "Cache-Control", "ETag", "Last-Modified"} {
 		if value := resp.Header.Get(name); value != "" {
 			c.Header(name, value)

@@ -197,12 +197,13 @@ func (r *videoRepository) FinalizeJobAndReconcileHold(ctx context.Context, p ser
 	var finishedAt any
 	var balanceRefund float64
 	var frozenReduction float64
-	if p.Status == "completed" {
+	switch p.Status {
+	case "completed":
 		frozenReduction = preauthorizationAmount
 		settlement = "captured"
 		settledAt = time.Now()
 		finishedAt = settledAt
-	} else if p.Status == "failed" || p.Status == "canceled" {
+	case "failed", "canceled":
 		balanceRefund = preauthorizationAmount
 		frozenReduction = preauthorizationAmount
 		settlement = "released"
@@ -261,7 +262,7 @@ func (r *videoRepository) ListJobsForOwner(ctx context.Context, apiKeyID int64, 
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	return scanVideoJobs(rows)
 }
 
@@ -273,7 +274,7 @@ func (r *videoRepository) ListActiveJobs(ctx context.Context, limit int) ([]*ser
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	return scanVideoJobs(rows)
 }
 

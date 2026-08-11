@@ -296,7 +296,7 @@ func (s *XiaoVideoService) Upload(ctx context.Context, owner VideoOwner, body io
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	raw, readErr := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
 	if readErr != nil {
 		return nil, ErrVideoUpstreamUnavailable.WithCause(readErr)
@@ -848,7 +848,7 @@ func (s *XiaoVideoService) Cancel(ctx context.Context, owner VideoOwner, jobID s
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, upstreamVideoError(resp, raw)
@@ -985,7 +985,7 @@ func (s *XiaoVideoService) refresh(ctx context.Context, job *VideoJob) (*VideoJo
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	raw, readErr := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
 	if readErr != nil {
 		return nil, ErrVideoUpstreamUnavailable.WithCause(readErr)
@@ -1031,7 +1031,7 @@ func (s *XiaoVideoService) fetchUpstreamJob(ctx context.Context, account *Accoun
 	if err != nil {
 		return nil, nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	raw, readErr := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
 	if readErr != nil {
 		return nil, nil, ErrVideoUpstreamUnavailable.WithCause(readErr)
@@ -1056,7 +1056,7 @@ func (s *XiaoVideoService) cancelUpstream(ctx context.Context, account *Account,
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20))
 	return nil
 }
