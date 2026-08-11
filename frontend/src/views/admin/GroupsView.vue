@@ -494,7 +494,12 @@
           <p class="input-hint">{{ t("admin.groups.platformHint") }}</p>
         </div>
         <!-- 从分组复制账号 -->
-        <div v-if="copyAccountsGroupOptions.length > 0">
+        <div
+          v-if="
+            copyAccountsGroupOptions.length > 0 &&
+            !createForm.auto_assign_accounts_by_rate
+          "
+        >
           <div class="mb-1.5 flex items-center gap-1">
             <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
               {{ t("admin.groups.copyAccounts.title") }}
@@ -596,6 +601,62 @@
             data-tour="group-form-multiplier"
           />
           <p class="input-hint">{{ t("admin.groups.rateMultiplierHint") }}</p>
+        </div>
+        <div class="border-l-2 border-primary-200 pl-4 dark:border-primary-800">
+          <div class="flex items-center justify-between gap-4">
+            <div class="min-w-0">
+              <label class="input-label mb-0">{{
+                t("admin.groups.form.autoAssignByRate")
+              }}</label>
+              <p class="input-hint mt-1">
+                {{ t("admin.groups.form.autoAssignByRateHint") }}
+              </p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              :aria-checked="createForm.auto_assign_accounts_by_rate"
+              @click="
+                createForm.auto_assign_accounts_by_rate =
+                  !createForm.auto_assign_accounts_by_rate;
+                if (createForm.auto_assign_accounts_by_rate) {
+                  createForm.copy_accounts_from_group_ids = [];
+                }
+              "
+              :class="[
+                'relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors',
+                createForm.auto_assign_accounts_by_rate
+                  ? 'bg-primary-500'
+                  : 'bg-gray-300 dark:bg-dark-600',
+              ]"
+            >
+              <span
+                :class="[
+                  'inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform',
+                  createForm.auto_assign_accounts_by_rate
+                    ? 'translate-x-6'
+                    : 'translate-x-1',
+                ]"
+              />
+            </button>
+          </div>
+          <div v-if="createForm.auto_assign_accounts_by_rate" class="mt-3">
+            <label class="input-label">{{
+              t("admin.groups.form.autoAssignMaxRate")
+            }}</label>
+            <input
+              v-model.number="createForm.auto_assign_max_rate"
+              type="number"
+              step="0.0001"
+              min="0"
+              required
+              class="input"
+              placeholder="0.05"
+            />
+            <p class="input-hint">
+              {{ t("admin.groups.form.autoAssignMaxRateHint") }}
+            </p>
+          </div>
         </div>
         <div>
           <label class="input-label">{{ t("admin.groups.form.rpmLimit") }}</label>
@@ -2096,7 +2157,12 @@
           <p class="input-hint">{{ t("admin.groups.platformNotEditable") }}</p>
         </div>
         <!-- 从分组复制账号（编辑时） -->
-        <div v-if="copyAccountsGroupOptionsForEdit.length > 0">
+        <div
+          v-if="
+            copyAccountsGroupOptionsForEdit.length > 0 &&
+            !editForm.auto_assign_accounts_by_rate
+          "
+        >
           <div class="mb-1.5 flex items-center gap-1">
             <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
               {{ t("admin.groups.copyAccounts.title") }}
@@ -2199,6 +2265,62 @@
             class="input"
             data-tour="group-form-multiplier"
           />
+        </div>
+        <div class="border-l-2 border-primary-200 pl-4 dark:border-primary-800">
+          <div class="flex items-center justify-between gap-4">
+            <div class="min-w-0">
+              <label class="input-label mb-0">{{
+                t("admin.groups.form.autoAssignByRate")
+              }}</label>
+              <p class="input-hint mt-1">
+                {{ t("admin.groups.form.autoAssignByRateHint") }}
+              </p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              :aria-checked="editForm.auto_assign_accounts_by_rate"
+              @click="
+                editForm.auto_assign_accounts_by_rate =
+                  !editForm.auto_assign_accounts_by_rate;
+                if (editForm.auto_assign_accounts_by_rate) {
+                  editForm.copy_accounts_from_group_ids = [];
+                }
+              "
+              :class="[
+                'relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors',
+                editForm.auto_assign_accounts_by_rate
+                  ? 'bg-primary-500'
+                  : 'bg-gray-300 dark:bg-dark-600',
+              ]"
+            >
+              <span
+                :class="[
+                  'inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform',
+                  editForm.auto_assign_accounts_by_rate
+                    ? 'translate-x-6'
+                    : 'translate-x-1',
+                ]"
+              />
+            </button>
+          </div>
+          <div v-if="editForm.auto_assign_accounts_by_rate" class="mt-3">
+            <label class="input-label">{{
+              t("admin.groups.form.autoAssignMaxRate")
+            }}</label>
+            <input
+              v-model.number="editForm.auto_assign_max_rate"
+              type="number"
+              step="0.0001"
+              min="0"
+              required
+              class="input"
+              placeholder="0.05"
+            />
+            <p class="input-hint">
+              {{ t("admin.groups.form.autoAssignMaxRateHint") }}
+            </p>
+          </div>
         </div>
         <div>
           <label class="input-label">{{ t("admin.groups.form.rpmLimit") }}</label>
@@ -4700,6 +4822,8 @@ const createForm = reactive({
   description: "",
   platform: "anthropic" as GroupPlatform,
   rate_multiplier: 1.0,
+  auto_assign_accounts_by_rate: false,
+  auto_assign_max_rate: null as number | null,
   is_exclusive: false,
   subscription_type: "standard" as SubscriptionType,
   daily_limit_usd: null as number | null,
@@ -5053,6 +5177,8 @@ const editForm = reactive({
   description: "",
   platform: "anthropic" as GroupPlatform,
   rate_multiplier: 1.0,
+  auto_assign_accounts_by_rate: false,
+  auto_assign_max_rate: null as number | null,
   is_exclusive: false,
   status: "active" as "active" | "inactive",
   subscription_type: "standard" as SubscriptionType,
@@ -5506,6 +5632,8 @@ const closeCreateModal = () => {
   createForm.description = "";
   createForm.platform = "anthropic";
   createForm.rate_multiplier = 1.0;
+  createForm.auto_assign_accounts_by_rate = false;
+  createForm.auto_assign_max_rate = null;
   createForm.is_exclusive = false;
   createForm.subscription_type = "standard";
   createForm.daily_limit_usd = null;
@@ -5570,6 +5698,16 @@ const normalizeOptionalLimit = (
   return Number.isFinite(value) && value > 0 ? value : null;
 };
 
+const hasValidAutoAssignMaxRate = (
+  enabled: boolean,
+  value: number | string | null,
+) =>
+  !enabled ||
+  (value !== null &&
+    value !== "" &&
+    Number.isFinite(Number(value)) &&
+    Number(value) >= 0);
+
 const normalizeRateMultiplier = (
   value: number | string | null | undefined,
 ): number => {
@@ -5599,6 +5737,15 @@ const handleCreateGroup = async () => {
     return;
   }
   if (
+    !hasValidAutoAssignMaxRate(
+      createForm.auto_assign_accounts_by_rate,
+      createForm.auto_assign_max_rate,
+    )
+  ) {
+    appStore.showError(t("admin.groups.form.autoAssignMaxRateRequired"));
+    return;
+  }
+  if (
     supportsReasoningEffortPolicyPlatform(createForm.platform) &&
     createReasoningEffortPolicyRef.value &&
     !createReasoningEffortPolicyRef.value.validate()
@@ -5613,6 +5760,9 @@ const handleCreateGroup = async () => {
     // 构建请求数据，包含模型路由配置
     const requestData = {
       ...createForm,
+      auto_assign_max_rate: createForm.auto_assign_accounts_by_rate
+        ? Number(createForm.auto_assign_max_rate)
+        : null,
       daily_limit_usd: normalizeOptionalLimit(
         createForm.daily_limit_usd as number | string | null,
       ),
@@ -5714,6 +5864,9 @@ const handleEdit = async (group: AdminGroup) => {
   editForm.description = group.description || "";
   editForm.platform = group.platform;
   editForm.rate_multiplier = group.rate_multiplier;
+  editForm.auto_assign_accounts_by_rate =
+    group.auto_assign_accounts_by_rate ?? false;
+  editForm.auto_assign_max_rate = group.auto_assign_max_rate ?? null;
   editForm.is_exclusive = group.is_exclusive;
   editForm.status = group.status;
   editForm.subscription_type = group.subscription_type || "standard";
@@ -5804,6 +5957,8 @@ const closeEditModal = () => {
   editReasoningEffortPolicyRef.value?.resetValidation();
   editModelRoutingRules.value = [];
   editForm.copy_accounts_from_group_ids = [];
+  editForm.auto_assign_accounts_by_rate = false;
+  editForm.auto_assign_max_rate = null;
   editForm.peak_rate_enabled = false;
   editForm.peak_start = "";
   editForm.peak_end = "";
@@ -5829,6 +5984,15 @@ const handleUpdateGroup = async () => {
     return;
   }
   if (
+    !hasValidAutoAssignMaxRate(
+      editForm.auto_assign_accounts_by_rate,
+      editForm.auto_assign_max_rate,
+    )
+  ) {
+    appStore.showError(t("admin.groups.form.autoAssignMaxRateRequired"));
+    return;
+  }
+  if (
     supportsReasoningEffortPolicyPlatform(editForm.platform) &&
     editReasoningEffortPolicyRef.value &&
     !editReasoningEffortPolicyRef.value.validate()
@@ -5844,6 +6008,9 @@ const handleUpdateGroup = async () => {
     // 转换 fallback_group_id: null -> 0 (后端使用 0 表示清除)
     const payload = {
       ...editForm,
+      auto_assign_max_rate: editForm.auto_assign_accounts_by_rate
+        ? Number(editForm.auto_assign_max_rate)
+        : null,
       daily_limit_usd: normalizeOptionalLimit(
         editForm.daily_limit_usd as number | string | null,
       ),

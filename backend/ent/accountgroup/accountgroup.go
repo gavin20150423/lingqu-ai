@@ -20,6 +20,8 @@ const (
 	FieldPriority = "priority"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
 	FieldCreatedAt = "created_at"
+	// FieldAutoManaged holds the string denoting the auto_managed field in the database.
+	FieldAutoManaged = "auto_managed"
 	// EdgeAccount holds the string denoting the account edge name in mutations.
 	EdgeAccount = "account"
 	// EdgeGroup holds the string denoting the group edge name in mutations.
@@ -52,6 +54,7 @@ var Columns = []string{
 	FieldGroupID,
 	FieldPriority,
 	FieldCreatedAt,
+	FieldAutoManaged,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -69,6 +72,8 @@ var (
 	DefaultPriority int
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
 	DefaultCreatedAt func() time.Time
+	// DefaultAutoManaged holds the default value on creation for the "auto_managed" field.
+	DefaultAutoManaged bool
 )
 
 // OrderOption defines the ordering options for the AccountGroup queries.
@@ -92,6 +97,11 @@ func ByPriority(opts ...sql.OrderTermOption) OrderOption {
 // ByCreatedAt orders the results by the created_at field.
 func ByCreatedAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldCreatedAt, opts...).ToFunc()
+}
+
+// ByAutoManaged orders the results by the auto_managed field.
+func ByAutoManaged(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAutoManaged, opts...).ToFunc()
 }
 
 // ByAccountField orders the results by account field.

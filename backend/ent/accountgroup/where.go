@@ -30,6 +30,11 @@ func CreatedAt(v time.Time) predicate.AccountGroup {
 	return predicate.AccountGroup(sql.FieldEQ(FieldCreatedAt, v))
 }
 
+// AutoManaged applies equality check predicate on the "auto_managed" field. It's identical to AutoManagedEQ.
+func AutoManaged(v bool) predicate.AccountGroup {
+	return predicate.AccountGroup(sql.FieldEQ(FieldAutoManaged, v))
+}
+
 // AccountIDEQ applies the EQ predicate on the "account_id" field.
 func AccountIDEQ(v int64) predicate.AccountGroup {
 	return predicate.AccountGroup(sql.FieldEQ(FieldAccountID, v))
@@ -148,6 +153,16 @@ func CreatedAtLT(v time.Time) predicate.AccountGroup {
 // CreatedAtLTE applies the LTE predicate on the "created_at" field.
 func CreatedAtLTE(v time.Time) predicate.AccountGroup {
 	return predicate.AccountGroup(sql.FieldLTE(FieldCreatedAt, v))
+}
+
+// AutoManagedEQ applies the EQ predicate on the "auto_managed" field.
+func AutoManagedEQ(v bool) predicate.AccountGroup {
+	return predicate.AccountGroup(sql.FieldEQ(FieldAutoManaged, v))
+}
+
+// AutoManagedNEQ applies the NEQ predicate on the "auto_managed" field.
+func AutoManagedNEQ(v bool) predicate.AccountGroup {
+	return predicate.AccountGroup(sql.FieldNEQ(FieldAutoManaged, v))
 }
 
 // HasAccount applies the HasEdge predicate on the "account" edge.

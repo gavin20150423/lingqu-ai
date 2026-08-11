@@ -21,6 +21,8 @@ type Group struct {
 	Description                   string
 	Platform                      string
 	RateMultiplier                float64
+	AutoAssignAccountsByRate      bool
+	AutoAssignMaxRate             *float64
 	EffectiveRateMultiplier       *float64
 	EffectiveRateMultiplierSource string
 	NewUserRateEnabled            bool

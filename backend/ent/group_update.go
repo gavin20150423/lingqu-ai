@@ -117,6 +117,47 @@ func (_u *GroupUpdate) AddRateMultiplier(v float64) *GroupUpdate {
 	return _u
 }
 
+// SetAutoAssignAccountsByRate sets the "auto_assign_accounts_by_rate" field.
+func (_u *GroupUpdate) SetAutoAssignAccountsByRate(v bool) *GroupUpdate {
+	_u.mutation.SetAutoAssignAccountsByRate(v)
+	return _u
+}
+
+// SetNillableAutoAssignAccountsByRate sets the "auto_assign_accounts_by_rate" field if the given value is not nil.
+func (_u *GroupUpdate) SetNillableAutoAssignAccountsByRate(v *bool) *GroupUpdate {
+	if v != nil {
+		_u.SetAutoAssignAccountsByRate(*v)
+	}
+	return _u
+}
+
+// SetAutoAssignMaxRate sets the "auto_assign_max_rate" field.
+func (_u *GroupUpdate) SetAutoAssignMaxRate(v float64) *GroupUpdate {
+	_u.mutation.ResetAutoAssignMaxRate()
+	_u.mutation.SetAutoAssignMaxRate(v)
+	return _u
+}
+
+// SetNillableAutoAssignMaxRate sets the "auto_assign_max_rate" field if the given value is not nil.
+func (_u *GroupUpdate) SetNillableAutoAssignMaxRate(v *float64) *GroupUpdate {
+	if v != nil {
+		_u.SetAutoAssignMaxRate(*v)
+	}
+	return _u
+}
+
+// AddAutoAssignMaxRate adds value to the "auto_assign_max_rate" field.
+func (_u *GroupUpdate) AddAutoAssignMaxRate(v float64) *GroupUpdate {
+	_u.mutation.AddAutoAssignMaxRate(v)
+	return _u
+}
+
+// ClearAutoAssignMaxRate clears the value of the "auto_assign_max_rate" field.
+func (_u *GroupUpdate) ClearAutoAssignMaxRate() *GroupUpdate {
+	_u.mutation.ClearAutoAssignMaxRate()
+	return _u
+}
+
 // SetPeakRateEnabled sets the "peak_rate_enabled" field.
 func (_u *GroupUpdate) SetPeakRateEnabled(v bool) *GroupUpdate {
 	_u.mutation.SetPeakRateEnabled(v)
@@ -1353,6 +1394,18 @@ func (_u *GroupUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.AddedRateMultiplier(); ok {
 		_spec.AddField(group.FieldRateMultiplier, field.TypeFloat64, value)
 	}
+	if value, ok := _u.mutation.AutoAssignAccountsByRate(); ok {
+		_spec.SetField(group.FieldAutoAssignAccountsByRate, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.AutoAssignMaxRate(); ok {
+		_spec.SetField(group.FieldAutoAssignMaxRate, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedAutoAssignMaxRate(); ok {
+		_spec.AddField(group.FieldAutoAssignMaxRate, field.TypeFloat64, value)
+	}
+	if _u.mutation.AutoAssignMaxRateCleared() {
+		_spec.ClearField(group.FieldAutoAssignMaxRate, field.TypeFloat64)
+	}
 	if value, ok := _u.mutation.PeakRateEnabled(); ok {
 		_spec.SetField(group.FieldPeakRateEnabled, field.TypeBool, value)
 	}
@@ -2007,6 +2060,47 @@ func (_u *GroupUpdateOne) SetNillableRateMultiplier(v *float64) *GroupUpdateOne 
 // AddRateMultiplier adds value to the "rate_multiplier" field.
 func (_u *GroupUpdateOne) AddRateMultiplier(v float64) *GroupUpdateOne {
 	_u.mutation.AddRateMultiplier(v)
+	return _u
+}
+
+// SetAutoAssignAccountsByRate sets the "auto_assign_accounts_by_rate" field.
+func (_u *GroupUpdateOne) SetAutoAssignAccountsByRate(v bool) *GroupUpdateOne {
+	_u.mutation.SetAutoAssignAccountsByRate(v)
+	return _u
+}
+
+// SetNillableAutoAssignAccountsByRate sets the "auto_assign_accounts_by_rate" field if the given value is not nil.
+func (_u *GroupUpdateOne) SetNillableAutoAssignAccountsByRate(v *bool) *GroupUpdateOne {
+	if v != nil {
+		_u.SetAutoAssignAccountsByRate(*v)
+	}
+	return _u
+}
+
+// SetAutoAssignMaxRate sets the "auto_assign_max_rate" field.
+func (_u *GroupUpdateOne) SetAutoAssignMaxRate(v float64) *GroupUpdateOne {
+	_u.mutation.ResetAutoAssignMaxRate()
+	_u.mutation.SetAutoAssignMaxRate(v)
+	return _u
+}
+
+// SetNillableAutoAssignMaxRate sets the "auto_assign_max_rate" field if the given value is not nil.
+func (_u *GroupUpdateOne) SetNillableAutoAssignMaxRate(v *float64) *GroupUpdateOne {
+	if v != nil {
+		_u.SetAutoAssignMaxRate(*v)
+	}
+	return _u
+}
+
+// AddAutoAssignMaxRate adds value to the "auto_assign_max_rate" field.
+func (_u *GroupUpdateOne) AddAutoAssignMaxRate(v float64) *GroupUpdateOne {
+	_u.mutation.AddAutoAssignMaxRate(v)
+	return _u
+}
+
+// ClearAutoAssignMaxRate clears the value of the "auto_assign_max_rate" field.
+func (_u *GroupUpdateOne) ClearAutoAssignMaxRate() *GroupUpdateOne {
+	_u.mutation.ClearAutoAssignMaxRate()
 	return _u
 }
 
@@ -3275,6 +3369,18 @@ func (_u *GroupUpdateOne) sqlSave(ctx context.Context) (_node *Group, err error)
 	}
 	if value, ok := _u.mutation.AddedRateMultiplier(); ok {
 		_spec.AddField(group.FieldRateMultiplier, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AutoAssignAccountsByRate(); ok {
+		_spec.SetField(group.FieldAutoAssignAccountsByRate, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.AutoAssignMaxRate(); ok {
+		_spec.SetField(group.FieldAutoAssignMaxRate, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedAutoAssignMaxRate(); ok {
+		_spec.AddField(group.FieldAutoAssignMaxRate, field.TypeFloat64, value)
+	}
+	if _u.mutation.AutoAssignMaxRateCleared() {
+		_spec.ClearField(group.FieldAutoAssignMaxRate, field.TypeFloat64)
 	}
 	if value, ok := _u.mutation.PeakRateEnabled(); ok {
 		_spec.SetField(group.FieldPeakRateEnabled, field.TypeBool, value)

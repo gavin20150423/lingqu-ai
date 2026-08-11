@@ -61,6 +61,8 @@ func createGroupRecord(ctx context.Context, client *dbent.Client, groupIn *servi
 		SetDescription(groupIn.Description).
 		SetPlatform(groupIn.Platform).
 		SetRateMultiplier(groupIn.RateMultiplier).
+		SetAutoAssignAccountsByRate(groupIn.AutoAssignAccountsByRate).
+		SetNillableAutoAssignMaxRate(groupIn.AutoAssignMaxRate).
 		SetSortOrder(groupIn.SortOrder).
 		SetIsExclusive(groupIn.IsExclusive).
 		SetStatus(groupIn.Status).
@@ -234,6 +236,7 @@ func (r *groupRepository) Update(ctx context.Context, groupIn *service.Group) er
 		SetDescription(groupIn.Description).
 		SetPlatform(groupIn.Platform).
 		SetRateMultiplier(groupIn.RateMultiplier).
+		SetAutoAssignAccountsByRate(groupIn.AutoAssignAccountsByRate).
 		SetIsExclusive(groupIn.IsExclusive).
 		SetStatus(groupIn.Status).
 		SetSubscriptionType(groupIn.SubscriptionType).
@@ -281,6 +284,11 @@ func (r *groupRepository) Update(ctx context.Context, groupIn *service.Group) er
 		builder = builder.SetDailyLimitUsd(*groupIn.DailyLimitUSD)
 	} else {
 		builder = builder.ClearDailyLimitUsd()
+	}
+	if groupIn.AutoAssignMaxRate != nil {
+		builder = builder.SetAutoAssignMaxRate(*groupIn.AutoAssignMaxRate)
+	} else {
+		builder = builder.ClearAutoAssignMaxRate()
 	}
 	if groupIn.WeeklyLimitUSD != nil {
 		builder = builder.SetWeeklyLimitUsd(*groupIn.WeeklyLimitUSD)

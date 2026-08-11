@@ -78,6 +78,20 @@ func (_u *AccountGroupUpdate) AddPriority(v int) *AccountGroupUpdate {
 	return _u
 }
 
+// SetAutoManaged sets the "auto_managed" field.
+func (_u *AccountGroupUpdate) SetAutoManaged(v bool) *AccountGroupUpdate {
+	_u.mutation.SetAutoManaged(v)
+	return _u
+}
+
+// SetNillableAutoManaged sets the "auto_managed" field if the given value is not nil.
+func (_u *AccountGroupUpdate) SetNillableAutoManaged(v *bool) *AccountGroupUpdate {
+	if v != nil {
+		_u.SetAutoManaged(*v)
+	}
+	return _u
+}
+
 // SetAccount sets the "account" edge to the Account entity.
 func (_u *AccountGroupUpdate) SetAccount(v *Account) *AccountGroupUpdate {
 	return _u.SetAccountID(v.ID)
@@ -160,6 +174,9 @@ func (_u *AccountGroupUpdate) sqlSave(ctx context.Context) (_node int, err error
 	}
 	if value, ok := _u.mutation.AddedPriority(); ok {
 		_spec.AddField(accountgroup.FieldPriority, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AutoManaged(); ok {
+		_spec.SetField(accountgroup.FieldAutoManaged, field.TypeBool, value)
 	}
 	if _u.mutation.AccountCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -288,6 +305,20 @@ func (_u *AccountGroupUpdateOne) AddPriority(v int) *AccountGroupUpdateOne {
 	return _u
 }
 
+// SetAutoManaged sets the "auto_managed" field.
+func (_u *AccountGroupUpdateOne) SetAutoManaged(v bool) *AccountGroupUpdateOne {
+	_u.mutation.SetAutoManaged(v)
+	return _u
+}
+
+// SetNillableAutoManaged sets the "auto_managed" field if the given value is not nil.
+func (_u *AccountGroupUpdateOne) SetNillableAutoManaged(v *bool) *AccountGroupUpdateOne {
+	if v != nil {
+		_u.SetAutoManaged(*v)
+	}
+	return _u
+}
+
 // SetAccount sets the "account" edge to the Account entity.
 func (_u *AccountGroupUpdateOne) SetAccount(v *Account) *AccountGroupUpdateOne {
 	return _u.SetAccountID(v.ID)
@@ -402,6 +433,9 @@ func (_u *AccountGroupUpdateOne) sqlSave(ctx context.Context) (_node *AccountGro
 	}
 	if value, ok := _u.mutation.AddedPriority(); ok {
 		_spec.AddField(accountgroup.FieldPriority, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AutoManaged(); ok {
+		_spec.SetField(accountgroup.FieldAutoManaged, field.TypeBool, value)
 	}
 	if _u.mutation.AccountCleared() {
 		edge := &sqlgraph.EdgeSpec{

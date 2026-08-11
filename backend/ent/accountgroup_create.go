@@ -64,6 +64,20 @@ func (_c *AccountGroupCreate) SetNillableCreatedAt(v *time.Time) *AccountGroupCr
 	return _c
 }
 
+// SetAutoManaged sets the "auto_managed" field.
+func (_c *AccountGroupCreate) SetAutoManaged(v bool) *AccountGroupCreate {
+	_c.mutation.SetAutoManaged(v)
+	return _c
+}
+
+// SetNillableAutoManaged sets the "auto_managed" field if the given value is not nil.
+func (_c *AccountGroupCreate) SetNillableAutoManaged(v *bool) *AccountGroupCreate {
+	if v != nil {
+		_c.SetAutoManaged(*v)
+	}
+	return _c
+}
+
 // SetAccount sets the "account" edge to the Account entity.
 func (_c *AccountGroupCreate) SetAccount(v *Account) *AccountGroupCreate {
 	return _c.SetAccountID(v.ID)
@@ -117,6 +131,10 @@ func (_c *AccountGroupCreate) defaults() {
 		v := accountgroup.DefaultCreatedAt()
 		_c.mutation.SetCreatedAt(v)
 	}
+	if _, ok := _c.mutation.AutoManaged(); !ok {
+		v := accountgroup.DefaultAutoManaged
+		_c.mutation.SetAutoManaged(v)
+	}
 }
 
 // check runs all checks and user-defined validators on the builder.
@@ -132,6 +150,9 @@ func (_c *AccountGroupCreate) check() error {
 	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "AccountGroup.created_at"`)}
+	}
+	if _, ok := _c.mutation.AutoManaged(); !ok {
+		return &ValidationError{Name: "auto_managed", err: errors.New(`ent: missing required field "AccountGroup.auto_managed"`)}
 	}
 	if len(_c.mutation.AccountIDs()) == 0 {
 		return &ValidationError{Name: "account", err: errors.New(`ent: missing required edge "AccountGroup.account"`)}
@@ -169,6 +190,10 @@ func (_c *AccountGroupCreate) createSpec() (*AccountGroup, *sqlgraph.CreateSpec)
 	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(accountgroup.FieldCreatedAt, field.TypeTime, value)
 		_node.CreatedAt = value
+	}
+	if value, ok := _c.mutation.AutoManaged(); ok {
+		_spec.SetField(accountgroup.FieldAutoManaged, field.TypeBool, value)
+		_node.AutoManaged = value
 	}
 	if nodes := _c.mutation.AccountIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
@@ -298,6 +323,18 @@ func (u *AccountGroupUpsert) AddPriority(v int) *AccountGroupUpsert {
 	return u
 }
 
+// SetAutoManaged sets the "auto_managed" field.
+func (u *AccountGroupUpsert) SetAutoManaged(v bool) *AccountGroupUpsert {
+	u.Set(accountgroup.FieldAutoManaged, v)
+	return u
+}
+
+// UpdateAutoManaged sets the "auto_managed" field to the value that was provided on create.
+func (u *AccountGroupUpsert) UpdateAutoManaged() *AccountGroupUpsert {
+	u.SetExcluded(accountgroup.FieldAutoManaged)
+	return u
+}
+
 // UpdateNewValues updates the mutable fields using the new values that were set on create.
 // Using this option is equivalent to using:
 //
@@ -389,6 +426,20 @@ func (u *AccountGroupUpsertOne) AddPriority(v int) *AccountGroupUpsertOne {
 func (u *AccountGroupUpsertOne) UpdatePriority() *AccountGroupUpsertOne {
 	return u.Update(func(s *AccountGroupUpsert) {
 		s.UpdatePriority()
+	})
+}
+
+// SetAutoManaged sets the "auto_managed" field.
+func (u *AccountGroupUpsertOne) SetAutoManaged(v bool) *AccountGroupUpsertOne {
+	return u.Update(func(s *AccountGroupUpsert) {
+		s.SetAutoManaged(v)
+	})
+}
+
+// UpdateAutoManaged sets the "auto_managed" field to the value that was provided on create.
+func (u *AccountGroupUpsertOne) UpdateAutoManaged() *AccountGroupUpsertOne {
+	return u.Update(func(s *AccountGroupUpsert) {
+		s.UpdateAutoManaged()
 	})
 }
 
@@ -626,6 +677,20 @@ func (u *AccountGroupUpsertBulk) AddPriority(v int) *AccountGroupUpsertBulk {
 func (u *AccountGroupUpsertBulk) UpdatePriority() *AccountGroupUpsertBulk {
 	return u.Update(func(s *AccountGroupUpsert) {
 		s.UpdatePriority()
+	})
+}
+
+// SetAutoManaged sets the "auto_managed" field.
+func (u *AccountGroupUpsertBulk) SetAutoManaged(v bool) *AccountGroupUpsertBulk {
+	return u.Update(func(s *AccountGroupUpsert) {
+		s.SetAutoManaged(v)
+	})
+}
+
+// UpdateAutoManaged sets the "auto_managed" field to the value that was provided on create.
+func (u *AccountGroupUpsertBulk) UpdateAutoManaged() *AccountGroupUpsertBulk {
+	return u.Update(func(s *AccountGroupUpsert) {
+		s.UpdateAutoManaged()
 	})
 }
 

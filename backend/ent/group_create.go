@@ -105,6 +105,34 @@ func (_c *GroupCreate) SetNillableRateMultiplier(v *float64) *GroupCreate {
 	return _c
 }
 
+// SetAutoAssignAccountsByRate sets the "auto_assign_accounts_by_rate" field.
+func (_c *GroupCreate) SetAutoAssignAccountsByRate(v bool) *GroupCreate {
+	_c.mutation.SetAutoAssignAccountsByRate(v)
+	return _c
+}
+
+// SetNillableAutoAssignAccountsByRate sets the "auto_assign_accounts_by_rate" field if the given value is not nil.
+func (_c *GroupCreate) SetNillableAutoAssignAccountsByRate(v *bool) *GroupCreate {
+	if v != nil {
+		_c.SetAutoAssignAccountsByRate(*v)
+	}
+	return _c
+}
+
+// SetAutoAssignMaxRate sets the "auto_assign_max_rate" field.
+func (_c *GroupCreate) SetAutoAssignMaxRate(v float64) *GroupCreate {
+	_c.mutation.SetAutoAssignMaxRate(v)
+	return _c
+}
+
+// SetNillableAutoAssignMaxRate sets the "auto_assign_max_rate" field if the given value is not nil.
+func (_c *GroupCreate) SetNillableAutoAssignMaxRate(v *float64) *GroupCreate {
+	if v != nil {
+		_c.SetAutoAssignMaxRate(*v)
+	}
+	return _c
+}
+
 // SetPeakRateEnabled sets the "peak_rate_enabled" field.
 func (_c *GroupCreate) SetPeakRateEnabled(v bool) *GroupCreate {
 	_c.mutation.SetPeakRateEnabled(v)
@@ -912,6 +940,10 @@ func (_c *GroupCreate) defaults() error {
 		v := group.DefaultRateMultiplier
 		_c.mutation.SetRateMultiplier(v)
 	}
+	if _, ok := _c.mutation.AutoAssignAccountsByRate(); !ok {
+		v := group.DefaultAutoAssignAccountsByRate
+		_c.mutation.SetAutoAssignAccountsByRate(v)
+	}
 	if _, ok := _c.mutation.PeakRateEnabled(); !ok {
 		v := group.DefaultPeakRateEnabled
 		_c.mutation.SetPeakRateEnabled(v)
@@ -1073,6 +1105,9 @@ func (_c *GroupCreate) check() error {
 	}
 	if _, ok := _c.mutation.RateMultiplier(); !ok {
 		return &ValidationError{Name: "rate_multiplier", err: errors.New(`ent: missing required field "Group.rate_multiplier"`)}
+	}
+	if _, ok := _c.mutation.AutoAssignAccountsByRate(); !ok {
+		return &ValidationError{Name: "auto_assign_accounts_by_rate", err: errors.New(`ent: missing required field "Group.auto_assign_accounts_by_rate"`)}
 	}
 	if _, ok := _c.mutation.PeakRateEnabled(); !ok {
 		return &ValidationError{Name: "peak_rate_enabled", err: errors.New(`ent: missing required field "Group.peak_rate_enabled"`)}
@@ -1269,6 +1304,14 @@ func (_c *GroupCreate) createSpec() (*Group, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.RateMultiplier(); ok {
 		_spec.SetField(group.FieldRateMultiplier, field.TypeFloat64, value)
 		_node.RateMultiplier = value
+	}
+	if value, ok := _c.mutation.AutoAssignAccountsByRate(); ok {
+		_spec.SetField(group.FieldAutoAssignAccountsByRate, field.TypeBool, value)
+		_node.AutoAssignAccountsByRate = value
+	}
+	if value, ok := _c.mutation.AutoAssignMaxRate(); ok {
+		_spec.SetField(group.FieldAutoAssignMaxRate, field.TypeFloat64, value)
+		_node.AutoAssignMaxRate = &value
 	}
 	if value, ok := _c.mutation.PeakRateEnabled(); ok {
 		_spec.SetField(group.FieldPeakRateEnabled, field.TypeBool, value)
@@ -1697,6 +1740,42 @@ func (u *GroupUpsert) UpdateRateMultiplier() *GroupUpsert {
 // AddRateMultiplier adds v to the "rate_multiplier" field.
 func (u *GroupUpsert) AddRateMultiplier(v float64) *GroupUpsert {
 	u.Add(group.FieldRateMultiplier, v)
+	return u
+}
+
+// SetAutoAssignAccountsByRate sets the "auto_assign_accounts_by_rate" field.
+func (u *GroupUpsert) SetAutoAssignAccountsByRate(v bool) *GroupUpsert {
+	u.Set(group.FieldAutoAssignAccountsByRate, v)
+	return u
+}
+
+// UpdateAutoAssignAccountsByRate sets the "auto_assign_accounts_by_rate" field to the value that was provided on create.
+func (u *GroupUpsert) UpdateAutoAssignAccountsByRate() *GroupUpsert {
+	u.SetExcluded(group.FieldAutoAssignAccountsByRate)
+	return u
+}
+
+// SetAutoAssignMaxRate sets the "auto_assign_max_rate" field.
+func (u *GroupUpsert) SetAutoAssignMaxRate(v float64) *GroupUpsert {
+	u.Set(group.FieldAutoAssignMaxRate, v)
+	return u
+}
+
+// UpdateAutoAssignMaxRate sets the "auto_assign_max_rate" field to the value that was provided on create.
+func (u *GroupUpsert) UpdateAutoAssignMaxRate() *GroupUpsert {
+	u.SetExcluded(group.FieldAutoAssignMaxRate)
+	return u
+}
+
+// AddAutoAssignMaxRate adds v to the "auto_assign_max_rate" field.
+func (u *GroupUpsert) AddAutoAssignMaxRate(v float64) *GroupUpsert {
+	u.Add(group.FieldAutoAssignMaxRate, v)
+	return u
+}
+
+// ClearAutoAssignMaxRate clears the value of the "auto_assign_max_rate" field.
+func (u *GroupUpsert) ClearAutoAssignMaxRate() *GroupUpsert {
+	u.SetNull(group.FieldAutoAssignMaxRate)
 	return u
 }
 
@@ -2622,6 +2701,48 @@ func (u *GroupUpsertOne) AddRateMultiplier(v float64) *GroupUpsertOne {
 func (u *GroupUpsertOne) UpdateRateMultiplier() *GroupUpsertOne {
 	return u.Update(func(s *GroupUpsert) {
 		s.UpdateRateMultiplier()
+	})
+}
+
+// SetAutoAssignAccountsByRate sets the "auto_assign_accounts_by_rate" field.
+func (u *GroupUpsertOne) SetAutoAssignAccountsByRate(v bool) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetAutoAssignAccountsByRate(v)
+	})
+}
+
+// UpdateAutoAssignAccountsByRate sets the "auto_assign_accounts_by_rate" field to the value that was provided on create.
+func (u *GroupUpsertOne) UpdateAutoAssignAccountsByRate() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateAutoAssignAccountsByRate()
+	})
+}
+
+// SetAutoAssignMaxRate sets the "auto_assign_max_rate" field.
+func (u *GroupUpsertOne) SetAutoAssignMaxRate(v float64) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetAutoAssignMaxRate(v)
+	})
+}
+
+// AddAutoAssignMaxRate adds v to the "auto_assign_max_rate" field.
+func (u *GroupUpsertOne) AddAutoAssignMaxRate(v float64) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.AddAutoAssignMaxRate(v)
+	})
+}
+
+// UpdateAutoAssignMaxRate sets the "auto_assign_max_rate" field to the value that was provided on create.
+func (u *GroupUpsertOne) UpdateAutoAssignMaxRate() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateAutoAssignMaxRate()
+	})
+}
+
+// ClearAutoAssignMaxRate clears the value of the "auto_assign_max_rate" field.
+func (u *GroupUpsertOne) ClearAutoAssignMaxRate() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.ClearAutoAssignMaxRate()
 	})
 }
 
@@ -3844,6 +3965,48 @@ func (u *GroupUpsertBulk) AddRateMultiplier(v float64) *GroupUpsertBulk {
 func (u *GroupUpsertBulk) UpdateRateMultiplier() *GroupUpsertBulk {
 	return u.Update(func(s *GroupUpsert) {
 		s.UpdateRateMultiplier()
+	})
+}
+
+// SetAutoAssignAccountsByRate sets the "auto_assign_accounts_by_rate" field.
+func (u *GroupUpsertBulk) SetAutoAssignAccountsByRate(v bool) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetAutoAssignAccountsByRate(v)
+	})
+}
+
+// UpdateAutoAssignAccountsByRate sets the "auto_assign_accounts_by_rate" field to the value that was provided on create.
+func (u *GroupUpsertBulk) UpdateAutoAssignAccountsByRate() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateAutoAssignAccountsByRate()
+	})
+}
+
+// SetAutoAssignMaxRate sets the "auto_assign_max_rate" field.
+func (u *GroupUpsertBulk) SetAutoAssignMaxRate(v float64) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetAutoAssignMaxRate(v)
+	})
+}
+
+// AddAutoAssignMaxRate adds v to the "auto_assign_max_rate" field.
+func (u *GroupUpsertBulk) AddAutoAssignMaxRate(v float64) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.AddAutoAssignMaxRate(v)
+	})
+}
+
+// UpdateAutoAssignMaxRate sets the "auto_assign_max_rate" field to the value that was provided on create.
+func (u *GroupUpsertBulk) UpdateAutoAssignMaxRate() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateAutoAssignMaxRate()
+	})
+}
+
+// ClearAutoAssignMaxRate clears the value of the "auto_assign_max_rate" field.
+func (u *GroupUpsertBulk) ClearAutoAssignMaxRate() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.ClearAutoAssignMaxRate()
 	})
 }
 

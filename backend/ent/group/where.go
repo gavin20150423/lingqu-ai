@@ -85,6 +85,16 @@ func RateMultiplier(v float64) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldRateMultiplier, v))
 }
 
+// AutoAssignAccountsByRate applies equality check predicate on the "auto_assign_accounts_by_rate" field. It's identical to AutoAssignAccountsByRateEQ.
+func AutoAssignAccountsByRate(v bool) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldAutoAssignAccountsByRate, v))
+}
+
+// AutoAssignMaxRate applies equality check predicate on the "auto_assign_max_rate" field. It's identical to AutoAssignMaxRateEQ.
+func AutoAssignMaxRate(v float64) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldAutoAssignMaxRate, v))
+}
+
 // PeakRateEnabled applies equality check predicate on the "peak_rate_enabled" field. It's identical to PeakRateEnabledEQ.
 func PeakRateEnabled(v bool) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldPeakRateEnabled, v))
@@ -613,6 +623,66 @@ func RateMultiplierLT(v float64) predicate.Group {
 // RateMultiplierLTE applies the LTE predicate on the "rate_multiplier" field.
 func RateMultiplierLTE(v float64) predicate.Group {
 	return predicate.Group(sql.FieldLTE(FieldRateMultiplier, v))
+}
+
+// AutoAssignAccountsByRateEQ applies the EQ predicate on the "auto_assign_accounts_by_rate" field.
+func AutoAssignAccountsByRateEQ(v bool) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldAutoAssignAccountsByRate, v))
+}
+
+// AutoAssignAccountsByRateNEQ applies the NEQ predicate on the "auto_assign_accounts_by_rate" field.
+func AutoAssignAccountsByRateNEQ(v bool) predicate.Group {
+	return predicate.Group(sql.FieldNEQ(FieldAutoAssignAccountsByRate, v))
+}
+
+// AutoAssignMaxRateEQ applies the EQ predicate on the "auto_assign_max_rate" field.
+func AutoAssignMaxRateEQ(v float64) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldAutoAssignMaxRate, v))
+}
+
+// AutoAssignMaxRateNEQ applies the NEQ predicate on the "auto_assign_max_rate" field.
+func AutoAssignMaxRateNEQ(v float64) predicate.Group {
+	return predicate.Group(sql.FieldNEQ(FieldAutoAssignMaxRate, v))
+}
+
+// AutoAssignMaxRateIn applies the In predicate on the "auto_assign_max_rate" field.
+func AutoAssignMaxRateIn(vs ...float64) predicate.Group {
+	return predicate.Group(sql.FieldIn(FieldAutoAssignMaxRate, vs...))
+}
+
+// AutoAssignMaxRateNotIn applies the NotIn predicate on the "auto_assign_max_rate" field.
+func AutoAssignMaxRateNotIn(vs ...float64) predicate.Group {
+	return predicate.Group(sql.FieldNotIn(FieldAutoAssignMaxRate, vs...))
+}
+
+// AutoAssignMaxRateGT applies the GT predicate on the "auto_assign_max_rate" field.
+func AutoAssignMaxRateGT(v float64) predicate.Group {
+	return predicate.Group(sql.FieldGT(FieldAutoAssignMaxRate, v))
+}
+
+// AutoAssignMaxRateGTE applies the GTE predicate on the "auto_assign_max_rate" field.
+func AutoAssignMaxRateGTE(v float64) predicate.Group {
+	return predicate.Group(sql.FieldGTE(FieldAutoAssignMaxRate, v))
+}
+
+// AutoAssignMaxRateLT applies the LT predicate on the "auto_assign_max_rate" field.
+func AutoAssignMaxRateLT(v float64) predicate.Group {
+	return predicate.Group(sql.FieldLT(FieldAutoAssignMaxRate, v))
+}
+
+// AutoAssignMaxRateLTE applies the LTE predicate on the "auto_assign_max_rate" field.
+func AutoAssignMaxRateLTE(v float64) predicate.Group {
+	return predicate.Group(sql.FieldLTE(FieldAutoAssignMaxRate, v))
+}
+
+// AutoAssignMaxRateIsNil applies the IsNil predicate on the "auto_assign_max_rate" field.
+func AutoAssignMaxRateIsNil() predicate.Group {
+	return predicate.Group(sql.FieldIsNull(FieldAutoAssignMaxRate))
+}
+
+// AutoAssignMaxRateNotNil applies the NotNil predicate on the "auto_assign_max_rate" field.
+func AutoAssignMaxRateNotNil() predicate.Group {
+	return predicate.Group(sql.FieldNotNull(FieldAutoAssignMaxRate))
 }
 
 // PeakRateEnabledEQ applies the EQ predicate on the "peak_rate_enabled" field.

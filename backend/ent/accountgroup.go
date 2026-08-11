@@ -25,6 +25,8 @@ type AccountGroup struct {
 	Priority int `json:"priority,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
 	CreatedAt time.Time `json:"created_at,omitempty"`
+	// AutoManaged holds the value of the "auto_managed" field.
+	AutoManaged bool `json:"auto_managed,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the AccountGroupQuery when eager-loading is set.
 	Edges        AccountGroupEdges `json:"edges"`
@@ -69,6 +71,8 @@ func (*AccountGroup) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
+		case accountgroup.FieldAutoManaged:
+			values[i] = new(sql.NullBool)
 		case accountgroup.FieldAccountID, accountgroup.FieldGroupID, accountgroup.FieldPriority:
 			values[i] = new(sql.NullInt64)
 		case accountgroup.FieldCreatedAt:
@@ -111,6 +115,12 @@ func (_m *AccountGroup) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
 			} else if value.Valid {
 				_m.CreatedAt = value.Time
+			}
+		case accountgroup.FieldAutoManaged:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field auto_managed", values[i])
+			} else if value.Valid {
+				_m.AutoManaged = value.Bool
 			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
@@ -168,6 +178,9 @@ func (_m *AccountGroup) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
 	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))
+	builder.WriteString(", ")
+	builder.WriteString("auto_managed=")
+	builder.WriteString(fmt.Sprintf("%v", _m.AutoManaged))
 	builder.WriteByte(')')
 	return builder.String()
 }

@@ -301,6 +301,19 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 	if input.RateMultiplier <= 0 {
 		return nil, errors.New("rate_multiplier must be > 0")
 	}
+	if input.AutoAssignAccountsByRate {
+		if input.AutoAssignMaxRate == nil {
+			return nil, errors.New("auto_assign_max_rate is required when automatic account assignment is enabled")
+		}
+		if *input.AutoAssignMaxRate < 0 {
+			return nil, errors.New("auto_assign_max_rate must be >= 0")
+		}
+		if len(input.CopyAccountsFromGroupIDs) > 0 {
+			return nil, infraerrors.BadRequest("DYNAMIC_GROUP_COPY_CONFLICT", "automatic account assignment cannot be combined with copying accounts from other groups")
+		}
+	} else {
+		input.AutoAssignMaxRate = nil
+	}
 
 	platform := NormalizeGroupPlatform(input.Platform)
 	maxReasoningEffort, err := normalizeMaxReasoningEffortForPlatform(platform, input.MaxReasoningEffort)
@@ -451,6 +464,8 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 		Description:                     input.Description,
 		Platform:                        platform,
 		RateMultiplier:                  input.RateMultiplier,
+		AutoAssignAccountsByRate:        input.AutoAssignAccountsByRate,
+		AutoAssignMaxRate:               input.AutoAssignMaxRate,
 		IsExclusive:                     input.IsExclusive,
 		Status:                          StatusActive,
 		SubscriptionType:                subscriptionType,
@@ -642,6 +657,24 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 			return nil, errors.New("rate_multiplier must be > 0")
 		}
 		group.RateMultiplier = *input.RateMultiplier
+	}
+	if input.AutoAssignAccountsByRate != nil {
+		group.AutoAssignAccountsByRate = *input.AutoAssignAccountsByRate
+		if !group.AutoAssignAccountsByRate {
+			group.AutoAssignMaxRate = nil
+		}
+	}
+	if input.AutoAssignMaxRate != nil {
+		if *input.AutoAssignMaxRate < 0 {
+			return nil, errors.New("auto_assign_max_rate must be >= 0")
+		}
+		group.AutoAssignMaxRate = input.AutoAssignMaxRate
+	}
+	if group.AutoAssignAccountsByRate && group.AutoAssignMaxRate == nil {
+		return nil, errors.New("auto_assign_max_rate is required when automatic account assignment is enabled")
+	}
+	if group.AutoAssignAccountsByRate && len(input.CopyAccountsFromGroupIDs) > 0 {
+		return nil, infraerrors.BadRequest("DYNAMIC_GROUP_COPY_CONFLICT", "automatic account assignment cannot be combined with copying accounts from other groups")
 	}
 	if input.IsExclusive != nil {
 		group.IsExclusive = *input.IsExclusive

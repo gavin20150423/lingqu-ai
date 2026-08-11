@@ -36,6 +36,7 @@ func (AccountGroup) Fields() []ent.Field {
 			Immutable().
 			Default(time.Now).
 			SchemaType(map[string]string{dialect.Postgres: "timestamptz"}),
+		field.Bool("auto_managed").Default(false),
 	}
 }
 

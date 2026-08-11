@@ -28,6 +28,10 @@ const (
 	FieldDescription = "description"
 	// FieldRateMultiplier holds the string denoting the rate_multiplier field in the database.
 	FieldRateMultiplier = "rate_multiplier"
+	// FieldAutoAssignAccountsByRate holds the string denoting the auto_assign_accounts_by_rate field in the database.
+	FieldAutoAssignAccountsByRate = "auto_assign_accounts_by_rate"
+	// FieldAutoAssignMaxRate holds the string denoting the auto_assign_max_rate field in the database.
+	FieldAutoAssignMaxRate = "auto_assign_max_rate"
 	// FieldPeakRateEnabled holds the string denoting the peak_rate_enabled field in the database.
 	FieldPeakRateEnabled = "peak_rate_enabled"
 	// FieldPeakStart holds the string denoting the peak_start field in the database.
@@ -207,6 +211,8 @@ var Columns = []string{
 	FieldName,
 	FieldDescription,
 	FieldRateMultiplier,
+	FieldAutoAssignAccountsByRate,
+	FieldAutoAssignMaxRate,
 	FieldPeakRateEnabled,
 	FieldPeakStart,
 	FieldPeakEnd,
@@ -295,6 +301,8 @@ var (
 	NameValidator func(string) error
 	// DefaultRateMultiplier holds the default value on creation for the "rate_multiplier" field.
 	DefaultRateMultiplier float64
+	// DefaultAutoAssignAccountsByRate holds the default value on creation for the "auto_assign_accounts_by_rate" field.
+	DefaultAutoAssignAccountsByRate bool
 	// DefaultPeakRateEnabled holds the default value on creation for the "peak_rate_enabled" field.
 	DefaultPeakRateEnabled bool
 	// DefaultPeakStart holds the default value on creation for the "peak_start" field.
@@ -419,6 +427,16 @@ func ByDescription(opts ...sql.OrderTermOption) OrderOption {
 // ByRateMultiplier orders the results by the rate_multiplier field.
 func ByRateMultiplier(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldRateMultiplier, opts...).ToFunc()
+}
+
+// ByAutoAssignAccountsByRate orders the results by the auto_assign_accounts_by_rate field.
+func ByAutoAssignAccountsByRate(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAutoAssignAccountsByRate, opts...).ToFunc()
+}
+
+// ByAutoAssignMaxRate orders the results by the auto_assign_max_rate field.
+func ByAutoAssignMaxRate(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAutoAssignMaxRate, opts...).ToFunc()
 }
 
 // ByPeakRateEnabled orders the results by the peak_rate_enabled field.

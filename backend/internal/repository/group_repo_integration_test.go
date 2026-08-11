@@ -68,6 +68,67 @@ func (s *GroupRepoSuite) TestCreate() {
 	s.Require().Equal("test-create", got.Name)
 }
 
+func (s *GroupRepoSuite) TestDynamicRateGroupKeepsBindingsInSync() {
+	insertAccount := func(name, platform string, rate float64) int64 {
+		var id int64
+		s.Require().NoError(scanSingleRow(
+			s.ctx,
+			s.tx,
+			"INSERT INTO accounts (name, platform, type, rate_multiplier) VALUES ($1, $2, $3, $4) RETURNING id",
+			[]any{name, platform, service.AccountTypeOAuth, rate},
+			&id,
+		))
+		return id
+	}
+
+	belowID := insertAccount("dynamic-below", service.PlatformOpenAI, 0.04)
+	equalID := insertAccount("dynamic-equal", service.PlatformOpenAI, 0.05)
+	aboveID := insertAccount("dynamic-above", service.PlatformOpenAI, 0.06)
+	otherPlatformID := insertAccount("dynamic-other", service.PlatformAnthropic, 0.01)
+	maxRate := 0.05
+	dynamicGroup := &service.Group{
+		Name:                     "dynamic-openai",
+		Platform:                 service.PlatformOpenAI,
+		RateMultiplier:           1,
+		AutoAssignAccountsByRate: true,
+		AutoAssignMaxRate:        &maxRate,
+		Status:                   service.StatusActive,
+		SubscriptionType:         service.SubscriptionTypeStandard,
+	}
+	s.Require().NoError(s.repo.Create(s.ctx, dynamicGroup))
+
+	assertBindings := func(want ...int64) {
+		rows, err := s.tx.QueryContext(s.ctx, "SELECT account_id FROM account_groups WHERE group_id = $1 ORDER BY account_id", dynamicGroup.ID)
+		s.Require().NoError(err)
+		defer func() { _ = rows.Close() }()
+		var got []int64
+		for rows.Next() {
+			var id int64
+			s.Require().NoError(rows.Scan(&id))
+			got = append(got, id)
+		}
+		s.Require().NoError(rows.Err())
+		s.Require().ElementsMatch(want, got)
+	}
+
+	assertBindings(belowID, equalID)
+	_, err := s.tx.ExecContext(s.ctx, "UPDATE accounts SET rate_multiplier = 0.051 WHERE id = $1", equalID)
+	s.Require().NoError(err)
+	assertBindings(belowID)
+
+	_, err = s.tx.ExecContext(s.ctx, "UPDATE accounts SET rate_multiplier = 0.05 WHERE id = $1", aboveID)
+	s.Require().NoError(err)
+	assertBindings(belowID, aboveID)
+
+	_, err = s.tx.ExecContext(s.ctx, "INSERT INTO account_groups (account_id, group_id, priority, created_at) VALUES ($1, $2, 50, NOW())", otherPlatformID, dynamicGroup.ID)
+	s.Require().NoError(err)
+	assertBindings(belowID, aboveID)
+
+	_, err = s.tx.ExecContext(s.ctx, "DELETE FROM account_groups WHERE account_id = $1 AND group_id = $2", belowID, dynamicGroup.ID)
+	s.Require().NoError(err)
+	assertBindings(belowID, aboveID)
+}
+
 func (s *GroupRepoSuite) TestCreateFromSourcePreservesPriorityAndFiltersIneligibleAccounts() {
 	source := &service.Group{
 		Name:             "duplicate-source",

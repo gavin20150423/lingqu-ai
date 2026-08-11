@@ -461,6 +461,12 @@ type OpenAIGatewayService struct {
 	openaiCompatAnthropicDigestSessions sync.Map
 }
 
+// TempUnscheduleRetryableError applies the same exhausted-retry quarantine
+// used by the generic gateway to OpenAI-specific handler loops.
+func (s *OpenAIGatewayService) TempUnscheduleRetryableError(ctx context.Context, accountID int64, failoverErr *UpstreamFailoverError) {
+	tempUnscheduleRetryableError(ctx, s.accountRepo, accountID, failoverErr)
+}
+
 // NewOpenAIGatewayService creates a new OpenAIGatewayService
 func NewOpenAIGatewayService(
 	accountRepo AccountRepository,

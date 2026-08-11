@@ -5109,6 +5109,7 @@ type AccountGroupMutation struct {
 	priority       *int
 	addpriority    *int
 	created_at     *time.Time
+	auto_managed   *bool
 	clearedFields  map[string]struct{}
 	account        *int64
 	clearedaccount bool
@@ -5253,6 +5254,25 @@ func (m *AccountGroupMutation) ResetCreatedAt() {
 	m.created_at = nil
 }
 
+// SetAutoManaged sets the "auto_managed" field.
+func (m *AccountGroupMutation) SetAutoManaged(b bool) {
+	m.auto_managed = &b
+}
+
+// AutoManaged returns the value of the "auto_managed" field in the mutation.
+func (m *AccountGroupMutation) AutoManaged() (r bool, exists bool) {
+	v := m.auto_managed
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetAutoManaged resets all changes to the "auto_managed" field.
+func (m *AccountGroupMutation) ResetAutoManaged() {
+	m.auto_managed = nil
+}
+
 // ClearAccount clears the "account" edge to the Account entity.
 func (m *AccountGroupMutation) ClearAccount() {
 	m.clearedaccount = true
@@ -5341,7 +5361,7 @@ func (m *AccountGroupMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *AccountGroupMutation) Fields() []string {
-	fields := make([]string, 0, 4)
+	fields := make([]string, 0, 5)
 	if m.account != nil {
 		fields = append(fields, accountgroup.FieldAccountID)
 	}
@@ -5353,6 +5373,9 @@ func (m *AccountGroupMutation) Fields() []string {
 	}
 	if m.created_at != nil {
 		fields = append(fields, accountgroup.FieldCreatedAt)
+	}
+	if m.auto_managed != nil {
+		fields = append(fields, accountgroup.FieldAutoManaged)
 	}
 	return fields
 }
@@ -5370,6 +5393,8 @@ func (m *AccountGroupMutation) Field(name string) (ent.Value, bool) {
 		return m.Priority()
 	case accountgroup.FieldCreatedAt:
 		return m.CreatedAt()
+	case accountgroup.FieldAutoManaged:
+		return m.AutoManaged()
 	}
 	return nil, false
 }
@@ -5413,6 +5438,13 @@ func (m *AccountGroupMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetCreatedAt(v)
+		return nil
+	case accountgroup.FieldAutoManaged:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAutoManaged(v)
 		return nil
 	}
 	return fmt.Errorf("unknown AccountGroup field %s", name)
@@ -5489,6 +5521,9 @@ func (m *AccountGroupMutation) ResetField(name string) error {
 		return nil
 	case accountgroup.FieldCreatedAt:
 		m.ResetCreatedAt()
+		return nil
+	case accountgroup.FieldAutoManaged:
+		m.ResetAutoManaged()
 		return nil
 	}
 	return fmt.Errorf("unknown AccountGroup field %s", name)
@@ -21870,6 +21905,9 @@ type GroupMutation struct {
 	description                             *string
 	rate_multiplier                         *float64
 	addrate_multiplier                      *float64
+	auto_assign_accounts_by_rate            *bool
+	auto_assign_max_rate                    *float64
+	addauto_assign_max_rate                 *float64
 	peak_rate_enabled                       *bool
 	peak_start                              *string
 	peak_end                                *string
@@ -22325,6 +22363,112 @@ func (m *GroupMutation) AddedRateMultiplier() (r float64, exists bool) {
 func (m *GroupMutation) ResetRateMultiplier() {
 	m.rate_multiplier = nil
 	m.addrate_multiplier = nil
+}
+
+// SetAutoAssignAccountsByRate sets the "auto_assign_accounts_by_rate" field.
+func (m *GroupMutation) SetAutoAssignAccountsByRate(b bool) {
+	m.auto_assign_accounts_by_rate = &b
+}
+
+// AutoAssignAccountsByRate returns the value of the "auto_assign_accounts_by_rate" field in the mutation.
+func (m *GroupMutation) AutoAssignAccountsByRate() (r bool, exists bool) {
+	v := m.auto_assign_accounts_by_rate
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAutoAssignAccountsByRate returns the old "auto_assign_accounts_by_rate" field's value of the Group entity.
+// If the Group object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GroupMutation) OldAutoAssignAccountsByRate(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAutoAssignAccountsByRate is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAutoAssignAccountsByRate requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAutoAssignAccountsByRate: %w", err)
+	}
+	return oldValue.AutoAssignAccountsByRate, nil
+}
+
+// ResetAutoAssignAccountsByRate resets all changes to the "auto_assign_accounts_by_rate" field.
+func (m *GroupMutation) ResetAutoAssignAccountsByRate() {
+	m.auto_assign_accounts_by_rate = nil
+}
+
+// SetAutoAssignMaxRate sets the "auto_assign_max_rate" field.
+func (m *GroupMutation) SetAutoAssignMaxRate(f float64) {
+	m.auto_assign_max_rate = &f
+	m.addauto_assign_max_rate = nil
+}
+
+// AutoAssignMaxRate returns the value of the "auto_assign_max_rate" field in the mutation.
+func (m *GroupMutation) AutoAssignMaxRate() (r float64, exists bool) {
+	v := m.auto_assign_max_rate
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAutoAssignMaxRate returns the old "auto_assign_max_rate" field's value of the Group entity.
+// If the Group object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GroupMutation) OldAutoAssignMaxRate(ctx context.Context) (v *float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAutoAssignMaxRate is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAutoAssignMaxRate requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAutoAssignMaxRate: %w", err)
+	}
+	return oldValue.AutoAssignMaxRate, nil
+}
+
+// AddAutoAssignMaxRate adds f to the "auto_assign_max_rate" field.
+func (m *GroupMutation) AddAutoAssignMaxRate(f float64) {
+	if m.addauto_assign_max_rate != nil {
+		*m.addauto_assign_max_rate += f
+	} else {
+		m.addauto_assign_max_rate = &f
+	}
+}
+
+// AddedAutoAssignMaxRate returns the value that was added to the "auto_assign_max_rate" field in this mutation.
+func (m *GroupMutation) AddedAutoAssignMaxRate() (r float64, exists bool) {
+	v := m.addauto_assign_max_rate
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearAutoAssignMaxRate clears the value of the "auto_assign_max_rate" field.
+func (m *GroupMutation) ClearAutoAssignMaxRate() {
+	m.auto_assign_max_rate = nil
+	m.addauto_assign_max_rate = nil
+	m.clearedFields[group.FieldAutoAssignMaxRate] = struct{}{}
+}
+
+// AutoAssignMaxRateCleared returns if the "auto_assign_max_rate" field was cleared in this mutation.
+func (m *GroupMutation) AutoAssignMaxRateCleared() bool {
+	_, ok := m.clearedFields[group.FieldAutoAssignMaxRate]
+	return ok
+}
+
+// ResetAutoAssignMaxRate resets all changes to the "auto_assign_max_rate" field.
+func (m *GroupMutation) ResetAutoAssignMaxRate() {
+	m.auto_assign_max_rate = nil
+	m.addauto_assign_max_rate = nil
+	delete(m.clearedFields, group.FieldAutoAssignMaxRate)
 }
 
 // SetPeakRateEnabled sets the "peak_rate_enabled" field.
@@ -25113,7 +25257,7 @@ func (m *GroupMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *GroupMutation) Fields() []string {
-	fields := make([]string, 0, 55)
+	fields := make([]string, 0, 57)
 	if m.created_at != nil {
 		fields = append(fields, group.FieldCreatedAt)
 	}
@@ -25131,6 +25275,12 @@ func (m *GroupMutation) Fields() []string {
 	}
 	if m.rate_multiplier != nil {
 		fields = append(fields, group.FieldRateMultiplier)
+	}
+	if m.auto_assign_accounts_by_rate != nil {
+		fields = append(fields, group.FieldAutoAssignAccountsByRate)
+	}
+	if m.auto_assign_max_rate != nil {
+		fields = append(fields, group.FieldAutoAssignMaxRate)
 	}
 	if m.peak_rate_enabled != nil {
 		fields = append(fields, group.FieldPeakRateEnabled)
@@ -25299,6 +25449,10 @@ func (m *GroupMutation) Field(name string) (ent.Value, bool) {
 		return m.Description()
 	case group.FieldRateMultiplier:
 		return m.RateMultiplier()
+	case group.FieldAutoAssignAccountsByRate:
+		return m.AutoAssignAccountsByRate()
+	case group.FieldAutoAssignMaxRate:
+		return m.AutoAssignMaxRate()
 	case group.FieldPeakRateEnabled:
 		return m.PeakRateEnabled()
 	case group.FieldPeakStart:
@@ -25418,6 +25572,10 @@ func (m *GroupMutation) OldField(ctx context.Context, name string) (ent.Value, e
 		return m.OldDescription(ctx)
 	case group.FieldRateMultiplier:
 		return m.OldRateMultiplier(ctx)
+	case group.FieldAutoAssignAccountsByRate:
+		return m.OldAutoAssignAccountsByRate(ctx)
+	case group.FieldAutoAssignMaxRate:
+		return m.OldAutoAssignMaxRate(ctx)
 	case group.FieldPeakRateEnabled:
 		return m.OldPeakRateEnabled(ctx)
 	case group.FieldPeakStart:
@@ -25566,6 +25724,20 @@ func (m *GroupMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetRateMultiplier(v)
+		return nil
+	case group.FieldAutoAssignAccountsByRate:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAutoAssignAccountsByRate(v)
+		return nil
+	case group.FieldAutoAssignMaxRate:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAutoAssignMaxRate(v)
 		return nil
 	case group.FieldPeakRateEnabled:
 		v, ok := value.(bool)
@@ -25921,6 +26093,9 @@ func (m *GroupMutation) AddedFields() []string {
 	if m.addrate_multiplier != nil {
 		fields = append(fields, group.FieldRateMultiplier)
 	}
+	if m.addauto_assign_max_rate != nil {
+		fields = append(fields, group.FieldAutoAssignMaxRate)
+	}
 	if m.addpeak_rate_multiplier != nil {
 		fields = append(fields, group.FieldPeakRateMultiplier)
 	}
@@ -25997,6 +26172,8 @@ func (m *GroupMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
 	case group.FieldRateMultiplier:
 		return m.AddedRateMultiplier()
+	case group.FieldAutoAssignMaxRate:
+		return m.AddedAutoAssignMaxRate()
 	case group.FieldPeakRateMultiplier:
 		return m.AddedPeakRateMultiplier()
 	case group.FieldDailyLimitUsd:
@@ -26056,6 +26233,13 @@ func (m *GroupMutation) AddField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddRateMultiplier(v)
+		return nil
+	case group.FieldAutoAssignMaxRate:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddAutoAssignMaxRate(v)
 		return nil
 	case group.FieldPeakRateMultiplier:
 		v, ok := value.(float64)
@@ -26225,6 +26409,9 @@ func (m *GroupMutation) ClearedFields() []string {
 	if m.FieldCleared(group.FieldDescription) {
 		fields = append(fields, group.FieldDescription)
 	}
+	if m.FieldCleared(group.FieldAutoAssignMaxRate) {
+		fields = append(fields, group.FieldAutoAssignMaxRate)
+	}
 	if m.FieldCleared(group.FieldDuplicateOperationID) {
 		fields = append(fields, group.FieldDuplicateOperationID)
 	}
@@ -26286,6 +26473,9 @@ func (m *GroupMutation) ClearField(name string) error {
 		return nil
 	case group.FieldDescription:
 		m.ClearDescription()
+		return nil
+	case group.FieldAutoAssignMaxRate:
+		m.ClearAutoAssignMaxRate()
 		return nil
 	case group.FieldDuplicateOperationID:
 		m.ClearDuplicateOperationID()
@@ -26354,6 +26544,12 @@ func (m *GroupMutation) ResetField(name string) error {
 		return nil
 	case group.FieldRateMultiplier:
 		m.ResetRateMultiplier()
+		return nil
+	case group.FieldAutoAssignAccountsByRate:
+		m.ResetAutoAssignAccountsByRate()
+		return nil
+	case group.FieldAutoAssignMaxRate:
+		m.ResetAutoAssignMaxRate()
 		return nil
 	case group.FieldPeakRateEnabled:
 		m.ResetPeakRateEnabled()
