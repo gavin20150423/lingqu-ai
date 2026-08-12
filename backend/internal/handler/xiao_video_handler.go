@@ -335,6 +335,7 @@ func safePublicVideoCode(value string) string {
 	case "VIDEO_REQUEST_INVALID", "VIDEO_RESOURCE_NOT_FOUND", "VIDEO_JOB_NOT_CANCELABLE",
 		"VIDEO_MODEL_INVALID", "VIDEO_PROMPT_INVALID", "VIDEO_RESOLUTION_INVALID",
 		"VIDEO_DURATION_INVALID", "VIDEO_ASPECT_RATIO_INVALID", "VIDEO_MEDIA_INVALID",
+		"VIDEO_REFERENCE_IMAGE_STRENGTH_INVALID", "VIDEO_PROMPT_ASPECT_RATIO_CONFLICT", "VIDEO_PROMPT_DURATION_CONFLICT",
 		"VIDEO_OPTION_UNSUPPORTED", "VIDEO_CAPACITY_EXHAUSTED", "VIDEO_GENERATION_FAILED",
 		"CONTENT_POLICY_VIOLATION", "SAFETY_FILTER_TRIGGERED", "MODERATION_FAILED",
 		"RATE_LIMIT_EXCEEDED", "INTERNAL_ERROR":
@@ -390,6 +391,12 @@ func safePublicVideoMessage(code string) string {
 		return "aspect ratio is not supported by this model"
 	case "VIDEO_MEDIA_INVALID":
 		return "video media is invalid"
+	case "VIDEO_REFERENCE_IMAGE_STRENGTH_INVALID":
+		return "reference image strength must be low, medium, or high"
+	case "VIDEO_PROMPT_ASPECT_RATIO_CONFLICT":
+		return "prompt aspect ratio conflicts with the selected option"
+	case "VIDEO_PROMPT_DURATION_CONFLICT":
+		return "prompt duration conflicts with the selected option"
 	case "VIDEO_OPTION_UNSUPPORTED":
 		return "video option is not supported by this model"
 	case "VIDEO_CAPACITY_EXHAUSTED":
@@ -496,17 +503,20 @@ func safeVideoUpstreamError(status int, body []byte) (string, string, bool) {
 		message string
 	}
 	allowed := map[string]publicError{
-		"VIDEO_REQUEST_INVALID":      {http.StatusBadRequest, "video request is invalid"},
-		"VIDEO_RESOURCE_NOT_FOUND":   {http.StatusNotFound, "video resource not found"},
-		"VIDEO_JOB_NOT_CANCELABLE":   {http.StatusConflict, "video job is not cancelable"},
-		"VIDEO_MODEL_INVALID":        {http.StatusUnprocessableEntity, "model is not supported"},
-		"VIDEO_PROMPT_INVALID":       {http.StatusUnprocessableEntity, "prompt is invalid"},
-		"VIDEO_RESOLUTION_INVALID":   {http.StatusUnprocessableEntity, "resolution is not supported by this model"},
-		"VIDEO_DURATION_INVALID":     {http.StatusUnprocessableEntity, "duration is not supported by this model"},
-		"VIDEO_ASPECT_RATIO_INVALID": {http.StatusUnprocessableEntity, "aspect ratio is not supported by this model"},
-		"VIDEO_MEDIA_INVALID":        {http.StatusUnprocessableEntity, "video media is invalid"},
-		"VIDEO_OPTION_UNSUPPORTED":   {http.StatusUnprocessableEntity, "video option is not supported by this model"},
-		"VIDEO_CAPACITY_EXHAUSTED":   {http.StatusTooManyRequests, "video capacity is temporarily exhausted"},
+		"VIDEO_REQUEST_INVALID":                  {http.StatusBadRequest, "video request is invalid"},
+		"VIDEO_RESOURCE_NOT_FOUND":               {http.StatusNotFound, "video resource not found"},
+		"VIDEO_JOB_NOT_CANCELABLE":               {http.StatusConflict, "video job is not cancelable"},
+		"VIDEO_MODEL_INVALID":                    {http.StatusUnprocessableEntity, "model is not supported"},
+		"VIDEO_PROMPT_INVALID":                   {http.StatusUnprocessableEntity, "prompt is invalid"},
+		"VIDEO_RESOLUTION_INVALID":               {http.StatusUnprocessableEntity, "resolution is not supported by this model"},
+		"VIDEO_DURATION_INVALID":                 {http.StatusUnprocessableEntity, "duration is not supported by this model"},
+		"VIDEO_ASPECT_RATIO_INVALID":             {http.StatusUnprocessableEntity, "aspect ratio is not supported by this model"},
+		"VIDEO_MEDIA_INVALID":                    {http.StatusUnprocessableEntity, "video media is invalid"},
+		"VIDEO_REFERENCE_IMAGE_STRENGTH_INVALID": {http.StatusUnprocessableEntity, "reference image strength must be low, medium, or high"},
+		"VIDEO_PROMPT_ASPECT_RATIO_CONFLICT":     {http.StatusUnprocessableEntity, "prompt aspect ratio conflicts with the selected option"},
+		"VIDEO_PROMPT_DURATION_CONFLICT":         {http.StatusUnprocessableEntity, "prompt duration conflicts with the selected option"},
+		"VIDEO_OPTION_UNSUPPORTED":               {http.StatusUnprocessableEntity, "video option is not supported by this model"},
+		"VIDEO_CAPACITY_EXHAUSTED":               {http.StatusTooManyRequests, "video capacity is temporarily exhausted"},
 	}
 	definition, ok := allowed[strings.TrimSpace(envelope.Error.Code)]
 	if !ok || definition.status != status {

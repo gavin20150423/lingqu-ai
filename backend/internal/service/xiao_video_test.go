@@ -539,6 +539,46 @@ func TestXiaoVideoDetectsReferenceVideoGuidance(t *testing.T) {
 	require.False(t, meta.ReferenceVideo)
 }
 
+func TestXiaoVideoNormalizesReferenceImageStrengthAndOrder(t *testing.T) {
+	svc := newVideoServiceForTest(newVideoRepositoryStub(), &videoAccountRepoStub{}, nil)
+	owner := VideoOwner{UserID: 11, APIKeyID: 22, GroupID: videoInt64Ptr(7)}
+
+	rewritten, _, _, _, err := svc.rewriteGenerationRequest(
+		context.Background(),
+		owner,
+		[]byte(`{"model":"seedance-2.0","prompt":"waves","guidances":{"image_reference":[{"image":{"url":"https://example.test/a.png","type":"UPLOADED"},"strength":"HIGH","order":9},{"image":{"url":"https://example.test/b.png","type":"UPLOADED"},"strength":"AUTO","order":8}]}}`),
+	)
+	require.NoError(t, err)
+	var request map[string]any
+	require.NoError(t, json.Unmarshal(rewritten, &request))
+	items := request["guidances"].(map[string]any)["image_reference"].([]any)
+	first := items[0].(map[string]any)
+	second := items[1].(map[string]any)
+	require.Equal(t, "HIGH", first["strength"])
+	require.EqualValues(t, 0, first["order"])
+	require.Equal(t, "MID", second["strength"])
+	require.EqualValues(t, 1, second["order"])
+
+	_, _, _, _, err = svc.rewriteGenerationRequest(
+		context.Background(),
+		owner,
+		[]byte(`{"model":"seedance-2.0","prompt":"waves","guidances":{"image_reference":[{"image":{"url":"https://example.test/a.png","type":"UPLOADED"},"strength":"strong"}]}}`),
+	)
+	require.ErrorIs(t, err, ErrVideoReferenceImageStrengthInvalid)
+}
+
+func TestXiaoVideoRejectsPromptParameterConflictsAndFrameImageMix(t *testing.T) {
+	svc := newVideoServiceForTest(newVideoRepositoryStub(), &videoAccountRepoStub{}, nil)
+	owner := VideoOwner{UserID: 11, APIKeyID: 22, GroupID: videoInt64Ptr(7)}
+
+	_, _, _, _, err := svc.rewriteGenerationRequest(context.Background(), owner, []byte(`{"model":"seedance-2.0","prompt":"9:16 portrait","aspect_ratio":"16:9","duration":8}`))
+	require.ErrorIs(t, err, ErrVideoPromptAspectRatioConflict)
+	_, _, _, _, err = svc.rewriteGenerationRequest(context.Background(), owner, []byte(`{"model":"seedance-2.0","prompt":"总时长 15 秒","aspect_ratio":"16:9","duration":8}`))
+	require.ErrorIs(t, err, ErrVideoPromptDurationConflict)
+	_, _, _, _, err = svc.rewriteGenerationRequest(context.Background(), owner, []byte(`{"model":"seedance-2.0","prompt":"keep subject","start_frame_url":"https://example.test/start.png","guidances":{"image_reference":[{"image":{"url":"https://example.test/ref.png","type":"UPLOADED"},"strength":"MID"}]}}`))
+	require.ErrorIs(t, err, ErrVideoOptionUnsupported)
+}
+
 func TestXiaoVideoSeedanceAudioReachesUpstream(t *testing.T) {
 	const groupID int64 = 7
 	models := []string{"seedance-2.0", "seedance-2.0-fast", "seedance-2.0-mini"}

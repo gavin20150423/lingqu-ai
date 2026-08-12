@@ -28,21 +28,24 @@ const (
 )
 
 var (
-	ErrVideoGenerationDisabled   = infraerrors.New(http.StatusForbidden, "VIDEO_GENERATION_DISABLED", "video generation is not enabled for this API key")
-	ErrVideoExecutionDisabled    = infraerrors.New(http.StatusServiceUnavailable, "VIDEO_EXECUTION_DISABLED", "video execution is disabled")
-	ErrVideoResourceNotFound     = infraerrors.New(http.StatusNotFound, "VIDEO_RESOURCE_NOT_FOUND", "video resource not found")
-	ErrVideoRequestInvalid       = infraerrors.New(http.StatusBadRequest, "VIDEO_REQUEST_INVALID", "video request is invalid")
-	ErrVideoIdempotencyInvalid   = infraerrors.New(http.StatusBadRequest, "IDEMPOTENCY_KEY_INVALID", "idempotency key must be 1 to 128 printable ASCII characters")
-	ErrVideoIdempotencyConflict  = infraerrors.New(http.StatusConflict, "IDEMPOTENCY_KEY_CONFLICT", "idempotency key was reused with a different request")
-	ErrVideoRequestInProgress    = infraerrors.New(http.StatusServiceUnavailable, "VIDEO_REQUEST_IN_PROGRESS", "the idempotent request is still being created")
-	ErrVideoInsufficientBalance  = infraerrors.New(http.StatusPaymentRequired, "INSUFFICIENT_BALANCE", "insufficient balance")
-	ErrVideoJobNotCancelable     = infraerrors.New(http.StatusConflict, "VIDEO_JOB_NOT_CANCELABLE", "video job is not cancelable")
-	ErrVideoCapacityExhausted    = infraerrors.New(http.StatusTooManyRequests, "VIDEO_CAPACITY_EXHAUSTED", "video capacity is temporarily exhausted")
-	ErrVideoPricingUnavailable   = infraerrors.New(http.StatusServiceUnavailable, "VIDEO_PRICING_UNAVAILABLE", "video pricing is unavailable")
-	ErrVideoUpstreamUnavailable  = infraerrors.New(http.StatusServiceUnavailable, "VIDEO_UPSTREAM_UNAVAILABLE", "video upstream is unavailable")
-	ErrVideoMediaAccountMismatch = infraerrors.New(http.StatusUnprocessableEntity, "VIDEO_MEDIA_INVALID", "all uploaded media must belong to the same video upstream")
-	ErrVideoUploadUnsupported    = infraerrors.New(http.StatusUnprocessableEntity, "VIDEO_UPLOAD_UNSUPPORTED", "the selected video upstream only accepts public media URLs")
-	ErrVideoOptionUnsupported    = infraerrors.New(http.StatusUnprocessableEntity, "VIDEO_OPTION_UNSUPPORTED", "the selected video upstream does not support this video option")
+	ErrVideoGenerationDisabled            = infraerrors.New(http.StatusForbidden, "VIDEO_GENERATION_DISABLED", "video generation is not enabled for this API key")
+	ErrVideoExecutionDisabled             = infraerrors.New(http.StatusServiceUnavailable, "VIDEO_EXECUTION_DISABLED", "video execution is disabled")
+	ErrVideoResourceNotFound              = infraerrors.New(http.StatusNotFound, "VIDEO_RESOURCE_NOT_FOUND", "video resource not found")
+	ErrVideoRequestInvalid                = infraerrors.New(http.StatusBadRequest, "VIDEO_REQUEST_INVALID", "video request is invalid")
+	ErrVideoIdempotencyInvalid            = infraerrors.New(http.StatusBadRequest, "IDEMPOTENCY_KEY_INVALID", "idempotency key must be 1 to 128 printable ASCII characters")
+	ErrVideoIdempotencyConflict           = infraerrors.New(http.StatusConflict, "IDEMPOTENCY_KEY_CONFLICT", "idempotency key was reused with a different request")
+	ErrVideoRequestInProgress             = infraerrors.New(http.StatusServiceUnavailable, "VIDEO_REQUEST_IN_PROGRESS", "the idempotent request is still being created")
+	ErrVideoInsufficientBalance           = infraerrors.New(http.StatusPaymentRequired, "INSUFFICIENT_BALANCE", "insufficient balance")
+	ErrVideoJobNotCancelable              = infraerrors.New(http.StatusConflict, "VIDEO_JOB_NOT_CANCELABLE", "video job is not cancelable")
+	ErrVideoCapacityExhausted             = infraerrors.New(http.StatusTooManyRequests, "VIDEO_CAPACITY_EXHAUSTED", "video capacity is temporarily exhausted")
+	ErrVideoPricingUnavailable            = infraerrors.New(http.StatusServiceUnavailable, "VIDEO_PRICING_UNAVAILABLE", "video pricing is unavailable")
+	ErrVideoUpstreamUnavailable           = infraerrors.New(http.StatusServiceUnavailable, "VIDEO_UPSTREAM_UNAVAILABLE", "video upstream is unavailable")
+	ErrVideoMediaAccountMismatch          = infraerrors.New(http.StatusUnprocessableEntity, "VIDEO_MEDIA_INVALID", "all uploaded media must belong to the same video upstream")
+	ErrVideoUploadUnsupported             = infraerrors.New(http.StatusUnprocessableEntity, "VIDEO_UPLOAD_UNSUPPORTED", "the selected video upstream only accepts public media URLs")
+	ErrVideoOptionUnsupported             = infraerrors.New(http.StatusUnprocessableEntity, "VIDEO_OPTION_UNSUPPORTED", "the selected video upstream does not support this video option")
+	ErrVideoReferenceImageStrengthInvalid = infraerrors.New(http.StatusUnprocessableEntity, "VIDEO_REFERENCE_IMAGE_STRENGTH_INVALID", "reference image strength must be LOW, MID, or HIGH")
+	ErrVideoPromptAspectRatioConflict     = infraerrors.New(http.StatusUnprocessableEntity, "VIDEO_PROMPT_ASPECT_RATIO_CONFLICT", "prompt aspect ratio conflicts with the selected option")
+	ErrVideoPromptDurationConflict        = infraerrors.New(http.StatusUnprocessableEntity, "VIDEO_PROMPT_DURATION_CONFLICT", "prompt duration conflicts with the selected option")
 )
 
 type VideoOwner struct {
@@ -672,6 +675,9 @@ func (s *XiaoVideoService) rewriteGenerationRequest(ctx context.Context, owner V
 	if prompt := videoStringValue(request["prompt"]); meta.Model == "" || prompt == "" {
 		return nil, meta, "", 0, ErrVideoRequestInvalid
 	}
+	if err := validateVideoPromptParameters(videoStringValue(request["prompt"]), meta.AspectRatio, request["duration"]); err != nil {
+		return nil, meta, "", 0, err
+	}
 	if rawDuration, exists := request["duration"]; exists && rawDuration != nil {
 		n, ok := rawDuration.(json.Number)
 		if !ok {
@@ -696,8 +702,17 @@ func (s *XiaoVideoService) rewriteGenerationRequest(ctx context.Context, owner V
 		return nil, meta, "", 0, ErrVideoRequestInvalid
 	}
 	if rawGuidances, exists := request["guidances"]; exists && rawGuidances != nil {
-		if _, ok := rawGuidances.(map[string]any); !ok {
+		guidances, ok := rawGuidances.(map[string]any)
+		if !ok {
 			return nil, meta, "", 0, ErrVideoRequestInvalid
+		}
+		if videoStringValue(request["start_frame_url"]) != "" || videoStringValue(request["end_frame_url"]) != "" {
+			if images, ok := guidances["image_reference"].([]any); ok && len(images) > 0 {
+				return nil, meta, "", 0, ErrVideoOptionUnsupported
+			}
+		}
+		if err := normalizeVideoGuidances(guidances); err != nil {
+			return nil, meta, "", 0, err
 		}
 	}
 	var fixedAccountID int64
@@ -753,6 +768,72 @@ func (s *XiaoVideoService) rewriteGenerationRequest(ctx context.Context, owner V
 	}
 	digest := sha256.Sum256(rewritten)
 	return rewritten, meta, hex.EncodeToString(digest[:]), fixedAccountID, nil
+}
+
+func validateVideoPromptParameters(prompt, aspectRatio string, rawDuration any) error {
+	if aspectRatio != "" {
+		for _, ratio := range []string{"21:9", "16:9", "9:21", "9:16", "4:3", "3:4", "1:1"} {
+			if strings.Contains(prompt, ratio) && ratio != aspectRatio {
+				return ErrVideoPromptAspectRatioConflict
+			}
+		}
+	}
+	duration := 0
+	if number, ok := rawDuration.(json.Number); ok {
+		duration, _ = strconv.Atoi(number.String())
+	}
+	if duration > 0 {
+		for _, marker := range []string{"总时长", "视频时长", "片长", "时长"} {
+			index := strings.Index(prompt, marker)
+			if index < 0 {
+				continue
+			}
+			tail := prompt[index+len(marker):]
+			for len(tail) > 0 && strings.ContainsRune(" \t:：为是", rune(tail[0])) {
+				tail = tail[1:]
+			}
+			value := 0
+			for len(tail) > 0 && tail[0] >= '0' && tail[0] <= '9' {
+				value = value*10 + int(tail[0]-'0')
+				tail = tail[1:]
+			}
+			if value > 0 && value != duration && (strings.HasPrefix(strings.TrimSpace(tail), "秒") || strings.HasPrefix(strings.TrimSpace(tail), "s")) {
+				return ErrVideoPromptDurationConflict
+			}
+		}
+	}
+	return nil
+}
+
+// normalizeVideoGuidances keeps legacy clients compatible while ensuring every
+// reference image sent upstream has a strict strength and deterministic order.
+func normalizeVideoGuidances(guidances map[string]any) error {
+	items, exists := guidances["image_reference"]
+	if !exists || items == nil {
+		return nil
+	}
+	list, ok := items.([]any)
+	if !ok {
+		return ErrVideoRequestInvalid
+	}
+	for index, rawItem := range list {
+		item, ok := rawItem.(map[string]any)
+		if !ok {
+			return ErrVideoRequestInvalid
+		}
+		rawStrength := strings.ToUpper(strings.TrimSpace(videoStringValue(item["strength"])))
+		if rawStrength == "" || rawStrength == "AUTO" {
+			rawStrength = "MID"
+		}
+		switch rawStrength {
+		case "LOW", "MID", "HIGH":
+		default:
+			return ErrVideoReferenceImageStrengthInvalid
+		}
+		item["strength"] = rawStrength
+		item["order"] = index
+	}
+	return nil
 }
 
 // requestContainsReferenceVideo identifies the AIStartLab reference-video

@@ -111,47 +111,43 @@
             <span v-if="retryingSameRequest" class="video-retry-badge">可安全重试</span>
           </div>
 
-          <div class="video-mode-tabs" role="tablist" aria-label="创作方式">
-            <button
-              v-for="item in availableModes"
-              :key="item.value"
-              type="button"
-              role="tab"
-              :aria-selected="creationMode === item.value"
-              :class="{ 'video-mode-tab--active': creationMode === item.value }"
-              @click="creationMode = item.value"
-            >
-              <Icon :name="item.icon" size="sm" />
-              <span>{{ item.label }}</span>
-            </button>
-          </div>
+          <section
+            v-if="selectedCapability?.supportsStartFrame || hasReferenceSupport"
+            class="video-materials"
+            aria-label="素材组合"
+          >
+            <header class="video-materials__header">
+              <div><strong>素材组合</strong><span>首尾帧与参考图片互斥，选择一类会自动清除另一类</span></div>
+              <em>{{ selectedModeLabel }}</em>
+            </header>
 
-          <section v-if="creationMode === 'frames'" class="video-media-band" aria-label="首尾帧">
-            <MediaInput
-              label="首帧"
-              :hint="isAIStartLab ? '粘贴公开的 HTTP(S) 图片链接' : 'PNG / JPEG / WebP，最大 10 MiB'"
-              accept="image/png,image/jpeg,image/webp"
-              :remote="isAIStartLab"
-              :required="selectedCapability?.requiresStartFrame"
-              :item="startFrame"
-              @select="setSingleMedia('start', $event)"
-              @select-url="setSingleMediaUrl('start', $event)"
-              @remove="clearSingleMedia('start')"
-            />
-            <MediaInput
-              v-if="selectedCapability?.supportsEndFrame"
-              label="尾帧"
-              hint="让镜头自然过渡到目标构图"
-              accept="image/png,image/jpeg,image/webp"
-              :remote="isAIStartLab"
-              :item="endFrame"
-              @select="setSingleMedia('end', $event)"
-              @select-url="setSingleMediaUrl('end', $event)"
-              @remove="clearSingleMedia('end')"
-            />
-          </section>
+            <div v-if="selectedCapability?.supportsStartFrame" class="video-media-band" aria-label="首尾帧">
+              <MediaInput
+                label="首帧"
+                :hint="isAIStartLab ? '粘贴公开的 HTTP(S) 图片链接' : 'PNG / JPEG / WebP，最大 10 MiB'"
+                accept="image/png,image/jpeg,image/webp"
+                :remote="isAIStartLab"
+                :required="selectedCapability?.requiresStartFrame"
+                :item="startFrame"
+                @select="setSingleMedia('start', $event)"
+                @select-url="setSingleMediaUrl('start', $event)"
+                @remove="clearSingleMedia('start')"
+              />
+              <MediaInput
+                v-if="selectedCapability?.supportsEndFrame"
+                label="尾帧"
+                :hint="startFrame ? '让镜头自然过渡到目标构图' : '请先添加首帧'"
+                accept="image/png,image/jpeg,image/webp"
+                :remote="isAIStartLab"
+                :disabled="!startFrame"
+                :item="endFrame"
+                @select="setSingleMedia('end', $event)"
+                @select-url="setSingleMediaUrl('end', $event)"
+                @remove="clearSingleMedia('end')"
+              />
+            </div>
 
-          <section v-if="creationMode === 'references'" class="video-reference-section" aria-label="参考素材">
+            <div v-if="hasReferenceSupport" class="video-reference-section" aria-label="参考素材">
             <div class="video-reference-row" v-if="referenceLimit('image') > 0">
               <div><strong>参考图片</strong><span>最多 {{ referenceLimit('image') }} 张</span></div>
               <RemoteMediaInput
@@ -167,6 +163,23 @@
             </div>
             <div v-if="referenceImages.length" class="video-media-list">
               <MediaChip v-for="item in referenceImages" :key="item.id" :item="item" @remove="removeReference('image', item.id)" />
+            </div>
+            <div v-if="referenceImages.length" class="video-reference-strength">
+              <div>
+                <strong>参考图强度</strong>
+                <span>统一应用到本次请求的全部参考图片</span>
+              </div>
+              <div class="video-strength-options" role="radiogroup" aria-label="参考图强度">
+                <button
+                  v-for="item in referenceStrengthOptions"
+                  :key="item.value"
+                  type="button"
+                  role="radio"
+                  :aria-checked="referenceImageStrength === item.value"
+                  :class="{ 'video-strength-option--active': referenceImageStrength === item.value }"
+                  @click="referenceImageStrength = item.value"
+                >{{ item.label }}</button>
+              </div>
             </div>
 
             <div class="video-reference-row" v-if="referenceLimit('video') > 0">
@@ -201,6 +214,7 @@
             </div>
             <div v-if="referenceAudios.length" class="video-media-list">
               <MediaChip v-for="item in referenceAudios" :key="item.id" :item="item" @remove="removeReference('audio', item.id)" />
+            </div>
             </div>
           </section>
 
@@ -339,9 +353,14 @@ import {
   resolveVideoCapability,
   videoMediaLimits,
   type ReferenceKind,
-  type VideoCreationMode,
   type VideoModelCapability,
 } from '@/utils/videoCapabilities'
+import {
+  imageReferenceGuidances,
+  normalizeVideoPrompt,
+  validateVideoPromptParameters,
+  type ReferenceImageStrength,
+} from '@/utils/videoWorkbench'
 
 interface MediaSelection {
   id: string
@@ -357,19 +376,20 @@ interface MediaSelection {
 const MediaInput = defineComponent({
   props: {
     label: { type: String, required: true }, hint: { type: String, required: true },
-    accept: { type: String, required: true }, required: Boolean, remote: Boolean,
+    accept: { type: String, required: true }, required: Boolean, remote: Boolean, disabled: Boolean,
     item: { type: Object as PropType<MediaSelection | null>, default: null },
   },
   emits: ['select', 'select-url', 'remove'],
   setup(props, { emit }) {
     const remoteUrl = ref('')
     const selectRemote = () => {
+      if (props.disabled) return
       const value = remoteUrl.value.trim()
       if (!/^https?:\/\/[^\s]+$/i.test(value)) return
       emit('select-url', value)
       remoteUrl.value = ''
     }
-    return () => h('div', { class: 'video-media-input' }, [
+    return () => h('div', { class: ['video-media-input', { 'video-media-input--disabled': props.disabled }] }, [
       h('div', { class: 'video-media-input__copy' }, [
         h('strong', props.label), props.required ? h('em', '必需') : null, h('span', props.hint),
       ]),
@@ -387,12 +407,12 @@ const MediaInput = defineComponent({
                 onInput: (event: Event) => { remoteUrl.value = (event.target as HTMLInputElement).value },
                 onKeydown: (event: KeyboardEvent) => { if (event.key === 'Enter') { event.preventDefault(); selectRemote() } },
               }),
-              h('button', { type: 'button', onClick: selectRemote }, '使用链接'),
+              h('button', { type: 'button', disabled: props.disabled, onClick: selectRemote }, '使用链接'),
             ])
         : h('label', { class: 'video-media-input__add' }, [
             h(Icon, { name: 'upload', size: 'sm' }), h('span', '选择文件'),
             h('input', {
-              type: 'file', accept: props.accept,
+              type: 'file', accept: props.accept, disabled: props.disabled,
               onChange: (event: Event) => {
                 const input = event.target as HTMLInputElement
                 if (input.files?.[0]) emit('select', input.files[0])
@@ -451,7 +471,6 @@ const apiKeys = ref<ApiKey[]>([])
 const models = ref<VideoModel[]>([])
 const selectedKeyId = ref('')
 const selectedModelId = ref('')
-const creationMode = ref<VideoCreationMode>('text')
 const prompt = ref('')
 const promptCues = [
   { label: '缓慢推进', value: '镜头缓慢向主体推进' },
@@ -466,6 +485,12 @@ const aspectRatio = ref('')
 const durationIndex = ref(0)
 const audio = ref(true)
 const promptEnhance = ref<'AUTO' | 'ON' | 'OFF'>('AUTO')
+const referenceImageStrength = ref<ReferenceImageStrength>('MID')
+const referenceStrengthOptions: Array<{ value: ReferenceImageStrength; label: string }> = [
+  { value: 'LOW', label: '低' },
+  { value: 'MID', label: '中' },
+  { value: 'HIGH', label: '高' },
+]
 const startFrame = ref<MediaSelection | null>(null)
 const endFrame = ref<MediaSelection | null>(null)
 const referenceImages = ref<MediaSelection[]>([])
@@ -488,21 +513,20 @@ const isAIStartLab = computed(() => selectedCapability.value?.capabilitySource =
 const durationOptions = computed(() => selectedCapability.value ? durationsFor(selectedCapability.value, resolution.value) : [5])
 const duration = computed(() => durationOptions.value[durationIndex.value] || durationOptions.value[0] || 5)
 const aspectRatioOptions = computed(() => selectedCapability.value ? aspectRatiosFor(selectedCapability.value, resolution.value) : ['16:9'])
-const availableModes = computed(() => {
-  const capability = selectedCapability.value
-  const modes: Array<{ value: VideoCreationMode; label: string; icon: 'sparkles' | 'image' | 'grid' }> = []
-  if (!capability?.requiresStartFrame) modes.push({ value: 'text', label: '文生视频', icon: 'sparkles' })
-  if (capability?.supportsStartFrame) modes.push({ value: 'frames', label: capability.supportsEndFrame ? '首尾帧' : '首帧驱动', icon: 'image' })
-  if (capability && Object.values(capability.maxReferences).some((count) => count > 0)) {
-    modes.push({ value: 'references', label: '参考素材', icon: 'grid' })
-  }
-  return modes
+const hasReferenceSupport = computed(() => Boolean(
+  selectedCapability.value && Object.values(selectedCapability.value.maxReferences).some((count) => count > 0),
+))
+const selectedModeLabel = computed(() => {
+  if (endFrame.value) return '首尾帧'
+  if (startFrame.value) return '首帧驱动'
+  if (referenceImages.value.length + referenceVideos.value.length + referenceAudios.value.length > 0) return '参考素材'
+  return '文生视频'
 })
-const selectedModeLabel = computed(() => availableModes.value.find((item) => item.value === creationMode.value)?.label || '文生视频')
 const canSubmit = computed(() => Boolean(
   selectedKey.value
   && selectedCapability.value
   && prompt.value.trim()
+  && !validateVideoPromptParameters(prompt.value, { aspectRatio: aspectRatio.value, duration: duration.value })
   && (!selectedCapability.value.requiresStartFrame || startFrame.value),
 ))
 const retryingSameRequest = computed(() => Boolean(pendingIdempotencyKey.value && pendingRequestBody.value))
@@ -538,8 +562,8 @@ const capabilityNotes = computed(() => {
   const capability = selectedCapability.value
   if (!capability) return []
   const notes = ['分辨率、画面比例和时长以上方当前可选项为准；提示词里尽量不要重复写横屏、竖屏或分辨率。']
-  if (capability.supportsEndFrame) notes.push('首帧或尾帧不能与参考素材同时使用；上传尾帧前必须先上传首帧。')
-  if (capability.maxReferences.audio > 0) notes.push('参考音频必须搭配参考图片或参考视频，且参考视频和参考音频不能同时使用。')
+  if (capability.supportsEndFrame) notes.push('首帧或尾帧不能与参考图片同时使用；上传尾帧前必须先上传首帧。')
+  if (capability.maxReferences.audio > 0) notes.push('参考音频必须搭配参考图片或参考视频。')
   if (capability.requiresStartFrame) notes.push('该模型不支持纯文本直出，提交前必须上传首帧。')
   return notes
 })
@@ -557,8 +581,13 @@ function selectModel(item: VideoModelCapability) {
 function shortJobId(id: string) { return id.length > 16 ? `${id.slice(0, 9)}…${id.slice(-5)}` : id }
 function errorMessage(error: unknown) {
   if (error instanceof VideoAPIError) {
+    const publicMessages: Record<string, string> = {
+      VIDEO_REFERENCE_IMAGE_STRENGTH_INVALID: '参考图强度无效，请选择低、中或高',
+      VIDEO_PROMPT_ASPECT_RATIO_CONFLICT: '提示词中的画面比例与当前选择不一致',
+      VIDEO_PROMPT_DURATION_CONFLICT: '提示词中的总时长与当前选择不一致',
+    }
     const requestId = error.requestId ? `（请求 ID：${error.requestId}）` : ''
-    return `${error.message}${requestId}`
+    return `${publicMessages[error.code] || error.message}${requestId}`
   }
   return error instanceof Error ? error.message : '请求失败，请稍后重试'
 }
@@ -582,6 +611,14 @@ function releaseAllMedia() {
   startFrame.value = null; endFrame.value = null
   referenceImages.value = []; referenceVideos.value = []; referenceAudios.value = []
 }
+function clearReferenceImages() {
+  referenceImages.value.forEach(releaseMedia)
+  referenceImages.value = []
+}
+function clearFrames() {
+  releaseMedia(startFrame.value); releaseMedia(endFrame.value)
+  startFrame.value = null; endFrame.value = null
+}
 function validateMediaFile(file: File, kind: ReferenceKind): string {
   const allowed = kind === 'image'
     ? ['image/png', 'image/jpeg', 'image/webp']
@@ -593,8 +630,13 @@ function validateMediaFile(file: File, kind: ReferenceKind): string {
   return ''
 }
 function setSingleMedia(target: 'start' | 'end', file: File) {
+  if (target === 'end' && !startFrame.value) {
+    formError.value = '请先上传首帧，再添加尾帧'
+    return
+  }
   const error = validateMediaFile(file, 'image')
   if (error) { formError.value = error; return }
+  clearReferenceImages()
   const current = target === 'start' ? startFrame.value : endFrame.value
   releaseMedia(current)
   if (target === 'start') startFrame.value = createMedia(file, 'image')
@@ -602,6 +644,11 @@ function setSingleMedia(target: 'start' | 'end', file: File) {
   formError.value = ''
 }
 function setSingleMediaUrl(target: 'start' | 'end', url: string) {
+  if (target === 'end' && !startFrame.value) {
+    formError.value = '请先添加首帧，再添加尾帧'
+    return
+  }
+  clearReferenceImages()
   const current = target === 'start' ? startFrame.value : endFrame.value
   releaseMedia(current)
   const selection = createRemoteMedia(url, 'image')
@@ -612,7 +659,11 @@ function setSingleMediaUrl(target: 'start' | 'end', url: string) {
 function clearSingleMedia(target: 'start' | 'end') {
   const current = target === 'start' ? startFrame.value : endFrame.value
   releaseMedia(current)
-  if (target === 'start') startFrame.value = null
+  if (target === 'start') {
+    startFrame.value = null
+    releaseMedia(endFrame.value)
+    endFrame.value = null
+  }
   else endFrame.value = null
 }
 function referenceList(kind: ReferenceKind) {
@@ -624,6 +675,7 @@ function addReferenceFiles(kind: ReferenceKind, event: Event) {
   const list = referenceList(kind)
   const remaining = Math.max(0, referenceLimit(kind) - list.value.length)
   const files = Array.from(input.files || []).slice(0, remaining)
+  if (kind === 'image' && files.length) clearFrames()
   const errors = files.map((file) => validateMediaFile(file, kind)).filter(Boolean)
   if (errors.length) formError.value = errors[0]
   list.value.push(...files.filter((file) => !validateMediaFile(file, kind)).map((file) => createMedia(file, kind)))
@@ -635,6 +687,7 @@ function addReferenceUrl(kind: ReferenceKind, url: string) {
     formError.value = `${kind === 'image' ? '参考图片' : kind === 'video' ? '参考视频' : '参考音频'} 已达到数量上限`
     return
   }
+  if (kind === 'image') clearFrames()
   list.value.push(createRemoteMedia(url, kind))
   formError.value = ''
 }
@@ -705,38 +758,33 @@ async function buildRequest() {
   if (capability.requiresStartFrame && !startFrame.value) {
     throw new Error(`${capability.label} 必须提供一张首帧`)
   }
-  if (creationMode.value === 'references' && referenceAudios.value.length > 0 && referenceImages.value.length + referenceVideos.value.length === 0) {
+  if (referenceAudios.value.length > 0 && referenceImages.value.length + referenceVideos.value.length === 0) {
     throw new Error('参考音频必须同时搭配至少一张参考图片或一个参考视频')
   }
-  if (creationMode.value === 'references' && referenceAudios.value.length > 0 && referenceVideos.value.length > 0) {
-    throw new Error('参考视频和参考音频不能同时使用')
-  }
-  if (creationMode.value === 'frames' && endFrame.value && !startFrame.value) {
+  if (endFrame.value && !startFrame.value) {
     throw new Error('上传尾帧前必须先上传首帧')
   }
   uploading.value = true
   try {
+    const promptConflict = validateVideoPromptParameters(prompt.value, { aspectRatio: aspectRatio.value, duration: duration.value })
+    if (promptConflict) throw new Error(promptConflict)
     const request: import('@/api/video').CreateVideoRequest = {
       model: capability.id,
-      prompt: prompt.value.trim(),
+      prompt: normalizeVideoPrompt(prompt.value.trim(), { aspectRatio: aspectRatio.value, duration: duration.value }),
       resolution: resolution.value,
       duration: duration.value,
       aspect_ratio: aspectRatio.value,
       audio: capability.supportsAudio ? audio.value : false,
     }
     if (capability.supportsPromptEnhance) request.prompt_enhance = promptEnhance.value
-    if (creationMode.value === 'frames') {
-      if (startFrame.value) request.start_frame_url = (await ensureUploaded(startFrame.value)).url
-      if (endFrame.value && capability.supportsEndFrame) request.end_frame_url = (await ensureUploaded(endFrame.value)).url
-    }
-    if (creationMode.value === 'references') {
+    if (startFrame.value) request.start_frame_url = (await ensureUploaded(startFrame.value)).url
+    if (endFrame.value && capability.supportsEndFrame) request.end_frame_url = (await ensureUploaded(endFrame.value)).url
+    if (referenceImages.value.length || referenceVideos.value.length || referenceAudios.value.length) {
       const images = await Promise.all(referenceImages.value.map(ensureUploaded))
       const videos = await Promise.all(referenceVideos.value.map(ensureUploaded))
       const audios = await Promise.all(referenceAudios.value.map(ensureUploaded))
       request.guidances = {}
-      if (images.length) request.guidances.image_reference = images.map((item, index) => ({
-        image: { url: item.url, type: 'UPLOADED' }, strength: 'MID', order: index + 1,
-      }))
+      if (images.length) request.guidances.image_reference = imageReferenceGuidances(images.map((item) => item.url), referenceImageStrength.value)
       if (videos.length) request.guidances.video_reference_base = videos.map((item) => ({ video: { url: item.url, type: 'UPLOADED' } }))
       if (audios.length) request.guidances.audio_reference = audios.map((item) => ({ audio: { url: item.url, type: 'UPLOADED' } }))
       if (Object.keys(request.guidances).length === 0) delete request.guidances
@@ -781,9 +829,7 @@ watch(selectedCapability, (capability) => {
   const durationValue = capability.defaultDuration
   durationIndex.value = Math.max(0, durationsFor(capability, resolution.value).indexOf(durationValue))
   aspectRatio.value = capability.defaultAspectRatio
-  audio.value = true; promptEnhance.value = 'AUTO'; formError.value = ''
-  if (capability.requiresStartFrame) creationMode.value = 'frames'
-  else if (!availableModes.value.some((item) => item.value === creationMode.value)) creationMode.value = 'text'
+  audio.value = true; promptEnhance.value = 'AUTO'; referenceImageStrength.value = 'MID'; formError.value = ''
   releaseAllMedia()
 })
 watch(resolution, () => {
@@ -791,7 +837,7 @@ watch(resolution, () => {
   if (durationIndex.value >= durationValues.length) durationIndex.value = Math.max(0, durationValues.length - 1)
   if (!aspectRatioOptions.value.includes(aspectRatio.value)) aspectRatio.value = aspectRatioOptions.value[0]
 })
-watch([prompt, resolution, aspectRatio, durationIndex, audio, promptEnhance, creationMode], () => {
+watch([prompt, resolution, aspectRatio, durationIndex, audio, promptEnhance, referenceImageStrength], () => {
   formError.value = ''
 })
 watch(startFrame, (value) => {
