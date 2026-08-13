@@ -333,3 +333,47 @@
   .video-capability--shelf dl { grid-template-columns: 1fr; }
 }
 @media (prefers-reduced-motion: reduce) { .video-audio-toggle i::after { transition: none; } }
+
+/* Readability pass: keep the control room dense, but make every instruction
+ * and control label readable at normal desktop zoom. */
+.video-parameters .video-sidebar__title strong { font-size: 1rem; }
+.video-parameters .video-sidebar__title small { font-size: .72rem; }
+.video-parameters .video-setting > span { font-size: .84rem; }
+.video-parameters .video-segments button { min-height: 2.2rem; padding-inline: .62rem; font-size: .78rem; }
+.video-parameters .video-duration strong { font-size: .78rem; }
+.video-parameters .video-setting select { min-height: 2.2rem; font-size: .8rem; }
+.video-parameters .video-audio-toggle strong { font-size: .86rem; }
+.video-parameters .video-audio-toggle small { font-size: .72rem; }
+.video-parameters .video-monitor-meta span { font-size: .68rem; }
+.video-parameters .video-monitor-meta strong { font-size: .8rem; }
+
+.video-prompt > span strong { font-size: .8rem; }
+.video-prompt small { font-size: .68rem; }
+.video-prompt textarea { font-size: .9rem; line-height: 1.75; }
+.video-shot-language > span { font-size: .68rem; }
+.video-shot-language button { min-height: 2rem; font-size: .66rem; }
+.video-form-error { font-size: .72rem; line-height: 1.55; }
+
+.video-materials__header strong { font-size: .88rem; }
+.video-materials__header span { font-size: .74rem; }
+.video-materials__header em { font-size: .72rem; }
+.video-media-input :deep(.video-media-input__copy strong) { font-size: .76rem; }
+.video-media-input :deep(.video-media-input__copy em) { font-size: .62rem; }
+.video-media-input :deep(.video-media-input__copy span) { font-size: .66rem; line-height: 1.45; }
+.video-media-input :deep(.video-media-input__add), .video-add-media { font-size: .68rem; }
+.video-media-input :deep(.video-media-input__selected span) { font-size: .68rem; }
+.video-reference-row strong { font-size: .76rem; }
+.video-reference-row span { font-size: .66rem; }
+.video-reference-strength strong { font-size: .8rem; }
+.video-reference-strength span { font-size: .7rem; }
+.video-strength-options button { min-height: 2.15rem; font-size: .76rem; }
+.video-media-chip :deep(span:nth-child(2)) { font-size: .64rem; }
+
+.video-capability header strong { font-size: .76rem; }
+.video-capability header small { font-size: .64rem; }
+.video-capability header em { font-size: .6rem; }
+.video-capability dt { font-size: .66rem; }
+.video-capability dd { font-size: .66rem; line-height: 1.55; }
+.video-capability__section > strong { font-size: .74rem; }
+.video-capability__section p { font-size: .66rem; line-height: 1.65; }
+.video-capability__lead { font-size: .7rem; line-height: 1.55; }
