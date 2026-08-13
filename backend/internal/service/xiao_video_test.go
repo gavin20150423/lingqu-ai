@@ -1,10 +1,12 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"io"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -15,6 +17,39 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/tlsfingerprint"
 	"github.com/stretchr/testify/require"
 )
+
+func TestVideoUpstreamDiagnosticSanitizers(t *testing.T) {
+	require.Equal(t, "req_123:attempt-2", sanitizeVideoUpstreamRequestID(" req_123:attempt-2 "))
+	require.Empty(t, sanitizeVideoUpstreamRequestID("https://secret.example/request?id=9"))
+	require.Equal(t, "unsupported image codec", sanitizeVideoUpstreamDiagnostic(" unsupported  image codec "))
+	require.Empty(t, sanitizeVideoUpstreamDiagnostic("unsupported codec\naccount 99"))
+	require.Empty(t, sanitizeVideoUpstreamDiagnostic("provider https://secret.example failed"))
+	require.Empty(t, sanitizeVideoUpstreamDiagnostic("token abc123 was rejected"))
+}
+
+func TestLogVideoUpstreamErrorForRequestDoesNotLeakSensitiveValues(t *testing.T) {
+	var output bytes.Buffer
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&output, nil)))
+	t.Cleanup(func() { slog.SetDefault(previous) })
+
+	LogVideoUpstreamErrorForRequest(&VideoUpstreamError{
+		Status: http.StatusUnprocessableEntity,
+		Header: http.Header{"X-Request-Id": []string{"https://secret.example/request?id=9"}},
+		Body:   []byte(`{"error":{"code":"SECRET_ACCOUNT_999","message":"account 999 at https://secret.example failed","request_id":"internal secret"}}`),
+	}, "Bearer secret-token", "/v1/videos/generations")
+
+	var entry map[string]any
+	require.NoError(t, json.Unmarshal(output.Bytes(), &entry))
+	require.Equal(t, float64(http.StatusUnprocessableEntity), entry["status"])
+	require.Equal(t, "/v1/videos/generations", entry["path"])
+	require.Len(t, entry["body_sha256"], 64)
+	require.Empty(t, entry["request_id"])
+	require.Empty(t, entry["upstream_request_id"])
+	require.NotContains(t, output.String(), "secret.example")
+	require.NotContains(t, output.String(), "SECRET_ACCOUNT_999")
+	require.NotContains(t, output.String(), "account 999")
+}
 
 type videoAccountRepoStub struct {
 	AccountRepository

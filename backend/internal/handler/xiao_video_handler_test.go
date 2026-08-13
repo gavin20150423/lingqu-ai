@@ -102,6 +102,52 @@ func TestVideoErrorPreservesDocumentedCodeWithoutLeakingMessage(t *testing.T) {
 	require.NotContains(t, recorder.Body.String(), "account 9")
 }
 
+func TestVideoErrorExposesSafeUnknownUpstreamDiagnostic(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	videoError(ctx, &service.VideoUpstreamError{
+		Status: http.StatusUnprocessableEntity,
+		Header: http.Header{"X-Request-Id": []string{"upstream-rid"}},
+		Body:   []byte(`{"error":{"code":"MEDIA_CODEC_UNSUPPORTED","message":"unsupported image codec"}}`),
+	})
+	require.Equal(t, http.StatusUnprocessableEntity, recorder.Code)
+	require.Contains(t, recorder.Body.String(), "MEDIA_CODEC_UNSUPPORTED")
+	require.Contains(t, recorder.Body.String(), "unsupported image codec")
+}
+
+func TestVideoErrorRejectsUnsafeUnknownUpstreamDiagnostic(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	videoError(ctx, &service.VideoUpstreamError{
+		Status: http.StatusUnprocessableEntity,
+		Header: make(http.Header),
+		Body:   []byte(`{"error":{"code":"SECRET_ACCOUNT_999","message":"account 999 at https://secret.example rejected"}}`),
+	})
+	require.Equal(t, http.StatusUnprocessableEntity, recorder.Code)
+	require.Contains(t, recorder.Body.String(), "VIDEO_UPSTREAM_ERROR")
+	require.NotContains(t, recorder.Body.String(), "SECRET_ACCOUNT_999")
+	require.NotContains(t, recorder.Body.String(), "secret.example")
+}
+
+func TestVideoErrorDoesNotReflectUnsafeUpstreamRequestID(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	videoError(ctx, &service.VideoUpstreamError{
+		Status: http.StatusBadGateway,
+		Header: http.Header{"X-Request-Id": []string{"https://secret.example/request?id=9"}},
+		Body:   []byte(`{"error":{"code":"VIDEO_UPSTREAM_ERROR"}}`),
+	})
+	require.Empty(t, recorder.Header().Get("X-Request-Id"))
+}
+
+func TestSanitizeVideoUpstreamMessageRejectsMultilineValue(t *testing.T) {
+	require.Empty(t, sanitizeVideoUpstreamMessage("unsupported codec\naccount 99"))
+	require.Equal(t, "unsupported image codec", sanitizeVideoUpstreamMessage(" unsupported  image codec "))
+}
+
 func TestVideoRequestHeaderValidation(t *testing.T) {
 	require.True(t, validVideoJSONContentType("application/json; charset=utf-8"))
 	require.False(t, validVideoJSONContentType("text/plain"))

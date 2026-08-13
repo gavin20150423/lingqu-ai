@@ -147,6 +147,15 @@ type VideoUpstreamError struct {
 	Body   []byte
 }
 
+// VideoUpstreamDiagnostic contains only provider fields that are safe to log
+// and, when recognized, show to the caller. The raw provider body is never
+// exposed by the API.
+type VideoUpstreamDiagnostic struct {
+	Code      string
+	Message   string
+	RequestID string
+}
+
 func (e *VideoUpstreamError) Error() string {
 	return "video upstream returned HTTP " + strconv.Itoa(e.Status)
 }
@@ -2082,6 +2091,97 @@ func defaultString(value, fallback string) string {
 
 func upstreamVideoError(resp *http.Response, body []byte) error {
 	return &VideoUpstreamError{Status: resp.StatusCode, Header: resp.Header.Clone(), Body: body}
+}
+
+func VideoUpstreamDiagnosticFromError(err *VideoUpstreamError) VideoUpstreamDiagnostic {
+	if err == nil {
+		return VideoUpstreamDiagnostic{}
+	}
+	var envelope struct {
+		Error struct {
+			Code      string `json:"code"`
+			Message   string `json:"message"`
+			RequestID string `json:"request_id"`
+		} `json:"error"`
+		Code      string `json:"code"`
+		Message   string `json:"message"`
+		RequestID string `json:"request_id"`
+	}
+	if json.Unmarshal(err.Body, &envelope) != nil {
+		return VideoUpstreamDiagnostic{}
+	}
+	diagnostic := VideoUpstreamDiagnostic{
+		Code:      strings.TrimSpace(envelope.Error.Code),
+		Message:   strings.TrimSpace(envelope.Error.Message),
+		RequestID: strings.TrimSpace(envelope.Error.RequestID),
+	}
+	if diagnostic.Code == "" {
+		diagnostic.Code = strings.TrimSpace(envelope.Code)
+	}
+	if diagnostic.Message == "" {
+		diagnostic.Message = strings.TrimSpace(envelope.Message)
+	}
+	if diagnostic.RequestID == "" {
+		diagnostic.RequestID = strings.TrimSpace(envelope.RequestID)
+	}
+	return diagnostic
+}
+
+func LogVideoUpstreamErrorForRequest(err *VideoUpstreamError, requestID, path string) {
+	if err == nil {
+		return
+	}
+	diagnostic := VideoUpstreamDiagnosticFromError(err)
+	bodyHash := sha256.Sum256(err.Body)
+	upstreamRequestID := sanitizeVideoUpstreamRequestID(err.Header.Get("X-Request-Id"))
+	if upstreamRequestID == "" {
+		upstreamRequestID = sanitizeVideoUpstreamRequestID(diagnostic.RequestID)
+	}
+	fields := []any{
+		"request_id", sanitizeVideoUpstreamRequestID(requestID),
+		"upstream_request_id", upstreamRequestID,
+		"status", err.Status,
+		"path", path,
+		"body_bytes", len(err.Body),
+		"body_sha256", hex.EncodeToString(bodyHash[:]),
+	}
+	if code := sanitizeVideoUpstreamDiagnostic(diagnostic.Code); code != "" {
+		fields = append(fields, "upstream_code", code)
+	}
+	if message := sanitizeVideoUpstreamDiagnostic(diagnostic.Message); message != "" {
+		fields = append(fields, "upstream_message", message)
+	}
+	slog.Warn("xiao_video.upstream_error", fields...)
+}
+
+func sanitizeVideoUpstreamDiagnostic(value string) string {
+	if strings.ContainsAny(value, "\r\n") {
+		return ""
+	}
+	value = strings.Join(strings.Fields(strings.TrimSpace(value)), " ")
+	if value == "" || len(value) > 240 {
+		return ""
+	}
+	lower := strings.ToLower(value)
+	for _, marker := range []string{"http://", "https://", "bearer ", "api_key", "account_id", "account id", "internal", "secret", "token"} {
+		if strings.Contains(lower, marker) {
+			return ""
+		}
+	}
+	return value
+}
+
+func sanitizeVideoUpstreamRequestID(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" || len(value) > 128 {
+		return ""
+	}
+	for _, r := range value {
+		if !(r >= 'a' && r <= 'z') && !(r >= 'A' && r <= 'Z') && !(r >= '0' && r <= '9') && r != '_' && r != '-' && r != '.' && r != ':' {
+			return ""
+		}
+	}
+	return value
 }
 
 func sortStrings(values []string) {

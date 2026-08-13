@@ -434,7 +434,15 @@ func proxyVideoResponse(c *gin.Context, resp *http.Response, stream bool) {
 func videoError(c *gin.Context, err error) {
 	var upstream *service.VideoUpstreamError
 	if errors.As(err, &upstream) {
-		if requestID := upstream.Header.Get("X-Request-Id"); requestID != "" {
+		clientRequestID, path := "", ""
+		if c != nil && c.Request != nil {
+			clientRequestID = c.GetHeader("X-Client-Request-Id")
+			if c.Request.URL != nil {
+				path = c.Request.URL.Path
+			}
+		}
+		service.LogVideoUpstreamErrorForRequest(upstream, clientRequestID, path)
+		if requestID := safeVideoUpstreamRequestID(upstream.Header.Get("X-Request-Id")); requestID != "" {
 			c.Header("X-Request-Id", requestID)
 		}
 		if retryAfter := upstream.Header.Get("Retry-After"); retryAfter != "" {
@@ -492,8 +500,11 @@ func videoPreferRespondAsync(value string) bool {
 func safeVideoUpstreamError(status int, body []byte) (string, string, bool) {
 	var envelope struct {
 		Error struct {
-			Code string `json:"code"`
+			Code    string `json:"code"`
+			Message string `json:"message"`
 		} `json:"error"`
+		Code    string `json:"code"`
+		Message string `json:"message"`
 	}
 	if json.Unmarshal(body, &envelope) != nil {
 		return "", "", false
@@ -518,9 +529,85 @@ func safeVideoUpstreamError(status int, body []byte) (string, string, bool) {
 		"VIDEO_OPTION_UNSUPPORTED":               {http.StatusUnprocessableEntity, "video option is not supported by this model"},
 		"VIDEO_CAPACITY_EXHAUSTED":               {http.StatusTooManyRequests, "video capacity is temporarily exhausted"},
 	}
-	definition, ok := allowed[strings.TrimSpace(envelope.Error.Code)]
+	code := strings.TrimSpace(envelope.Error.Code)
+	if code == "" {
+		code = strings.TrimSpace(envelope.Code)
+	}
+	definition, ok := allowed[code]
 	if !ok || definition.status != status {
+		return safeUpstreamFallback(status, code, envelope.Error.Message, envelope.Message)
+	}
+	return code, definition.message, true
+}
+
+func safeUpstreamFallback(status int, code, nestedMessage, topMessage string) (string, string, bool) {
+	// Provider-specific codes are useful to support staff, while provider text
+	// is normalized to avoid leaking URLs, account IDs, or internal details.
+	code = strings.TrimSpace(code)
+	if !safeVideoUpstreamCode(code) {
+		code = ""
+	}
+	message := strings.TrimSpace(nestedMessage)
+	if message == "" {
+		message = strings.TrimSpace(topMessage)
+	}
+	message = sanitizeVideoUpstreamMessage(message)
+	if code == "" && message == "" {
 		return "", "", false
 	}
-	return strings.TrimSpace(envelope.Error.Code), definition.message, true
+	if message == "" {
+		message = "video upstream rejected the request"
+	}
+	if code == "" {
+		code = "VIDEO_UPSTREAM_ERROR"
+	}
+	return code, message, true
+}
+
+func sanitizeVideoUpstreamMessage(value string) string {
+	if strings.ContainsAny(value, "\r\n") {
+		return ""
+	}
+	value = strings.Join(strings.Fields(strings.TrimSpace(value)), " ")
+	if value == "" || len(value) > 240 {
+		return ""
+	}
+	for _, marker := range []string{"http://", "https://", "bearer ", "api_key", "account_id", "account id", "internal", "secret", "token"} {
+		if strings.Contains(strings.ToLower(value), strings.ToLower(marker)) {
+			return ""
+		}
+	}
+	return value
+}
+
+func safeVideoUpstreamRequestID(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" || len(value) > 128 {
+		return ""
+	}
+	for _, r := range value {
+		if !(r >= 'a' && r <= 'z') && !(r >= 'A' && r <= 'Z') && !(r >= '0' && r <= '9') && r != '_' && r != '-' && r != '.' && r != ':' {
+			return ""
+		}
+	}
+	return value
+}
+
+func safeVideoUpstreamCode(value string) bool {
+	value = strings.TrimSpace(value)
+	if value == "" || len(value) > 80 {
+		return false
+	}
+	lower := strings.ToLower(value)
+	for _, marker := range []string{"http", "secret", "account", "internal", "api_key", "token"} {
+		if strings.Contains(lower, marker) {
+			return false
+		}
+	}
+	for _, r := range value {
+		if !(r >= 'A' && r <= 'Z') && !(r >= '0' && r <= '9') && r != '_' && r != '-' && r != '.' {
+			return false
+		}
+	}
+	return true
 }
