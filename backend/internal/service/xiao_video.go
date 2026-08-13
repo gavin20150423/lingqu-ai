@@ -2177,9 +2177,10 @@ func sanitizeVideoUpstreamRequestID(value string) string {
 		return ""
 	}
 	for _, r := range value {
-		if !(r >= 'a' && r <= 'z') && !(r >= 'A' && r <= 'Z') && !(r >= '0' && r <= '9') && r != '_' && r != '-' && r != '.' && r != ':' {
-			return ""
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || strings.ContainsRune("_-.:", r) {
+			continue
 		}
+		return ""
 	}
 	return value
 }
