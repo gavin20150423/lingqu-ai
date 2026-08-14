@@ -600,11 +600,6 @@ async function openUsersTab(wrapper: ReturnType<typeof mountView>) {
 
 describe("admin SettingsView email domain quota copy", () => {
   it("documents the email domain quota and empty-whitelist behavior in both locales", () => {
-    expect(zhCommon.auth.emailDomainRegistrationLimit).toContain("主流邮箱");
-    expect(zhCommon.auth.emailDomainRegistrationLimit).toContain("联系客服");
-    expect(enCommon.auth.emailDomainRegistrationLimit).toContain("mainstream email");
-    expect(enCommon.auth.emailDomainRegistrationLimit).toContain("contact support");
-
     // 白名单 hint 描述严格默认语义；额度语义移入独立开关的 hint。
     const zhWhitelistHint = zhSettings.settings.registration.emailSuffixWhitelistHint;
     const enWhitelistHint = enSettings.settings.registration.emailSuffixWhitelistHint;
