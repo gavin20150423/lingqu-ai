@@ -2192,6 +2192,7 @@ func TestOpenAIResponses_APIKeyPassthroughPoolAuthFailureRetriesThenSwitchesToHe
 				nil,
 				nil,
 				nil,
+				nil,
 				cfg,
 			)
 

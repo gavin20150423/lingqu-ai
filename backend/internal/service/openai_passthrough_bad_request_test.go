@@ -58,8 +58,7 @@ func TestIsOpenAIAccountSpecificBadRequest(t *testing.T) {
 
 func TestShouldFailoverOpenAIPassthroughResponseRecognizesAccountSpecificBadRequest(t *testing.T) {
 	body := []byte(`{"error":{"message":"This account does not have access to model gpt-5.5"}}`)
-	svc := &OpenAIGatewayService{}
-	require.True(t, svc.shouldFailoverOpenAIPassthroughResponse(nil, http.StatusBadRequest, body))
+	require.True(t, shouldFailoverOpenAIPassthroughResponse(nil, http.StatusBadRequest, body))
 }
 
 func TestOpenAIPassthroughRecognized400TriggersFailover(t *testing.T) {

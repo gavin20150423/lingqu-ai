@@ -2,6 +2,8 @@
   <AppLayout>
     <MonitorHero
       :overall-status="overallStatus"
+      :total="items.length"
+      :counts="statusCounts"
       :interval-seconds="DEFAULT_INTERVAL_SECONDS"
       :window="currentWindow"
       :loading="loading"
@@ -79,6 +81,18 @@ const overallStatus = computed<OverallStatus>(() => {
     if (it.primary_status !== STATUS_OPERATIONAL) return 'degraded'
   }
   return 'operational'
+})
+
+const statusCounts = computed(() => {
+  return items.value.reduce(
+    (counts, item) => {
+      if (item.primary_status === 'operational') counts.operational += 1
+      else if (item.primary_status === 'degraded') counts.degraded += 1
+      else counts.failed += 1
+      return counts
+    },
+    { operational: 0, degraded: 0, failed: 0 },
+  )
 })
 
 const detailTitle = computed(() => {

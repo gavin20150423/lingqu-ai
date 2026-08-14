@@ -12,6 +12,68 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/timezone"
 )
 
+// StableGrokAudioBillingRequestID provides a deterministic deduplication key.
+func StableGrokAudioBillingRequestID(upstreamRequestID string) string {
+	requestID := strings.TrimSpace(upstreamRequestID)
+	if strings.HasPrefix(requestID, "grok_audio:") {
+		return requestID
+	}
+	if requestID == "" {
+		requestID = generateRequestID()
+	}
+	return "grok_audio:" + requestID
+}
+
+// StableGrokRealtimeBillingRequestID provides a deterministic session key.
+func StableGrokRealtimeBillingRequestID(sessionID string) string {
+	sessionID = strings.TrimSpace(sessionID)
+	if strings.HasPrefix(sessionID, "grok_realtime:") {
+		return sessionID
+	}
+	if sessionID == "" {
+		sessionID = generateRequestID()
+	}
+	return "grok_realtime:" + sessionID
+}
+
+const responseModelBillingCostEpsilon = 1e-12
+
+func responseModelBillingDeclaration(source, responseModel string, conflict, mediaBilled bool) string {
+	if source != BillingModelSourceResponse || conflict || mediaBilled {
+		return ""
+	}
+	return strings.TrimSpace(responseModel)
+}
+
+func responseModelBillingAdoptable(baseline, response *CostBreakdown, baselineChannelPriced, responseChannelPriced bool) bool {
+	if baseline == nil || response == nil {
+		return false
+	}
+	if response.TotalCost > baseline.TotalCost+responseModelBillingCostEpsilon {
+		return false
+	}
+	if response.TotalCost <= 0 && baseline.TotalCost > 0 {
+		return false
+	}
+	return !baselineChannelPriced || responseChannelPriced
+}
+
+func logResponseModelBillingApplied(component string, account *Account, requestID, baselineModel, responseModel string, baselineCost, responseCost *CostBreakdown) {
+	baselineModel = strings.TrimSpace(baselineModel)
+	responseModel = strings.TrimSpace(responseModel)
+	if strings.EqualFold(baselineModel, responseModel) {
+		return
+	}
+	attrs := []any{"component", component, "request_id", strings.TrimSpace(requestID), "baseline_model", baselineModel, "response_model", responseModel}
+	if baselineCost != nil && responseCost != nil {
+		attrs = append(attrs, "baseline_cost", baselineCost.TotalCost, "billed_cost", responseCost.TotalCost)
+	}
+	if account != nil {
+		attrs = append(attrs, "platform", account.Platform, "account_id", account.ID)
+	}
+	slog.Info("billing.response_model_applied", attrs...)
+}
+
 func (s *GatewayService) getUserGroupRateMultiplier(ctx context.Context, userID, groupID int64, groupDefaultMultiplier float64) float64 {
 	if s == nil {
 		return groupDefaultMultiplier

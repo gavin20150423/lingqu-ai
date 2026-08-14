@@ -32,6 +32,10 @@ func (priorityOpenAIOAuthClient) RefreshTokenWithClientID(context.Context, strin
 
 type priorityGrokOAuthClient struct{}
 
+func (priorityGrokOAuthClient) LoginWithPassword(context.Context, string, string, string) (*service.GrokPasswordLoginResult, error) {
+	return nil, nil
+}
+
 func (priorityGrokOAuthClient) ExchangeCode(context.Context, string, string, string, string, string) (*xai.TokenResponse, error) {
 	return &xai.TokenResponse{AccessToken: "access-token", RefreshToken: "refresh-token", ExpiresIn: 3600}, nil
 }

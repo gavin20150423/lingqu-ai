@@ -24,21 +24,25 @@ import (
 )
 
 var (
-	ErrInvalidCredentials      = infraerrors.Unauthorized("INVALID_CREDENTIALS", "invalid email or password")
-	ErrUserNotActive           = infraerrors.Forbidden("USER_NOT_ACTIVE", "user is not active")
-	ErrEmailExists             = infraerrors.Conflict("EMAIL_EXISTS", "email already exists")
-	ErrEmailReserved           = infraerrors.BadRequest("EMAIL_RESERVED", "email is reserved")
-	ErrInvalidToken            = infraerrors.Unauthorized("INVALID_TOKEN", "invalid token")
-	ErrTokenExpired            = infraerrors.Unauthorized("TOKEN_EXPIRED", "token has expired")
-	ErrAccessTokenExpired      = infraerrors.Unauthorized("ACCESS_TOKEN_EXPIRED", "access token has expired")
-	ErrTokenTooLarge           = infraerrors.BadRequest("TOKEN_TOO_LARGE", "token too large")
-	ErrTokenRevoked            = infraerrors.Unauthorized("TOKEN_REVOKED", "token has been revoked")
-	ErrRefreshTokenInvalid     = infraerrors.Unauthorized("REFRESH_TOKEN_INVALID", "invalid refresh token")
-	ErrRefreshTokenExpired     = infraerrors.Unauthorized("REFRESH_TOKEN_EXPIRED", "refresh token has expired")
-	ErrRefreshTokenReused      = infraerrors.Unauthorized("REFRESH_TOKEN_REUSED", "refresh token has been reused")
-	ErrEmailVerifyRequired     = infraerrors.BadRequest("EMAIL_VERIFY_REQUIRED", "email verification is required")
-	ErrEmailAliasNotAllowed    = infraerrors.BadRequest("EMAIL_ALIAS_NOT_ALLOWED", "email aliases are not allowed for registration")
-	ErrEmailSuffixNotAllowed   = infraerrors.BadRequest("EMAIL_SUFFIX_NOT_ALLOWED", "email suffix is not allowed")
+	ErrInvalidCredentials           = infraerrors.Unauthorized("INVALID_CREDENTIALS", "invalid email or password")
+	ErrUserNotActive                = infraerrors.Forbidden("USER_NOT_ACTIVE", "user is not active")
+	ErrEmailExists                  = infraerrors.Conflict("EMAIL_EXISTS", "email already exists")
+	ErrEmailReserved                = infraerrors.BadRequest("EMAIL_RESERVED", "email is reserved")
+	ErrInvalidToken                 = infraerrors.Unauthorized("INVALID_TOKEN", "invalid token")
+	ErrTokenExpired                 = infraerrors.Unauthorized("TOKEN_EXPIRED", "token has expired")
+	ErrAccessTokenExpired           = infraerrors.Unauthorized("ACCESS_TOKEN_EXPIRED", "access token has expired")
+	ErrTokenTooLarge                = infraerrors.BadRequest("TOKEN_TOO_LARGE", "token too large")
+	ErrTokenRevoked                 = infraerrors.Unauthorized("TOKEN_REVOKED", "token has been revoked")
+	ErrRefreshTokenInvalid          = infraerrors.Unauthorized("REFRESH_TOKEN_INVALID", "invalid refresh token")
+	ErrRefreshTokenExpired          = infraerrors.Unauthorized("REFRESH_TOKEN_EXPIRED", "refresh token has expired")
+	ErrRefreshTokenReused           = infraerrors.Unauthorized("REFRESH_TOKEN_REUSED", "refresh token has been reused")
+	ErrEmailVerifyRequired          = infraerrors.BadRequest("EMAIL_VERIFY_REQUIRED", "email verification is required")
+	ErrEmailAliasNotAllowed         = infraerrors.BadRequest("EMAIL_ALIAS_NOT_ALLOWED", "email aliases are not allowed for registration")
+	ErrEmailSuffixNotAllowed        = infraerrors.BadRequest("EMAIL_SUFFIX_NOT_ALLOWED", "email suffix is not allowed")
+	ErrEmailDomainRegistrationLimit = infraerrors.BadRequest(
+		"EMAIL_DOMAIN_REGISTRATION_LIMIT",
+		"this email domain cannot register another account; use a mainstream email or contact support to add the enterprise domain",
+	)
 	ErrRegDisabled             = infraerrors.Forbidden("REGISTRATION_DISABLED", "registration is currently disabled")
 	ErrServiceUnavailable      = infraerrors.ServiceUnavailable("SERVICE_UNAVAILABLE", "service temporarily unavailable")
 	ErrInvitationCodeRequired  = infraerrors.BadRequest("INVITATION_CODE_REQUIRED", "invitation code is required")
@@ -170,9 +174,6 @@ func (s *AuthService) RegisterWithVerification(ctx context.Context, email, passw
 	if err := s.validateRegistrationEmailAliasPolicy(ctx, email); err != nil {
 		return "", nil, err
 	}
-	if err := s.validateRegistrationEmailPolicy(ctx, email); err != nil {
-		return "", nil, err
-	}
 
 	// 检查是否需要邀请码
 	var invitationRedeemCode *RedeemCode
@@ -220,6 +221,9 @@ func (s *AuthService) RegisterWithVerification(ctx context.Context, email, passw
 	if existsEmail {
 		return "", nil, ErrEmailExists
 	}
+	if err := s.validateRegistrationEmailQuota(ctx, email); err != nil {
+		return "", nil, err
+	}
 
 	// 密码哈希
 	hashedPassword, err := s.HashPassword(password)
@@ -246,10 +250,13 @@ func (s *AuthService) RegisterWithVerification(ctx context.Context, email, passw
 		Status:       StatusActive,
 	}
 
-	if err := s.userRepo.CreateWithEmailAliasGuard(ctx, user); err != nil {
+	if err := s.createUserWithRegistrationEmailGuard(ctx, user); err != nil {
 		// 优先检查邮箱冲突错误（竞态条件下可能发生）
 		if errors.Is(err, ErrEmailExists) {
 			return "", nil, ErrEmailExists
+		}
+		if errors.Is(err, ErrEmailDomainRegistrationLimit) {
+			return "", nil, ErrEmailDomainRegistrationLimit
 		}
 		logger.LegacyPrintf("service.auth", "[Auth] Database error creating user: %v", err)
 		return "", nil, ErrServiceUnavailable
@@ -317,9 +324,6 @@ func (s *AuthService) SendVerifyCode(ctx context.Context, email string, locale .
 	if err := s.validateRegistrationEmailAliasPolicy(ctx, email); err != nil {
 		return err
 	}
-	if err := s.validateRegistrationEmailPolicy(ctx, email); err != nil {
-		return err
-	}
 
 	// 检查邮箱是否已存在（含 +别名 / Gmail 点号变体归一化，防止单个收件箱批量派生注册）
 	existsEmail, err := s.existsByEmailOrAlias(ctx, email)
@@ -329,6 +333,9 @@ func (s *AuthService) SendVerifyCode(ctx context.Context, email string, locale .
 	}
 	if existsEmail {
 		return ErrEmailExists
+	}
+	if err := s.validateRegistrationEmailQuota(ctx, email); err != nil {
+		return err
 	}
 
 	// 发送验证码
@@ -361,9 +368,6 @@ func (s *AuthService) SendVerifyCodeAsync(ctx context.Context, email string, loc
 	if err := s.validateRegistrationEmailAliasPolicy(ctx, email); err != nil {
 		return nil, err
 	}
-	if err := s.validateRegistrationEmailPolicy(ctx, email); err != nil {
-		return nil, err
-	}
 
 	// 检查邮箱是否已存在（含 +别名 / Gmail 点号变体归一化；在发信前拦截，避免批量脚本消耗发信配额）
 	existsEmail, err := s.existsByEmailOrAlias(ctx, email)
@@ -374,6 +378,9 @@ func (s *AuthService) SendVerifyCodeAsync(ctx context.Context, email string, loc
 	if existsEmail {
 		logger.LegacyPrintf("service.auth", "[Auth] Email already exists: %s", email)
 		return nil, ErrEmailExists
+	}
+	if err := s.validateRegistrationEmailQuota(ctx, email); err != nil {
+		return nil, err
 	}
 
 	// 检查邮件队列服务是否配置
@@ -1215,6 +1222,69 @@ func (s *AuthService) validateRegistrationEmailPolicy(ctx context.Context, email
 		return buildEmailSuffixNotAllowedError(whitelist)
 	}
 	return nil
+}
+
+// validateRegistrationEmailQuota allows one account per non-whitelisted
+// registrable domain when the quota feature is enabled.
+func (s *AuthService) validateRegistrationEmailQuota(ctx context.Context, email string) error {
+	if s.settingService == nil {
+		return nil
+	}
+	whitelist := s.settingService.GetRegistrationEmailSuffixWhitelist(ctx)
+	if !IsRegistrationEmailSuffixLimited(email, whitelist) {
+		return nil
+	}
+	if !s.settingService.IsRegistrationEmailDomainQuotaEnabled(ctx) {
+		return buildEmailSuffixNotAllowedError(whitelist)
+	}
+	domain := RegistrationEmailDomain(email)
+	if domain == "" {
+		return buildEmailSuffixNotAllowedError(whitelist)
+	}
+	quotaRepo, ok := s.userRepo.(RegistrationEmailDomainRepository)
+	if !ok {
+		if s.entClient != nil {
+			return ErrServiceUnavailable
+		}
+		return nil
+	}
+	count, err := quotaRepo.CountUsersByEmailDomain(ctx, domain)
+	if err != nil {
+		logger.LegacyPrintf("service.auth", "[Auth] Failed to count registration email domain %s: %v", domain, err)
+		return ErrServiceUnavailable
+	}
+	if count > 0 {
+		return ErrEmailDomainRegistrationLimit
+	}
+	return nil
+}
+
+func (s *AuthService) createUserWithRegistrationEmailGuard(ctx context.Context, user *User) error {
+	if s == nil || s.userRepo == nil {
+		return ErrServiceUnavailable
+	}
+	whitelist := []string{}
+	if s.settingService != nil {
+		whitelist = s.settingService.GetRegistrationEmailSuffixWhitelist(ctx)
+	}
+	domain := RegistrationEmailDomain(user.Email)
+	if !IsRegistrationEmailSuffixLimited(user.Email, whitelist) {
+		return s.userRepo.CreateWithEmailAliasGuard(ctx, user)
+	}
+	if s.settingService == nil || !s.settingService.IsRegistrationEmailDomainQuotaEnabled(ctx) {
+		return buildEmailSuffixNotAllowedError(whitelist)
+	}
+	if domain == "" {
+		return buildEmailSuffixNotAllowedError(whitelist)
+	}
+	quotaRepo, ok := s.userRepo.(RegistrationEmailDomainRepository)
+	if !ok {
+		if s.entClient != nil {
+			return ErrServiceUnavailable
+		}
+		return s.userRepo.CreateWithEmailAliasGuard(ctx, user)
+	}
+	return quotaRepo.CreateWithEmailAliasGuardAndDomainLimit(ctx, user, domain)
 }
 
 func (s *AuthService) validateRegistrationEmailAliasPolicy(ctx context.Context, email string) error {
