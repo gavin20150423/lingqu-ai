@@ -39,12 +39,10 @@ func TestSameAccountRetryDelayFor(t *testing.T) {
 		retryCount int
 		want       time.Duration
 	}{
-		{name: "first retry", retryCount: 1, want: 500 * time.Millisecond},
-		{name: "second retry", retryCount: 2, want: time.Second},
-		{name: "third retry", retryCount: 3, want: 2 * time.Second},
-		{name: "fourth retry", retryCount: 4, want: 4 * time.Second},
-		{name: "fifth retry", retryCount: 5, want: 8 * time.Second},
-		{name: "capped retry", retryCount: 10, want: 8 * time.Second},
+		{name: "first retry", retryCount: 1, want: 100 * time.Millisecond},
+		{name: "bounded retry", retryCount: 2, want: 200 * time.Millisecond},
+		{name: "legacy retry", retryCount: 3, want: 300 * time.Millisecond},
+		{name: "capped retry", retryCount: 10, want: time.Second},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			require.Equal(t, tc.want, sameAccountRetryDelayFor(capacityErr, tc.retryCount))
@@ -52,11 +50,11 @@ func TestSameAccountRetryDelayFor(t *testing.T) {
 	}
 
 	t.Run("non request scoped errors keep fixed delay", func(t *testing.T) {
-		require.Equal(t, 500*time.Millisecond, sameAccountRetryDelayFor(&service.UpstreamFailoverError{}, 10))
+		require.Equal(t, time.Second, sameAccountRetryDelayFor(&service.UpstreamFailoverError{}, 10))
 	})
 
 	t.Run("nil error keeps fixed delay", func(t *testing.T) {
-		require.Equal(t, 500*time.Millisecond, sameAccountRetryDelayFor(nil, 10))
+		require.Equal(t, 100*time.Millisecond, sameAccountRetryDelayFor(nil, 10))
 	})
 }
 
@@ -399,8 +397,8 @@ func TestHandleFailoverError_SameAccountRetry(t *testing.T) {
 		require.Equal(t, 0, fs.SwitchCount, "同账号重试不应增加切换计数")
 		require.NotContains(t, fs.FailedAccountIDs, int64(100), "同账号重试不应加入失败列表")
 		require.Empty(t, mock.calls, "同账号重试期间不应调用 TempUnschedule")
-		// 验证等待了 sameAccountRetryDelay (500ms)
-		require.GreaterOrEqual(t, elapsed, 400*time.Millisecond)
+		// 验证等待了 bounded sameAccountRetryDelay (100ms)
+		require.GreaterOrEqual(t, elapsed, 80*time.Millisecond)
 		require.Less(t, elapsed, 2*time.Second)
 	})
 
@@ -481,7 +479,7 @@ func TestHandleFailoverError_SameAccountRetry(t *testing.T) {
 		// pool_mode_retry_count 配置。此处验证传入 retryLimit=1 时只重试 1 次即切换。
 		mock := &mockTempUnscheduler{}
 		fs := NewFailoverState(5, false)
-		err := newTestFailoverErr(403, true, false)
+		err := newTestFailoverErr(400, true, false)
 		const retryLimit = 1
 
 		// 第 1 次：同账号重试
@@ -512,6 +510,23 @@ func TestHandleFailoverError_SameAccountRetry(t *testing.T) {
 		require.Equal(t, 1, fs.SwitchCount, "应立即切换账号")
 		require.Len(t, mock.calls, 1, "应立即 TempUnschedule")
 	})
+}
+
+func TestHandleFailoverError403SwitchesWithoutSameAccountRetry(t *testing.T) {
+	mock := &mockTempUnscheduler{}
+	fs := NewFailoverState(3, false)
+	err := newTestFailoverErr(http.StatusForbidden, true, false)
+	start := time.Now()
+	action := fs.HandleFailoverError(context.Background(), mock, 100, "openai", 3, err)
+	if action != FailoverContinue {
+		t.Fatalf("action=%v, want immediate failover", action)
+	}
+	if fs.SameAccountRetryCount[100] != 0 || fs.SwitchCount != 1 || len(mock.calls) != 1 {
+		t.Fatalf("state=%+v temp_unschedule=%+v, want direct switch", fs, mock.calls)
+	}
+	if elapsed := time.Since(start); elapsed >= 80*time.Millisecond {
+		t.Fatalf("403 failover took %s, want no retry delay", elapsed)
+	}
 }
 
 // ---------------------------------------------------------------------------

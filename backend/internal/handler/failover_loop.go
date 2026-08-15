@@ -33,9 +33,9 @@ const (
 const (
 	// maxSameAccountRetries 同账号重试次数默认上限（针对 RetryableOnSameAccount 错误）。
 	// 生产调用方通常传入账号级配置 account.GetPoolModeRetryCount()，该常量仅作兜底/测试默认值。
-	maxSameAccountRetries = 3
-	// sameAccountRetryDelay 同账号重试间隔
-	sameAccountRetryDelay = 500 * time.Millisecond
+	maxSameAccountRetries = 1
+	// sameAccountRetryDelay 同账号重试间隔。切换优先，避免在坏账号上拖住请求。
+	sameAccountRetryDelay = 100 * time.Millisecond
 	// maxRequestScopedRetryDelay 限制请求级瞬时错误的指数退避上限，避免高重试配置
 	// 将单次请求拖入分钟级等待。
 	maxRequestScopedRetryDelay = 8 * time.Second
@@ -56,18 +56,30 @@ const (
 const profitVetoExhaustedMessage = "No available accounts: all candidates rejected by group profit control"
 
 func sameAccountRetryDelayFor(failoverErr *service.UpstreamFailoverError, retryCount int) time.Duration {
-	if failoverErr == nil || !failoverErr.RequestScopedTransient || retryCount <= 1 {
+	if failoverErr == nil || retryCount <= 1 {
 		return sameAccountRetryDelay
 	}
-
-	delay := sameAccountRetryDelay
-	for i := 1; i < retryCount; i++ {
-		if delay >= maxRequestScopedRetryDelay/2 {
-			return maxRequestScopedRetryDelay
-		}
-		delay *= 2
+	// Request-scoped transient errors are switched immediately by
+	// sameAccountRetryAllowed. Keep this bounded for legacy callers that still
+	// pass such errors through the delay helper.
+	delay := sameAccountRetryDelay * time.Duration(retryCount)
+	if delay > maxRequestScopedRetryDelay {
+		return maxRequestScopedRetryDelay
 	}
 	return delay
+}
+
+func sameAccountRetryAllowed(failoverErr *service.UpstreamFailoverError) bool {
+	if failoverErr == nil || !failoverErr.RetryableOnSameAccount {
+		return false
+	}
+	// These statuses are either request-scoped or account-scoped failures. A
+	// second attempt with the same credentials only adds latency and can repeat
+	// a deterministic rejection (especially content policy 403s).
+	if failoverErr.RequestScopedTransient || failoverErr.StatusCode == http.StatusUnauthorized || failoverErr.StatusCode == http.StatusForbidden {
+		return false
+	}
+	return true
 }
 
 // FailoverState 跨循环迭代共享的 failover 状态
@@ -158,14 +170,14 @@ func (s *FailoverState) HandleFailoverError(
 	}
 
 	// 同账号重试不算切换账号，粘性会话仅在实际切换时强制缓存计费。
-	sameAccountRetry := failoverErr.RetryableOnSameAccount && s.SameAccountRetryCount[accountID] < retryLimit
+	sameAccountRetry := sameAccountRetryAllowed(failoverErr) && s.SameAccountRetryCount[accountID] < minRetryLimit(retryLimit)
 	if needForceCacheBilling(s.hasBoundSession, failoverErr, sameAccountRetry) {
 		s.ForceCacheBilling = true
 	}
 
 	// 同账号重试：对 RetryableOnSameAccount 的临时性错误，先在同一账号上重试。
 	// 重试次数上限 retryLimit 由调用方传入（账号级 pool_mode_retry_count 配置）。
-	if failoverErr.RetryableOnSameAccount && s.SameAccountRetryCount[accountID] < retryLimit {
+	if sameAccountRetryAllowed(failoverErr) && s.SameAccountRetryCount[accountID] < minRetryLimit(retryLimit) {
 		s.SameAccountRetryCount[accountID]++
 		retryDelay := sameAccountRetryDelayFor(failoverErr, s.SameAccountRetryCount[accountID])
 		logger.FromContext(ctx).Warn("gateway.failover_same_account_retry",
@@ -212,6 +224,16 @@ func (s *FailoverState) HandleFailoverError(
 	}
 
 	return FailoverContinue
+}
+
+func minRetryLimit(retryLimit int) int {
+	if retryLimit <= 0 {
+		return 0
+	}
+	if retryLimit > maxSameAccountRetries {
+		return maxSameAccountRetries
+	}
+	return retryLimit
 }
 
 // HandleSelectionExhausted 处理选号失败（所有候选账号都在排除列表中）时的退避重试决策。

@@ -20,6 +20,7 @@ func TestIsUpstreamContentPolicyBody(t *testing.T) {
 	}{
 		{"review refusal", http.StatusForbidden, `{"error":{"message":"This request has been flagged by the content review system and blocked according to the usage policy."}}`, true},
 		{"structured marker", http.StatusForbidden, `{"type":"content_policy_violation"}`, true},
+		{"upstream policy error", http.StatusForbidden, `{"error":{"message":"Request blocked by upstream content policy","type":"content_policy_error"}}`, true},
 		{"permission failure", http.StatusForbidden, `{"error":{"message":"permission denied"}}`, false},
 		{"wrong status", http.StatusBadRequest, `request blocked by content policy`, false},
 	}

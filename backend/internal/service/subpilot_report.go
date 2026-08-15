@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"strconv"
+	"strings"
 )
 
 type SubPilotFailureInput struct {
@@ -101,6 +102,12 @@ func (s *GatewayService) ReportSubPilotFailure(ctx context.Context, input SubPil
 	if client == nil || input.LeaseID == "" || input.Account == nil {
 		return
 	}
+	// Content-policy refusals belong to this request, not to the selected
+	// account. Do not feed them into SubPilot health metrics or retry/failover
+	// feedback; the lease is still released by the report endpoint.
+	if isNonRetryableRequestFailure(input.StatusCode, input.ErrorCode, input.ErrorMessage) {
+		return
+	}
 	stream := input.Stream
 	client.reportFailure(ctx, subPilotReportFailureRequest{
 		RequestID:    subPilotReportRequestID(ctx, input.RequestID),
@@ -124,6 +131,9 @@ func (s *OpenAIGatewayService) ReportSubPilotFailure(ctx context.Context, input 
 	if client == nil || input.LeaseID == "" || input.Account == nil {
 		return
 	}
+	if isNonRetryableRequestFailure(input.StatusCode, input.ErrorCode, input.ErrorMessage) {
+		return
+	}
 	stream := input.Stream
 	client.reportFailure(ctx, subPilotReportFailureRequest{
 		RequestID:    subPilotReportRequestID(ctx, input.RequestID),
@@ -140,6 +150,26 @@ func (s *OpenAIGatewayService) ReportSubPilotFailure(ctx context.Context, input 
 		RequestType:  input.normalizedRequestType(),
 		Stream:       &stream,
 	})
+}
+
+func isNonRetryableRequestFailure(statusCode int, errorCode, message string) bool {
+	if statusCode != 403 {
+		return false
+	}
+	value := strings.ToLower(strings.TrimSpace(errorCode + " " + message))
+	for _, marker := range []string{
+		"content_policy_error",
+		"content_policy_violation",
+		"content policy",
+		"content moderation",
+		"usage policy",
+		"safety policy",
+	} {
+		if strings.Contains(value, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 func (input SubPilotFailureInput) normalizedRequestType() string {
