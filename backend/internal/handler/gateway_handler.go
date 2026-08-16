@@ -1892,6 +1892,7 @@ func (h *GatewayHandler) ensureForwardErrorResponse(c *gin.Context, streamStarte
 
 func (h *GatewayHandler) reportSubPilotForwardFailure(c *gin.Context, apiKey *service.APIKey, account *service.Account, selection *service.AccountSelectionResult, model string, sessionKey string, stream bool, failoverErr *service.UpstreamFailoverError, err error) {
 	if h == nil || h.gatewayService == nil || selection == nil || selection.SubPilotLeaseID == "" || account == nil {
+		storeSubPilotRetryDirective(c, service.SubPilotRetryDirective{})
 		return
 	}
 	statusCode := 0
@@ -1903,7 +1904,7 @@ func (h *GatewayHandler) reportSubPilotForwardFailure(c *gin.Context, apiKey *se
 	if errorMessage == "" && err != nil {
 		errorMessage = err.Error()
 	}
-	h.gatewayService.ReportSubPilotFailure(c.Request.Context(), service.SubPilotFailureInput{
+	directive := h.gatewayService.ReportSubPilotFailure(c.Request.Context(), service.SubPilotFailureInput{
 		LeaseID:       selection.SubPilotLeaseID,
 		APIKey:        apiKey,
 		Account:       account,
@@ -1915,6 +1916,7 @@ func (h *GatewayHandler) reportSubPilotForwardFailure(c *gin.Context, apiKey *se
 		Stream:        stream,
 		QuotaPlatform: service.QuotaPlatform(c.Request.Context(), apiKey),
 	})
+	storeSubPilotRetryDirective(c, directive)
 }
 
 // gatewayForwardErrorAlreadyCommunicated reports whether a Forward implementation

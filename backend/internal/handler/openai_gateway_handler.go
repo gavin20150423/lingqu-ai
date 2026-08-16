@@ -522,6 +522,7 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 			zap.Float64("load_skew", scheduleDecision.LoadSkew),
 		)
 		account := selection.Account
+		c.Request = c.Request.WithContext(service.WithSubPilotAttemptTimeout(c.Request.Context(), selection))
 		sessionHash = ensureOpenAIPoolModeSessionHash(sessionHash, account)
 		reqLog.Debug("openai.account_selected", zap.Int64("account_id", account.ID), zap.String("account_name", account.Name))
 		setOpsSelectedAccount(c, account.ID, account.Platform)
@@ -600,6 +601,11 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 						)
 						return
 					}
+					h.reportSubPilotForwardFailure(c, apiKey, account, selection, reqModel, sessionHash, reqStream, failoverErr, err)
+					if subPilotRetryShouldStop(c) {
+						h.handleFailoverExhausted(c, failoverErr, streamStarted)
+						return
+					}
 					if !openAIForwardMayFailover(c, writerSizeBeforeForward, failoverErr) {
 						h.handleFailoverExhausted(c, failoverErr, true)
 						return
@@ -619,7 +625,7 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 						return
 					}
 					// 池模式：同账号重试
-					if failoverErr.RetryableOnSameAccount {
+					if !subPilotRetryRequiresNextAccount(c) && failoverErr.RetryableOnSameAccount {
 						retryLimit := account.GetPoolModeRetryCount()
 						if sameAccountRetryCount[account.ID] < retryLimit {
 							sameAccountRetryCount[account.ID]++
@@ -1094,6 +1100,7 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 			return
 		}
 		account := selection.Account
+		c.Request = c.Request.WithContext(service.WithSubPilotAttemptTimeout(c.Request.Context(), selection))
 		sessionHash = ensureOpenAIPoolModeSessionHash(sessionHash, account)
 		reqLog.Debug("openai_messages.account_selected", zap.Int64("account_id", account.ID), zap.String("account_name", account.Name))
 		_ = scheduleDecision
@@ -1161,6 +1168,11 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 						)
 						return
 					}
+					h.reportSubPilotForwardFailure(c, apiKey, account, selection, reqModel, sessionHash, reqStream, failoverErr, err)
+					if subPilotRetryShouldStop(c) {
+						h.handleAnthropicFailoverExhausted(c, failoverErr, streamStarted)
+						return
+					}
 					if c.Writer.Size() != writerSizeBeforeForward {
 						h.handleAnthropicFailoverExhausted(c, failoverErr, true)
 						return
@@ -1173,7 +1185,7 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 						return
 					}
 					// 池模式：同账号重试
-					if failoverErr.RetryableOnSameAccount {
+					if !subPilotRetryRequiresNextAccount(c) && failoverErr.RetryableOnSameAccount {
 						retryLimit := account.GetPoolModeRetryCount()
 						if sameAccountRetryCount[account.ID] < retryLimit {
 							sameAccountRetryCount[account.ID]++
@@ -1495,6 +1507,7 @@ func (h *OpenAIGatewayHandler) acquireResponsesAccountSlot(
 	// 门只存在于调度栈的局部 ctx，必须经选号结果重放到本函数的 ctx 上。
 	ctx := service.ContextWithSelectionProfitGate(c.Request.Context(), selection)
 	account := selection.Account
+	ctx = service.WithSubPilotAttemptTimeout(ctx, selection)
 	finishAcquired := func(release func()) (func(), openAISlotAcquireResult) {
 		if selection.OpenAIDispatchRequirements != nil {
 			latest, err := h.gatewayService.RevalidateSelectedOpenAIAccountForDispatch(ctx, groupID, account, *selection.OpenAIDispatchRequirements)
@@ -1840,6 +1853,10 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 			h.gatewayService.ReportOpenAIAccountScheduleResult(account.ID, account.GetMappedModel(reqModel), false, nil)
 		}
 		releaseAccountSlot()
+		if subPilotRetryShouldStop(c) {
+			closeOpenAIWSFailoverExhausted(wsConn, failoverErr)
+			return false
+		}
 		if !failoverErr.ShouldRetryNextAccount() {
 			closeOpenAIWSFailoverExhausted(wsConn, failoverErr)
 			return false
@@ -1929,6 +1946,7 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 		}
 
 		account := selection.Account
+		c.Request = c.Request.WithContext(service.WithSubPilotAttemptTimeout(c.Request.Context(), selection))
 		accountMaxConcurrency := account.Concurrency
 		if selection.WaitPlan != nil && selection.WaitPlan.MaxConcurrency > 0 {
 			accountMaxConcurrency = selection.WaitPlan.MaxConcurrency
@@ -2008,6 +2026,7 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 			}
 			var failoverErr *service.UpstreamFailoverError
 			if errors.As(err, &failoverErr) {
+				h.reportSubPilotForwardFailure(c, apiKey, account, selection, reqModel, sessionHash, true, failoverErr, err)
 				if handleWSFailover(account, failoverErr) {
 					continue
 				}
@@ -2243,6 +2262,7 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 		if err := h.gatewayService.ProxyResponsesWebSocketFromClient(ctx, c, wsConn, account, token, wsFirstMessage, hooks); err != nil {
 			var failoverErr *service.UpstreamFailoverError
 			if errors.As(err, &failoverErr) {
+				h.reportSubPilotForwardFailure(c, apiKey, account, selection, reqModel, sessionHash, true, failoverErr, err)
 				if handleWSFailover(account, failoverErr) {
 					continue
 				}
@@ -3374,6 +3394,7 @@ func (h *OpenAIGatewayHandler) reportSubPilotForwardFailure(c *gin.Context, apiK
 
 func (h *OpenAIGatewayHandler) reportSubPilotForwardFailureWithCode(c *gin.Context, apiKey *service.APIKey, account *service.Account, selection *service.AccountSelectionResult, model string, sessionKey string, stream bool, failoverErr *service.UpstreamFailoverError, err error, errorCode string) {
 	if h == nil || h.gatewayService == nil || selection == nil || selection.SubPilotLeaseID == "" || account == nil {
+		storeSubPilotRetryDirective(c, service.SubPilotRetryDirective{})
 		return
 	}
 	statusCode := 0
@@ -3385,7 +3406,7 @@ func (h *OpenAIGatewayHandler) reportSubPilotForwardFailureWithCode(c *gin.Conte
 	if errorMessage == "" && err != nil {
 		errorMessage = err.Error()
 	}
-	h.gatewayService.ReportSubPilotFailure(c.Request.Context(), service.SubPilotFailureInput{
+	directive := h.gatewayService.ReportSubPilotFailure(c.Request.Context(), service.SubPilotFailureInput{
 		LeaseID:       selection.SubPilotLeaseID,
 		APIKey:        apiKey,
 		Account:       account,
@@ -3398,6 +3419,7 @@ func (h *OpenAIGatewayHandler) reportSubPilotForwardFailureWithCode(c *gin.Conte
 		Stream:        stream,
 		QuotaPlatform: service.QuotaPlatform(c.Request.Context(), apiKey),
 	})
+	storeSubPilotRetryDirective(c, directive)
 }
 
 func subPilotLeaseID(selection *service.AccountSelectionResult) string {

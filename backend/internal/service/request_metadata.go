@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"sync/atomic"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 )
@@ -20,6 +21,8 @@ type RequestMetadata struct {
 	AccountSwitchCount         *int
 	SubPilotDisabled           *bool
 	SubPilotAPIKeyID           *int64
+	SubPilotRetryDirective     *SubPilotRetryDirective
+	SubPilotAttemptTimeoutMS   int64
 }
 
 var (
@@ -130,6 +133,37 @@ func WithSubPilotAPIKeyID(ctx context.Context, value int64) context.Context {
 		v := value
 		md.SubPilotAPIKeyID = &v
 	}, nil)
+}
+
+func WithSubPilotRetryDirective(ctx context.Context, value SubPilotRetryDirective) context.Context {
+	return updateRequestMetadata(ctx, false, func(md *RequestMetadata) {
+		directive := value
+		md.SubPilotRetryDirective = &directive
+	}, nil)
+}
+
+func SubPilotRetryDirectiveFromContext(ctx context.Context) (SubPilotRetryDirective, bool) {
+	if md := metadataFromContext(ctx); md != nil && md.SubPilotRetryDirective != nil {
+		return *md.SubPilotRetryDirective, true
+	}
+	return SubPilotRetryDirective{}, false
+}
+
+func WithSubPilotAttemptTimeout(ctx context.Context, selection *AccountSelectionResult) context.Context {
+	value := int64(0)
+	if selection != nil && selection.SubPilotAttemptTimeout > 0 {
+		value = selection.SubPilotAttemptTimeout.Milliseconds()
+	}
+	return updateRequestMetadata(ctx, false, func(md *RequestMetadata) {
+		md.SubPilotAttemptTimeoutMS = value
+	}, nil)
+}
+
+func SubPilotAttemptTimeoutFromContext(ctx context.Context) time.Duration {
+	if md := metadataFromContext(ctx); md != nil && md.SubPilotAttemptTimeoutMS > 0 {
+		return time.Duration(md.SubPilotAttemptTimeoutMS) * time.Millisecond
+	}
+	return 0
 }
 
 func SubPilotAPIKeyIDFromContext(ctx context.Context) (int64, bool) {

@@ -305,6 +305,10 @@ func (h *OpenAIGatewayHandler) Images(c *gin.Context) {
 						return
 					}
 					h.reportSubPilotForwardFailure(c, apiKey, account, selection, requestModel, sessionHash, parsed.Stream, failoverErr, err)
+					if subPilotRetryShouldStop(c) {
+						h.handleFailoverExhausted(c, failoverErr, streamStarted)
+						return
+					}
 					h.gatewayService.ReportOpenAIAccountScheduleResult(account.ID, account.GetMappedModel(requestModel), false, nil)
 					if service.OpenAIImagesJSONKeepaliveAdjustedWrittenSize(c) != writerSizeBeforeForward {
 						reqLog.Warn("openai.images.upstream_failover_skipped_after_flush",
@@ -314,7 +318,7 @@ func (h *OpenAIGatewayHandler) Images(c *gin.Context) {
 						h.handleFailoverExhausted(c, failoverErr, true)
 						return
 					}
-					if failoverErr.RetryableOnSameAccount {
+					if !subPilotRetryRequiresNextAccount(c) && failoverErr.RetryableOnSameAccount {
 						retryLimit := account.GetPoolModeRetryCount()
 						if sameAccountRetryCount[account.ID] < retryLimit {
 							sameAccountRetryCount[account.ID]++

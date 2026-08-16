@@ -164,6 +164,17 @@ func TestOpenAIFirstOutputTimeoutForReasoningEffort(t *testing.T) {
 	require.Equal(t, 300*time.Second, svc.openAIFirstOutputTimeout("max"))
 }
 
+func TestOpenAIFirstOutputTimeoutUsesSubPilotAttemptEnvelope(t *testing.T) {
+	cfg := config.Config{}
+	cfg.Gateway.OpenAIFirstOutputTimeoutSeconds = 30
+	svc := &OpenAIGatewayService{cfg: &cfg}
+	selection := &AccountSelectionResult{SubPilotAttemptTimeout: 1200 * time.Millisecond}
+	ctx := WithSubPilotAttemptTimeout(context.Background(), selection)
+
+	require.Equal(t, 1200*time.Millisecond, svc.openAIFirstOutputTimeoutForContext(ctx, "low"))
+	require.Equal(t, 30*time.Second, svc.openAIFirstOutputTimeoutForContext(context.Background(), "low"))
+}
+
 func TestOpenAIFirstOutputStageDefaultLimitIsIndependentFromScannerLimit(t *testing.T) {
 	stage := newDefaultOpenAIFirstOutputStage()
 	defer func() { require.NoError(t, stage.Close()) }()

@@ -165,19 +165,25 @@ func (s *FailoverState) HandleFailoverError(
 		return FailoverCanceled
 	}
 	s.LastFailoverErr = failoverErr
+	directive, subPilotControlled := service.SubPilotRetryDirectiveFromContext(ctx)
+	if subPilotControlled && directive.ShouldStop() {
+		s.FailedAccountIDs[accountID] = struct{}{}
+		return FailoverExhausted
+	}
 	if failoverErr == nil || !failoverErr.ShouldRetryNextAccount() {
 		return FailoverExhausted
 	}
+	forceNextAccount := subPilotControlled && directive.RequiresNextAccount()
 
 	// 同账号重试不算切换账号，粘性会话仅在实际切换时强制缓存计费。
-	sameAccountRetry := sameAccountRetryAllowed(failoverErr) && s.SameAccountRetryCount[accountID] < minRetryLimit(retryLimit)
+	sameAccountRetry := !forceNextAccount && sameAccountRetryAllowed(failoverErr) && s.SameAccountRetryCount[accountID] < minRetryLimit(retryLimit)
 	if needForceCacheBilling(s.hasBoundSession, failoverErr, sameAccountRetry) {
 		s.ForceCacheBilling = true
 	}
 
 	// 同账号重试：对 RetryableOnSameAccount 的临时性错误，先在同一账号上重试。
 	// 重试次数上限 retryLimit 由调用方传入（账号级 pool_mode_retry_count 配置）。
-	if sameAccountRetryAllowed(failoverErr) && s.SameAccountRetryCount[accountID] < minRetryLimit(retryLimit) {
+	if !forceNextAccount && sameAccountRetryAllowed(failoverErr) && s.SameAccountRetryCount[accountID] < minRetryLimit(retryLimit) {
 		s.SameAccountRetryCount[accountID]++
 		retryDelay := sameAccountRetryDelayFor(failoverErr, s.SameAccountRetryCount[accountID])
 		logger.FromContext(ctx).Warn("gateway.failover_same_account_retry",
@@ -224,6 +230,29 @@ func (s *FailoverState) HandleFailoverError(
 	}
 
 	return FailoverContinue
+}
+
+func storeSubPilotRetryDirective(c *gin.Context, directive service.SubPilotRetryDirective) {
+	if c == nil || c.Request == nil {
+		return
+	}
+	c.Request = c.Request.WithContext(service.WithSubPilotRetryDirective(c.Request.Context(), directive))
+}
+
+func subPilotRetryShouldStop(c *gin.Context) bool {
+	if c == nil || c.Request == nil {
+		return false
+	}
+	directive, ok := service.SubPilotRetryDirectiveFromContext(c.Request.Context())
+	return ok && directive.ShouldStop()
+}
+
+func subPilotRetryRequiresNextAccount(c *gin.Context) bool {
+	if c == nil || c.Request == nil {
+		return false
+	}
+	directive, ok := service.SubPilotRetryDirectiveFromContext(c.Request.Context())
+	return ok && directive.RequiresNextAccount()
 }
 
 func minRetryLimit(retryLimit int) int {

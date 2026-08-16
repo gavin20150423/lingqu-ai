@@ -27,6 +27,8 @@ const (
 	subPilotRuntimeConfigPath   = "/v1/dispatch/runtime-config"
 	subPilotDefaultTimeout      = 80 * time.Millisecond
 	subPilotReportTimeout       = 500 * time.Millisecond
+	subPilotFailureReportMin    = 50 * time.Millisecond
+	subPilotFailureReportMax    = 200 * time.Millisecond
 	subPilotConfigCacheTTL      = 5 * time.Second
 	subPilotReportQueueSize     = 16384
 	subPilotReportWorkers       = 8
@@ -71,6 +73,30 @@ type subPilotReportJob struct {
 	payload any
 }
 
+type SubPilotRetryDirective struct {
+	Available         bool
+	Action            string
+	ErrorType         string
+	Attempt           int
+	RemainingAttempts int
+	RemainingBudgetMS int64
+	CooldownMS        int64
+}
+
+func (d SubPilotRetryDirective) ShouldStop() bool {
+	if !d.Available {
+		return false
+	}
+	if d.Action != "retry_next" {
+		return true
+	}
+	return d.RemainingAttempts <= 0 || d.RemainingBudgetMS <= 0
+}
+
+func (d SubPilotRetryDirective) RequiresNextAccount() bool {
+	return d.Available && !d.ShouldStop() && d.Action == "retry_next"
+}
+
 type subPilotSelectRequest struct {
 	RequestID          string   `json:"request_id"`
 	APIKeyID           string   `json:"api_key_id,omitempty"`
@@ -91,13 +117,17 @@ type subPilotSelectResponse struct {
 	Lease struct {
 		ID string `json:"id"`
 	} `json:"lease"`
+	RetryPolicy struct {
+		AttemptTimeoutMS int64 `json:"attempt_timeout_ms"`
+	} `json:"retry_policy"`
 }
 
 type subPilotSelectResult struct {
-	AccountID  int64
-	LeaseID    string
-	RequestID  string
-	LastResort bool
+	AccountID      int64
+	LeaseID        string
+	RequestID      string
+	LastResort     bool
+	AttemptTimeout time.Duration
 }
 
 type subPilotReleaseLeaseRequest struct {
@@ -241,11 +271,22 @@ func (c *subPilotClient) recommendAccountWithOwnership(ctx context.Context, req 
 		return nil, handledErr != nil, handledErr
 	}
 	return &subPilotSelectResult{
-		AccountID:  accountID,
-		LeaseID:    strings.TrimSpace(resp.Lease.ID),
-		RequestID:  req.RequestID,
-		LastResort: resp.Reason == "last_resort",
+		AccountID:      accountID,
+		LeaseID:        strings.TrimSpace(resp.Lease.ID),
+		RequestID:      req.RequestID,
+		LastResort:     resp.Reason == "last_resort",
+		AttemptTimeout: boundedSubPilotAttemptTimeout(resp.RetryPolicy.AttemptTimeoutMS),
 	}, true, nil
+}
+
+func boundedSubPilotAttemptTimeout(value int64) time.Duration {
+	if value <= 0 {
+		return 0
+	}
+	if value > int64((5*time.Minute)/time.Millisecond) {
+		value = int64((5 * time.Minute) / time.Millisecond)
+	}
+	return time.Duration(value) * time.Millisecond
 }
 
 func (c *subPilotClient) takeoverActive(ctx context.Context) bool {
@@ -266,11 +307,16 @@ func (c *subPilotClient) reportSuccess(ctx context.Context, req subPilotReportSu
 	c.enqueueReport(subPilotReportSuccessPath, req)
 }
 
-func (c *subPilotClient) reportFailure(ctx context.Context, req subPilotReportFailureRequest) {
+func (c *subPilotClient) reportFailure(ctx context.Context, req subPilotReportFailureRequest) SubPilotRetryDirective {
 	if c == nil {
-		return
+		return SubPilotRetryDirective{}
 	}
-	c.enqueueReport(subPilotReportFailurePath, req)
+	headers, err := c.postJSONWithTimeoutHeaders(ctx, subPilotReportFailurePath, req, nil, c.failureReportTimeout())
+	if err != nil {
+		slog.Debug("subpilot synchronous failure report failed", "error", err)
+		return SubPilotRetryDirective{}
+	}
+	return parseSubPilotRetryDirective(headers)
 }
 
 func (c *subPilotClient) releaseLease(ctx context.Context, req subPilotReleaseLeaseRequest) {
@@ -383,25 +429,30 @@ func (c *subPilotClient) recordSuccess() {
 }
 
 func (c *subPilotClient) postJSONWithTimeout(ctx context.Context, path string, in any, out any, timeout time.Duration) error {
+	_, err := c.postJSONWithTimeoutHeaders(ctx, path, in, out, timeout)
+	return err
+}
+
+func (c *subPilotClient) postJSONWithTimeoutHeaders(ctx context.Context, path string, in any, out any, timeout time.Duration) (http.Header, error) {
 	if c == nil {
-		return nil
+		return nil, nil
 	}
 	body, err := json.Marshal(in)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	reqCtx, cancel := context.WithTimeout(contextOrBackground(ctx), timeout)
 	defer cancel()
 	req, err := http.NewRequestWithContext(reqCtx, http.MethodPost, c.baseURL+path, bytes.NewReader(body))
 	if err != nil {
-		return err
+		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
 	c.setSharedSecret(req)
 	resp, err := c.client.Do(req)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer func() {
 		if closeErr := resp.Body.Close(); closeErr != nil {
@@ -410,15 +461,15 @@ func (c *subPilotClient) postJSONWithTimeout(ctx context.Context, path string, i
 	}()
 	raw, err := readSubPilotResponse(resp.Body)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("subpilot status %d: %s", resp.StatusCode, strings.TrimSpace(string(raw)))
+		return resp.Header.Clone(), fmt.Errorf("subpilot status %d: %s", resp.StatusCode, strings.TrimSpace(string(raw)))
 	}
 	if out == nil || resp.StatusCode == http.StatusNoContent || len(raw) == 0 {
-		return nil
+		return resp.Header.Clone(), nil
 	}
-	return json.Unmarshal(raw, out)
+	return resp.Header.Clone(), json.Unmarshal(raw, out)
 }
 
 func (c *subPilotClient) getJSONWithTimeout(ctx context.Context, path string, out any, timeout time.Duration) error {
@@ -468,6 +519,49 @@ func (c *subPilotClient) reportTimeout() time.Duration {
 		return c.timeout
 	}
 	return subPilotReportTimeout
+}
+
+func (c *subPilotClient) failureReportTimeout() time.Duration {
+	timeout := c.timeout
+	if timeout < subPilotFailureReportMin {
+		return subPilotFailureReportMin
+	}
+	if timeout > subPilotFailureReportMax {
+		return subPilotFailureReportMax
+	}
+	return timeout
+}
+
+func parseSubPilotRetryDirective(headers http.Header) SubPilotRetryDirective {
+	action := strings.TrimSpace(headers.Get("X-SubPilot-Retry-Action"))
+	if action == "" {
+		return SubPilotRetryDirective{}
+	}
+	return SubPilotRetryDirective{
+		Available:         true,
+		Action:            action,
+		ErrorType:         strings.TrimSpace(headers.Get("X-SubPilot-Error-Type")),
+		Attempt:           nonNegativeHeaderInt(headers, "X-SubPilot-Attempt"),
+		RemainingAttempts: nonNegativeHeaderInt(headers, "X-SubPilot-Remaining-Attempts"),
+		RemainingBudgetMS: nonNegativeHeaderInt64(headers, "X-SubPilot-Remaining-Budget-Ms"),
+		CooldownMS:        nonNegativeHeaderInt64(headers, "X-SubPilot-Cooldown-Ms"),
+	}
+}
+
+func nonNegativeHeaderInt(headers http.Header, name string) int {
+	value, err := strconv.Atoi(strings.TrimSpace(headers.Get(name)))
+	if err != nil || value < 0 {
+		return 0
+	}
+	return value
+}
+
+func nonNegativeHeaderInt64(headers http.Header, name string) int64 {
+	value, err := strconv.ParseInt(strings.TrimSpace(headers.Get(name)), 10, 64)
+	if err != nil || value < 0 {
+		return 0
+	}
+	return value
 }
 
 func (c *subPilotClient) setSharedSecret(req *http.Request) {
