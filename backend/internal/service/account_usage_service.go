@@ -504,6 +504,12 @@ func (s *AccountUsageService) GetUsage(ctx context.Context, accountID int64, for
 	return s.getUsageForAccount(ctx, account, forceProbe)
 }
 
+// GetUsageForAccount exposes the account-based usage lookup used by channel monitors.
+func (s *AccountUsageService) GetUsageForAccount(ctx context.Context, account *Account, force ...bool) (*UsageInfo, error) {
+	forceProbe := len(force) > 0 && force[0]
+	return s.getUsageForAccount(ctx, account, forceProbe)
+}
+
 // GetUsageBatch 批量获取账号使用量。
 // Anthropic OAuth/SetupToken 统一走 passive 链路，其他账号复用现有主动查询逻辑。
 // 单个账号失败不会中断整批请求，错误会按账号返回。

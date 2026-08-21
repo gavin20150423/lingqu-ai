@@ -99,9 +99,47 @@ func openAIForwardSucceededForScheduling(result *service.OpenAIForwardResult) bo
 	return result.SucceededForScheduling()
 }
 
-func resolveOpenAIMessagesDispatchMappedModel(apiKey *service.APIKey, requestedModel string) string {
+func openAIAccountScheduleModel(c *gin.Context, account *service.Account, forwardModel string, requireCompact bool, result *service.OpenAIForwardResult) string {
+	if result != nil {
+		if actual := strings.TrimSpace(result.UpstreamModel); actual != "" {
+			return actual
+		}
+	}
+	if c != nil {
+		if value, ok := c.Get(service.OpsUpstreamModelKey); ok {
+			if actual, ok := value.(string); ok && strings.TrimSpace(actual) != "" {
+				return strings.TrimSpace(actual)
+			}
+		}
+	}
+	return service.ResolveOpenAIAccountUpstreamModelForRequest(account, forwardModel, requireCompact)
+}
+
+func resolveOpenAIMessagesDispatchMappedModel(args ...any) string {
+	var c *gin.Context
+	var apiKey *service.APIKey
+	var requestedModel string
+	for _, arg := range args {
+		switch value := arg.(type) {
+		case *gin.Context:
+			c = value
+		case *service.APIKey:
+			apiKey = value
+		case string:
+			requestedModel = value
+		}
+	}
 	if apiKey == nil || apiKey.Group == nil {
 		return ""
+	}
+	if apiKey.Group.Platform == service.PlatformComposite {
+		if c == nil || c.Request == nil {
+			return ""
+		}
+		if platform, ok := service.ResolvedTargetPlatformFromContext(c.Request.Context()); ok &&
+			(platform == service.PlatformGrok || service.IsCNProvider(platform)) {
+			return ""
+		}
 	}
 	return strings.TrimSpace(apiKey.Group.ResolveMessagesDispatchModel(requestedModel))
 }
@@ -183,18 +221,47 @@ func openAIResponsesRequiredCapability(imageIntent bool, platform string) servic
 	return service.OpenAIEndpointCapabilityChatCompletions
 }
 
-func allowOpenAICompatibleMessagesDispatch(apiKey *service.APIKey) bool {
+func openAIResponsesRequiredCapabilityForRequest(imageIntent, compact bool, platform string) service.OpenAIEndpointCapability {
+	if compact && platform == service.PlatformOpenAI {
+		return service.OpenAIEndpointCapabilityResponses
+	}
+	return openAIResponsesRequiredCapability(imageIntent, platform)
+}
+
+func allowOpenAICompatibleMessagesDispatch(args ...any) bool {
+	var c *gin.Context
+	var apiKey *service.APIKey
+	for _, arg := range args {
+		switch value := arg.(type) {
+		case *gin.Context:
+			c = value
+		case *service.APIKey:
+			apiKey = value
+		}
+	}
 	if apiKey == nil || apiKey.Group == nil {
 		return true
 	}
-	if apiKey.Group.Platform == service.PlatformGrok {
+	platform := apiKey.Group.Platform
+	if platform == service.PlatformComposite {
+		if c == nil || c.Request == nil {
+			return false
+		}
+		resolved, ok := service.ResolvedTargetPlatformFromContext(c.Request.Context())
+		if !ok {
+			return false
+		}
+		platform = resolved
+	}
+	if platform == service.PlatformGrok || service.IsCNProvider(platform) {
 		return true
 	}
 	return apiKey.Group.AllowMessagesDispatch
 }
 
 func openAICompatibleTextTargetAllowed(c *gin.Context, apiKey *service.APIKey, model string) bool {
-	return compositeTargetPlatformAllowed(c, apiKey, model, service.PlatformOpenAI, service.PlatformGrok)
+	return compositeTargetPlatformAllowed(c, apiKey, model, service.PlatformOpenAI, service.PlatformGrok,
+		service.PlatformKimi, service.PlatformZhipu, service.PlatformDeepseek)
 }
 
 // NewOpenAIGatewayHandler creates a new OpenAIGatewayHandler
@@ -341,11 +408,21 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 			h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "previous_response_id must be a response.id (resp_*), not a message id")
 			return
 		}
-		reqLog.Warn("openai.request_validation_failed",
-			zap.String("reason", "previous_response_id_requires_wsv2"),
-		)
-		h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "previous_response_id is only supported on Responses WebSocket v2")
-		return
+		groupID := int64(0)
+		if apiKey.GroupID != nil {
+			groupID = *apiKey.GroupID
+		}
+		if groupID <= 0 || subject.UserID <= 0 || apiKey.ID <= 0 {
+			h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "previous_response_id is not available for this user")
+			return
+		}
+		owned, ownerErr := h.gatewayService.ValidateOpenAIHTTPResponseOwner(c.Request.Context(), groupID, previousResponseID, subject.UserID, apiKey.ID)
+		if ownerErr != nil || !owned {
+			reqLog.Warn("openai.request_validation_failed", zap.String("reason", "previous_response_owner_mismatch"), zap.Error(ownerErr))
+			h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "previous_response_id is not available for this user")
+			return
+		}
+		service.SetOpenAIHTTPResponseOwner(c, subject.UserID, apiKey.ID)
 	}
 
 	setOpsRequestContext(c, reqModel, reqStream)
@@ -759,6 +836,10 @@ func isOpenAIRemoteCompactPath(c *gin.Context) bool {
 	return strings.HasSuffix(normalizedPath, "/responses/compact")
 }
 
+func isOpenAILegacyCompactPath(c *gin.Context) bool {
+	return service.IsOpenAIResponsesCompactPath(c)
+}
+
 // isBareOpenAIResponsesPath 仅匹配裸 /responses 端点（无 /compact 等子路径），
 // body-signal 提升只允许发生在这里，避免误伤 /responses/{id}/... 形态的请求。
 func isBareOpenAIResponsesPath(c *gin.Context) bool {
@@ -766,22 +847,27 @@ func isBareOpenAIResponsesPath(c *gin.Context) bool {
 		return false
 	}
 	normalizedPath := strings.TrimRight(strings.TrimSpace(c.Request.URL.Path), "/")
-	return strings.HasSuffix(normalizedPath, "/responses")
-}
-
-func isOpenAIRemoteCompactionV2Request(c *gin.Context, body []byte) bool {
-	stream, valid := parseOpenAICompatibleStream(body)
-	if !valid || !stream || c == nil || c.Request == nil {
+	switch normalizedPath {
+	case "/responses", "/v1/responses", "/openai/v1/responses", "/backend-api/codex/responses":
+		return true
+	default:
 		return false
 	}
-	for _, header := range c.Request.Header.Values("x-codex-beta-features") {
-		for _, feature := range strings.Split(header, ",") {
-			if strings.TrimSpace(feature) == "remote_compaction_v2" {
-				return true
-			}
+}
+
+func isOpenAIRemoteCompactionV2Request(args ...any) bool {
+	var body []byte
+	for _, arg := range args {
+		switch value := arg.(type) {
+		case []byte:
+			body = value
 		}
 	}
-	return false
+	stream, valid := parseOpenAICompatibleStream(body)
+	if !valid || !stream {
+		return false
+	}
+	return service.HasCompactionTriggerInInput(body)
 }
 
 // normalizeOpenAIResponsesCompactRequest keeps Codex remote compaction v2 on
@@ -1440,6 +1526,15 @@ func (p *openAIWSTurnPricing) freeze(at time.Time) {
 	p.mu.Lock()
 	p.at = at
 	p.mu.Unlock()
+}
+
+func (p *openAIWSTurnPricing) currentOr(fallback time.Time) time.Time {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if !p.at.IsZero() {
+		return p.at
+	}
+	return fallback
 }
 
 func (p *openAIWSTurnPricing) current() time.Time {
@@ -3172,6 +3267,9 @@ func (h *OpenAIGatewayHandler) enqueueCyberSessionBlockedOpsEntry(c *gin.Context
 	if h.opsService == nil {
 		return
 	}
+	if c != nil {
+		c.Set(opsDedicatedErrorRecordedKey, true)
+	}
 	meta := cyberPolicyOpsErrorMeta{Model: model, InboundEndpoint: GetInboundEndpoint(c), CreatedAt: time.Now(), SessionBlockKey: sessionBlockKey}
 	meta.RequestID = c.Writer.Header().Get("X-Request-Id")
 	if c.Request != nil && c.Request.URL != nil {
@@ -3205,7 +3303,14 @@ func (h *OpenAIGatewayHandler) enqueueCyberSessionBlockedOpsEntry(c *gin.Context
 // 并在 forward 返回错误时写一条 tokens=0 用量行。标记由 gateway 服务层在透传 cyber 后设置；
 // 当前请求已发给用户，本方法只做事后记录，不影响响应。forwardErrored 为 true 时才写用量行，
 // 避免与正常 RecordUsage(forward 成功路径)重复。每请求至多记录一次。
-func (h *OpenAIGatewayHandler) recordCyberPolicyIfMarked(c *gin.Context, apiKey *service.APIKey, account *service.Account, subscription *service.UserSubscription, model string, forwardErrored bool, cyberBlockKey string, channelFields service.ChannelUsageFields, requestPayloadHash string) {
+func (h *OpenAIGatewayHandler) recordCyberPolicyIfMarked(c *gin.Context, apiKey *service.APIKey, account *service.Account, subscription *service.UserSubscription, model string, forwardErrored bool, cyberBlockKey any, channelFields service.ChannelUsageFields, requestPayloadHash string) {
+	var blockKey string
+	switch value := cyberBlockKey.(type) {
+	case string:
+		blockKey = value
+	case []byte:
+		blockKey = string(value)
+	}
 	mark := service.GetOpsCyberPolicy(c)
 	if mark == nil {
 		return
@@ -3328,8 +3433,8 @@ func (h *OpenAIGatewayHandler) recordCyberPolicyIfMarked(c *gin.Context, apiKey 
 				ChannelUsageFields: channelFields,
 			})
 		}
-		if gwSvc != nil && cyberBlockKey != "" {
-			gwSvc.MarkCyberSessionBlocked(ctx, cyberBlockKey)
+		if gwSvc != nil && blockKey != "" {
+			gwSvc.MarkCyberSessionBlocked(ctx, blockKey)
 		}
 		if opsSvc != nil {
 			enqueueOpsErrorLog(opsSvc, buildCyberPolicyOpsErrorEntry(opsMeta, mark))
@@ -3346,6 +3451,38 @@ func clearCyberPolicyTurnState(c *gin.Context) {
 	}
 	service.ClearOpsCyberPolicy(c)
 	c.Set(cyberPolicyRecordedKey, false)
+}
+
+func openAIWSNextAttemptMessage(current, retryPayload []byte, retryCurrentTurn bool) ([]byte, bool) {
+	if !retryCurrentTurn {
+		return append([]byte(nil), current...), true
+	}
+	if len(retryPayload) == 0 {
+		return nil, false
+	}
+	return append([]byte(nil), retryPayload...), true
+}
+
+type cyberSessionBlockWritePlan struct {
+	scopeKey string
+	keys     []string
+}
+
+func buildCyberSessionBlockWritePlan(apiKeyID int64, c *gin.Context, body []byte) cyberSessionBlockWritePlan {
+	plan := cyberSessionBlockWritePlan{}
+	if c != nil && c.Request != nil {
+		plan.scopeKey = service.CyberSessionScopeKey(apiKeyID, c.ClientIP(), c.GetHeader("User-Agent"))
+	}
+	plan.keys = append(plan.keys, service.CyberSessionTranscriptBlockKeys(apiKeyID, body)...)
+	if explicit := service.CyberSessionExplicitBlockKey(apiKeyID, c, body); explicit != "" {
+		for _, key := range plan.keys {
+			if key == explicit {
+				return plan
+			}
+		}
+		plan.keys = append(plan.keys, explicit)
+	}
+	return plan
 }
 
 func summarizeWSCloseErrorForLog(err error) (string, string) {
