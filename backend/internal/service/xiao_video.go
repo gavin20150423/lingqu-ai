@@ -62,8 +62,16 @@ type VideoMedia struct {
 	APIKeyID        int64
 	UpstreamURL     string
 	MediaType       string
-	ExpiresAt       time.Time
-	CreatedAt       time.Time
+	// The following fields are optional metadata returned by newer video
+	// upstreams. Keep them on the internal media value so the browser
+	// workbench can use the richer upload response without breaking older
+	// providers that only return media_id, url, and type.
+	MediaContentType string
+	MIMEType         string
+	Container        string
+	DurationUS       int64
+	ExpiresAt        time.Time
+	CreatedAt        time.Time
 }
 
 type VideoJob struct {
@@ -298,7 +306,23 @@ func (s *XiaoVideoService) ListModels(ctx context.Context, owner VideoOwner) ([]
 	return out, nil
 }
 
-func (s *XiaoVideoService) Upload(ctx context.Context, owner VideoOwner, body io.Reader, contentType string) (*VideoMedia, error) {
+// ListCapabilities is a compatibility view for the browser workbench. Model
+// responses already carry the effective, priced capability contract, so
+// returning the same records keeps both endpoints consistent.
+func (s *XiaoVideoService) ListCapabilities(ctx context.Context, owner VideoOwner) (int, []map[string]any, error) {
+	models, err := s.ListModels(ctx, owner)
+	if err != nil {
+		return 1, nil, err
+	}
+	return 1, models, nil
+}
+
+// Upload accepts an optional idempotency key for compatibility with the
+// browser workbench. Durable idempotency records are owned by the generation
+// endpoint; the upload key is reserved for a future media-level idempotency
+// implementation.
+func (s *XiaoVideoService) Upload(ctx context.Context, owner VideoOwner, body io.Reader, contentType string, idempotencyKeys ...string) (*VideoMedia, error) {
+	_ = idempotencyKeys
 	account, release, err := s.selectVideoAccountForUpload(ctx, owner)
 	if err != nil {
 		return nil, err
@@ -317,10 +341,14 @@ func (s *XiaoVideoService) Upload(ctx context.Context, owner VideoOwner, body io
 		return nil, upstreamVideoError(resp, raw)
 	}
 	var upstream struct {
-		MediaID   string    `json:"media_id"`
-		URL       string    `json:"url"`
-		Type      string    `json:"type"`
-		ExpiresAt time.Time `json:"expires_at"`
+		MediaID          string    `json:"media_id"`
+		URL              string    `json:"url"`
+		Type             string    `json:"type"`
+		MediaContentType string    `json:"media_type"`
+		MIMEType         string    `json:"mime_type"`
+		Container        string    `json:"container"`
+		DurationUS       int64     `json:"duration_us"`
+		ExpiresAt        time.Time `json:"expires_at"`
 	}
 	if err := json.Unmarshal(raw, &upstream); err != nil || strings.TrimSpace(upstream.MediaID) == "" || strings.TrimSpace(upstream.URL) == "" {
 		return nil, ErrVideoUpstreamUnavailable.WithCause(errors.New("invalid upload response"))
@@ -337,15 +365,19 @@ func (s *XiaoVideoService) Upload(ctx context.Context, owner VideoOwner, body io
 		mediaType = "UPLOADED"
 	}
 	media := &VideoMedia{
-		MediaID:         mediaID,
-		UpstreamMediaID: upstream.MediaID,
-		AccountID:       account.ID,
-		UserID:          owner.UserID,
-		APIKeyID:        owner.APIKeyID,
-		UpstreamURL:     upstream.URL,
-		MediaType:       mediaType,
-		ExpiresAt:       upstream.ExpiresAt,
-		CreatedAt:       time.Now(),
+		MediaID:          mediaID,
+		UpstreamMediaID:  upstream.MediaID,
+		AccountID:        account.ID,
+		UserID:           owner.UserID,
+		APIKeyID:         owner.APIKeyID,
+		UpstreamURL:      upstream.URL,
+		MediaType:        mediaType,
+		MediaContentType: upstream.MediaContentType,
+		MIMEType:         upstream.MIMEType,
+		Container:        upstream.Container,
+		DurationUS:       upstream.DurationUS,
+		ExpiresAt:        upstream.ExpiresAt,
+		CreatedAt:        time.Now(),
 	}
 	if err := s.repo.CreateMedia(ctx, media); err != nil {
 		return nil, err
