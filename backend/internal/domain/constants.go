@@ -23,8 +23,22 @@ const (
 	PlatformGemini      = "gemini"
 	PlatformAntigravity = "antigravity"
 	PlatformGrok        = "grok"
+	PlatformKimi        = "kimi"
+	PlatformZhipu       = "zhipu"
+	PlatformDeepseek    = "deepseek"
 	PlatformXiaoAPI     = "xiaoapi"
 	PlatformComposite   = "composite"
+)
+
+// Account mode and protocol constants for mainland China providers.
+const (
+	AccountModePayG   = "payg"
+	AccountModeCoding = "coding"
+
+	APIProtocolChatCompletions = "chat_completions"
+	APIProtocolAnthropic       = "anthropic"
+	APIProtocolResponses       = "responses"
+	APIProtocolAdaptive        = "adaptive"
 )
 
 // Account type constants

@@ -472,7 +472,8 @@ func compositeTargetPlatformMiddleware(resolver *service.CompositeRouteResolver)
 			if decision.Matched {
 				c.Request = c.Request.WithContext(service.WithCompositeRouteDecision(c.Request.Context(), decision))
 				if upstreamModel := strings.TrimSpace(decision.UpstreamModel); upstreamModel != "" && upstreamModel != model && gjson.ValidBytes(body) {
-					if rewritten, rewriteErr := sjson.SetBytes(body, "model", upstreamModel); rewriteErr == nil {
+					modelPath := compositeRequestModelPath(body)
+					if rewritten, rewriteErr := sjson.SetBytes(body, modelPath, upstreamModel); rewriteErr == nil {
 						body = rewritten
 					}
 				}
@@ -484,10 +485,19 @@ func compositeTargetPlatformMiddleware(resolver *service.CompositeRouteResolver)
 }
 
 func compositeRequestModelFromBody(contentType string, body []byte) string {
-	if model := strings.TrimSpace(gjson.GetBytes(body, "model").String()); model != "" {
-		return model
+	if path := compositeRequestModelPath(body); path != "" {
+		return strings.TrimSpace(gjson.GetBytes(body, path).String())
 	}
 	return compositeMultipartModelFromBody(contentType, body)
+}
+
+func compositeRequestModelPath(body []byte) string {
+	for _, path := range []string{"model", "session.model", "request.model", "input.model"} {
+		if model := strings.TrimSpace(gjson.GetBytes(body, path).String()); model != "" {
+			return path
+		}
+	}
+	return ""
 }
 
 func compositeMultipartModelFromBody(contentType string, body []byte) string {
@@ -576,6 +586,8 @@ func compositeRouteEndpointForPath(path string) string {
 	case strings.Contains(path, "/messages"):
 		return service.CompositeRouteEndpointMessages
 	case strings.Contains(path, "/responses"):
+		return service.CompositeRouteEndpointResponses
+	case strings.Contains(path, "/alpha/search"), strings.Contains(path, "/realtime"), strings.HasSuffix(path, "/live"):
 		return service.CompositeRouteEndpointResponses
 	case strings.Contains(path, "/chat/completions"):
 		return service.CompositeRouteEndpointChatCompletions

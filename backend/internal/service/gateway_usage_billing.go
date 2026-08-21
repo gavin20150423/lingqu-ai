@@ -898,10 +898,31 @@ func (s *GatewayService) calculateRecordUsageCost(
 	result *ForwardResult,
 	apiKey *APIKey,
 	billingModel string,
-	multiplier float64,
-	imageMultiplier float64,
-	opts *recordUsageOpts,
+	args ...any,
 ) *CostBreakdown {
+	// Accept both the current (multiplier, imageMultiplier, opts) shape and
+	// the legacy test/helper shape that carried a request timestamp.
+	multiplier, imageMultiplier := 1.0, 1.0
+	var opts *recordUsageOpts
+	if len(args) > 0 {
+		if value, ok := args[0].(float64); ok {
+			multiplier = value
+		} else if value, ok := args[0].(int); ok {
+			multiplier = float64(value)
+		}
+	}
+	if len(args) > 1 {
+		if value, ok := args[1].(float64); ok {
+			imageMultiplier = value
+		} else if value, ok := args[1].(int); ok {
+			imageMultiplier = float64(value)
+		}
+	}
+	if len(args) > 2 {
+		if value, ok := args[2].(*recordUsageOpts); ok {
+			opts = value
+		}
+	}
 	// 图片生成：渠道定价为 token 计费时走 token 路径，否则走图片计费
 	if result.ImageCount > 0 {
 		if resolved := s.resolveChannelPricing(ctx, billingModel, apiKey); resolved != nil && resolved.Mode == BillingModeToken {
