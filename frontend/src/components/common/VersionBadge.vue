@@ -761,7 +761,8 @@ const isReleaseBuild = computed(() => buildType.value === 'release')
 function formatDisplayVersion(value: string | undefined | null): string {
   const raw = (value || '').trim()
   if (!raw) return ''
-  return raw.replace(/^v/i, '').replace(/-lingqu(?:\.\d+)?$/i, '')
+  const semanticVersion = raw.match(/\d+\.\d+\.\d+/)?.[0]
+  return semanticVersion || raw.replace(/^v/i, '')
 }
 
 function toggleDropdown() {
