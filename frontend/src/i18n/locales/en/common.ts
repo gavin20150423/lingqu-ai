@@ -172,6 +172,7 @@ export default {
     subscriptions: 'Subscriptions',
     accounts: 'Accounts',
     xiaoVideo: 'Video Account Settings',
+    plugins: 'Plugins',
     proxies: 'Proxies',
     redeemCodes: 'Redeem Codes',
     ops: 'Ops',

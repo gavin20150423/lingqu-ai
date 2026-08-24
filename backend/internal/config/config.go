@@ -61,6 +61,10 @@ const (
 // 可通过 gateway.upstream_response_read_max_bytes 配置项覆盖。
 const DefaultUpstreamResponseReadMaxBytes int64 = 128 * 1024 * 1024
 
+// DefaultModelsListReadMaxBytes 上游模型列表响应体的默认读取上限。
+// 可通过 gateway.models_list_read_max_bytes 配置项覆盖。
+const DefaultModelsListReadMaxBytes int64 = 8 * 1024 * 1024
+
 type Config struct {
 	Server                  ServerConfig                  `mapstructure:"server"`
 	Log                     LogConfig                     `mapstructure:"log"`
@@ -101,6 +105,18 @@ type Config struct {
 	VideoAPI                VideoAPIConfig                `mapstructure:"video_api"`
 	ImageStorage            ImageStorageConfig            `mapstructure:"image_storage"`
 	ReceiptCodeStorage      ReceiptCodeStorageConfig      `mapstructure:"receipt_code_storage"`
+	Plugins                 PluginConfig                  `mapstructure:"plugins"`
+}
+
+// PluginConfig 控制管理员手动上传的本地进程插件。
+// 默认不包含插件，也不允许安装未签名插件；TrustedPublishers 用于追加第三方发布者。
+type PluginConfig struct {
+	DataDir              string            `mapstructure:"data_dir"`
+	AllowUnsigned        bool              `mapstructure:"allow_unsigned"`
+	TrustedPublishers    map[string]string `mapstructure:"trusted_publishers"`
+	MaxUploadBytes       int64             `mapstructure:"max_upload_bytes"`
+	MaxUncompressedBytes int64             `mapstructure:"max_uncompressed_bytes"`
+	StartTimeoutSeconds  int               `mapstructure:"start_timeout_seconds"`
 }
 
 type LogConfig struct {
@@ -884,6 +900,37 @@ type ProbeURLConfig struct {
 	Parser string `mapstructure:"parser"`
 }
 
+func normalizeProxyProbeURLs(targets []ProbeURLConfig) ([]ProbeURLConfig, error) {
+	if len(targets) == 0 {
+		return nil, nil
+	}
+	normalized := make([]ProbeURLConfig, 0, len(targets))
+	for i, target := range targets {
+		rawURL := strings.TrimSpace(target.URL)
+		parser := strings.ToLower(strings.TrimSpace(target.Parser))
+		if rawURL == "" {
+			return nil, fmt.Errorf("entry %d: url is required", i)
+		}
+		if parser == "" {
+			return nil, fmt.Errorf("entry %d: parser is required", i)
+		}
+		switch parser {
+		case "ip-api", "ipify", "chatgpt-trace":
+		default:
+			return nil, fmt.Errorf("entry %d: unsupported parser %q", i, target.Parser)
+		}
+		parsed, err := url.Parse(rawURL)
+		if err != nil || parsed.Host == "" {
+			return nil, fmt.Errorf("entry %d: invalid url %q", i, target.URL)
+		}
+		if parsed.Scheme != "http" && parsed.Scheme != "https" {
+			return nil, fmt.Errorf("entry %d: url scheme must be http or https", i)
+		}
+		normalized = append(normalized, ProbeURLConfig{URL: rawURL, Parser: parser})
+	}
+	return normalized, nil
+}
+
 type BillingConfig struct {
 	CircuitBreaker CircuitBreakerConfig `mapstructure:"circuit_breaker"`
 	// MinimumBalanceReserve is the conservative preflight floor for balance billing.
@@ -964,6 +1011,8 @@ type GatewayConfig struct {
 	TextMaxBodySize int64 `mapstructure:"text_max_body_size"`
 	// 非流式上游响应体读取上限（字节），用于防止无界读取导致内存放大
 	UpstreamResponseReadMaxBytes int64 `mapstructure:"upstream_response_read_max_bytes"`
+	// 上游模型列表响应体读取上限（字节）
+	ModelsListReadMaxBytes int64 `mapstructure:"models_list_read_max_bytes"`
 	// 代理探测响应体读取上限（字节）
 	ProxyProbeResponseReadMaxBytes int64 `mapstructure:"proxy_probe_response_read_max_bytes"`
 	// Gemini 上游响应头调试日志开关（默认关闭，避免高频日志开销）
@@ -1779,6 +1828,10 @@ func load(allowMissingJWTSecret bool) (*Config, error) {
 	// 环境变量支持
 	viper.AutomaticEnv()
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	if tz, ok := os.LookupEnv("TZ"); ok && strings.TrimSpace(tz) != "" {
+		// AutomaticEnv maps timezone to TIMEZONE; standard TZ has higher precedence.
+		viper.Set("timezone", strings.TrimSpace(tz))
+	}
 	if err := viper.BindEnv("server.enable_server_timing", "ENABLE_SERVER_TIMING"); err != nil {
 		return nil, fmt.Errorf("bind ENABLE_SERVER_TIMING: %w", err)
 	}
@@ -2317,6 +2370,14 @@ func setDefaults() {
 	viper.SetDefault("pricing.update_interval_hours", 24)
 	viper.SetDefault("pricing.hash_check_interval_minutes", 10)
 
+	// 本地进程插件。插件必须由管理员手动上传，项目默认不携带任何插件能力。
+	viper.SetDefault("plugins.data_dir", "")
+	viper.SetDefault("plugins.allow_unsigned", false)
+	viper.SetDefault("plugins.trusted_publishers", map[string]string{})
+	viper.SetDefault("plugins.max_upload_bytes", int64(128*1024*1024))
+	viper.SetDefault("plugins.max_uncompressed_bytes", int64(256*1024*1024))
+	viper.SetDefault("plugins.start_timeout_seconds", 15)
+
 	// Timezone (default to Asia/Shanghai for Chinese users)
 	viper.SetDefault("timezone", "Asia/Shanghai")
 
@@ -2490,6 +2551,7 @@ func setDefaults() {
 	viper.SetDefault("gateway.max_body_size", int64(256*1024*1024))
 	viper.SetDefault("gateway.text_max_body_size", int64(32*1024*1024))
 	viper.SetDefault("gateway.upstream_response_read_max_bytes", DefaultUpstreamResponseReadMaxBytes)
+	viper.SetDefault("gateway.models_list_read_max_bytes", DefaultModelsListReadMaxBytes)
 	viper.SetDefault("gateway.proxy_probe_response_read_max_bytes", int64(1024*1024))
 	viper.SetDefault("gateway.gemini_debug_response_headers", false)
 	viper.SetDefault("gateway.connection_pool_isolation", ConnectionPoolIsolationAccountProxy)
@@ -2674,6 +2736,20 @@ func (c *Config) Validate() error {
 	}
 	c.Security.ForwardedClientIPHeaders = forwardedClientIPHeaders
 	c.SetForwardedClientIPSettings(c.Security.TrustForwardedIPForAPIKeyACL, forwardedClientIPHeaders)
+	proxyProbeURLs, err := normalizeProxyProbeURLs(c.Security.ProxyProbe.URLs)
+	if err != nil {
+		return fmt.Errorf("security.proxy_probe.urls: %w", err)
+	}
+	c.Security.ProxyProbe.URLs = proxyProbeURLs
+	if c.Plugins.MaxUploadBytes <= 0 || c.Plugins.MaxUploadBytes > 1024*1024*1024 {
+		return fmt.Errorf("plugins.max_upload_bytes must be between 1 and 1073741824")
+	}
+	if c.Plugins.MaxUncompressedBytes < c.Plugins.MaxUploadBytes || c.Plugins.MaxUncompressedBytes > 2*1024*1024*1024 {
+		return fmt.Errorf("plugins.max_uncompressed_bytes must be between max_upload_bytes and 2147483648")
+	}
+	if c.Plugins.StartTimeoutSeconds < 1 || c.Plugins.StartTimeoutSeconds > 120 {
+		return fmt.Errorf("plugins.start_timeout_seconds must be between 1 and 120")
+	}
 	if c.Server.ReadHeaderTimeout < 1 || c.Server.ReadHeaderTimeout > 60 {
 		return fmt.Errorf("server.read_header_timeout must be between 1 and 60 seconds")
 	}
@@ -3291,6 +3367,9 @@ func (c *Config) Validate() error {
 	}
 	if c.Gateway.UpstreamResponseReadMaxBytes <= 0 {
 		return fmt.Errorf("gateway.upstream_response_read_max_bytes must be positive")
+	}
+	if c.Gateway.ModelsListReadMaxBytes <= 0 {
+		return fmt.Errorf("gateway.models_list_read_max_bytes must be positive")
 	}
 	if c.Gateway.ProxyProbeResponseReadMaxBytes <= 0 {
 		return fmt.Errorf("gateway.proxy_probe_response_read_max_bytes must be positive")

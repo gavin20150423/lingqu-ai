@@ -39,6 +39,7 @@ import riskControlAPI from './riskControl'
 import adminComplianceAPI from './compliance'
 import auditAPI from './audit'
 import adminStoreAPI from './store'
+import pluginsAPI from './plugins'
 
 /**
  * Unified admin API object for convenient access
@@ -80,6 +81,7 @@ export const adminAPI = {
   compliance: adminComplianceAPI,
   audit: auditAPI,
   store: adminStoreAPI
+  plugins: pluginsAPI
 }
 
 export {
@@ -119,6 +121,7 @@ export {
   adminComplianceAPI,
   auditAPI,
   adminStoreAPI
+  pluginsAPI
 }
 
 export default adminAPI
@@ -132,3 +135,9 @@ export type { TLSFingerprintProfile, CreateProfileRequest, UpdateProfileRequest 
 export type { ContentModerationConfig, ContentModerationLog, ModerationMode } from './riskControl'
 export type { AccountSharePolicy } from './accountSharePolicies'
 export type { AccountShareModePolicy } from './accountShareModePolicy'
+export type {
+  PluginInstallation,
+  PluginCompatibility,
+  PluginUISession,
+  PluginTestResult
+} from './plugins'

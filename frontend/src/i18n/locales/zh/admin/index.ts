@@ -9,6 +9,7 @@ import promptAudit from './promptAudit'
 import store from './store'
 import xiaoVideo from './xiaoVideo'
 import conversations from './conversations'
+import plugins from './plugins'
 
 export default {
   ...overview,
@@ -22,4 +23,5 @@ export default {
   ...store,
   ...xiaoVideo,
   ...conversations,
+  ...plugins,
 }

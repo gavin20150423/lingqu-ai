@@ -14,6 +14,7 @@ import (
 )
 
 const (
+	upstreamModelsBodyLimit                  = 1 << 20
 	upstreamPricingSourceNone                = "none"
 	upstreamPricingSourceModelList           = "model_list"
 	upstreamPricingSourceAIStartLabConfig    = "aistartlab_config"

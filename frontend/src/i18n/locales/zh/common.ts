@@ -172,6 +172,7 @@ export default {
     subscriptions: '订阅管理',
     accounts: '账号管理',
     xiaoVideo: '视频账号配置',
+    plugins: '插件管理',
     proxies: 'IP管理',
     redeemCodes: '兑换码',
     ops: '运维监控',
