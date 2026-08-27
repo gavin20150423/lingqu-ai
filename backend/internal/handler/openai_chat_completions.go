@@ -278,6 +278,10 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 						return
 					}
 					h.reportSubPilotForwardFailure(c, apiKey, account, selection, reqModel, sessionHash, reqStream, failoverErr, err)
+					if subPilotRetryShouldStop(c) {
+						h.handleFailoverExhausted(c, failoverErr, streamStarted)
+						return
+					}
 					if c.Writer.Size() != writerSizeBeforeForward {
 						h.handleFailoverExhausted(c, failoverErr, true)
 						return
@@ -290,7 +294,7 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 						return
 					}
 					// Pool mode: retry on the same account
-					if failoverErr.RetryableOnSameAccount {
+					if !subPilotRetryRequiresNextAccount(c) && failoverErr.RetryableOnSameAccount {
 						retryLimit := account.GetPoolModeRetryCount()
 						if sameAccountRetryCount[account.ID] < retryLimit {
 							sameAccountRetryCount[account.ID]++

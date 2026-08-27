@@ -213,6 +213,10 @@ func (h *OpenAIGatewayHandler) Embeddings(c *gin.Context) {
 			var failoverErr *service.UpstreamFailoverError
 			if errors.As(err, &failoverErr) {
 				h.reportSubPilotForwardFailure(c, apiKey, account, selection, reqModel, "", false, failoverErr, err)
+				if subPilotRetryShouldStop(c) {
+					h.handleFailoverExhausted(c, failoverErr, false)
+					return
+				}
 				if c.Writer.Size() != writerSizeBeforeForward {
 					h.handleFailoverExhausted(c, failoverErr, true)
 					return

@@ -154,6 +154,35 @@ func TestNewFailoverState(t *testing.T) {
 	})
 }
 
+func TestHandleFailoverErrorHonorsSubPilotStopDirective(t *testing.T) {
+	fs := NewFailoverState(5, false)
+	mock := &mockTempUnscheduler{}
+	ctx := service.WithSubPilotRetryDirective(context.Background(), service.SubPilotRetryDirective{
+		Available: true, Action: "stop", Attempt: 3, RemainingAttempts: 0, RemainingBudgetMS: 0,
+	})
+
+	action := fs.HandleFailoverError(ctx, mock, 101, service.PlatformOpenAI, 1, newTestFailoverErr(http.StatusServiceUnavailable, true, false))
+
+	require.Equal(t, FailoverExhausted, action)
+	require.Zero(t, fs.SwitchCount)
+	require.Contains(t, fs.FailedAccountIDs, int64(101))
+}
+
+func TestHandleFailoverErrorSubPilotRetryNextSkipsSameAccountRetry(t *testing.T) {
+	fs := NewFailoverState(5, false)
+	mock := &mockTempUnscheduler{}
+	ctx := service.WithSubPilotRetryDirective(context.Background(), service.SubPilotRetryDirective{
+		Available: true, Action: "retry_next", Attempt: 1, RemainingAttempts: 2, RemainingBudgetMS: 8000,
+	})
+
+	action := fs.HandleFailoverError(ctx, mock, 101, service.PlatformOpenAI, 1, newTestFailoverErr(http.StatusServiceUnavailable, true, false))
+
+	require.Equal(t, FailoverContinue, action)
+	require.Equal(t, 1, fs.SwitchCount)
+	require.Zero(t, fs.SameAccountRetryCount[101])
+	require.Contains(t, fs.FailedAccountIDs, int64(101))
+}
+
 // ---------------------------------------------------------------------------
 // sleepWithContext 测试
 // ---------------------------------------------------------------------------

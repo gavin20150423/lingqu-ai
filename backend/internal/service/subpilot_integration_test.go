@@ -103,6 +103,49 @@ func TestSubPilotReportFailureFallsBackToContextAPIKeyID(t *testing.T) {
 	}
 }
 
+func TestSubPilotReportFailureConsumesRetryDirective(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, subPilotReportFailurePath, r.URL.Path)
+		w.Header().Set("X-SubPilot-Retry-Action", "retry_next")
+		w.Header().Set("X-SubPilot-Error-Type", "server_error")
+		w.Header().Set("X-SubPilot-Attempt", "2")
+		w.Header().Set("X-SubPilot-Remaining-Attempts", "1")
+		w.Header().Set("X-SubPilot-Remaining-Budget-Ms", "7420")
+		w.Header().Set("X-SubPilot-Cooldown-Ms", "15000")
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+
+	svc := &OpenAIGatewayService{cfg: &config.Config{Gateway: config.GatewayConfig{
+		SubPilot: config.SubPilotConfig{Enabled: true, BaseURL: server.URL, TimeoutMS: 80},
+	}}}
+	directive := svc.ReportSubPilotFailure(context.Background(), SubPilotFailureInput{
+		LeaseID: "lease-directive", Account: &Account{ID: 11}, RequestID: "request-directive",
+		Platform: PlatformOpenAI, GroupID: "22", Model: "gpt-5.4", StatusCode: http.StatusBadGateway,
+	})
+
+	require.True(t, directive.Available)
+	require.True(t, directive.RequiresNextAccount())
+	require.False(t, directive.ShouldStop())
+	require.Equal(t, "server_error", directive.ErrorType)
+	require.Equal(t, 2, directive.Attempt)
+	require.Equal(t, 1, directive.RemainingAttempts)
+	require.Equal(t, int64(7420), directive.RemainingBudgetMS)
+	require.Equal(t, int64(15000), directive.CooldownMS)
+}
+
+func TestSubPilotRetryDirectiveStopsWhenBudgetIsExhausted(t *testing.T) {
+	directive := parseSubPilotRetryDirective(http.Header{
+		"X-Subpilot-Retry-Action":        {"retry_next"},
+		"X-Subpilot-Remaining-Attempts":  {"1"},
+		"X-Subpilot-Remaining-Budget-Ms": {"0"},
+	})
+
+	require.True(t, directive.Available)
+	require.True(t, directive.ShouldStop())
+	require.False(t, directive.RequiresNextAccount())
+}
+
 func TestOpenAISubPilotSuccessReportCarriesLeaseAndSession(t *testing.T) {
 	requests := make(chan subPilotReportSuccessRequest, 1)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

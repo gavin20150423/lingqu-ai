@@ -243,6 +243,15 @@ func (s *OpenAIGatewayService) openAIFirstOutputTimeout(reasoningEffort string) 
 	return time.Duration(seconds) * time.Second
 }
 
+func (s *OpenAIGatewayService) openAIFirstOutputTimeoutForContext(ctx context.Context, reasoningEffort string) time.Duration {
+	configured := s.openAIFirstOutputTimeout(reasoningEffort)
+	adaptive := SubPilotAttemptTimeoutFromContext(ctx)
+	if adaptive > 0 && (configured <= 0 || adaptive < configured) {
+		return adaptive
+	}
+	return configured
+}
+
 func (s *OpenAIGatewayService) newOpenAIFirstOutputTimeoutError(
 	ctx context.Context,
 	c *gin.Context,

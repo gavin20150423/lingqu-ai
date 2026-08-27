@@ -97,19 +97,19 @@ func (s *OpenAIGatewayService) reportSubPilotSuccess(ctx context.Context, usageL
 	})
 }
 
-func (s *GatewayService) ReportSubPilotFailure(ctx context.Context, input SubPilotFailureInput) {
+func (s *GatewayService) ReportSubPilotFailure(ctx context.Context, input SubPilotFailureInput) SubPilotRetryDirective {
 	client := s.subPilotClient()
 	if client == nil || input.LeaseID == "" || input.Account == nil {
-		return
+		return SubPilotRetryDirective{}
 	}
 	// Content-policy refusals belong to this request, not to the selected
 	// account. Do not feed them into SubPilot health metrics or retry/failover
 	// feedback; the lease is still released by the report endpoint.
 	if isNonRetryableRequestFailure(input.StatusCode, input.ErrorCode, input.ErrorMessage) {
-		return
+		return SubPilotRetryDirective{}
 	}
 	stream := input.Stream
-	client.reportFailure(ctx, subPilotReportFailureRequest{
+	return client.reportFailure(ctx, subPilotReportFailureRequest{
 		RequestID:    subPilotReportRequestID(ctx, input.RequestID),
 		LeaseID:      input.LeaseID,
 		APIKeyID:     subPilotReportAPIKeyID(ctx, input.APIKey),
@@ -126,16 +126,16 @@ func (s *GatewayService) ReportSubPilotFailure(ctx context.Context, input SubPil
 	})
 }
 
-func (s *OpenAIGatewayService) ReportSubPilotFailure(ctx context.Context, input SubPilotFailureInput) {
+func (s *OpenAIGatewayService) ReportSubPilotFailure(ctx context.Context, input SubPilotFailureInput) SubPilotRetryDirective {
 	client := s.subPilotClient()
 	if client == nil || input.LeaseID == "" || input.Account == nil {
-		return
+		return SubPilotRetryDirective{}
 	}
 	if isNonRetryableRequestFailure(input.StatusCode, input.ErrorCode, input.ErrorMessage) {
-		return
+		return SubPilotRetryDirective{}
 	}
 	stream := input.Stream
-	client.reportFailure(ctx, subPilotReportFailureRequest{
+	return client.reportFailure(ctx, subPilotReportFailureRequest{
 		RequestID:    subPilotReportRequestID(ctx, input.RequestID),
 		LeaseID:      input.LeaseID,
 		APIKeyID:     subPilotReportAPIKeyID(ctx, input.APIKey),

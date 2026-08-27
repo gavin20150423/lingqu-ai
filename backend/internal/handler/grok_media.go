@@ -343,6 +343,10 @@ func (h *OpenAIGatewayHandler) handleGrokMedia(c *gin.Context, endpoint service.
 					return
 				}
 				h.reportSubPilotForwardFailure(c, apiKey, account, selection, requestModel, sessionHash, false, failoverErr, err)
+				if subPilotRetryShouldStop(c) {
+					h.handleFailoverExhausted(c, failoverErr, false)
+					return
+				}
 				if failoverErr.ShouldReportAccountScheduleFailure() {
 					h.gatewayService.ReportOpenAIAccountScheduleResult(account.ID, grokMediaScheduleModel(account, routingModel, nil), false, nil)
 				}
@@ -358,7 +362,7 @@ func (h *OpenAIGatewayHandler) handleGrokMedia(c *gin.Context, endpoint service.
 					h.handleFailoverExhausted(c, failoverErr, false)
 					return
 				}
-				if failoverErr.RetryableOnSameAccount {
+				if !subPilotRetryRequiresNextAccount(c) && failoverErr.RetryableOnSameAccount {
 					retryLimit := account.GetPoolModeRetryCount()
 					if sameAccountRetryCount[account.ID] < retryLimit {
 						sameAccountRetryCount[account.ID]++
