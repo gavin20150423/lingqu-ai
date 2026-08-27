@@ -775,6 +775,9 @@ export async function revertProxyFallback(id: number): Promise<{ message: string
 export async function batchDelete(accountIds: number[]): Promise<BatchOperationResult> {
   const { data } = await apiClient.post<BatchOperationResult>('/admin/accounts/batch-delete', {
     account_ids: accountIds
+  }, {
+    // Deleting a large selection can legitimately exceed the shared 30s API timeout.
+    timeout: 5 * 60 * 1000
   })
   return data
 }

@@ -1593,7 +1593,13 @@ func (h *AccountHandler) BatchDelete(c *gin.Context) {
 		return
 	}
 
-	accounts, err := h.adminService.GetAccountsByIDs(c.Request.Context(), accountIDs)
+	// A confirmed batch deletion must not turn into a partial operation merely
+	// because the browser's request timeout expires. Keep the bounded server-side
+	// operation alive, while still imposing a hard deadline of our own.
+	batchCtx, cancel := context.WithTimeout(context.WithoutCancel(c.Request.Context()), 5*time.Minute)
+	defer cancel()
+
+	accounts, err := h.adminService.GetAccountsByIDs(batchCtx, accountIDs)
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return
@@ -1660,7 +1666,7 @@ func (h *AccountHandler) BatchDelete(c *gin.Context) {
 	}
 
 	const maxConcurrency = 5
-	g, gctx := errgroup.WithContext(c.Request.Context())
+	g, gctx := errgroup.WithContext(batchCtx)
 	g.SetLimit(maxConcurrency)
 
 	var mu sync.Mutex

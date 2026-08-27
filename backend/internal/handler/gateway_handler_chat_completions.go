@@ -380,6 +380,11 @@ func (h *GatewayHandler) handleCCFailoverExhausted(c *gin.Context, lastErr *serv
 	if streamStarted {
 		return
 	}
+	if lastErr != nil && h.cfg != nil && h.cfg.Gateway.PassthroughUpstreamErrors &&
+		writeRawUpstreamError(c, lastErr.StatusCode, lastErr.ResponseHeaders, lastErr.ResponseBody) {
+		service.SetOpsUpstreamError(c, lastErr.StatusCode, service.ExtractUpstreamErrorMessage(lastErr.ResponseBody), "")
+		return
+	}
 	if lastErr != nil && lastErr.IsCredentialFailure() {
 		status, message := credentialFailoverClientResponse(lastErr)
 		h.chatCompletionsErrorResponse(c, status, "server_error", message)

@@ -989,6 +989,15 @@ const (
 
 // GatewayConfig API网关相关配置
 type GatewayConfig struct {
+	// IgnoreAccountCooldowns keeps transient upstream health markers out of the
+	// gateway candidate filter. The markers remain persisted for observability
+	// and token-refresh workers, but every active, manually schedulable account
+	// is still tried by the request path.
+	IgnoreAccountCooldowns bool `mapstructure:"ignore_account_cooldowns"`
+	// PassthroughUpstreamErrors returns an upstream HTTP error body/status as-is
+	// when the upstream supplied a response, instead of synthesizing a generic
+	// gateway error message.
+	PassthroughUpstreamErrors bool `mapstructure:"passthrough_upstream_errors"`
 	// 等待上游响应头的超时时间（秒），0表示无超时
 	// 注意：这不影响流式数据传输，只控制等待响应头的时间
 	ResponseHeaderTimeout int `mapstructure:"response_header_timeout"`
@@ -2523,6 +2532,10 @@ func setDefaults() {
 	viper.SetDefault("gateway.openai_http2.fallback_window_seconds", 60)
 	viper.SetDefault("gateway.openai_http2.fallback_ttl_seconds", 600)
 	viper.SetDefault("gateway.openai_proxy_stream_circuit.disabled", false)
+	// Keep transient upstream cooldown markers for observability, but do not let
+	// them prevent the gateway from attempting an active account.
+	viper.SetDefault("gateway.ignore_account_cooldowns", true)
+	viper.SetDefault("gateway.passthrough_upstream_errors", true)
 	viper.SetDefault("gateway.openai_proxy_stream_circuit.failure_threshold", 2)
 	viper.SetDefault("gateway.openai_proxy_stream_circuit.window_seconds", 60)
 	viper.SetDefault("gateway.openai_proxy_stream_circuit.ttl_seconds", 600)

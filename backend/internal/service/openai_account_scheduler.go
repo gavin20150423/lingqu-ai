@@ -1441,7 +1441,8 @@ func (s *defaultOpenAIAccountScheduler) selectByLoadBalance(
 				continue
 			}
 		}
-		if !account.IsSchedulable() {
+		if (s.service != nil && s.service.ignoreAccountCooldowns() && !account.IsSchedulableIgnoringCooldowns()) ||
+			(s.service == nil || !s.service.ignoreAccountCooldowns()) && !account.IsSchedulable() {
 			filterStats.exclude("not_schedulable")
 			continue
 		}
@@ -2248,6 +2249,9 @@ func (s *OpenAIGatewayService) selectAccountWithSchedulerOnce(
 	previousResponseCanMove bool,
 	useUpstreamTokenCost bool,
 ) (*AccountSelectionResult, OpenAIAccountScheduleDecision, error) {
+	if s.ignoreAccountCooldowns() {
+		ctx = withIgnoreAccountCooldowns(ctx)
+	}
 	ctx = s.withOpenAIQuotaAutoPauseContext(ctx)
 	ctx = s.withOpenAIGroupPrivacyRequirement(ctx, groupID)
 	// 分组利润控制：唯一文本调度入口的防御性装门。handler 文本
@@ -2278,6 +2282,9 @@ func (s *OpenAIGatewayService) selectAccountWithSchedulerOnce(
 	}
 
 	effectiveExcludedIDs := cloneExcludedAccountIDs(excludedIDs)
+	if effectiveExcludedIDs == nil {
+		effectiveExcludedIDs = make(map[int64]struct{})
+	}
 	if client := s.subPilotClient(); !SubPilotDisabledFromContext(ctx) && groupID != nil && requestedModel != "" && client != nil && client.takeoverActive(ctx) {
 		accounts, listErr := s.listSchedulableAccounts(ctx, groupID, platform)
 		if listErr != nil {

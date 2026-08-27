@@ -128,6 +128,8 @@ type subPilotSelectResult struct {
 	RequestID      string
 	LastResort     bool
 	AttemptTimeout time.Duration
+	Decision       string
+	Reason         string
 }
 
 type subPilotReleaseLeaseRequest struct {
@@ -259,7 +261,11 @@ func (c *subPilotClient) recommendAccountWithOwnership(ctx context.Context, req 
 	}
 	c.recordSuccess()
 	if resp.Decision != "selected" {
-		return nil, true, nil
+		return &subPilotSelectResult{
+			RequestID: req.RequestID,
+			Decision:  strings.TrimSpace(resp.Decision),
+			Reason:    strings.TrimSpace(resp.Reason),
+		}, true, nil
 	}
 	accountID, err := strconv.ParseInt(strings.TrimSpace(resp.Account.ID), 10, 64)
 	if err != nil || accountID <= 0 || strings.TrimSpace(resp.Lease.ID) == "" {
@@ -276,6 +282,8 @@ func (c *subPilotClient) recommendAccountWithOwnership(ctx context.Context, req 
 		RequestID:      req.RequestID,
 		LastResort:     resp.Reason == "last_resort",
 		AttemptTimeout: boundedSubPilotAttemptTimeout(resp.RetryPolicy.AttemptTimeoutMS),
+		Decision:       strings.TrimSpace(resp.Decision),
+		Reason:         strings.TrimSpace(resp.Reason),
 	}, true, nil
 }
 

@@ -2,8 +2,10 @@ package service
 
 import (
 	"context"
+	"log/slog"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
@@ -42,17 +44,29 @@ func (s *GatewayService) trySubPilotRecommend(ctx context.Context, groupID *int6
 		if rec == nil {
 			return nil, true, ErrNoAvailableAccounts
 		}
+		if rec.AccountID <= 0 {
+			if subPilotDecisionIsExclusive(rec.Decision) {
+				return nil, true, ErrNoAvailableAccounts
+			}
+			mergeSubPilotExcludedIDs(excludedIDs, localExcluded)
+			logSubPilotNativeFallback("gateway", groupID, requestedModel, rec.Decision, rec.Reason, len(localExcluded))
+			return nil, false, nil
+		}
 		if _, excluded := localExcluded[rec.AccountID]; excluded {
 			if !rec.LastResort {
 				releaseSubPilotRecommendation(client, rec)
-				return nil, true, ErrNoAvailableAccounts
+				mergeSubPilotExcludedIDs(excludedIDs, localExcluded)
+				logSubPilotNativeFallback("gateway", groupID, requestedModel, rec.Decision, "recommended_account_already_excluded", len(localExcluded))
+				return nil, false, nil
 			}
 		}
 		account := s.validateSubPilotGatewayAccount(ctx, rec.AccountID, groupID, platform, requestedModel, accounts, useMixed, rec.LastResort)
 		if account == nil {
 			releaseSubPilotRecommendation(client, rec)
 			if rec.LastResort {
-				return nil, true, ErrNoAvailableAccounts
+				mergeSubPilotExcludedIDs(excludedIDs, localExcluded)
+				logSubPilotNativeFallback("gateway", groupID, requestedModel, rec.Decision, "last_resort_account_rejected", len(localExcluded))
+				return nil, false, nil
 			}
 			localExcluded[rec.AccountID] = struct{}{}
 			continue
@@ -65,7 +79,9 @@ func (s *GatewayService) trySubPilotRecommend(ctx context.Context, groupID *int6
 		if result == nil || !result.Acquired {
 			releaseSubPilotRecommendation(client, rec)
 			if rec.LastResort {
-				return nil, true, ErrNoAvailableAccounts
+				mergeSubPilotExcludedIDs(excludedIDs, localExcluded)
+				logSubPilotNativeFallback("gateway", groupID, requestedModel, rec.Decision, "last_resort_slot_unavailable", len(localExcluded))
+				return nil, false, nil
 			}
 			localExcluded[rec.AccountID] = struct{}{}
 			continue
@@ -74,7 +90,9 @@ func (s *GatewayService) trySubPilotRecommend(ctx context.Context, groupID *int6
 			result.ReleaseFunc()
 			releaseSubPilotRecommendation(client, rec)
 			if rec.LastResort {
-				return nil, true, ErrNoAvailableAccounts
+				mergeSubPilotExcludedIDs(excludedIDs, localExcluded)
+				logSubPilotNativeFallback("gateway", groupID, requestedModel, rec.Decision, "last_resort_session_limit", len(localExcluded))
+				return nil, false, nil
 			}
 			localExcluded[rec.AccountID] = struct{}{}
 			continue
@@ -190,17 +208,29 @@ func (s *OpenAIGatewayService) trySubPilotRecommend(ctx context.Context, groupID
 		if rec == nil {
 			return nil, true, ErrNoAvailableAccounts
 		}
+		if rec.AccountID <= 0 {
+			if subPilotDecisionIsExclusive(rec.Decision) {
+				return nil, true, ErrNoAvailableAccounts
+			}
+			mergeSubPilotExcludedIDs(excludedIDs, localExcluded)
+			logSubPilotNativeFallback("openai", groupID, requestedModel, rec.Decision, rec.Reason, len(localExcluded))
+			return nil, false, nil
+		}
 		if _, excluded := localExcluded[rec.AccountID]; excluded {
 			if !rec.LastResort {
 				releaseSubPilotRecommendation(client, rec)
-				return nil, true, ErrNoAvailableAccounts
+				mergeSubPilotExcludedIDs(excludedIDs, localExcluded)
+				logSubPilotNativeFallback("openai", groupID, requestedModel, rec.Decision, "recommended_account_already_excluded", len(localExcluded))
+				return nil, false, nil
 			}
 		}
 		account := s.validateSubPilotOpenAIAccount(ctx, rec.AccountID, groupID, platform, requestedModel, requireCompact, requiredCapability, requiredTransport, requiredImageCapability, accounts, rec.LastResort)
 		if account == nil {
 			releaseSubPilotRecommendation(client, rec)
 			if rec.LastResort {
-				return nil, true, ErrNoAvailableAccounts
+				mergeSubPilotExcludedIDs(excludedIDs, localExcluded)
+				logSubPilotNativeFallback("openai", groupID, requestedModel, rec.Decision, "last_resort_account_rejected", len(localExcluded))
+				return nil, false, nil
 			}
 			localExcluded[rec.AccountID] = struct{}{}
 			continue
@@ -213,7 +243,9 @@ func (s *OpenAIGatewayService) trySubPilotRecommend(ctx context.Context, groupID
 		if result == nil || !result.Acquired {
 			releaseSubPilotRecommendation(client, rec)
 			if rec.LastResort {
-				return nil, true, ErrNoAvailableAccounts
+				mergeSubPilotExcludedIDs(excludedIDs, localExcluded)
+				logSubPilotNativeFallback("openai", groupID, requestedModel, rec.Decision, "last_resort_slot_unavailable", len(localExcluded))
+				return nil, false, nil
 			}
 			localExcluded[rec.AccountID] = struct{}{}
 			continue
@@ -296,6 +328,36 @@ func cloneSubPilotExcludedIDs(excludedIDs map[int64]struct{}) map[int64]struct{}
 		cloned[accountID] = struct{}{}
 	}
 	return cloned
+}
+
+func mergeSubPilotExcludedIDs(target map[int64]struct{}, source map[int64]struct{}) {
+	if target == nil {
+		return
+	}
+	for accountID := range source {
+		if accountID > 0 {
+			target[accountID] = struct{}{}
+		}
+	}
+}
+
+func subPilotDecisionIsExclusive(decision string) bool {
+	switch strings.ToLower(strings.TrimSpace(decision)) {
+	case "no_channel", "disabled", "rejected":
+		return true
+	default:
+		return false
+	}
+}
+
+func logSubPilotNativeFallback(platform string, groupID *int64, model string, decision string, reason string, excludedCount int) {
+	slog.Warn("subpilot dispatch fell back to native scheduler",
+		"platform", platform,
+		"group_id", derefGroupID(groupID),
+		"model", model,
+		"decision", strings.TrimSpace(decision),
+		"reason", strings.TrimSpace(reason),
+		"excluded_count", excludedCount)
 }
 
 func subPilotExcludedAccountIDs(excludedIDs map[int64]struct{}) []string {

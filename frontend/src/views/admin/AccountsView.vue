@@ -180,6 +180,7 @@
           :total-results="pagination.total"
           :selecting-all="selectingAllResults"
           :all-results-selected="allResultsSelected"
+          :deleting="bulkDeleting"
           @delete="handleBulkDelete"
           @reset-status="handleBulkResetStatus"
           @refresh-token="handleBulkRefreshToken"
@@ -588,6 +589,7 @@ const showImportData = ref(false)
 const showExportDataDialog = ref(false)
 const includeProxyOnExport = ref(true)
 const showBulkEdit = ref(false)
+const bulkDeleting = ref(false)
 const bulkEditTarget = ref<AccountBulkEditTarget | null>(null)
 const showTempUnsched = ref(false)
 const showDeleteDialog = ref(false)
@@ -1786,8 +1788,11 @@ const toggleSelectAllVisible = (event: Event) => {
   toggleVisible(target.checked)
 }
 const handleBulkDelete = async () => {
+  if (bulkDeleting.value) return
   const accountIds = [...selIds.value]
+  if (accountIds.length === 0) return
   if (!confirm(t('admin.accounts.bulkActions.confirmDelete', { count: accountIds.length }))) return
+  bulkDeleting.value = true
   try {
     const result = await adminAPI.accounts.batchDelete(accountIds)
     if (result.failed > 0) {
@@ -1803,7 +1808,9 @@ const handleBulkDelete = async () => {
     await reload()
   } catch (error) {
     console.error('Failed to bulk delete accounts:', error)
-    appStore.showError(String(error))
+    appStore.showError(extractApiErrorMessage(error, t('common.error')))
+  } finally {
+    bulkDeleting.value = false
   }
 }
 const handleBulkResetStatus = async () => {

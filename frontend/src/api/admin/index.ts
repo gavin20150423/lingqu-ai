@@ -80,7 +80,7 @@ export const adminAPI = {
   riskControl: riskControlAPI,
   compliance: adminComplianceAPI,
   audit: auditAPI,
-  store: adminStoreAPI
+  store: adminStoreAPI,
   plugins: pluginsAPI
 }
 
@@ -120,7 +120,7 @@ export {
   riskControlAPI,
   adminComplianceAPI,
   auditAPI,
-  adminStoreAPI
+  adminStoreAPI,
   pluginsAPI
 }
 

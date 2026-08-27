@@ -837,6 +837,10 @@ func (s *GeminiMessagesCompatService) writeGeminiChatCompletionsMappedError(
 	); matched {
 		return s.writeChatCompletionsError(c, status, errType, errMsg)
 	}
+	if s.cfg != nil && s.cfg.Gateway.PassthroughUpstreamErrors && len(body) > 0 {
+		c.Data(upstreamStatus, "application/json", body)
+		return fmt.Errorf("upstream error: %d message=%s", upstreamStatus, upstreamMsg)
+	}
 
 	statusCode := http.StatusBadGateway
 	errType := "upstream_error"

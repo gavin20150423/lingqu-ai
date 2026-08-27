@@ -257,7 +257,11 @@ func (s *GeminiMessagesCompatService) isAccountUsableForRequestWithPrecheck(
 ) bool {
 	// 检查模型调度能力
 	// Check model scheduling capability
-	if !account.IsSchedulableForModelWithContext(ctx, requestedModel) {
+	schedulable := account.IsSchedulableForModelWithContext(ctx, requestedModel)
+	if s.cfg != nil && s.cfg.Gateway.IgnoreAccountCooldowns {
+		schedulable = account.IsSchedulableForModelIgnoringCooldowns(ctx, requestedModel)
+	}
+	if !schedulable {
 		return false
 	}
 
@@ -275,7 +279,7 @@ func (s *GeminiMessagesCompatService) isAccountUsableForRequestWithPrecheck(
 
 	// 速率限制预检
 	// Rate limit precheck
-	if !s.passesRateLimitPreCheckWithCache(ctx, account, requestedModel, precheckResult) {
+	if !(s.cfg != nil && s.cfg.Gateway.IgnoreAccountCooldowns) && !s.passesRateLimitPreCheckWithCache(ctx, account, requestedModel, precheckResult) {
 		return false
 	}
 
@@ -444,6 +448,34 @@ func (s *GeminiMessagesCompatService) hydrateSelectedAccount(ctx context.Context
 }
 
 func (s *GeminiMessagesCompatService) listSchedulableAccountsOnce(ctx context.Context, groupID *int64, platform string, hasForcePlatform bool) ([]Account, error) {
+	if s.cfg != nil && s.cfg.Gateway.IgnoreAccountCooldowns {
+		useMixedScheduling := platform == PlatformGemini && !hasForcePlatform
+		platforms := []string{platform}
+		if useMixedScheduling {
+			platforms = append(platforms, PlatformAntigravity)
+		}
+		queryGroupID := groupID
+		includeGrouped := false
+		if s.cfg.RunMode == config.RunModeSimple {
+			queryGroupID = nil
+			includeGrouped = true
+		}
+		accounts, err := s.accountRepo.ListModelAvailabilityCandidates(ctx, queryGroupID, platforms, includeGrouped)
+		if err != nil {
+			return nil, err
+		}
+		if useMixedScheduling {
+			filtered := make([]Account, 0, len(accounts))
+			for _, acc := range accounts {
+				if acc.Platform == PlatformAntigravity && !acc.IsMixedSchedulingEnabled() {
+					continue
+				}
+				filtered = append(filtered, acc)
+			}
+			accounts = filtered
+		}
+		return accounts, nil
+	}
 	if s.schedulerSnapshot != nil {
 		accounts, _, err := s.schedulerSnapshot.ListSchedulableAccounts(ctx, groupID, platform, hasForcePlatform)
 		return accounts, err
@@ -1845,6 +1877,10 @@ func (s *GeminiMessagesCompatService) writeGeminiMappedError(c *gin.Context, acc
 			return fmt.Errorf("upstream error: %d (passthrough rule matched)", upstreamStatus)
 		}
 		return fmt.Errorf("upstream error: %d (passthrough rule matched) message=%s", upstreamStatus, upstreamMsg)
+	}
+	if s.cfg != nil && s.cfg.Gateway.PassthroughUpstreamErrors && len(body) > 0 {
+		c.Data(upstreamStatus, "application/json", body)
+		return fmt.Errorf("upstream error: %d message=%s", upstreamStatus, upstreamMsg)
 	}
 
 	var statusCode int

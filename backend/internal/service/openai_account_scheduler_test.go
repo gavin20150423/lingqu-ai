@@ -684,6 +684,41 @@ func TestOpenAIGatewayService_SubPilotNoChannelDoesNotFallBackToNativeScheduler(
 	require.Equal(t, "subpilot", decision.Layer)
 }
 
+func TestOpenAIGatewayService_SubPilotNoAvailableFallsBackToNativeScheduler(t *testing.T) {
+	resetOpenAIAdvancedSchedulerSettingCacheForTest()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, subPilotSelectPath, r.URL.Path)
+		_, _ = w.Write([]byte(`{"decision":"no_available","reason":"awaiting_probe_recovery"}`))
+	}))
+	defer server.Close()
+
+	groupID := int64(10121)
+	accounts := []Account{{
+		ID: 36141, Platform: PlatformOpenAI, Type: AccountTypeAPIKey,
+		Status: StatusActive, Schedulable: true, Concurrency: 1,
+	}}
+	cfg := &config.Config{}
+	cfg.Gateway.Scheduling.LoadBatchEnabled = false
+	cfg.Gateway.SubPilot = config.SubPilotConfig{Enabled: true, BaseURL: server.URL, TimeoutMS: 500}
+	svc := &OpenAIGatewayService{
+		accountRepo:        schedulerTestOpenAIAccountRepo{accounts: accounts},
+		cache:              &schedulerTestGatewayCache{},
+		cfg:                cfg,
+		concurrencyService: NewConcurrencyService(schedulerTestConcurrencyCache{}),
+	}
+
+	selection, decision, err := svc.SelectAccountWithScheduler(
+		context.Background(), &groupID, "", "", "gpt-5.4", nil,
+		OpenAIUpstreamTransportAny, false,
+	)
+	require.NoError(t, err)
+	require.NotNil(t, selection)
+	require.NotNil(t, selection.Account)
+	require.Equal(t, int64(36141), selection.Account.ID)
+	require.Equal(t, openAIAccountScheduleLayerLoadBalance, decision.Layer)
+}
+
 func TestOpenAIGatewayService_SubPilotReceivesFailedAccountExclusions(t *testing.T) {
 	resetOpenAIAdvancedSchedulerSettingCacheForTest()
 

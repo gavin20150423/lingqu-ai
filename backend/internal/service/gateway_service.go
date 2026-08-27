@@ -746,6 +746,9 @@ func (e *sseStreamErrorEventError) Error() string { return "have error in stream
 // TempUnscheduleRetryableError 对 RetryableOnSameAccount 类型的 failover 错误触发临时封禁。
 // 由 handler 层在同账号重试全部用尽、切换账号时调用。
 func (s *GatewayService) TempUnscheduleRetryableError(ctx context.Context, accountID int64, failoverErr *UpstreamFailoverError) {
+	if s != nil && s.ignoreAccountCooldowns() {
+		return
+	}
 	tempUnscheduleRetryableError(ctx, s.accountRepo, accountID, failoverErr)
 }
 

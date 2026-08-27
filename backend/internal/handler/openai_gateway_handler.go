@@ -2641,6 +2641,11 @@ func (h *OpenAIGatewayHandler) handleFailoverExhausted(c *gin.Context, failoverE
 		h.handleStreamingAwareError(c, status, "upstream_error", message, streamStarted)
 		return
 	}
+	if !streamStarted && h.cfg != nil && h.cfg.Gateway.PassthroughUpstreamErrors &&
+		writeRawUpstreamError(c, failoverErr.StatusCode, failoverErr.ResponseHeaders, failoverErr.ResponseBody) {
+		service.SetOpsUpstreamError(c, failoverErr.StatusCode, service.ExtractUpstreamErrorMessage(failoverErr.ResponseBody), "")
+		return
+	}
 	if isUpstreamPoolRateLimitExhausted(failoverErr) {
 		clearUpstreamPoolRetryAfter(c)
 		h.handleStreamingAwareErrorWithCode(

@@ -51,6 +51,15 @@ func (a *Account) IsSchedulableForModelWithContext(ctx context.Context, requeste
 	return true
 }
 
+// IsSchedulableForModelIgnoringCooldowns is the request-path variant used by
+// the gateway when transient upstream cooldowns are fail-open. It keeps the
+// account's persistent/manual eligibility checks but intentionally bypasses
+// account- and model-level rate-limit windows so the request still reaches an
+// upstream account.
+func (a *Account) IsSchedulableForModelIgnoringCooldowns(_ context.Context, _ string) bool {
+	return a != nil && a.IsSchedulableIgnoringCooldowns()
+}
+
 // GetRateLimitRemainingTime 获取限流剩余时间（模型级限流）
 // 返回 0 表示未限流或已过期
 func (a *Account) GetRateLimitRemainingTime(requestedModel string) time.Duration {

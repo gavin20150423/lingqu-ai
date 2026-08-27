@@ -2205,11 +2205,27 @@ func (r *accountRepository) GetGroups(ctx context.Context, accountID int64) ([]s
 	return outGroups, nil
 }
 
-func (r *accountRepository) BindGroups(ctx context.Context, accountID int64, groupIDs []int64) error {
-	existingGroupIDs, err := r.loadAccountGroupIDs(ctx, accountID)
-	if err != nil {
-		return err
+func uniqueInt64sPreserveOrder(values []int64) []int64 {
+	if len(values) < 2 {
+		return values
 	}
+	seen := make(map[int64]struct{}, len(values))
+	result := make([]int64, 0, len(values))
+	for _, value := range values {
+		if _, exists := seen[value]; exists {
+			continue
+		}
+		seen[value] = struct{}{}
+		result = append(result, value)
+	}
+	return result
+}
+
+func (r *accountRepository) BindGroups(ctx context.Context, accountID int64, groupIDs []int64) error {
+	// A repeated group ID is semantically one binding. De-duplicate at the
+	// repository boundary so every caller is protected from the account_groups
+	// primary-key conflict, including stale clients and batch/import paths.
+	groupIDs = uniqueInt64sPreserveOrder(groupIDs)
 	// 使用事务保证删除旧绑定与创建新绑定的原子性
 	tx, err := r.client.Tx(ctx)
 	if err != nil && !errors.Is(err, dbent.ErrTxStarted) {
@@ -2225,15 +2241,51 @@ func (r *accountRepository) BindGroups(ctx context.Context, accountID int64, gro
 		txClient = r.client
 	}
 
-	if _, err := txClient.AccountGroup.Delete().Where(dbaccountgroup.AccountIDEQ(accountID)).Exec(ctx); err != nil {
+	// Serialize edits initiated by instances that run this implementation.
+	// The upsert below remains the final guard against older running instances.
+	if _, err := txClient.Account.Query().
+		Where(dbaccount.IDEQ(accountID)).
+		Select(dbaccount.FieldID).
+		ForUpdate().
+		Only(ctx); err != nil {
 		return err
+	}
+	entries, err := txClient.AccountGroup.
+		Query().
+		Where(dbaccountgroup.AccountIDEQ(accountID)).
+		All(ctx)
+	if err != nil {
+		return err
+	}
+	existingGroupIDs := make([]int64, 0, len(entries))
+	for _, entry := range entries {
+		existingGroupIDs = append(existingGroupIDs, entry.GroupID)
 	}
 
 	if len(groupIDs) == 0 {
+		if _, err := txClient.AccountGroup.Delete().Where(dbaccountgroup.AccountIDEQ(accountID)).Exec(ctx); err != nil {
+			return err
+		}
 		if tx != nil {
-			return tx.Commit()
+			if err := tx.Commit(); err != nil {
+				return err
+			}
+		}
+		payload := buildSchedulerGroupPayload(existingGroupIDs)
+		if err := enqueueSchedulerOutbox(ctx, r.sql, service.SchedulerOutboxEventAccountGroupsChanged, &accountID, nil, payload); err != nil {
+			logger.LegacyPrintf("repository.account", "[SchedulerOutbox] enqueue clear groups failed: account=%d err=%v", accountID, err)
 		}
 		return nil
+	}
+
+	// Only remove bindings that are no longer requested. Keeping desired rows
+	// in place avoids a delete/insert gap where another instance can recreate a
+	// key between the two statements.
+	if _, err := txClient.AccountGroup.Delete().Where(
+		dbaccountgroup.AccountIDEQ(accountID),
+		dbaccountgroup.GroupIDNotIn(groupIDs...),
+	).Exec(ctx); err != nil {
+		return err
 	}
 
 	builders := make([]*dbent.AccountGroupCreate, 0, len(groupIDs))
@@ -2245,7 +2297,12 @@ func (r *accountRepository) BindGroups(ctx context.Context, accountID int64, gro
 		)
 	}
 
-	if _, err := txClient.AccountGroup.CreateBulk(builders...).Save(ctx); err != nil {
+	// Upsert makes the replacement idempotent even if another running instance
+	// writes the same binding without taking the account-row lock.
+	if err := txClient.AccountGroup.CreateBulk(builders...).
+		OnConflictColumns(dbaccountgroup.FieldAccountID, dbaccountgroup.FieldGroupID).
+		UpdatePriority().
+		Exec(ctx); err != nil {
 		return err
 	}
 

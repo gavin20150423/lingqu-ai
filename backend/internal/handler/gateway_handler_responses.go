@@ -368,6 +368,11 @@ func (h *GatewayHandler) handleResponsesFailoverExhausted(c *gin.Context, lastEr
 	if streamStarted {
 		return // Can't write error after stream started
 	}
+	if lastErr != nil && h.cfg != nil && h.cfg.Gateway.PassthroughUpstreamErrors &&
+		writeRawUpstreamError(c, lastErr.StatusCode, lastErr.ResponseHeaders, lastErr.ResponseBody) {
+		service.SetOpsUpstreamError(c, lastErr.StatusCode, service.ExtractUpstreamErrorMessage(lastErr.ResponseBody), "")
+		return
+	}
 	if lastErr != nil && lastErr.IsCredentialFailure() {
 		status, message := credentialFailoverClientResponse(lastErr)
 		h.responsesErrorResponse(c, status, "server_error", message)

@@ -446,6 +446,10 @@ func (s *RateLimitService) HandleUpstreamError(ctx context.Context, account *Acc
 					slog.Info("antigravity_401_force_refresh_marked", "account_id", authAccount.ID)
 				}
 			}
+			if s.cfg != nil && s.cfg.Gateway.IgnoreAccountCooldowns {
+				shouldDisable = true
+				break
+			}
 			cooldownMinutes := s.cfg.RateLimit.OAuth401CooldownMinutes
 			if cooldownMinutes <= 0 {
 				cooldownMinutes = 10
@@ -1819,6 +1823,10 @@ func persistOpenAI429PlanType(ctx context.Context, repo AccountRepository, accou
 // handle529 处理529过载错误
 // 根据配置决定是否暂停账号调度及冷却时长
 func (s *RateLimitService) handle529(ctx context.Context, account *Account) {
+	if s != nil && s.cfg != nil && s.cfg.Gateway.IgnoreAccountCooldowns {
+		slog.Info("account_529_ignored", "account_id", account.ID, "reason", "gateway_account_cooldowns_ignored")
+		return
+	}
 	var settings *OverloadCooldownSettings
 	if s.settingService != nil {
 		var err error

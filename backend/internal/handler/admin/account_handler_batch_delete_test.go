@@ -171,3 +171,22 @@ func TestAccountHandlerBatchDeleteRejectsEmptyNormalizedIDs(t *testing.T) {
 
 	require.Equal(t, http.StatusBadRequest, rec.Code)
 }
+
+func TestAccountHandlerBatchDeleteFinishesAfterRequestCancellation(t *testing.T) {
+	adminSvc := &batchDeleteAdminService{stubAdminService: newStubAdminService()}
+	router := setupAccountBatchDeleteRouter(adminSvc)
+
+	rec := httptest.NewRecorder()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/api/v1/admin/accounts/batch-delete",
+		bytes.NewBufferString(`{"account_ids":[1,2,3]}`),
+	).WithContext(ctx)
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.ElementsMatch(t, []int64{1, 2, 3}, adminSvc.deletedIDs)
+}

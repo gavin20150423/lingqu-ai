@@ -102,6 +102,9 @@ func (s *GatewayService) SelectAccountForModelWithExclusions(ctx context.Context
 // metadataUserID: 用于客户端亲和调度，从中提取客户端 ID
 // sub2apiUserID: 系统用户 ID，用于二维亲和调度
 func (s *GatewayService) SelectAccountWithLoadAwareness(ctx context.Context, groupID *int64, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}, metadataUserID string, sub2apiUserID int64) (*AccountSelectionResult, error) {
+	if excludedIDs == nil {
+		excludedIDs = make(map[int64]struct{})
+	}
 	// 调试日志：记录调度入口参数
 	excludedIDsList := make([]int64, 0, len(excludedIDs))
 	for id := range excludedIDs {
@@ -1026,6 +1029,37 @@ func (s *GatewayService) resolvePlatform(ctx context.Context, groupID *int64, gr
 }
 
 func (s *GatewayService) listSchedulableAccounts(ctx context.Context, groupID *int64, platform string, hasForcePlatform bool) ([]Account, bool, error) {
+	if s.ignoreAccountCooldowns() {
+		useMixed := (platform == PlatformAnthropic || platform == PlatformGemini) && !hasForcePlatform
+		platforms := []string{platform}
+		if useMixed {
+			platforms = append(platforms, PlatformAntigravity)
+		}
+		queryGroupID := groupID
+		includeGrouped := false
+		if s.cfg != nil && s.cfg.RunMode == config.RunModeSimple {
+			queryGroupID = nil
+			includeGrouped = true
+		}
+		accounts, err := s.accountRepo.ListModelAvailabilityCandidates(ctx, queryGroupID, platforms, includeGrouped)
+		if err != nil {
+			return nil, useMixed, err
+		}
+		if useMixed {
+			filtered := make([]Account, 0, len(accounts))
+			for _, acc := range accounts {
+				if acc.Platform == PlatformAntigravity && !acc.IsMixedSchedulingEnabled() {
+					continue
+				}
+				filtered = append(filtered, acc)
+			}
+			accounts = filtered
+		}
+		if platform == PlatformGrok || strings.EqualFold(platform, PlatformGrok) {
+			accounts = s.filterGrokFreeQuotaAccountsForGateway(ctx, accounts)
+		}
+		return accounts, useMixed, nil
+	}
 	if s.schedulerSnapshot != nil {
 		accounts, useMixed, err := s.schedulerSnapshot.ListSchedulableAccounts(ctx, groupID, platform, hasForcePlatform)
 		if err == nil {
@@ -1164,6 +1198,9 @@ func (s *GatewayService) isAccountSchedulableForSelection(account *Account) bool
 	if account == nil {
 		return false
 	}
+	if s.ignoreAccountCooldowns() {
+		return account.IsSchedulableIgnoringCooldowns()
+	}
 	return account.IsSchedulable()
 }
 
@@ -1171,7 +1208,20 @@ func (s *GatewayService) isAccountSchedulableForModelSelection(ctx context.Conte
 	if account == nil {
 		return false
 	}
+	if s.ignoreAccountCooldowns() {
+		return account.IsSchedulableForModelIgnoringCooldowns(ctx, requestedModel)
+	}
 	return account.IsSchedulableForModelWithContext(ctx, requestedModel)
+}
+
+// gatewayAccountCooldownsIgnored exposes the effective gateway policy to
+// adjacent services that share the generic account selection path.
+func (s *GatewayService) GatewayIgnoresAccountCooldowns() bool {
+	return s.ignoreAccountCooldowns()
+}
+
+func (s *GatewayService) ignoreAccountCooldowns() bool {
+	return s != nil && s.cfg != nil && s.cfg.Gateway.IgnoreAccountCooldowns
 }
 
 // isAccountInGroup checks if the account belongs to the specified group.

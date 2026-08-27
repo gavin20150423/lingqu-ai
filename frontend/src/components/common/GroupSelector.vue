@@ -101,6 +101,15 @@ const filteredGroups = computed(() => {
       result = result.filter((g) => g.platform === props.platform || g.platform === 'composite')
     }
   }
+  // The groups endpoint can briefly return duplicate rows while its cached
+  // snapshot is being refreshed. Render one checkbox per ID so one click
+  // cannot append the same group twice.
+  const seen = new Set<number>()
+  result = result.filter((group) => {
+    if (seen.has(group.id)) return false
+    seen.add(group.id)
+    return true
+  })
   if (isSearchable.value && searchText.value) {
     const q = searchText.value.toLowerCase()
     result = result.filter(
@@ -112,7 +121,7 @@ const filteredGroups = computed(() => {
 
 const handleChange = (groupId: number, checked: boolean) => {
   const newValue = checked
-    ? [...props.modelValue, groupId]
+    ? Array.from(new Set([...props.modelValue, groupId]))
     : props.modelValue.filter((id) => id !== groupId)
   emit('update:modelValue', newValue)
 }

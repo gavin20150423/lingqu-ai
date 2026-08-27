@@ -137,11 +137,11 @@ export function extractApiErrorMessage(
   if (typeof err === 'object' && err !== null) {
     const e = err as ApiErrorLike
     // Interceptor shape: { message, error }
-    if (e.message) return e.message
-    if (e.error) return e.error
+    if (typeof e.message === 'string' && e.message.trim()) return e.message
+    if (typeof e.error === 'string' && e.error.trim()) return e.error
     // Legacy axios shape: { response.data.detail }
-    if (e.response?.data?.detail) return e.response.data.detail
-    if (e.response?.data?.message) return e.response.data.message
+    if (typeof e.response?.data?.detail === 'string' && e.response.data.detail.trim()) return e.response.data.detail
+    if (typeof e.response?.data?.message === 'string' && e.response.data.message.trim()) return e.response.data.message
   }
 
   // Standard Error

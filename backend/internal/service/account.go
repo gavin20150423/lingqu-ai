@@ -408,6 +408,26 @@ func (a *Account) IsSchedulable() bool {
 	return true
 }
 
+// IsSchedulableIgnoringCooldowns is the gateway dispatch predicate used when
+// IgnoreAccountCooldowns is enabled. It deliberately ignores transient
+// upstream markers (429/529/temp-unschedulable and model-level rate limits are
+// handled by the caller), while preserving explicit operator controls, account
+// status, expiry and hard local quota limits. The persisted markers are left
+// untouched for observability and background recovery workers.
+func (a *Account) IsSchedulableIgnoringCooldowns() bool {
+	if a == nil || !a.IsActive() || !a.Schedulable {
+		return false
+	}
+	now := time.Now()
+	if a.AutoPauseOnExpired && a.ExpiresAt != nil && !now.Before(*a.ExpiresAt) {
+		return false
+	}
+	if a.IsAPIKeyOrBedrock() && a.IsQuotaExceeded() {
+		return false
+	}
+	return true
+}
+
 // IsCredentialUsableForShadow 报告本账号(作为某 spark 影子的母账号)的凭据/传输是否可被影子透传使用。
 //
 // 检查「凭据/账号/传输可用性」:

@@ -329,6 +329,7 @@ export interface PublicSettings {
   channel_monitor_default_interval_seconds: number
   /** When true, user monitor hides RPM/TPM so scale cannot be reverse-estimated. */
   channel_monitor_hide_throughput?: boolean
+  channel_monitor_show_quota?: boolean
   available_channels_enabled: boolean
   user_account_import_limit?: number
   openai_account_levels?: OpenAIAccountLevelConfig[]
@@ -589,7 +590,17 @@ export interface PaginationConfig {
 
 // ==================== API Key & Group Types ====================
 
-export type GroupPlatform = 'anthropic' | 'openai' | 'gemini' | 'antigravity' | 'grok' | 'xiaoapi' | 'composite'
+export type GroupPlatform =
+  | 'anthropic'
+  | 'openai'
+  | 'gemini'
+  | 'antigravity'
+  | 'grok'
+  | 'kimi'
+  | 'zhipu'
+  | 'deepseek'
+  | 'xiaoapi'
+  | 'composite'
 
 export type VideoModelPrices = Record<string, Record<string, number>>
 
@@ -952,7 +963,16 @@ export interface UpdateGroupRequest {
 
 // ==================== Account & Proxy Types ====================
 
-export type AccountPlatform = 'anthropic' | 'openai' | 'gemini' | 'antigravity' | 'grok' | 'xiaoapi'
+export type AccountPlatform =
+  | 'anthropic'
+  | 'openai'
+  | 'gemini'
+  | 'antigravity'
+  | 'grok'
+  | 'kimi'
+  | 'zhipu'
+  | 'deepseek'
+  | 'xiaoapi'
 export type AccountType = 'oauth' | 'setup-token' | 'apikey' | 'upstream' | 'bedrock' | 'service_account'
 export type AccountLevel = 'unknown' | (string & {})
 export type AccountShareMode = 'private' | 'public'

@@ -20,6 +20,20 @@ import (
 	"github.com/tidwall/gjson"
 )
 
+type ignoreAccountCooldownsContextKey struct{}
+
+func withIgnoreAccountCooldowns(ctx context.Context) context.Context {
+	return context.WithValue(ctx, ignoreAccountCooldownsContextKey{}, true)
+}
+
+func ignoreAccountCooldownsFromContext(ctx context.Context) bool {
+	if ctx == nil {
+		return false
+	}
+	value, _ := ctx.Value(ignoreAccountCooldownsContextKey{}).(bool)
+	return value
+}
+
 const (
 	openCodeSessionAffinityHeader = "X-Session-Affinity"
 	openCodeSessionIDHeader       = "X-Session-Id"
@@ -401,7 +415,11 @@ func openAICompatibleAccountEligibilityFailureReasonBeforeProfit(ctx context.Con
 	if account.Platform != platform || !account.IsOpenAICompatible() {
 		return "platform_mismatch"
 	}
-	if !account.IsSchedulableForModelWithContext(ctx, requestedModel) {
+	schedulable := account.IsSchedulableForModelWithContext(ctx, requestedModel)
+	if ignoreAccountCooldownsFromContext(ctx) {
+		schedulable = account.IsSchedulableForModelIgnoringCooldowns(ctx, requestedModel)
+	}
+	if !schedulable {
 		if account.IsSchedulable() {
 			return "model_rate_limited"
 		}
@@ -1477,6 +1495,22 @@ func (s *OpenAIGatewayService) selectAccountWithLoadAwareness(ctx context.Contex
 
 func (s *OpenAIGatewayService) listSchedulableAccounts(ctx context.Context, groupID *int64, platform string) ([]Account, error) {
 	platform = NormalizeOpenAICompatiblePlatform(platform)
+	if s.ignoreAccountCooldowns() {
+		queryGroupID := groupID
+		includeGrouped := false
+		if s.cfg != nil && s.cfg.RunMode == config.RunModeSimple {
+			queryGroupID = nil
+			includeGrouped = true
+		}
+		accounts, err := s.accountRepo.ListModelAvailabilityCandidates(ctx, queryGroupID, []string{platform}, includeGrouped)
+		if err != nil {
+			return nil, fmt.Errorf("query accounts failed: %w", err)
+		}
+		if platform == PlatformGrok {
+			accounts = s.filterGrokFreeQuotaAccountsForOpenAI(ctx, accounts)
+		}
+		return accounts, nil
+	}
 	if s.schedulerSnapshot != nil {
 		accounts, _, err := s.schedulerSnapshot.ListSchedulableAccounts(ctx, groupID, platform, false)
 		if err != nil {
@@ -1505,6 +1539,10 @@ func (s *OpenAIGatewayService) listSchedulableAccounts(ctx context.Context, grou
 		accounts = s.filterGrokFreeQuotaAccountsForOpenAI(ctx, accounts)
 	}
 	return accounts, nil
+}
+
+func (s *OpenAIGatewayService) ignoreAccountCooldowns() bool {
+	return s != nil && s.cfg != nil && s.cfg.Gateway.IgnoreAccountCooldowns
 }
 
 func (s *OpenAIGatewayService) tryAcquireAccountSlot(ctx context.Context, accountID int64, maxConcurrency int) (*AcquireResult, error) {
