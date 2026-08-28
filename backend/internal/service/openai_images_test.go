@@ -27,6 +27,40 @@ type failingOpenAIImageWriter struct {
 	writes    int
 }
 
+type delayedOpenAIImageWriter struct {
+	gin.ResponseWriter
+	delay time.Duration
+}
+
+type lingeringOpenAIImagesJSONBody struct {
+	reader *io.PipeReader
+	writer *io.PipeWriter
+}
+
+func newLingeringOpenAIImagesJSONBody(payload []byte) io.ReadCloser {
+	reader, writer := io.Pipe()
+	go func() {
+		_, _ = writer.Write(payload)
+		// Intentionally do not close the writer. The image handler must return
+		// after the complete JSON value instead of waiting for EOF.
+	}()
+	return &lingeringOpenAIImagesJSONBody{reader: reader, writer: writer}
+}
+
+func (b *lingeringOpenAIImagesJSONBody) Read(p []byte) (int, error) {
+	return b.reader.Read(p)
+}
+
+func (b *lingeringOpenAIImagesJSONBody) Close() error {
+	_ = b.writer.Close()
+	return b.reader.Close()
+}
+
+func (w *delayedOpenAIImageWriter) Write(p []byte) (int, error) {
+	time.Sleep(w.delay)
+	return w.ResponseWriter.Write(p)
+}
+
 type openAIImagesReadErrorBody struct {
 	err error
 }
@@ -40,6 +74,92 @@ func (w *failingOpenAIImageWriter) Write(p []byte) (int, error) {
 	}
 	w.writes++
 	return w.ResponseWriter.Write(p)
+}
+
+func TestOpenAIImagesNonStreamingDurationExcludesDownstreamWrite(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	const downstreamDelay = 100 * time.Millisecond
+
+	t.Run("api key", func(t *testing.T) {
+		body := []byte(`{"model":"gpt-image-2","prompt":"draw a cat","response_format":"b64_json"}`)
+		c, rec := newOpenAIImagesTestContext(t, body)
+		c.Writer = &delayedOpenAIImageWriter{ResponseWriter: c.Writer, delay: downstreamDelay}
+
+		svc := newOpenAIImagesTestService(&httpUpstreamRecorder{resp: openAIImagesJSONResponse()})
+		parsed, err := svc.ParseOpenAIImagesRequest(c, body)
+		require.NoError(t, err)
+
+		wallStart := time.Now()
+		result, err := svc.ForwardImages(context.Background(), c, newOpenAIImagesAPIKeyAccount(), body, parsed, "")
+		wallDuration := time.Since(wallStart)
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		require.GreaterOrEqual(t, wallDuration-result.Duration, downstreamDelay)
+		require.JSONEq(t, `{"created":1710000000,"data":[{"b64_json":"aGVsbG8="}],"usage":{"input_tokens":10,"output_tokens":20,"total_tokens":30}}`, rec.Body.String())
+	})
+
+	t.Run("oauth", func(t *testing.T) {
+		body := []byte(`{"model":"gpt-image-2","prompt":"draw a cat","response_format":"b64_json"}`)
+		c, rec := newOpenAIImagesTestContext(t, body)
+		c.Set("api_key", &APIKey{ID: 42})
+		c.Writer = &delayedOpenAIImageWriter{ResponseWriter: c.Writer, delay: downstreamDelay}
+
+		upstreamBody := "data: {\"type\":\"response.completed\",\"response\":{\"created_at\":1710000000,\"output\":[{\"type\":\"image_generation_call\",\"result\":\"aW1hZ2U=\",\"output_format\":\"png\"}]}}\n\n" +
+			"data: [DONE]\n\n"
+		svc := newOpenAIImagesTestService(&httpUpstreamRecorder{resp: &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     http.Header{"Content-Type": []string{"text/event-stream"}},
+			Body:       io.NopCloser(strings.NewReader(upstreamBody)),
+		}})
+		parsed, err := svc.ParseOpenAIImagesRequest(c, body)
+		require.NoError(t, err)
+		account := &Account{
+			ID: 32, Name: "openai-oauth-images", Platform: PlatformOpenAI, Type: AccountTypeOAuth,
+			Credentials: map[string]any{"access_token": "token-123"},
+		}
+
+		wallStart := time.Now()
+		result, err := svc.ForwardImages(context.Background(), c, account, body, parsed, "")
+		wallDuration := time.Since(wallStart)
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		require.GreaterOrEqual(t, wallDuration-result.Duration, downstreamDelay)
+		require.Equal(t, "aW1hZ2U=", gjson.Get(rec.Body.String(), "data.0.b64_json").String())
+	})
+}
+
+func TestOpenAIImagesNonStreamingJSONDoesNotWaitForEOF(t *testing.T) {
+	body := []byte(`{"model":"gpt-image-2","prompt":"draw a cat","response_format":"b64_json"}`)
+	c, rec := newOpenAIImagesTestContext(t, body)
+	responseBody := newLingeringOpenAIImagesJSONBody([]byte(`{"created":1710000000,"data":[{"b64_json":"aGVsbG8="}],"usage":{"input_tokens":10,"output_tokens":20,"total_tokens":30}}`))
+	svc := newOpenAIImagesTestService(&httpUpstreamRecorder{resp: &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Content-Type": []string{"application/json"}},
+		Body:       responseBody,
+	}})
+	parsed, err := svc.ParseOpenAIImagesRequest(c, body)
+	require.NoError(t, err)
+
+	done := make(chan struct{})
+	var result *OpenAIForwardResult
+	var forwardErr error
+	go func() {
+		result, forwardErr = svc.ForwardImages(context.Background(), c, newOpenAIImagesAPIKeyAccount(), body, parsed, "")
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(500 * time.Millisecond):
+		responseBody.Close()
+		t.Fatal("non-streaming image response waited for a delayed EOF")
+	}
+	require.NoError(t, forwardErr)
+	require.NotNil(t, result)
+	require.Equal(t, 1, result.ImageCount)
+	require.JSONEq(t, `{"created":1710000000,"data":[{"b64_json":"aGVsbG8="}],"usage":{"input_tokens":10,"output_tokens":20,"total_tokens":30}}`, rec.Body.String())
 }
 
 func TestOpenAIGatewayServiceParseOpenAIImagesRequest_JSON(t *testing.T) {
@@ -1156,7 +1276,7 @@ func TestOpenAIImagesOAuthBodyReadTransportErrorFailover(t *testing.T) {
 	account := &Account{ID: 5400, Name: "openai-oauth", Platform: PlatformOpenAI, Type: AccountTypeOAuth}
 	svc := &OpenAIGatewayService{}
 
-	_, _, _, readErr := svc.handleOpenAIImagesOAuthNonStreamingResponse(resp, c, "b64_json", "gpt-image-2")
+	_, _, _, _, readErr := svc.handleOpenAIImagesOAuthNonStreamingResponse(resp, c, "b64_json", "gpt-image-2", time.Now())
 	require.Error(t, readErr)
 	err := svc.handleOpenAIImagesOAuthResponseError(context.Background(), c, account, "gpt-image-2", "https://api.openai.com/v1/responses", resp, OpenAIImagesJSONKeepaliveAdjustedWrittenSize(c), readErr)
 

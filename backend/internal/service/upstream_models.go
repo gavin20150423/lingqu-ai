@@ -171,12 +171,27 @@ func (s *AccountTestService) buildXiaoVideoUpstreamModelsRequest(ctx context.Con
 		return nil, newUpstreamModelSyncConfigError("Invalid XiaoAPI video base URL", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, buildOpenAIModelsURL(normalizedBaseURL), nil)
+	adapter, adapterErr := videoProviderAdapterForAccount(account)
+	if adapterErr != nil {
+		return nil, newUpstreamModelSyncConfigError("Invalid XiaoAPI video adapter", adapterErr)
+	}
+	endpoint, supported := adapter.Endpoint(videoOperationModels, "")
+	if !supported {
+		return nil, newUpstreamModelSyncUnsupportedError("XiaoAPI video adapter does not expose a model list", nil)
+	}
+	modelURL, err := accountVideoEndpoint(normalizedBaseURL, endpoint.Path)
+	if err != nil {
+		return nil, newUpstreamModelSyncConfigError("Invalid XiaoAPI video model list URL", err)
+	}
+	req, err := http.NewRequestWithContext(ctx, endpoint.Method, modelURL, nil)
 	if err != nil {
 		return nil, newUpstreamModelSyncConfigError("Invalid XiaoAPI video model list URL", err)
 	}
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("Authorization", "Bearer "+apiKey)
+	adapter.Authorize(req, apiKey)
+	for name, value := range adapter.StaticHeaders() {
+		req.Header.Set(name, value)
+	}
 	account.ApplyHeaderOverrides(req.Header)
 	return req, nil
 }

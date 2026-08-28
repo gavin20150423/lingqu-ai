@@ -476,7 +476,10 @@ func validateXiaoAPIAccount(account *Account) error {
 		return infraerrors.BadRequest("XIAOAPI_API_KEY_REQUIRED", "xiaoapi api_key is required")
 	}
 	if account.XiaoVideoProtocol() == "" {
-		return infraerrors.BadRequest("XIAOAPI_VIDEO_PROTOCOL_INVALID", "xiaoapi video_protocol must be native or openai_sora")
+		return infraerrors.BadRequest("XIAOAPI_VIDEO_PROTOCOL_INVALID", "xiaoapi video_protocol is invalid")
+	}
+	if _, err := videoProviderAdapterForAccount(account); err != nil {
+		return infraerrors.Newf(http.StatusBadRequest, "XIAOAPI_VIDEO_ADAPTER_INVALID", "%v", err)
 	}
 	rawBaseURL := strings.TrimSpace(account.GetCredential("base_url"))
 	baseURL, err := url.Parse(rawBaseURL)

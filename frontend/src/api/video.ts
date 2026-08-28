@@ -162,6 +162,13 @@ export async function uploadVideoMedia(
 ): Promise<UploadedVideoMedia> {
   const form = new FormData()
   form.append('file', file, file.name)
+  // CTMOAI's media gateway requires an explicit media collection type. The
+  // native gateway ignores this field, so keeping it on every upload keeps
+  // both protocols compatible for browser and API clients.
+  const mediaType = file.type.startsWith('video/')
+    ? 'videos'
+    : file.type.startsWith('audio/') ? 'audios' : 'images'
+  form.append('type', mediaType)
   return videoRequest<UploadedVideoMedia>(apiKey, '/v1/videos/uploads', {
     method: 'POST',
     body: form,

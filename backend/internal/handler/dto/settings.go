@@ -25,6 +25,11 @@ type CustomEndpoint struct {
 	Description string `json:"description"`
 }
 
+type UserMenuConfig struct {
+	Visibility map[string]bool `json:"visibility,omitempty"`
+	Order      []string        `json:"order,omitempty"`
+}
+
 // SystemSettings represents the admin settings API response payload.
 type SystemSettings struct {
 	RegistrationEnabled                 bool                     `json:"registration_enabled"`
@@ -164,6 +169,7 @@ type SystemSettings struct {
 	TablePageSizeOptions        []int            `json:"table_page_size_options"`
 	CustomMenuItems             []CustomMenuItem `json:"custom_menu_items"`
 	CustomEndpoints             []CustomEndpoint `json:"custom_endpoints"`
+	UserMenuConfig              UserMenuConfig   `json:"user_menu_config"`
 
 	DefaultConcurrency           int                          `json:"default_concurrency"`
 	DefaultBalance               float64                      `json:"default_balance"`
@@ -391,6 +397,7 @@ type PublicSettings struct {
 	TablePageSizeOptions                []int                    `json:"table_page_size_options"`
 	CustomMenuItems                     []CustomMenuItem         `json:"custom_menu_items"`
 	CustomEndpoints                     []CustomEndpoint         `json:"custom_endpoints"`
+	UserMenuConfig                      UserMenuConfig           `json:"user_menu_config"`
 	DingTalkOAuthEnabled                bool                     `json:"dingtalk_oauth_enabled"`
 	LinuxDoOAuthEnabled                 bool                     `json:"linuxdo_oauth_enabled"`
 	WeChatOAuthEnabled                  bool                     `json:"wechat_oauth_enabled"`
@@ -606,4 +613,18 @@ func ParseCustomEndpoints(raw string) []CustomEndpoint {
 		return []CustomEndpoint{}
 	}
 	return items
+}
+
+func ParseUserMenuConfig(raw string) UserMenuConfig {
+	var config UserMenuConfig
+	if err := json.Unmarshal([]byte(strings.TrimSpace(raw)), &config); err != nil {
+		return UserMenuConfig{Visibility: map[string]bool{}, Order: []string{}}
+	}
+	if config.Visibility == nil {
+		config.Visibility = map[string]bool{}
+	}
+	if config.Order == nil {
+		config.Order = []string{}
+	}
+	return config
 }

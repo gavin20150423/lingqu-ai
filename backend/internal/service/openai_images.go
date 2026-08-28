@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"mime"
@@ -713,7 +714,7 @@ func (s *OpenAIGatewayService) forwardOpenAIImagesAPIKey(
 			ImageOutputSizes: imageOutputSizes,
 		}, nil
 	} else {
-		nonStreamUsage, nonStreamCount, nonStreamSizes, err := s.handleOpenAIImagesNonStreamingResponse(resp, c)
+		nonStreamUsage, nonStreamCount, nonStreamSizes, upstreamDuration, err := s.handleOpenAIImagesNonStreamingResponse(resp, c, upstreamStart)
 		if err != nil {
 			return nil, err
 		}
@@ -728,7 +729,7 @@ func (s *OpenAIGatewayService) forwardOpenAIImagesAPIKey(
 			UpstreamModel:    upstreamModel,
 			Stream:           parsed.Stream,
 			ResponseHeaders:  resp.Header.Clone(),
-			Duration:         time.Since(startTime),
+			Duration:         upstreamDuration,
 			FirstTokenMs:     firstTokenMs,
 			ImageCount:       imageCount,
 			ImageSize:        parsed.SizeTier,
@@ -884,11 +885,23 @@ func cloneMultipartHeader(src textproto.MIMEHeader) textproto.MIMEHeader {
 	return dst
 }
 
-func (s *OpenAIGatewayService) handleOpenAIImagesNonStreamingResponse(resp *http.Response, c *gin.Context) (OpenAIUsage, int, []string, error) {
-	body, err := ReadUpstreamResponseBody(resp.Body, s.cfg, c, openAITooLargeError)
+func (s *OpenAIGatewayService) handleOpenAIImagesNonStreamingResponse(
+	resp *http.Response,
+	c *gin.Context,
+	startTime time.Time,
+) (OpenAIUsage, int, []string, time.Duration, error) {
+	body, err := s.readOpenAIImagesNonStreamingResponseBody(resp, c)
 	if err != nil {
-		return OpenAIUsage{}, 0, nil, err
+		return OpenAIUsage{}, 0, nil, 0, err
 	}
+	// Capture the upstream wait before parsing/accounting and before writing to
+	// the downstream response. A delayed chunked-body EOF must not turn into
+	// minutes of reported model time once the JSON payload is complete.
+	upstreamDuration := time.Since(startTime)
+	usage, _ := extractOpenAIUsageFromJSONBytes(body)
+	imageCount := extractOpenAIImageCountFromJSONBytes(body)
+	imageOutputSizes := collectOpenAIResponseImageOutputSizesFromJSONBytes(body)
+
 	responseheaders.WriteFilteredHeaders(c.Writer.Header(), resp.Header, s.responseHeaderFilter)
 	contentType := "application/json"
 	if s.cfg != nil && !s.cfg.Security.ResponseHeaders.Enabled {
@@ -898,8 +911,42 @@ func (s *OpenAIGatewayService) handleOpenAIImagesNonStreamingResponse(resp *http
 	}
 	c.Data(resp.StatusCode, contentType, body)
 
-	usage, _ := extractOpenAIUsageFromJSONBytes(body)
-	return usage, extractOpenAIImageCountFromJSONBytes(body), collectOpenAIResponseImageOutputSizesFromJSONBytes(body), nil
+	return usage, imageCount, imageOutputSizes, upstreamDuration, nil
+}
+
+// readOpenAIImagesNonStreamingResponseBody stops after one complete JSON value
+// for JSON responses. Some OpenAI-compatible upstreams send a chunked JSON
+// payload and delay the terminal chunk; waiting for io.EOF would incorrectly
+// add that idle time to image generation latency.
+func (s *OpenAIGatewayService) readOpenAIImagesNonStreamingResponseBody(resp *http.Response, c *gin.Context) ([]byte, error) {
+	if resp == nil || resp.Body == nil {
+		return nil, errors.New("response body is nil")
+	}
+	contentType := strings.ToLower(strings.TrimSpace(resp.Header.Get("Content-Type")))
+	if !strings.Contains(contentType, "json") {
+		return ReadUpstreamResponseBody(resp.Body, s.cfg, c, openAITooLargeError)
+	}
+
+	maxBytes := resolveUpstreamResponseReadLimit(s.cfg)
+	if maxBytes <= 0 {
+		maxBytes = defaultUpstreamResponseReadMaxBytes
+	}
+	limited := &io.LimitedReader{R: resp.Body, N: maxBytes + 1}
+	var payload json.RawMessage
+	if err := json.NewDecoder(limited).Decode(&payload); err != nil {
+		if limited.N <= 0 {
+			setOpsUpstreamError(c, http.StatusBadGateway, "upstream response too large", "")
+			openAITooLargeError(c)
+			return nil, fmt.Errorf("%w: limit=%d", ErrUpstreamResponseBodyTooLarge, maxBytes)
+		}
+		return nil, err
+	}
+	if limited.N <= 0 || int64(len(payload)) > maxBytes {
+		setOpsUpstreamError(c, http.StatusBadGateway, "upstream response too large", "")
+		openAITooLargeError(c)
+		return nil, fmt.Errorf("%w: limit=%d", ErrUpstreamResponseBodyTooLarge, maxBytes)
+	}
+	return append([]byte(nil), payload...), nil
 }
 
 func (s *OpenAIGatewayService) handleOpenAIImagesStreamingResponse(

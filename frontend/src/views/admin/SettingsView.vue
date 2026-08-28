@@ -6609,6 +6609,62 @@
             </div>
           </div>
 
+          <!-- Native user menu visibility and order -->
+          <div class="card">
+            <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
+              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+                {{ localText("用户侧菜单", "User navigation") }}
+              </h2>
+              <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                {{ localText("控制用户左侧菜单的显示状态和排列顺序。保存后桌面端与移动端同时生效。", "Control visibility and order for the user navigation on desktop and mobile.") }}
+              </p>
+            </div>
+            <div class="divide-y divide-gray-100 px-6 dark:divide-dark-700">
+              <div
+                v-for="(item, index) in orderedUserMenuAdminItems"
+                :key="item.id"
+                class="flex items-center gap-4 py-3"
+              >
+                <span class="flex h-8 w-8 items-center justify-center rounded-md bg-gray-100 text-gray-600 dark:bg-dark-700 dark:text-gray-300">
+                  <Icon :name="item.icon" size="sm" />
+                </span>
+                <div class="min-w-0 flex-1">
+                  <p class="text-sm font-medium text-gray-900 dark:text-white">{{ item.label }}</p>
+                  <p class="text-xs text-gray-500 dark:text-gray-400">{{ item.path }}</p>
+                </div>
+                <div class="flex items-center gap-1">
+                  <button
+                    type="button"
+                    class="rounded-md p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-30 dark:hover:bg-dark-700 dark:hover:text-gray-200"
+                    :disabled="index === 0"
+                    :title="localText('上移', 'Move up')"
+                    @click="moveUserMenuItem(index, -1)"
+                  >
+                    <Icon name="chevronUp" size="sm" />
+                  </button>
+                  <button
+                    type="button"
+                    class="rounded-md p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-30 dark:hover:bg-dark-700 dark:hover:text-gray-200"
+                    :disabled="index === orderedUserMenuAdminItems.length - 1"
+                    :title="localText('下移', 'Move down')"
+                    @click="moveUserMenuItem(index, 1)"
+                  >
+                    <Icon name="chevronDown" size="sm" />
+                  </button>
+                </div>
+                <div class="flex w-24 items-center justify-end gap-2">
+                  <span class="text-xs text-gray-500 dark:text-gray-400">
+                    {{ isUserMenuItemVisible(item.id) ? localText("显示", "Shown") : localText("隐藏", "Hidden") }}
+                  </span>
+                  <Toggle
+                    :model-value="isUserMenuItemVisible(item.id)"
+                    @update:model-value="setUserMenuItemVisible(item.id, $event)"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
           <!-- Custom Menu Items -->
           <div class="card">
             <div
@@ -9642,6 +9698,10 @@ const form = reactive<SettingsForm>({
     endpoint: string;
     description: string;
   }>,
+  user_menu_config: {
+    visibility: {},
+    order: [],
+  },
   frontend_url: "",
   smtp_host: "",
   smtp_port: 587,
@@ -10632,6 +10692,50 @@ function moveMenuItem(index: number, direction: -1 | 1) {
   });
 }
 
+const defaultUserMenuAdminItems = [
+  { id: "dashboard", label: localText("首页", "Home"), path: "/dashboard", icon: "home" },
+  { id: "keys", label: "Key", path: "/keys", icon: "key" },
+  { id: "usage", label: localText("使用记录", "Usage"), path: "/usage", icon: "chart" },
+  { id: "purchase", label: localText("充值与订阅", "Recharge & Plans"), path: "/purchase", icon: "dollar" },
+  { id: "subscriptions", label: localText("我的订阅", "My Subscriptions"), path: "/subscriptions", icon: "calendar" },
+  { id: "ai-creation", label: localText("AI 创作", "AI Creation"), path: "/ai-creation", icon: "sparkles" },
+  { id: "images", label: localText("图工坊", "Image Studio"), path: "/images", icon: "image" },
+  { id: "videos", label: localText("视频工作台", "Video Studio"), path: "/videos", icon: "play" },
+  { id: "store", label: localText("发卡商城", "Store"), path: "/store", icon: "gift" },
+  { id: "account-share", label: localText("账号共享", "Account Sharing"), path: "/account-share", icon: "users" },
+  { id: "conversations", label: localText("工单服务", "Support"), path: "/conversations", icon: "chat" },
+  { id: "monitor", label: localText("服务状态", "Status"), path: "/monitor", icon: "server" },
+  { id: "billing", label: localText("账单中心", "Billing"), path: "/billing", icon: "creditCard" },
+] as const;
+
+const orderedUserMenuAdminItems = computed(() => {
+  const byID = new Map(defaultUserMenuAdminItems.map((item) => [item.id, item]));
+  const ordered = (form.user_menu_config.order || [])
+    .map((id) => byID.get(id as (typeof defaultUserMenuAdminItems)[number]["id"]))
+    .filter((item): item is (typeof defaultUserMenuAdminItems)[number] => Boolean(item));
+  const included = new Set(ordered.map((item) => item.id));
+  return [...ordered, ...defaultUserMenuAdminItems.filter((item) => !included.has(item.id))];
+});
+
+function isUserMenuItemVisible(id: string): boolean {
+  return form.user_menu_config.visibility?.[id] !== false;
+}
+
+function setUserMenuItemVisible(id: string, visible: boolean): void {
+  form.user_menu_config.visibility = {
+    ...(form.user_menu_config.visibility || {}),
+    [id]: visible,
+  };
+}
+
+function moveUserMenuItem(index: number, direction: -1 | 1): void {
+  const items = orderedUserMenuAdminItems.value.map((item) => item.id);
+  const targetIndex = index + direction;
+  if (targetIndex < 0 || targetIndex >= items.length) return;
+  [items[index], items[targetIndex]] = [items[targetIndex], items[index]];
+  form.user_menu_config.order = items;
+}
+
 // Custom endpoint management
 function addEndpoint() {
   form.custom_endpoints.push({ name: "", endpoint: "", description: "" });
@@ -11238,6 +11342,7 @@ async function saveSettings() {
       table_page_size_options: form.table_page_size_options,
       custom_menu_items: form.custom_menu_items,
       custom_endpoints: form.custom_endpoints,
+      user_menu_config: form.user_menu_config,
       frontend_url: form.frontend_url,
       smtp_host: form.smtp_host,
       smtp_port: form.smtp_port,

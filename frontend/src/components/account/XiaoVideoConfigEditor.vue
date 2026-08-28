@@ -35,7 +35,7 @@
       </div>
       <div class="overflow-x-auto">
         <div class="divide-y divide-gray-200 border-y border-gray-200 dark:divide-dark-600 dark:border-dark-600">
-          <div v-for="(rule, index) in pricing" :key="index" class="grid grid-cols-2 items-end gap-2 py-3 sm:grid-cols-[1.25fr_0.8fr_0.85fr_0.85fr_0.7fr_0.65fr_2.5rem]">
+          <div v-for="(rule, index) in pricing" :key="index" class="grid grid-cols-2 items-end gap-2 py-3 sm:grid-cols-[1.25fr_0.75fr_0.75fr_0.85fr_0.85fr_0.7fr_0.65fr_2.5rem]">
             <label class="col-span-2 min-w-0 text-xs text-gray-500 dark:text-gray-400 sm:col-span-1">
               {{ t('admin.accounts.xiaoapi.publicModel') }}
               <input v-model="rule.model" type="text" class="input mt-1" :data-testid="`xiao-price-model-${index}`" />
@@ -45,11 +45,18 @@
               <input v-model="rule.resolution" type="text" class="input mt-1" placeholder="720p" :data-testid="`xiao-price-resolution-${index}`" />
             </label>
             <label class="min-w-0 text-xs text-gray-500 dark:text-gray-400">
-              {{ t('admin.accounts.xiaoapi.pricePerSecond') }}
+              {{ t('admin.accounts.xiaoapi.billingUnit') }}
+              <select class="input mt-1" :value="rule.billing_unit ?? 'per_second'" :data-testid="`xiao-price-unit-${index}`" @change="setBillingUnit(index, $event)">
+                <option value="per_second">{{ t('admin.accounts.xiaoapi.perSecond') }}</option>
+                <option value="per_request">{{ t('admin.accounts.xiaoapi.perRequest') }}</option>
+              </select>
+            </label>
+            <label class="min-w-0 text-xs text-gray-500 dark:text-gray-400">
+              {{ rule.billing_unit === 'per_request' ? t('admin.accounts.xiaoapi.pricePerRequest') : t('admin.accounts.xiaoapi.pricePerSecond') }}
               <input v-model.number="rule.price_per_second" type="number" min="0" step="0.00000001" class="input mt-1" :data-testid="`xiao-price-base-${index}`" />
             </label>
             <label class="min-w-0 text-xs text-gray-500 dark:text-gray-400">
-              {{ t('admin.accounts.xiaoapi.audioPricePerSecond') }}
+              {{ rule.billing_unit === 'per_request' ? t('admin.accounts.xiaoapi.audioPricePerRequest') : t('admin.accounts.xiaoapi.audioPricePerSecond') }}
               <input v-model.number="rule.audio_price_per_second" type="number" min="0" step="0.00000001" class="input mt-1" :data-testid="`xiao-price-audio-${index}`" />
             </label>
             <label class="min-w-0 text-xs text-gray-500 dark:text-gray-400">
@@ -103,5 +110,12 @@ function setDefault(index: number, event: Event) {
   pricing.value.forEach((rule, ruleIndex) => {
     if (ruleIndex !== index && rule.model.trim() === model) rule.default_resolution = false
   })
+}
+
+function setBillingUnit(index: number, event: Event) {
+  const rule = pricing.value[index]
+  if (!rule) return
+  const value = (event.target as HTMLSelectElement).value
+  rule.billing_unit = value === 'per_request' ? 'per_request' : undefined
 }
 </script>

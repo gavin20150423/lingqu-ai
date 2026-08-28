@@ -121,6 +121,7 @@ const openAIEndpointCapabilitiesCredentialKey = "openai_capabilities"
 const (
 	XiaoVideoPricingCredentialKey  = "video_pricing"
 	XiaoVideoProtocolCredentialKey = "video_protocol"
+	XiaoVideoAdapterCredentialKey  = "video_adapter"
 	// XiaoVideoReferenceVideoMultiplierCredentialKey optionally overrides the
 	// provider-specific reference-video surcharge for an account. AIStartLab
 	// accounts use 1.5 automatically when this value is omitted.
@@ -128,6 +129,8 @@ const (
 
 	XiaoVideoProtocolNative     = "native"
 	XiaoVideoProtocolOpenAISora = "openai_sora"
+	XiaoVideoProtocolCustomJSON = "custom_json"
+	XiaoVideoProtocolCTMOAI     = "ctmoai"
 )
 
 // XiaoVideoProtocol returns the upstream wire protocol. Existing accounts
@@ -139,8 +142,8 @@ func (a *Account) XiaoVideoProtocol() string {
 	switch strings.ToLower(strings.TrimSpace(a.GetCredential(XiaoVideoProtocolCredentialKey))) {
 	case "", XiaoVideoProtocolNative:
 		return XiaoVideoProtocolNative
-	case XiaoVideoProtocolOpenAISora:
-		return XiaoVideoProtocolOpenAISora
+	case XiaoVideoProtocolOpenAISora, XiaoVideoProtocolCustomJSON, XiaoVideoProtocolCTMOAI:
+		return strings.ToLower(strings.TrimSpace(a.GetCredential(XiaoVideoProtocolCredentialKey)))
 	default:
 		return ""
 	}
@@ -182,6 +185,7 @@ func (a *Account) XiaoVideoReferenceVideoMultiplier() float64 {
 type XiaoVideoPricingRule struct {
 	Model               string  `json:"model"`
 	Resolution          string  `json:"resolution"`
+	BillingUnit         string  `json:"billing_unit,omitempty"`
 	PricePerSecond      float64 `json:"price_per_second"`
 	AudioPricePerSecond float64 `json:"audio_price_per_second,omitempty"`
 	DefaultResolution   bool    `json:"default_resolution,omitempty"`
@@ -276,6 +280,12 @@ func (a *Account) XiaoVideoPricingRules() ([]XiaoVideoPricingRule, error) {
 		rule := &rules[i]
 		rule.Model = strings.TrimSpace(rule.Model)
 		rule.Resolution = strings.TrimSpace(rule.Resolution)
+		if strings.TrimSpace(rule.BillingUnit) != "" {
+			rule.BillingUnit = normalizeXiaoVideoBillingUnit(rule.BillingUnit)
+			if rule.BillingUnit == "" {
+				return nil, fmt.Errorf("xiaoapi video pricing rule %d has an invalid billing_unit", i+1)
+			}
+		}
 		if rule.Model == "" || len(rule.Model) > 128 {
 			return nil, fmt.Errorf("xiaoapi video pricing rule %d has an invalid model", i+1)
 		}
@@ -362,7 +372,10 @@ func (a *Account) XiaoVideoPriceWithReferenceVideo(model, resolution string, dur
 	if audio {
 		rate += selected.AudioPricePerSecond
 	}
-	amount := float64(duration) * rate
+	amount := rate
+	if selected.BillingUnit != "per_request" {
+		amount *= float64(duration)
+	}
 	if referenceVideo {
 		amount *= a.XiaoVideoReferenceVideoMultiplier()
 	}
@@ -370,6 +383,17 @@ func (a *Account) XiaoVideoPriceWithReferenceVideo(model, resolution string, dur
 		return 0, "", 0, false
 	}
 	return amount, selected.Resolution, duration, true
+}
+
+func normalizeXiaoVideoBillingUnit(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "request", "per_request", "per-request", "task", "per_task", "per-task":
+		return "per_request"
+	case "second", "per_second", "per-second":
+		return "per_second"
+	default:
+		return ""
+	}
 }
 
 func (a *Account) EffectiveLoadFactor() int {

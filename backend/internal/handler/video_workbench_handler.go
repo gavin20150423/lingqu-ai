@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
@@ -38,12 +39,36 @@ func (h *VideoWorkbenchHandler) owner(c *gin.Context) (service.VideoOwner, bool)
 	if value == "" {
 		value = strings.TrimSpace(c.Query("key_id"))
 	}
-	keyID, err := strconv.ParseInt(value, 10, 64)
-	if err != nil || keyID <= 0 {
-		videoError(c, infraerrors.New(http.StatusBadRequest, "VIDEO_KEY_REQUIRED", "a video API key must be selected"))
-		return service.VideoOwner{}, false
+	var key *service.APIKey
+	var err error
+	if value != "" {
+		keyID, parseErr := strconv.ParseInt(value, 10, 64)
+		if parseErr != nil || keyID <= 0 {
+			videoError(c, infraerrors.New(http.StatusBadRequest, "VIDEO_KEY_INVALID", "the selected video API key is invalid"))
+			return service.VideoOwner{}, false
+		}
+		key, err = h.keys.GetByID(c.Request.Context(), keyID)
+	} else {
+		// The starter UI intentionally has no project-specific key picker. Resolve
+		// the first active key with an enabled video group, while still accepting
+		// X-Video-Key-Id for deployments that need explicit key selection.
+		keys, _, listErr := h.keys.List(c.Request.Context(), subject.UserID, pagination.PaginationParams{Page: 1, PageSize: 100, SortBy: "created_at", SortOrder: "asc"}, service.APIKeyListFilters{})
+		if listErr != nil {
+			videoError(c, listErr)
+			return service.VideoOwner{}, false
+		}
+		for index := range keys {
+			candidate := &keys[index]
+			if candidate.IsActive() && candidate.GroupID != nil && h.video.ActiveForGroup(c.Request.Context(), candidate.GroupID) {
+				key = candidate
+				break
+			}
+		}
+		if key == nil {
+			videoError(c, infraerrors.New(http.StatusForbidden, "VIDEO_KEY_REQUIRED", "no active video API key is available"))
+			return service.VideoOwner{}, false
+		}
 	}
-	key, err := h.keys.GetByID(c.Request.Context(), keyID)
 	if err != nil || key == nil || key.UserID != subject.UserID {
 		videoError(c, service.ErrVideoResourceNotFound)
 		return service.VideoOwner{}, false
@@ -181,7 +206,7 @@ func (h *VideoWorkbenchHandler) List(c *gin.Context) {
 	}
 	data := make([]map[string]any, 0, len(jobs))
 	for _, job := range jobs {
-		data = append(data, publicVideoJob(job))
+		data = append(data, publicWorkbenchVideoJob(job))
 	}
 	c.JSON(http.StatusOK, gin.H{"object": "list", "data": data})
 }
@@ -196,7 +221,7 @@ func (h *VideoWorkbenchHandler) Get(c *gin.Context) {
 		videoError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, publicVideoJob(job))
+	c.JSON(http.StatusOK, publicWorkbenchVideoJob(job))
 }
 
 func (h *VideoWorkbenchHandler) Cancel(c *gin.Context) {
@@ -209,7 +234,16 @@ func (h *VideoWorkbenchHandler) Cancel(c *gin.Context) {
 		videoError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, publicVideoJob(job))
+	c.JSON(http.StatusOK, publicWorkbenchVideoJob(job))
+}
+
+func publicWorkbenchVideoJob(job *service.VideoJob) map[string]any {
+	out := publicVideoJob(job)
+	out["status_url"] = "/api/v1/video/jobs/" + job.JobID
+	if job.Status == "completed" {
+		out["content_url"] = "/api/v1/video/jobs/" + job.JobID + "/content"
+	}
+	return out
 }
 
 func (h *VideoWorkbenchHandler) Content(c *gin.Context) {

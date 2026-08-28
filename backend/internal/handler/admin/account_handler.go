@@ -2825,6 +2825,7 @@ func (h *AccountHandler) SyncUpstreamModelsPreview(c *gin.Context) {
 		BaseURL       string `json:"base_url"`
 		APIKey        string `json:"api_key" binding:"required"`
 		VideoProtocol string `json:"video_protocol"`
+		VideoAdapter  any    `json:"video_adapter"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.BadRequest(c, "Invalid request: "+err.Error())
@@ -2838,6 +2839,7 @@ func (h *AccountHandler) SyncUpstreamModelsPreview(c *gin.Context) {
 			"api_key":        req.APIKey,
 			"base_url":       req.BaseURL,
 			"video_protocol": req.VideoProtocol,
+			"video_adapter":  req.VideoAdapter,
 		},
 	}
 

@@ -82,10 +82,6 @@ func (h *XiaoVideoHandler) Create(c *gin.Context) {
 		videoError(c, service.ErrVideoRequestInvalid)
 		return
 	}
-	if !videoPreferRespondAsync(c.GetHeader("Prefer")) {
-		videoError(c, infraerrors.New(http.StatusBadRequest, "ASYNC_REQUIRED", "Prefer: respond-async is required"))
-		return
-	}
 	body, err := io.ReadAll(io.LimitReader(c.Request.Body, 2<<20))
 	if err != nil || len(body) == 0 {
 		videoError(c, service.ErrVideoRequestInvalid)
@@ -100,7 +96,12 @@ func (h *XiaoVideoHandler) Create(c *gin.Context) {
 		return
 	}
 	location := "/v1/videos/jobs/" + job.JobID
-	c.Header("Preference-Applied", "respond-async")
+	if strings.HasSuffix(strings.TrimRight(c.Request.URL.Path, "/"), "/videos") {
+		location = "/v1/videos/" + job.JobID
+	}
+	if videoPreferRespondAsync(c.GetHeader("Prefer")) {
+		c.Header("Preference-Applied", "respond-async")
+	}
 	c.Header("Location", location)
 	c.JSON(http.StatusAccepted, gin.H{"job_id": job.JobID, "status": job.Status, "status_url": location})
 }
@@ -110,7 +111,11 @@ func (h *XiaoVideoHandler) Get(c *gin.Context) {
 	if !ok {
 		return
 	}
-	job, err := h.service.Get(c.Request.Context(), owner, c.Param("job_id"))
+	jobID := c.Param("job_id")
+	if jobID == "" {
+		jobID = c.Param("request_id")
+	}
+	job, err := h.service.Get(c.Request.Context(), owner, jobID)
 	if err != nil {
 		videoError(c, err)
 		return
@@ -154,7 +159,11 @@ func (h *XiaoVideoHandler) Content(c *gin.Context) {
 	if !ok {
 		return
 	}
-	resp, err := h.service.OpenContent(c.Request.Context(), owner, c.Param("job_id"), c.GetHeader("Range"), c.Request.URL.RawQuery)
+	jobID := c.Param("job_id")
+	if jobID == "" {
+		jobID = c.Param("request_id")
+	}
+	resp, err := h.service.OpenContent(c.Request.Context(), owner, jobID, c.GetHeader("Range"), c.Request.URL.RawQuery)
 	if err != nil {
 		videoError(c, err)
 		return
@@ -498,6 +507,12 @@ func videoPreferRespondAsync(value string) bool {
 }
 
 func safeVideoUpstreamError(status int, body []byte) (string, string, bool) {
+	// A few providers return an empty body for permission failures. Preserve
+	// the actionable cause instead of reducing a definitive 403 to a generic
+	// upstream failure message.
+	if status == http.StatusForbidden {
+		return "VIDEO_UPSTREAM_FORBIDDEN", "video upstream denied this model or API key permission", true
+	}
 	var envelope struct {
 		Error struct {
 			Code    string `json:"code"`
@@ -527,6 +542,7 @@ func safeVideoUpstreamError(status int, body []byte) (string, string, bool) {
 		"VIDEO_PROMPT_ASPECT_RATIO_CONFLICT":     {http.StatusUnprocessableEntity, "prompt aspect ratio conflicts with the selected option"},
 		"VIDEO_PROMPT_DURATION_CONFLICT":         {http.StatusUnprocessableEntity, "prompt duration conflicts with the selected option"},
 		"VIDEO_OPTION_UNSUPPORTED":               {http.StatusUnprocessableEntity, "video option is not supported by this model"},
+		"VIDEO_UPSTREAM_FORBIDDEN":               {http.StatusForbidden, "video upstream denied this model or API key permission"},
 		"VIDEO_CAPACITY_EXHAUSTED":               {http.StatusTooManyRequests, "video capacity is temporarily exhausted"},
 	}
 	code := strings.TrimSpace(envelope.Error.Code)

@@ -86,6 +86,20 @@ func TestVideoErrorSanitizesUpstreamBody(t *testing.T) {
 	require.True(t, strings.Contains(recorder.Body.String(), "VIDEO_UPSTREAM_ERROR"))
 }
 
+func TestVideoErrorExplainsForbiddenUpstreamModel(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	videoError(ctx, &service.VideoUpstreamError{
+		Status: http.StatusForbidden,
+		Header: make(http.Header),
+		Body:   nil,
+	})
+	require.Equal(t, http.StatusServiceUnavailable, recorder.Code)
+	require.Contains(t, recorder.Body.String(), "VIDEO_UPSTREAM_FORBIDDEN")
+	require.Contains(t, recorder.Body.String(), "model or API key permission")
+}
+
 func TestVideoErrorPreservesDocumentedCodeWithoutLeakingMessage(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	recorder := httptest.NewRecorder()

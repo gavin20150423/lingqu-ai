@@ -168,6 +168,7 @@ type UpdateSettingsRequest struct {
 	TablePageSizeOptions        []int                 `json:"table_page_size_options"`
 	CustomMenuItems             *[]dto.CustomMenuItem `json:"custom_menu_items"`
 	CustomEndpoints             *[]dto.CustomEndpoint `json:"custom_endpoints"`
+	UserMenuConfig              *dto.UserMenuConfig   `json:"user_menu_config"`
 
 	// 默认配置
 	DefaultConcurrency                        int                               `json:"default_concurrency"`
@@ -1248,6 +1249,18 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 	)
 
 	customMenuJSON := previousSettings.CustomMenuItems
+	userMenuJSON := previousSettings.UserMenuConfig
+	if req.UserMenuConfig != nil {
+		if req.UserMenuConfig.Visibility == nil {
+			req.UserMenuConfig.Visibility = map[string]bool{}
+		}
+		encoded, err := json.Marshal(req.UserMenuConfig)
+		if err != nil {
+			response.BadRequest(c, "Invalid user menu configuration")
+			return
+		}
+		userMenuJSON = string(encoded)
+	}
 	if req.CustomMenuItems != nil {
 		items := *req.CustomMenuItems
 		if len(items) > maxCustomMenuItems {
@@ -1611,6 +1624,7 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		TablePageSizeOptions:                   req.TablePageSizeOptions,
 		CustomMenuItems:                        customMenuJSON,
 		CustomEndpoints:                        customEndpointsJSON,
+		UserMenuConfig:                         userMenuJSON,
 		DefaultConcurrency:                     req.DefaultConcurrency,
 		DefaultBalance:                         req.DefaultBalance,
 		AffiliateRebateRate:                    affiliateRebateRate,
@@ -2197,6 +2211,7 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		TablePageSizeOptions:                                   updatedSettings.TablePageSizeOptions,
 		CustomMenuItems:                                        dto.ParseCustomMenuItems(updatedSettings.CustomMenuItems),
 		CustomEndpoints:                                        dto.ParseCustomEndpoints(updatedSettings.CustomEndpoints),
+		UserMenuConfig:                                         dto.ParseUserMenuConfig(updatedSettings.UserMenuConfig),
 		DefaultConcurrency:                                     updatedSettings.DefaultConcurrency,
 		DefaultBalance:                                         updatedSettings.DefaultBalance,
 		AffiliateRebateRate:                                    updatedSettings.AffiliateRebateRate,

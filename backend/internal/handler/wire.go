@@ -212,6 +212,7 @@ func ProvideHandlers(
 	asyncImageHandler *AsyncImageHandler,
 	batchImageHandler *BatchImageHandler,
 	xiaoVideoHandler *XiaoVideoHandler,
+	videoWorkbenchHandler *VideoWorkbenchHandler,
 	communityHandler *CommunityHandler,
 	_ *service.IdempotencyCoordinator,
 	_ *service.IdempotencyCleanupService,
@@ -246,6 +247,7 @@ func ProvideHandlers(
 		AsyncImage:       asyncImageHandler,
 		BatchImage:       batchImageHandler,
 		XiaoVideo:        xiaoVideoHandler,
+		VideoWorkbench:   videoWorkbenchHandler,
 		Community:        communityHandler,
 	}
 }
@@ -280,6 +282,7 @@ var ProviderSet = wire.NewSet(
 	NewAsyncImageHandler,
 	ProvideBatchImageHandler,
 	NewXiaoVideoHandler,
+	NewVideoWorkbenchHandler,
 	NewCommunityHandler,
 
 	// Admin handlers

@@ -25,6 +25,28 @@
         </div>
       </section>
 
+      <div class="flex items-center gap-2 rounded-lg border border-gray-200 bg-white p-1 dark:border-dark-700 dark:bg-dark-900">
+        <button
+          type="button"
+          class="store-section-tab"
+          :class="{ 'store-section-tab-active': activeStoreTab === 'products' }"
+          @click="activeStoreTab = 'products'"
+        >
+          <span>商城商品</span>
+          <span class="store-section-count">{{ products.length }}</span>
+        </button>
+        <button
+          v-if="authStore.isAuthenticated"
+          type="button"
+          class="store-section-tab"
+          :class="{ 'store-section-tab-active': activeStoreTab === 'orders' }"
+          @click="openOrderHistory"
+        >
+          <span>我的购买记录</span>
+          <span class="store-section-count">{{ orderTotal }}</span>
+        </button>
+      </div>
+
       <div v-if="loading" class="flex justify-center py-16">
         <div class="h-8 w-8 animate-spin rounded-full border-4 border-primary-500 border-t-transparent"></div>
       </div>
@@ -44,7 +66,7 @@
         />
       </template>
 
-      <template v-else>
+      <template v-else-if="activeStoreTab === 'products'">
         <div class="flex gap-2 overflow-x-auto pb-1">
           <button
             type="button"
@@ -140,6 +162,73 @@
           </article>
         </div>
       </template>
+
+      <section v-else class="overflow-hidden rounded-lg border border-gray-200 bg-white dark:border-dark-700 dark:bg-dark-900">
+        <div class="flex items-center justify-between gap-4 border-b border-gray-100 px-5 py-4 dark:border-dark-700">
+          <div>
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">我的购买记录</h2>
+            <p class="mt-1 text-sm text-gray-500 dark:text-dark-400">兑换码和文件会一直保留在这里，关闭交付弹窗后仍可查看。</p>
+          </div>
+          <button type="button" class="btn btn-secondary btn-sm" :disabled="ordersLoading" @click="loadOrders">
+            {{ ordersLoading ? '刷新中' : '刷新' }}
+          </button>
+        </div>
+
+        <div v-if="ordersLoading" class="flex justify-center py-14">
+          <div class="h-7 w-7 animate-spin rounded-full border-4 border-primary-500 border-t-transparent"></div>
+        </div>
+        <div v-else-if="orders.length === 0" class="px-5 py-14 text-center text-sm text-gray-500 dark:text-dark-400">
+          暂无购买记录
+        </div>
+        <div v-else class="divide-y divide-gray-100 dark:divide-dark-700">
+          <article v-for="order in orders" :key="order.id" class="p-5">
+            <div class="flex flex-wrap items-start justify-between gap-4">
+              <div class="min-w-0">
+                <div class="flex flex-wrap items-center gap-2">
+                  <h3 class="font-semibold text-gray-900 dark:text-white">{{ order.product_name }}</h3>
+                  <span class="store-order-status" :class="'store-order-status--' + order.status">
+                    {{ orderStatusText(order.status) }}
+                  </span>
+                </div>
+                <p class="mt-1 text-xs text-gray-500 dark:text-dark-400">
+                  订单号 {{ order.order_no }} · {{ formatOrderTime(order.created_at) }}
+                </p>
+              </div>
+              <div class="text-right">
+                <p class="font-semibold text-gray-900 dark:text-white">¥{{ order.total_amount.toFixed(2) }}</p>
+                <p class="mt-1 text-xs text-gray-500 dark:text-dark-400">数量 {{ order.quantity }}</p>
+              </div>
+            </div>
+
+            <div v-if="order.delivered_cards.length > 0" class="mt-4 rounded-lg border border-emerald-200 bg-emerald-50/70 p-3 dark:border-emerald-800 dark:bg-emerald-900/20">
+              <div class="mb-2 flex items-center justify-between gap-3">
+                <div>
+                  <p class="text-sm font-medium text-emerald-900 dark:text-emerald-200">已交付兑换码</p>
+                  <p class="text-xs text-emerald-700 dark:text-emerald-300">兑换码使用状态以目标平台查询结果为准。</p>
+                </div>
+                <button type="button" class="btn btn-secondary btn-sm" @click="copyOrderCards(order)">复制全部</button>
+              </div>
+              <div class="grid gap-2 md:grid-cols-2">
+                <code v-for="(card, index) in order.delivered_cards" :key="order.id + '-' + index" class="break-all rounded-md bg-white px-3 py-2 font-mono text-xs text-gray-900 ring-1 ring-emerald-200 dark:bg-dark-900 dark:text-dark-100 dark:ring-emerald-800">
+                  {{ card }}
+                </code>
+              </div>
+            </div>
+
+            <DeliveredFilesList
+              v-if="order.delivered_files.length > 0"
+              class="mt-4"
+              :order-id="order.id"
+              :files="order.delivered_files"
+            />
+
+            <p v-if="order.status === 'completed' && order.delivered_cards.length === 0 && order.delivered_files.length === 0" class="mt-4 rounded-lg bg-gray-50 px-3 py-2 text-sm text-gray-600 dark:bg-dark-800 dark:text-dark-300">
+              {{ completedOrderSummary(order) }}
+            </p>
+            <p v-if="order.failed_reason" class="mt-3 text-sm text-red-600 dark:text-red-400">{{ order.failed_reason }}</p>
+          </article>
+        </div>
+      </section>
     </div>
 
     <Teleport to="body">
@@ -378,6 +467,10 @@ const loading = ref(true)
 const submitting = ref(false)
 const categories = ref<StoreCategory[]>([])
 const products = ref<StoreProduct[]>([])
+const orders = ref<StoreOrder[]>([])
+const orderTotal = ref(0)
+const ordersLoading = ref(false)
+const activeStoreTab = ref<'products' | 'orders'>('products')
 const checkout = ref<CheckoutInfoResponse | null>(null)
 const selectedCategoryId = ref(0)
 const checkoutProduct = ref<StoreProduct | null>(null)
@@ -647,6 +740,46 @@ function closeCompletedOrder() {
   completedOrder.value = null
 }
 
+async function copyOrderCards(order: StoreOrder) {
+  if (order.delivered_cards.length === 0) return
+  await copyToClipboard(order.delivered_cards.join('\n'), t('store.cardsCopied'))
+}
+
+function orderStatusText(status: StoreOrder['status']): string {
+  return ({ pending: '待支付', paid: '已支付', completed: '已完成', cancelled: '已取消', failed: '失败' })[status] || status
+}
+
+function formatOrderTime(value?: string): string {
+  if (!value) return '-'
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString('zh-CN', { hour12: false })
+}
+
+function completedOrderSummary(order: StoreOrder): string {
+  if (order.load_factor_credits_awarded > 0) return '已发放 ' + order.load_factor_credits_awarded + ' 点负载积分'
+  if (order.draw_reward_amount != null) return '抽奖奖励 ' + formatDrawReward(order)
+  return '订单已完成'
+}
+
+async function loadOrders() {
+  if (!authStore.isAuthenticated || ordersLoading.value) return
+  ordersLoading.value = true
+  try {
+    const { data } = await storeAPI.getOrders({ page: 1, page_size: 50 })
+    orders.value = data.items || []
+    orderTotal.value = data.total || orders.value.length
+  } catch (err: unknown) {
+    appStore.showError(extractI18nErrorMessage(err, t, 'store.errors', t('common.error')))
+  } finally {
+    ordersLoading.value = false
+  }
+}
+
+async function openOrderHistory() {
+  activeStoreTab.value = 'orders'
+  if (orders.value.length === 0) await loadOrders()
+}
+
 function showCompletedOrder(order: StoreOrder) {
   completedOrder.value = order
 }
@@ -817,6 +950,7 @@ async function loadStore() {
       ...product,
       draw_progress: data?.[product.id] || product.draw_progress || null,
     }))
+    await loadOrders()
   }
   if (!selectedMethod.value && enabledMethods.value.length > 0) {
     selectedMethod.value = enabledMethods.value[0]
@@ -867,6 +1001,58 @@ onMounted(async () => {
   font-size: 0.875rem;
   font-weight: 600;
   color: rgb(75 85 99);
+}
+
+.store-section-tab {
+  min-height: 2.5rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 0.375rem;
+  padding: 0 0.875rem;
+  color: rgb(75 85 99);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.store-section-tab-active {
+  background: rgb(239 246 255);
+  color: rgb(29 78 216);
+}
+
+.store-section-count {
+  min-width: 1.25rem;
+  border-radius: 999px;
+  background: rgb(229 231 235);
+  padding: 0.125rem 0.375rem;
+  text-align: center;
+  font-size: 0.6875rem;
+}
+
+.store-order-status {
+  border-radius: 0.25rem;
+  background: rgb(243 244 246);
+  padding: 0.2rem 0.45rem;
+  color: rgb(75 85 99);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.store-order-status--completed {
+  background: rgb(220 252 231);
+  color: rgb(21 128 61);
+}
+
+.store-order-status--pending,
+.store-order-status--paid {
+  background: rgb(254 249 195);
+  color: rgb(161 98 7);
+}
+
+.store-order-status--failed,
+.store-order-status--cancelled {
+  background: rgb(254 226 226);
+  color: rgb(185 28 28);
 }
 
 .dark .store-filter {

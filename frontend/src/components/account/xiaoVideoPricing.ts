@@ -1,6 +1,7 @@
 export interface XiaoVideoPricingRule {
   model: string
   resolution: string
+  billing_unit?: 'per_second' | 'per_request'
   price_per_second: number
   audio_price_per_second: number
   default_resolution: boolean
@@ -42,6 +43,7 @@ export function readXiaoVideoPricing(value: unknown): XiaoVideoPricingRule[] {
     return [{
       model: typeof record.model === 'string' ? record.model : '',
       resolution: typeof record.resolution === 'string' ? record.resolution : '',
+      ...(normalizeBillingUnit(record.billing_unit) === 'per_request' ? { billing_unit: 'per_request' as const } : {}),
       price_per_second: Number(record.price_per_second ?? 0),
       audio_price_per_second: Number(record.audio_price_per_second ?? 0),
       default_resolution: record.default_resolution === true,
@@ -55,11 +57,16 @@ export function normalizeXiaoVideoPricing(rules: XiaoVideoPricingRule[]): XiaoVi
   return rules.map((rule) => ({
     model: rule.model.trim(),
     resolution: rule.resolution.trim(),
+    ...(normalizeBillingUnit(rule.billing_unit) === 'per_request' ? { billing_unit: 'per_request' as const } : {}),
     price_per_second: Number(rule.price_per_second),
     audio_price_per_second: Number(rule.audio_price_per_second),
     default_resolution: rule.default_resolution === true,
     default_duration: Number(rule.default_duration)
   }))
+}
+
+export function normalizeBillingUnit(value: unknown): 'per_second' | 'per_request' {
+  return String(value ?? '').trim().toLowerCase() === 'per_request' ? 'per_request' : 'per_second'
 }
 
 export function validateXiaoVideoPricing(

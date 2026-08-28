@@ -1,7 +1,10 @@
 <template>
   <div
     class="user-workspace"
-    :class="{ 'user-workspace--subpage': parentNavigation }"
+    :class="{
+      'user-workspace--subpage': parentNavigation,
+      'user-workspace--without-announcement': props.hideAnnouncement
+    }"
     :data-user-theme="theme"
     @mousemove="handlePointerMove"
     @mouseleave="resetPointer"
@@ -234,7 +237,7 @@
         </div>
       </nav>
 
-      <section class="user-workspace__summary" aria-label="系统公告">
+      <section v-if="!props.hideAnnouncement" class="user-workspace__summary" aria-label="系统公告">
         <div class="user-workspace__announcement-badge">
           <Icon name="bell" size="sm" />
           <span>公告</span>
@@ -316,6 +319,9 @@ import { useUserThemeStore } from '@/stores/userTheme'
 
 const route = useRoute()
 const router = useRouter()
+const props = withDefaults(defineProps<{ hideAnnouncement?: boolean }>(), {
+  hideAnnouncement: false
+})
 const appStore = useAppStore()
 const authStore = useAuthStore()
 const announcementStore = useAnnouncementStore()
@@ -337,7 +343,7 @@ const balanceText = computed(() => Number(user.value?.balance || 0).toFixed(2))
 
 const parentNavigation = computed(() => {
   const path = route.path
-  if (['/purchase', '/subscriptions', '/orders', '/redeem'].includes(path)) {
+  if (['/orders', '/redeem'].includes(path)) {
     if (theme.value === 'business') return null
     return { to: '/billing', label: '账单中心', group: '账单' }
   }
@@ -378,6 +384,12 @@ const currentSection = computed(() => {
       kicker: 'Image workspace',
       title: route.path === '/batch-image' ? '批量生图' : '图像工作台',
       description: '创建、管理并追踪你的图像生成任务。'
+    },
+    {
+      match: (path: string) => path === '/ai-creation' || path === '/video-workbench',
+      kicker: 'AI creation',
+      title: 'AI 创作',
+      description: '在无限画布中连接图片、文字、音频和视频创作。'
     },
     {
       match: (path: string) => path === '/docs/video-api' || path === '/videos' || path.startsWith('/videos/'),
@@ -439,53 +451,81 @@ const affiliateNavItem = {
   icon: 'users'
 } as const
 
-const baseNavItems = [
-  { path: '/dashboard', activePaths: ['/dashboard'], label: '首页', icon: 'home' },
-  { path: '/keys', activePaths: ['/keys', '/usage'], label: 'Key', icon: 'key' },
-  { path: '/account-share', activePaths: ['/account-share'], label: '账号共享', icon: 'users' },
-  { path: '/store', activePaths: ['/store'], label: '商城', icon: 'gift' },
-  { path: '/conversations', activePaths: ['/conversations'], label: '工单', icon: 'chat' },
-  { path: '/images', activePaths: ['/images'], label: '图工坊', icon: 'image' },
-  { path: '/videos', activePaths: ['/videos', '/docs/video-api'], label: '视频工作台', icon: 'play' },
-  { path: '/monitor', activePaths: ['/monitor', '/available-channels'], label: '状态', icon: 'server' },
-  { path: '/billing', activePaths: ['/billing', '/purchase', '/payment', '/subscriptions', '/orders', '/redeem'], label: '账单', icon: 'creditCard' }
-] as const
+type WorkspaceNavItem = {
+  id: string
+  path: string
+  activePaths: readonly string[]
+  label: string
+  icon:
+    | 'home'
+    | 'key'
+    | 'chart'
+    | 'dollar'
+    | 'calendar'
+    | 'sparkles'
+    | 'image'
+    | 'play'
+    | 'gift'
+    | 'users'
+    | 'chat'
+    | 'server'
+    | 'creditCard'
+}
 
-const baseBusinessNavItems = [
-  { path: '/dashboard', activePaths: ['/dashboard'], label: '首页', icon: 'home' },
-  { path: '/keys', activePaths: ['/keys'], label: 'Key', icon: 'key' },
-  { path: '/usage', activePaths: ['/usage'], label: '使用记录', icon: 'chart' },
-  { path: '/account-share', activePaths: ['/account-share'], label: '账号共享', icon: 'users' },
-  { path: '/store', activePaths: ['/store'], label: '发卡商城', icon: 'gift' },
-  { path: '/conversations', activePaths: ['/conversations'], label: '工单服务', icon: 'chat' },
-  { path: '/images', activePaths: ['/images'], label: '图工坊', icon: 'image' },
-  { path: '/videos', activePaths: ['/videos', '/docs/video-api'], label: '视频工作台', icon: 'play' },
-  { path: '/monitor', activePaths: ['/monitor', '/available-channels'], label: '状态', icon: 'server' },
-  { path: '/billing', activePaths: ['/billing', '/purchase', '/payment', '/subscriptions', '/orders', '/redeem'], label: '账单', icon: 'creditCard' }
-] as const
+const baseNavItems: WorkspaceNavItem[] = [
+  { id: 'dashboard', path: '/dashboard', activePaths: ['/dashboard'], label: '首页', icon: 'home' },
+  { id: 'keys', path: '/keys', activePaths: ['/keys'], label: 'Key', icon: 'key' },
+  { id: 'usage', path: '/usage', activePaths: ['/usage'], label: '使用记录', icon: 'chart' },
+  { id: 'purchase', path: '/purchase', activePaths: ['/purchase', '/payment'], label: '充值与订阅', icon: 'dollar' },
+  { id: 'subscriptions', path: '/subscriptions', activePaths: ['/subscriptions'], label: '我的订阅', icon: 'calendar' },
+  { id: 'ai-creation', path: '/ai-creation', activePaths: ['/ai-creation', '/video-workbench'], label: 'AI 创作', icon: 'sparkles' },
+  { id: 'images', path: '/images', activePaths: ['/images'], label: '图工坊', icon: 'image' },
+  { id: 'videos', path: '/videos', activePaths: ['/videos', '/docs/video-api'], label: '视频工作台', icon: 'play' },
+  { id: 'store', path: '/store', activePaths: ['/store'], label: '发卡商城', icon: 'gift' },
+  { id: 'account-share', path: '/account-share', activePaths: ['/account-share'], label: '账号共享', icon: 'users' },
+  { id: 'conversations', path: '/conversations', activePaths: ['/conversations'], label: '工单服务', icon: 'chat' },
+  { id: 'monitor', path: '/monitor', activePaths: ['/monitor', '/available-channels'], label: '状态', icon: 'server' },
+  { id: 'billing', path: '/billing', activePaths: ['/billing', '/orders', '/redeem'], label: '账单', icon: 'creditCard' }
+]
+
+const baseBusinessNavItems: WorkspaceNavItem[] = [...baseNavItems]
+
+function resolveConfiguredNav(items: WorkspaceNavItem[]): WorkspaceNavItem[] {
+  const config = appStore.cachedPublicSettings?.user_menu_config
+  const visibleItems = items.filter(item => config?.visibility?.[item.id] !== false)
+  if (!config?.order?.length) return visibleItems
+
+  const orderIndex = new Map(config.order.map((id, index) => [id, index]))
+  return [...visibleItems].sort((left, right) => {
+    const leftIndex = orderIndex.get(left.id) ?? Number.MAX_SAFE_INTEGER
+    const rightIndex = orderIndex.get(right.id) ?? Number.MAX_SAFE_INTEGER
+    return leftIndex - rightIndex
+  })
+}
 
 const navItems = computed(() => {
-  if (!affiliateEnabled.value) return [...baseNavItems]
-  return [...baseNavItems.slice(0, 5), affiliateNavItem, ...baseNavItems.slice(5)]
+  const items = affiliateEnabled.value
+    ? [...baseNavItems.slice(0, 9), { ...affiliateNavItem, id: 'affiliate' }, ...baseNavItems.slice(9)]
+    : [...baseNavItems]
+  return resolveConfiguredNav(items)
 })
 
 const businessNavItems = computed(() => {
-  if (!affiliateEnabled.value) return [...baseBusinessNavItems]
-  return [...baseBusinessNavItems.slice(0, 6), affiliateNavItem, ...baseBusinessNavItems.slice(6)]
+  const items = affiliateEnabled.value
+    ? [...baseBusinessNavItems.slice(0, 9), { ...affiliateNavItem, id: 'affiliate' }, ...baseBusinessNavItems.slice(9)]
+    : [...baseBusinessNavItems]
+  return resolveConfiguredNav(items)
 })
 
 const billingNavItems = [
   { path: '/billing', label: '账单概览' },
-  { path: '/purchase', label: '充值与订阅' },
-  { path: '/subscriptions', label: '我的订阅' },
   { path: '/orders', label: '订单记录' },
   { path: '/redeem', label: '兑换码' }
 ] as const
 
 const videoNavItems = [
   { path: '/videos', label: '视频创作' },
-  { path: '/videos/history', label: '历史任务' },
-  { path: '/docs/video-api', label: 'API 文档' }
+  { path: '/videos/history', label: '历史任务' }
 ] as const
 
 const displayName = computed(() => {
@@ -507,9 +547,6 @@ function isVideoNavActive(item: { path: string }): boolean {
 }
 
 function isBillingNavActive(item: (typeof billingNavItems)[number]): boolean {
-  if (item.path === '/purchase') {
-    return route.path === item.path || route.path.startsWith('/payment/')
-  }
   return route.path === item.path
 }
 
@@ -603,6 +640,38 @@ watch(theme, (nextTheme) => {
   background:
     radial-gradient(circle at var(--workspace-x, 70%) var(--workspace-y, 16%), rgba(255, 212, 71, 0.22), transparent 28rem),
     linear-gradient(115deg, #fff4ee 0%, #fffdf5 46%, #e8fbff 100%);
+}
+
+.user-workspace.user-workspace--without-announcement {
+  min-height: 100vh;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.user-workspace.user-workspace--without-announcement .user-workspace__header {
+  flex: 0 0 auto;
+}
+
+.user-workspace.user-workspace--without-announcement .user-workspace__main {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  width: auto;
+  max-width: none;
+  margin: 0;
+  overflow: hidden;
+  padding: 0;
+}
+
+.user-workspace.user-workspace--without-announcement :deep(.ai-creation-route) {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
 }
 
 .user-workspace__bg {

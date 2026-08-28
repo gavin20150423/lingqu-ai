@@ -31,6 +31,12 @@ const (
 //go:embed all:dist
 var frontendFS embed.FS
 
+func init() {
+	// Windows can register .svg as the non-standard image/svg type. With
+	// X-Content-Type-Options: nosniff, Chromium then refuses to render it.
+	_ = mime.AddExtensionType(".svg", "image/svg+xml")
+}
+
 // PublicSettingsProvider is an interface to fetch public settings
 type PublicSettingsProvider interface {
 	GetPublicSettingsForInjection(ctx context.Context) (any, error)
@@ -101,8 +107,9 @@ func (s *FrontendServer) Middleware() gin.HandlerFunc {
 			cleanPath = "index.html"
 		}
 
-		// For root index.html, serve the host SPA with injected settings.
-		if cleanPath == "index.html" {
+		// /ai-creation is a host SPA route, while /ai-creation/ is the
+		// independently built workbench loaded by that route's iframe.
+		if cleanPath == "index.html" || cleanPath == "ai-creation" {
 			s.serveIndexHTML(c)
 			return
 		}
@@ -381,6 +388,10 @@ func ServeEmbeddedFrontend() gin.HandlerFunc {
 		cleanPath := strings.TrimPrefix(path, "/")
 		if cleanPath == "" {
 			cleanPath = "index.html"
+		}
+		if cleanPath == "ai-creation" {
+			serveIndexHTML(c, distFS)
+			return
 		}
 
 		if staticPath, ok := resolveStaticPath(distFS, cleanPath); ok {

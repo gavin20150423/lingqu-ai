@@ -329,11 +329,13 @@ describe('XiaoVideoView', () => {
     expect((wrapper.get('[data-testid="xiao-price-resolution-0"]').element as HTMLInputElement).value)
       .toBe('720p')
     expect((wrapper.get('[data-testid="xiao-price-base-0"]').element as HTMLInputElement).value)
-      .toBe('1.3')
+      .toBe('6.5')
+    expect((wrapper.get('[data-testid="xiao-price-unit-0"]').element as HTMLSelectElement).value)
+      .toBe('per_request')
     expect((wrapper.get('[data-testid="xiao-price-resolution-1"]').element as HTMLInputElement).value)
       .toBe('1080p')
     expect((wrapper.get('[data-testid="xiao-price-base-1"]').element as HTMLInputElement).value)
-      .toBe('2.6')
+      .toBe('13')
     expect(wrapper.find('[data-testid="xiao-model-picker"]').exists()).toBe(false)
     expect(showSuccess).toHaveBeenCalledWith('admin.xiaoVideo.modelsImported')
   })
@@ -372,7 +374,7 @@ describe('XiaoVideoView', () => {
       .toBe('0.26')
   })
 
-  it('imports AIStartLab per-second and fixed-total credit prices into sales rules', async () => {
+  it('imports AIStartLab per-second and per-request credit prices into sales rules', async () => {
     listAccounts.mockResolvedValue(listResponse([]))
     syncUpstreamModelsPreview.mockResolvedValue({
       models: ['grok-imagine-video-1.0', 'gemini-omni-flash'],
@@ -410,7 +412,9 @@ describe('XiaoVideoView', () => {
     expect((wrapper.get('[data-testid="xiao-price-model-0"]').element as HTMLInputElement).value)
       .toBe('gemini-omni-flash')
     expect((wrapper.get('[data-testid="xiao-price-base-0"]').element as HTMLInputElement).value)
-      .toBe('0.195')
+      .toBe('1.95')
+    expect((wrapper.get('[data-testid="xiao-price-unit-0"]').element as HTMLSelectElement).value)
+      .toBe('per_request')
     expect((wrapper.get('[data-testid="xiao-price-duration-0"]').element as HTMLInputElement).value)
       .toBe('10')
     expect((wrapper.get('[data-testid="xiao-price-model-1"]').element as HTMLInputElement).value)
@@ -485,7 +489,8 @@ describe('XiaoVideoView', () => {
 
     await wrapper.get('[data-testid="xiao-fetch-models"]').trigger('click')
     await flushPromises()
-    expect(wrapper.text()).toContain('admin.xiaoVideo.modelPricingMissing')
+    expect((wrapper.get('[data-testid="xiao-price-base-0"]').element as HTMLInputElement).value)
+      .toBe('0.117')
     await wrapper.get('[data-testid="xiao-import-models"]').trigger('click')
 
     expect(wrapper.findAll('[data-testid^="xiao-mapping-upstream-"]')).toHaveLength(1)
@@ -495,6 +500,45 @@ describe('XiaoVideoView', () => {
       .toBe('grok-public')
     expect((wrapper.get('[data-testid="xiao-price-base-0"]').element as HTMLInputElement).value)
       .toBe('0.117')
+  })
+
+  it('keeps a configured selling price when refreshing upstream pricing', async () => {
+    const account = xiaoAccount({
+      credentials: {
+        base_url: 'https://upstream.example.com',
+        model_mapping: { 'public-video': 'provider-video-v2' },
+        video_pricing: [{
+          model: 'public-video',
+          resolution: '720p',
+          price_per_second: 0.42,
+          default_duration: 8,
+          default_resolution: true
+        }]
+      }
+    })
+    listAccounts.mockResolvedValue(listResponse([account]))
+    getAccount.mockResolvedValue(account)
+    syncUpstreamModels.mockResolvedValue({
+      models: ['provider-video-v2'],
+      model_specs: [{
+        id: 'provider-video-v2',
+        resolution: '720p',
+        upstream_cost: 0.2,
+        cost_currency: 'USD',
+        cost_unit: 'second',
+        default_duration: 4,
+        default_resolution: true
+      }],
+      pricing_source: 'model_list'
+    })
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.get('[data-testid="xiao-fetch-models"]').trigger('click')
+    await flushPromises()
+
+    expect((wrapper.get('[data-testid="xiao-price-base-0"]').element as HTMLInputElement).value)
+      .toBe('0.42')
   })
 
   it('tests and deletes the selected upstream through account APIs', async () => {

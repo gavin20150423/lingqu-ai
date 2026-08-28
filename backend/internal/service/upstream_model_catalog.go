@@ -154,16 +154,43 @@ func (s *AccountTestService) fetchXiaoVideoModelListCatalog(ctx context.Context,
 	if err != nil {
 		return nil, err
 	}
-	models, err := extractUpstreamModelIDs(body)
-	if err != nil {
-		return nil, newUpstreamModelSyncUpstreamError("Upstream model list response was not valid JSON", err)
+	adapter, adapterErr := videoProviderAdapterForAccount(account)
+	if adapterErr != nil {
+		return nil, newUpstreamModelSyncConfigError("Invalid XiaoAPI video adapter", adapterErr)
+	}
+	items, decodeErr := adapter.DecodeModels(body)
+	if decodeErr != nil {
+		return nil, newUpstreamModelSyncUpstreamError("Upstream model list response was not valid JSON", decodeErr)
+	}
+	models := make([]string, 0, len(items))
+	for _, item := range items {
+		if id := videoStringValue(item["id"]); id != "" {
+			models = append(models, id)
+		}
+	}
+	sort.Strings(models)
+	if len(models) > 1 {
+		unique := models[:1]
+		for _, model := range models[1:] {
+			if model != unique[len(unique)-1] {
+				unique = append(unique, model)
+			}
+		}
+		models = unique
 	}
 	if len(models) == 0 {
 		return nil, newUpstreamModelSyncUpstreamError("Upstream returned no supported models", nil)
 	}
-	specs, _ := extractXiaoVideoModelSpecs(body)
+	var specs []UpstreamModelSpec
+	if account.XiaoVideoProtocol() == XiaoVideoProtocolCTMOAI {
+		specs, _ = extractCTMOAIVideoModelSpecs(body)
+	} else {
+		specs, _ = extractXiaoVideoModelSpecs(body)
+	}
 	specs = filterSpecsByModelIDs(specs, models)
-	applyCatalogCostDefaults(specs, "USD", false, false)
+	if account.XiaoVideoProtocol() != XiaoVideoProtocolCTMOAI {
+		applyCatalogCostDefaults(specs, "USD", false, false)
+	}
 	return &UpstreamModelCatalog{Models: models, ModelSpecs: specs, PricingSource: upstreamPricingSourceModelList}, nil
 }
 
@@ -228,6 +255,193 @@ func extractXiaoVideoModelSpecs(body []byte) ([]UpstreamModelSpec, error) {
 	specs := make([]UpstreamModelSpec, 0)
 	walkXiaoVideoModelSpecs(root, "", "", &specs)
 	return dedupeAndSortModelSpecs(specs), nil
+}
+
+// extractCTMOAIVideoModelSpecs parses CTMOAI's capability-rich /v1/models
+// response. Its pricing and capability fields are nested differently from the
+// legacy XiaoAPI catalog, so using the generic walker would lose billing units,
+// durations and reference limits during model sync.
+func extractCTMOAIVideoModelSpecs(body []byte) ([]UpstreamModelSpec, error) {
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	decoder.UseNumber()
+	var root map[string]any
+	if err := decoder.Decode(&root); err != nil {
+		return nil, fmt.Errorf("parse CTMOAI model catalog: %w", err)
+	}
+	rawItems, _ := root["data"].([]any)
+	specs := make([]UpstreamModelSpec, 0, len(rawItems))
+	for _, raw := range rawItems {
+		item, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		modelID := firstCatalogString(item, "id", "model", "model_id", "name")
+		if modelID == "" {
+			continue
+		}
+		resolution := firstCatalogString(item, "resolution", "default_resolution", "defaultResolution")
+		if resolution == "" {
+			resolution = inferCTMOAIResolution(modelID)
+		}
+		pricing, _ := item["pricing"].(map[string]any)
+		var cost *float64
+		unit, currency := "", ""
+		if pricing != nil {
+			cost, _ = catalogFloatPtr(pricing["amount"])
+			if cost == nil {
+				cost, _ = catalogCost(pricing)
+			}
+			unit = normalizeCatalogCostUnit(firstCatalogString(pricing, "mode", "type", "billing_unit", "billingUnit", "unit"))
+			currency = normalizeCatalogCurrency(firstCatalogString(pricing, "currency", "currency_code", "currencyCode"))
+		}
+		if cost == nil {
+			cost, _ = catalogCost(item)
+		}
+		if unit == "" {
+			unit = normalizeCatalogCostUnit(firstCatalogString(item, "billing_unit", "billingUnit", "cost_unit", "costUnit", "unit"))
+		}
+		if currency == "" {
+			currency = normalizeCatalogCurrency(firstCatalogString(item, "currency", "currency_code", "currencyCode"))
+		}
+		durations := catalogIntList(item, "durations_seconds", "durations", "seconds")
+		defaultDuration := firstCatalogInt(item, "default_duration", "defaultDuration", "default_seconds", "defaultSeconds")
+		if defaultDuration == 0 && len(durations) > 0 {
+			defaultDuration = durations[0]
+		}
+		ratios := catalogStringList(item, "ratios", "aspect_ratios", "aspectRatios")
+		maxReferences := map[string]int{}
+		for key, target := range map[string]string{"max_images": "image", "max_videos": "video", "max_audios": "audio"} {
+			// Preserve an explicit zero. CTMOAI uses max_videos/max_audios=0
+			// on minimax-h3-quantized-768p to declare that those reference
+			// kinds are unsupported; dropping the zero makes the UI and the
+			// request validator incorrectly fall back to permissive defaults.
+			if _, present := item[key]; present {
+				if value := firstCatalogInt(item, key); value >= 0 {
+					maxReferences[target] = value
+				}
+			}
+		}
+		isH3 := strings.Contains(strings.ToLower(modelID), "minimax-h3")
+		supportsGuidances := false
+		for _, value := range maxReferences {
+			if value > 0 {
+				supportsGuidances = true
+				break
+			}
+		}
+		specs = append(specs, UpstreamModelSpec{
+			ID:                 modelID,
+			Resolution:         resolution,
+			UpstreamCost:       cost,
+			CostCurrency:       currency,
+			CostUnit:           unit,
+			DefaultDuration:    defaultDuration,
+			DefaultResolution:  true,
+			Durations:          durations,
+			AspectRatios:       ratios,
+			DefaultAspectRatio: firstNonEmptyCatalogString(ratios),
+			SupportsAudio:      false,
+			SupportsGuidances:  supportsGuidances,
+			SupportsStartFrame: isH3,
+			SupportsEndFrame:   isH3,
+			MaxReferences:      maxReferences,
+		})
+	}
+	return dedupeAndSortModelSpecs(specs), nil
+}
+
+func catalogFloatPtr(value any) (*float64, bool) {
+	parsed, ok := catalogFloat(value)
+	if !ok || parsed < 0 {
+		return nil, false
+	}
+	return &parsed, true
+}
+
+func catalogIntList(node map[string]any, keys ...string) []int {
+	result := make([]int, 0)
+	for _, key := range keys {
+		value := node[key]
+		if scalar, ok := catalogFloat(value); ok && scalar > 0 && scalar <= 3600 {
+			result = append(result, int(scalar))
+			continue
+		}
+		values, ok := value.([]any)
+		if !ok {
+			continue
+		}
+		for _, item := range values {
+			if parsed, ok := catalogFloat(item); ok && parsed > 0 && parsed <= 3600 {
+				result = append(result, int(parsed))
+			}
+		}
+		if len(result) > 0 {
+			break
+		}
+	}
+	return dedupeAndSortInts(result)
+}
+
+func catalogStringList(node map[string]any, keys ...string) []string {
+	result := make([]string, 0)
+	for _, key := range keys {
+		value := node[key]
+		if scalar := catalogString(value); scalar != "" {
+			result = append(result, scalar)
+			break
+		}
+		values, ok := value.([]any)
+		if !ok {
+			continue
+		}
+		for _, item := range values {
+			if parsed := catalogString(item); parsed != "" {
+				result = append(result, parsed)
+			}
+		}
+		if len(result) > 0 {
+			break
+		}
+	}
+	return dedupeAndSortModelIDs(result)
+}
+
+func firstNonEmptyCatalogString(values []string) string {
+	if len(values) == 0 {
+		return ""
+	}
+	return values[0]
+}
+
+func dedupeAndSortInts(values []int) []int {
+	seen := make(map[int]struct{}, len(values))
+	result := make([]int, 0, len(values))
+	for _, value := range values {
+		if _, exists := seen[value]; exists {
+			continue
+		}
+		seen[value] = struct{}{}
+		result = append(result, value)
+	}
+	sort.Ints(result)
+	return result
+}
+
+func inferCTMOAIResolution(modelID string) string {
+	for _, token := range strings.Split(strings.ToLower(modelID), "-") {
+		switch token {
+		case "2k":
+			return "2K"
+		case "4k":
+			return "4K"
+		}
+		if strings.HasSuffix(token, "p") {
+			if _, err := strconv.Atoi(strings.TrimSuffix(token, "p")); err == nil {
+				return token
+			}
+		}
+	}
+	return ""
 }
 
 type aiStartLabSpecCandidate struct {
@@ -718,7 +932,7 @@ func normalizeCatalogCostUnit(value string) string {
 	switch normalized {
 	case "s", "sec", "secs", "second", "seconds", "per_second", "per-second":
 		return "second"
-	case "request", "requests", "generation", "generations", "video", "videos", "per_request", "per-request", "fixed", "fixed_total", "fixed-total", "per_generation", "per-generation":
+	case "request", "requests", "task", "tasks", "generation", "generations", "video", "videos", "per_request", "per-request", "per_task", "per-task", "fixed", "fixed_total", "fixed-total", "per_generation", "per-generation":
 		return "request"
 	default:
 		return normalized

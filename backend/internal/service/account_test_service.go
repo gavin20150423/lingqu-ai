@@ -355,7 +355,15 @@ func (s *AccountTestService) testXiaoAPIAccountConnection(c *gin.Context, accoun
 	if err != nil {
 		return s.sendErrorAndEnd(c, fmt.Sprintf("Invalid base URL: %s", err.Error()))
 	}
-	endpoint, err := accountVideoEndpoint(baseURL, "/v1/models")
+	adapter, adapterErr := videoProviderAdapterForAccount(account)
+	if adapterErr != nil {
+		return s.sendErrorAndEnd(c, fmt.Sprintf("Invalid video adapter: %s", adapterErr.Error()))
+	}
+	modelEndpoint, supported := adapter.Endpoint(videoOperationModels, "")
+	if !supported {
+		return s.sendErrorAndEnd(c, "Video adapter does not expose a model list")
+	}
+	endpoint, err := accountVideoEndpoint(baseURL, modelEndpoint.Path)
 	if err != nil {
 		return s.sendErrorAndEnd(c, fmt.Sprintf("Invalid base URL: %s", err.Error()))
 	}
@@ -373,7 +381,10 @@ func (s *AccountTestService) testXiaoAPIAccountConnection(c *gin.Context, accoun
 		return s.sendErrorAndEnd(c, "Failed to create request")
 	}
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("Authorization", "Bearer "+apiKey)
+	adapter.Authorize(req, apiKey)
+	for name, value := range adapter.StaticHeaders() {
+		req.Header.Set(name, value)
+	}
 	account.ApplyHeaderOverrides(req.Header)
 
 	proxyURL := ""
@@ -392,14 +403,12 @@ func (s *AccountTestService) testXiaoAPIAccountConnection(c *gin.Context, accoun
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
 		return s.sendErrorAndEnd(c, fmt.Sprintf("API returned %d", resp.StatusCode))
 	}
-	var envelope struct {
-		Data []map[string]any `json:"data"`
-	}
-	if err := json.Unmarshal(body, &envelope); err != nil || envelope.Data == nil {
+	models, decodeErr := adapter.DecodeModels(body)
+	if decodeErr != nil {
 		return s.sendErrorAndEnd(c, "API returned an invalid models response")
 	}
 
-	s.sendEvent(c, TestEvent{Type: "content", Text: fmt.Sprintf("Connected; %d video models available", len(envelope.Data))})
+	s.sendEvent(c, TestEvent{Type: "content", Text: fmt.Sprintf("Connected; %d video models available", len(models))})
 	s.sendEvent(c, TestEvent{Type: "test_complete", Success: true})
 	return nil
 }

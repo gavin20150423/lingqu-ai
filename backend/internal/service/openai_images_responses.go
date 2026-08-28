@@ -1291,13 +1291,14 @@ func (s *OpenAIGatewayService) handleOpenAIImagesOAuthNonStreamingResponse(
 	c *gin.Context,
 	responseFormat string,
 	fallbackModel string,
-) (OpenAIUsage, int, []string, error) {
+	startTime time.Time,
+) (OpenAIUsage, int, []string, time.Duration, error) {
 	body, err := ReadUpstreamResponseBody(resp.Body, s.cfg, c, openAITooLargeError)
 	if err != nil {
 		if shouldClassifyOpenAIUpstreamStreamReadError(err, c.Request.Context()) {
 			err = newOpenAIUpstreamStreamReadError(err)
 		}
-		return OpenAIUsage{}, 0, nil, err
+		return OpenAIUsage{}, 0, nil, 0, err
 	}
 
 	var usage OpenAIUsage
@@ -1306,7 +1307,7 @@ func (s *OpenAIGatewayService) handleOpenAIImagesOAuthNonStreamingResponse(
 	})
 	results, createdAt, usageRaw, firstMeta, _, err := collectOpenAIImagesFromResponsesBody(body)
 	if err != nil {
-		return OpenAIUsage{}, 0, nil, err
+		return OpenAIUsage{}, 0, nil, 0, err
 	}
 	if len(results) == 0 {
 		if upstreamErr := extractOpenAIImagesUpstreamError(body); upstreamErr != nil {
@@ -1314,14 +1315,14 @@ func (s *OpenAIGatewayService) handleOpenAIImagesOAuthNonStreamingResponse(
 			if !IsOpenAIImagesRetryableUpstreamError(upstreamErr) {
 				writeOpenAIImagesUpstreamErrorResponse(c, upstreamErr)
 			}
-			return OpenAIUsage{}, 0, nil, upstreamErr
+			return OpenAIUsage{}, 0, nil, 0, upstreamErr
 		}
 		if textFallbackErr := openAIImagesTextFallbackError(body); textFallbackErr != nil {
 			setOpsUpstreamError(c, textFallbackErr.clientStatusCode(), textFallbackErr.clientMessage(), summarizeOpenAIImagesNoOutputBody(body))
 			if !IsOpenAIImagesRetryableUpstreamError(textFallbackErr) {
 				writeOpenAIImagesUpstreamErrorResponse(c, textFallbackErr)
 			}
-			return OpenAIUsage{}, 0, nil, textFallbackErr
+			return OpenAIUsage{}, 0, nil, 0, textFallbackErr
 		}
 		// 真空响应：既无图也无文字输出。它保持短暂可重试语义，优先同账号重试。
 		// (B) 真空响应：记录上游诊断摘要到 ops（last_event/status/model/body 片段）便于
@@ -1330,7 +1331,7 @@ func (s *OpenAIGatewayService) handleOpenAIImagesOAuthNonStreamingResponse(
 		// 由 handler 自然换账号 failover（switchCount 上限保护），既提高成功率又不无谓
 		// 消耗其它账号配额。
 		setOpsUpstreamError(c, http.StatusBadGateway, "upstream did not return image output", summarizeOpenAIImagesNoOutputBody(body))
-		return OpenAIUsage{}, 0, nil, &UpstreamFailoverError{
+		return OpenAIUsage{}, 0, nil, 0, &UpstreamFailoverError{
 			StatusCode:             http.StatusBadGateway,
 			ResponseBody:           body,
 			RetryableOnSameAccount: true,
@@ -1342,11 +1343,14 @@ func (s *OpenAIGatewayService) handleOpenAIImagesOAuthNonStreamingResponse(
 
 	responseBody, err := buildOpenAIImagesAPIResponse(results, createdAt, usageRaw, firstMeta, responseFormat)
 	if err != nil {
-		return OpenAIUsage{}, 0, nil, err
+		return OpenAIUsage{}, 0, nil, 0, err
 	}
+	imageOutputSizes := openAIResponsesImageResultSizes(results)
+	upstreamDuration := time.Since(startTime)
+
 	responseheaders.WriteFilteredHeaders(c.Writer.Header(), resp.Header, s.responseHeaderFilter)
 	c.Data(resp.StatusCode, "application/json; charset=utf-8", responseBody)
-	return usage, len(results), openAIResponsesImageResultSizes(results), nil
+	return usage, len(results), imageOutputSizes, upstreamDuration, nil
 }
 
 func (s *OpenAIGatewayService) handleOpenAIImagesOAuthStreamingResponse(
@@ -1849,6 +1853,7 @@ func (s *OpenAIGatewayService) forwardOpenAIImagesOAuth(
 		imageCount       int
 		imageOutputSizes []string
 		firstTokenMs     *int
+		upstreamDuration time.Duration
 	)
 	// 与 handleOpenAIImagesOAuthResponseError 的比较端同口径：排除非流式 JSON
 	// keepalive 心跳字节，避免 failover 第 2 轮起把上一轮心跳残留误判为已写响应。
@@ -1884,7 +1889,7 @@ func (s *OpenAIGatewayService) forwardOpenAIImagesOAuth(
 			)
 		}
 	} else {
-		usage, imageCount, imageOutputSizes, err = s.handleOpenAIImagesOAuthNonStreamingResponse(resp, c, parsed.ResponseFormat, requestModel)
+		usage, imageCount, imageOutputSizes, upstreamDuration, err = s.handleOpenAIImagesOAuthNonStreamingResponse(resp, c, parsed.ResponseFormat, requestModel, startTime)
 		if err != nil {
 			return nil, s.handleOpenAIImagesOAuthResponseError(
 				upstreamCtx,
@@ -1901,6 +1906,9 @@ func (s *OpenAIGatewayService) forwardOpenAIImagesOAuth(
 	if imageCount <= 0 {
 		imageCount = parsed.N
 	}
+	if parsed.Stream {
+		upstreamDuration = time.Since(startTime)
+	}
 	return &OpenAIForwardResult{
 		RequestID:        resp.Header.Get("x-request-id"),
 		Usage:            usage,
@@ -1908,7 +1916,7 @@ func (s *OpenAIGatewayService) forwardOpenAIImagesOAuth(
 		UpstreamModel:    requestModel,
 		Stream:           parsed.Stream,
 		ResponseHeaders:  resp.Header.Clone(),
-		Duration:         time.Since(startTime),
+		Duration:         upstreamDuration,
 		FirstTokenMs:     firstTokenMs,
 		ImageCount:       imageCount,
 		ImageSize:        parsed.SizeTier,
