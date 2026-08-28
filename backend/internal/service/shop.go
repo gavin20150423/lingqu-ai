@@ -515,6 +515,42 @@ func (s *ShopService) GetOrderForUser(ctx context.Context, userID, id int64) (*S
 	return &dto, nil
 }
 
+func (s *ShopService) ListOrdersForUser(ctx context.Context, userID int64, page, pageSize int) ([]ShopOrderDTO, int, error) {
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 {
+		pageSize = 20
+	}
+	if pageSize > 100 {
+		pageSize = 100
+	}
+
+	query := s.entClient.ShopOrder.Query().Where(shoporder.UserIDEQ(userID))
+	total, err := query.Clone().Count(ctx)
+	if err != nil {
+		return nil, 0, fmt.Errorf("count user shop orders: %w", err)
+	}
+	orders, err := query.
+		Order(dbent.Desc(shoporder.FieldCreatedAt), dbent.Desc(shoporder.FieldID)).
+		Limit(pageSize).
+		Offset((page - 1) * pageSize).
+		All(ctx)
+	if err != nil {
+		return nil, 0, fmt.Errorf("list user shop orders: %w", err)
+	}
+
+	items := make([]ShopOrderDTO, 0, len(orders))
+	for _, order := range orders {
+		dto := mapShopOrder(order, nil)
+		if err := s.hydrateOrderDeliveredFiles(ctx, &dto); err != nil {
+			return nil, 0, err
+		}
+		items = append(items, dto)
+	}
+	return items, total, nil
+}
+
 func (s *ShopService) GetOrderForAdmin(ctx context.Context, id int64) (*ShopOrderDTO, error) {
 	order, err := s.entClient.ShopOrder.Query().
 		Where(shoporder.IDEQ(id)).

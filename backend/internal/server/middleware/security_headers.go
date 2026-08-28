@@ -132,6 +132,13 @@ func SecurityHeaders(cfg config.CSPConfig, getFrameSrcOrigins func() []string) g
 		} else {
 			c.Header("X-Frame-Options", "DENY")
 		}
+		if isAICreationPath(c) {
+			// Canvas plugins are fetched as source, cached locally, and evaluated as
+			// blob modules. Local image files also use object URLs. Scope these
+			// exceptions to the embedded creation app only.
+			finalPolicy = addToDirective(finalPolicy, "script-src", "blob:")
+			finalPolicy = addToDirective(finalPolicy, "connect-src", "blob:")
+		}
 		c.Header("Referrer-Policy", "strict-origin-when-cross-origin")
 		if isAPIRoutePath(c) {
 			c.Next()
@@ -171,7 +178,16 @@ func isSameOriginEmbeddablePath(c *gin.Context) bool {
 		return false
 	}
 	path := c.Request.URL.Path
-	return path == "/image-playground" || strings.HasPrefix(path, "/image-playground/")
+	return path == "/image-playground" ||
+		strings.HasPrefix(path, "/image-playground/") ||
+		strings.HasPrefix(path, "/ai-creation/")
+}
+
+func isAICreationPath(c *gin.Context) bool {
+	if c == nil || c.Request == nil || c.Request.URL == nil {
+		return false
+	}
+	return strings.HasPrefix(c.Request.URL.Path, "/ai-creation/")
 }
 
 // enhanceCSPPolicy 确保 CSP 策略包含 nonce 支持和运行时组件必需域名。

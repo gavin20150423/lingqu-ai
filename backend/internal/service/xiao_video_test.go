@@ -400,6 +400,133 @@ func TestXiaoVideoOpenAISoraProtocolAdapter(t *testing.T) {
 	require.Equal(t, "CREDITS", normalized["currency"])
 }
 
+func TestXiaoVideoCustomJSONAdapterMapsProviderContract(t *testing.T) {
+	account := videoTestAccount(42, 7, "https://provider.example.test/api")
+	account.Credentials[XiaoVideoProtocolCredentialKey] = XiaoVideoProtocolCustomJSON
+	account.Credentials[XiaoVideoAdapterCredentialKey] = map[string]any{
+		"version": 1,
+		"auth":    map[string]any{"type": "header", "header": "X-API-Key", "prefix": "Token "},
+		"endpoints": map[string]any{
+			"models":  map[string]any{"method": "GET", "path": "/catalog"},
+			"create":  map[string]any{"method": "POST", "path": "/tasks"},
+			"status":  map[string]any{"method": "GET", "path": "/tasks/{job_id}"},
+			"content": map[string]any{"method": "GET", "path": "/tasks/{job_id}/file"},
+		},
+		"request": map[string]any{
+			"fields": map[string]any{"model": "engine", "prompt": "input.text", "duration": "input.seconds"},
+		},
+		"response": map[string]any{
+			"data_path":  "task",
+			"fields":     map[string]any{"job_id": "id", "status": "state", "result_url": "video.url"},
+			"status_map": map[string]any{"processing": "running", "done": "completed"},
+		},
+		"models": map[string]any{"items_path": "items", "id_path": "name"},
+	}
+	adapter, err := videoProviderAdapterForAccount(&account)
+	require.NoError(t, err)
+	endpoint, supported := adapter.Endpoint(videoOperationStatus, "task/one")
+	require.True(t, supported)
+	require.Equal(t, "/tasks/task%2Fone", endpoint.Path)
+	require.Equal(t, http.MethodGet, endpoint.Method)
+	require.Equal(t, "running", mustVideoStatus(t, adapter, []byte(`{"task":{"id":"job-1","state":"processing"}}`)))
+	body, err := adapter.RewriteCreate(&account, []byte(`{"model":"public","prompt":"waves","duration":4}`), "provider-model", "720p", 8)
+	require.NoError(t, err)
+	var payload map[string]any
+	require.NoError(t, json.Unmarshal(body, &payload))
+	require.Equal(t, "provider-model", payload["engine"])
+	require.Equal(t, map[string]any{"text": "waves", "seconds": float64(8)}, payload["input"])
+	require.Equal(t, "Token provider-secret", customAdapterAuthHeader(t, adapter, "provider-secret"))
+	models, err := adapter.DecodeModels([]byte(`{"items":[{"name":"model-a"}]}`))
+	require.NoError(t, err)
+	require.Equal(t, "model-a", models[0]["id"])
+	resultURL, ok := adapter.ResultURL([]byte(`{"task":{"id":"job-1","state":"done","video":{"url":"https://cdn.example.test/video.mp4"}}}`))
+	require.True(t, ok)
+	require.Equal(t, "https://cdn.example.test/video.mp4", resultURL)
+}
+
+func TestXiaoVideoCTMOAIAdapterMapsSeedanceAndH3Contracts(t *testing.T) {
+	account := videoTestAccount(42, 7, "https://video.ctmoai.com")
+	account.Credentials[XiaoVideoProtocolCredentialKey] = XiaoVideoProtocolCTMOAI
+	adapter, err := videoProviderAdapterForAccount(&account)
+	require.NoError(t, err)
+	create, ok := adapter.Endpoint(videoOperationCreate, "")
+	require.True(t, ok)
+	require.Equal(t, http.MethodPost, create.Method)
+	require.Equal(t, "/v1/videos", create.Path)
+	status, ok := adapter.Endpoint(videoOperationStatus, "task/1")
+	require.True(t, ok)
+	require.Equal(t, "/v1/videos/task%2F1", status.Path)
+	models, err := adapter.DecodeModels([]byte(`{"data":[{"id":"minimax-h3-quantized-768p","resolution":"768p","durations_seconds":[4,10],"ratios":["16:9"],"max_images":4,"max_videos":0,"max_audios":0}]}`))
+	require.NoError(t, err)
+	require.Equal(t, map[string]any{"image": json.Number("4"), "video": json.Number("0"), "audio": json.Number("0")}, models[0]["max_references"])
+
+	body, err := adapter.RewriteCreate(&account, []byte(`{"prompt":"A city at night","aspect_ratio":"16:9","guidances":{"image_reference":[{"image":{"url":"https://cdn.test/ref.jpg"}}]}}`), "minimax-h3-original-768p", "768p", 8)
+	require.NoError(t, err)
+	var payload map[string]any
+	require.NoError(t, json.Unmarshal(body, &payload))
+	require.Equal(t, "minimax-h3-original-768p", payload["model"])
+	require.Equal(t, float64(8), payload["seconds"])
+	require.Equal(t, "16:9", payload["aspect_ratio"])
+	require.Equal(t, "https://cdn.test/ref.jpg", payload["images"].([]any)[0])
+
+	cfBody, err := adapter.RewriteCreate(&account, []byte(`{"prompt":"Animate this","guidances":{"image_reference":[{"image":{"url":"https://cdn.test/ref.jpg"}}]}}`), "minimax-h3-original-cf-4k", "4K", 6)
+	require.NoError(t, err)
+	var cfPayload map[string]any
+	require.NoError(t, json.Unmarshal(cfBody, &cfPayload))
+	require.Equal(t, "https://cdn.test/ref.jpg", cfPayload["input_reference"])
+	_, err = adapter.RewriteCreate(&account, []byte(`{"prompt":"Missing reference"}`), "minimax-h3-original-cf-4k", "4K", 6)
+	require.ErrorIs(t, err, ErrVideoOptionUnsupported)
+
+	fl2vBody, err := adapter.RewriteCreate(&account, []byte(`{"prompt":"Transition","start_frame_url":"https://cdn.test/start.jpg","end_frame_url":"https://cdn.test/end.jpg"}`), "minimax-h3-original-768p", "768p", 5)
+	require.NoError(t, err)
+	var fl2vPayload map[string]any
+	require.NoError(t, json.Unmarshal(fl2vBody, &fl2vPayload))
+	require.Equal(t, "fl2v", fl2vPayload["workflow_id"])
+	require.Equal(t, []any{"https://cdn.test/start.jpg", "https://cdn.test/end.jpg"}, fl2vPayload["images"])
+
+	normalized, err := adapter.DecodeJob([]byte(`{"task_id":"task-1","status":"in_progress","seconds":8,"aspect_ratio":"16:9"}`))
+	require.NoError(t, err)
+	require.Equal(t, "task-1", normalized["job_id"])
+	require.Equal(t, "running", normalized["status"])
+
+	_, err = adapter.RewriteCreate(&account, []byte(`{"prompt":"Too long"}`), "minimax-h3-quantized-768p", "768p", 11)
+	require.ErrorIs(t, err, ErrVideoOptionUnsupported)
+	_, err = adapter.RewriteCreate(&account, []byte(`{"prompt":"Video reference","guidances":{"video_reference_base":[{"video":{"url":"https://cdn.test/ref.mp4"}}]}}`), "minimax-h3-quantized-768p", "768p", 8)
+	require.ErrorIs(t, err, ErrVideoOptionUnsupported)
+}
+
+func mustVideoStatus(t *testing.T, adapter videoProviderAdapter, raw []byte) string {
+	t.Helper()
+	value, err := adapter.DecodeJob(raw)
+	require.NoError(t, err)
+	return videoStringValue(value["status"])
+}
+
+func TestCTMOAIVideoAdapterMapsTransientAndTerminalStatuses(t *testing.T) {
+	adapter := ctmoaiVideoAdapter{}
+	for _, tc := range []struct {
+		status string
+		want   string
+	}{
+		{status: "unknown", want: "pending"},
+		{status: "timeout", want: "failed"},
+		{status: "timed_out", want: "failed"},
+		{status: "expired", want: "failed"},
+	} {
+		normalized, err := adapter.DecodeJob([]byte(`{"task_id":"task-status","status":"` + tc.status + `"}`))
+		require.NoError(t, err)
+		require.Equal(t, tc.want, normalized["status"], tc.status)
+	}
+}
+
+func customAdapterAuthHeader(t *testing.T, adapter videoProviderAdapter, apiKey string) string {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodGet, "https://provider.example.test", nil)
+	require.NoError(t, err)
+	adapter.Authorize(req, apiKey)
+	return req.Header.Get("X-Api-Key")
+}
+
 func TestXiaoVideoOpenAISoraEndToEndCompatibility(t *testing.T) {
 	const groupID int64 = 7
 	repo := newVideoRepositoryStub()
@@ -553,6 +680,22 @@ func TestXiaoVideoNormalizesAndValidatesAudio(t *testing.T) {
 	}
 }
 
+func TestXiaoVideoPreservesCapabilityDrivenGenerationOptions(t *testing.T) {
+	svc := newVideoServiceForTest(newVideoRepositoryStub(), &videoAccountRepoStub{}, nil)
+	owner := VideoOwner{UserID: 11, APIKeyID: 22, GroupID: videoInt64Ptr(7)}
+
+	rewritten, _, _, _, err := svc.rewriteGenerationRequest(context.Background(), owner, []byte(`{"model":"seedance-2.0","prompt":"waves","generation_mode":"text_to_video","quality":"standard","watermark":false}`))
+	require.NoError(t, err)
+	var request map[string]any
+	require.NoError(t, json.Unmarshal(rewritten, &request))
+	require.Equal(t, "text_to_video", request["generation_mode"])
+	require.Equal(t, "standard", request["quality"])
+	require.Equal(t, false, request["watermark"])
+
+	_, _, _, _, err = svc.rewriteGenerationRequest(context.Background(), owner, []byte(`{"model":"seedance-2.0","prompt":"waves","watermark":"false"}`))
+	require.ErrorIs(t, err, ErrVideoRequestInvalid)
+}
+
 func TestXiaoVideoDetectsReferenceVideoGuidance(t *testing.T) {
 	svc := newVideoServiceForTest(newVideoRepositoryStub(), &videoAccountRepoStub{}, nil)
 	owner := VideoOwner{UserID: 11, APIKeyID: 22, GroupID: videoInt64Ptr(7)}
@@ -572,6 +715,25 @@ func TestXiaoVideoDetectsReferenceVideoGuidance(t *testing.T) {
 	)
 	require.NoError(t, err)
 	require.False(t, meta.ReferenceVideo)
+}
+
+func TestXiaoVideoAcceptsProviderSecondsAlias(t *testing.T) {
+	svc := newVideoServiceForTest(newVideoRepositoryStub(), &videoAccountRepoStub{}, nil)
+	owner := VideoOwner{UserID: 11, APIKeyID: 22, GroupID: videoInt64Ptr(7)}
+	rewritten, meta, _, _, err := svc.rewriteGenerationRequest(
+		context.Background(), owner,
+		[]byte(`{"model":"seedance-2.0","prompt":"waves","seconds":6}`),
+	)
+	require.NoError(t, err)
+	require.Equal(t, 6, meta.Duration)
+	var request map[string]any
+	require.NoError(t, json.Unmarshal(rewritten, &request))
+	require.Equal(t, float64(6), request["duration"])
+	_, _, _, _, err = svc.rewriteGenerationRequest(
+		context.Background(), owner,
+		[]byte(`{"model":"seedance-2.0","prompt":"waves","duration":5,"seconds":6}`),
+	)
+	require.ErrorIs(t, err, ErrVideoRequestInvalid)
 }
 
 func TestXiaoVideoNormalizesReferenceImageStrengthAndOrder(t *testing.T) {
@@ -681,7 +843,7 @@ func TestXiaoVideoCreateBindsMediaAccountAndMapsModel(t *testing.T) {
 		}, nil
 	}}
 	svc := newVideoServiceForTest(repo, accounts, upstream)
-	job, err := svc.Create(context.Background(), VideoOwner{UserID: 11, APIKeyID: 22, GroupID: videoInt64Ptr(groupID)}, []byte(`{"model":"video-public","prompt":"make a video","duration":4,"start_frame_url":"https://video.example.test/v1/videos/uploads/vidmedia_local/content"}`), "order-1")
+	job, err := svc.Create(context.Background(), VideoOwner{UserID: 11, APIKeyID: 22, GroupID: videoInt64Ptr(groupID)}, []byte(`{"model":"video-public","prompt":"make a video","duration":4,"start_frame_url":"https://app.example.test/api/v1/video/uploads/vidmedia_local/content"}`), "order-1")
 	require.NoError(t, err)
 	require.Equal(t, int64(42), capturedAccountID)
 	require.Equal(t, "video-upstream-v2", captured["model"])
@@ -988,6 +1150,56 @@ func TestPricedVideoModelsUsesStoredAIStartLabCapabilities(t *testing.T) {
 	require.Equal(t, true, model["supports_start_frame"])
 	require.Equal(t, false, model["supports_audio"])
 	require.Equal(t, map[string]any{"image": float64(9), "video": float64(3), "audio": float64(3)}, model["max_references"])
+}
+
+func TestPricedVideoModelsPreferLiveCapabilityLimits(t *testing.T) {
+	account := videoTestAccount(42, 7, "https://video.ctmoai.com")
+	account.Credentials[XiaoVideoProtocolCredentialKey] = XiaoVideoProtocolCTMOAI
+	account.Credentials["model_mapping"] = map[string]any{"h3": "minimax-h3-quantized-768p"}
+	account.Credentials[xiaoVideoCapabilitiesCredentialKey] = map[string]any{
+		"minimax-h3-quantized-768p": map[string]any{
+			"durations":          []any{4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15},
+			"max_references":     map[string]any{"image": 9, "video": 3, "audio": 3},
+			"supports_guidances": true,
+		},
+	}
+	rules := []XiaoVideoPricingRule{{Model: "h3", Resolution: "768p", PricePerSecond: 1, DefaultResolution: true, DefaultDuration: 4}}
+	upstream := []map[string]any{{
+		"id":             "minimax-h3-quantized-768p",
+		"resolutions":    []any{"768p"},
+		"durations":      []any{4, 5, 6, 7, 8, 9, 10},
+		"max_references": map[string]any{"image": 4, "video": 0, "audio": 0},
+	}}
+	models := pricedVideoModelsForAccount(&account, rules, upstream)
+	model := models["h3"]
+	require.Equal(t, []any{4, 5, 6, 7, 8, 9, 10}, model["durations"])
+	require.Equal(t, map[string]any{"image": 4, "video": 0, "audio": 0}, model["max_references"])
+}
+
+func TestPricedVideoModelsRestoresLegacyPerRequestPrice(t *testing.T) {
+	account := videoTestAccount(42, 7, "https://video.ctmoai.com")
+	account.Credentials[XiaoVideoProtocolCredentialKey] = XiaoVideoProtocolCTMOAI
+	rules := []XiaoVideoPricingRule{{
+		Model:             "seedance2.0-stable-full-480p",
+		Resolution:        "480p",
+		PricePerSecond:    1.125,
+		DefaultResolution: true,
+		DefaultDuration:   4,
+	}}
+	models := pricedVideoModelsForAccount(&account, rules, []map[string]any{{
+		"id":          "seedance2.0-stable-full-480p",
+		"resolutions": []any{"480p"},
+		"pricing": map[string]any{
+			"mode":   "per_task",
+			"amount": json.Number("4.5"),
+		},
+	}})
+
+	variants, ok := models["seedance2.0-stable-full-480p"]["pricing_variants"].([]map[string]any)
+	require.True(t, ok)
+	require.Len(t, variants, 1)
+	require.Equal(t, "per_request", variants[0]["billing_unit"])
+	require.Equal(t, "4.5", variants[0]["unit_price"])
 }
 
 func TestPreferredVideoUpstreamModelKeepsLegacyBareMappingsDeterministic(t *testing.T) {

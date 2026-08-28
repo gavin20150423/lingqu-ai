@@ -36,6 +36,7 @@ func RegisterUserRoutes(
 		{
 			shop.GET("/draw-progress", h.Shop.ListDrawProgress)
 			shop.POST("/orders", h.Shop.CreateOrder)
+			shop.GET("/orders", h.Shop.ListOrders)
 			shop.GET("/orders/:id", h.Shop.GetOrder)
 			shop.GET("/orders/:id/files/download.zip", h.Shop.DownloadOrderFilesZip)
 			shop.GET("/orders/:id/files/:card_id/download", h.Shop.DownloadOrderFile)
@@ -203,6 +204,25 @@ func RegisterUserRoutes(
 		{
 			monitors.GET("", h.ChannelMonitor.List)
 			monitors.GET("/:id/status", h.ChannelMonitor.GetStatus)
+		}
+
+		// The standalone browser workbench uses the current session and keeps the
+		// selected API credential on the server side.
+		if h.VideoWorkbench != nil {
+			video := authenticated.Group("/video")
+			{
+				video.GET("/bootstrap", h.VideoWorkbench.Bootstrap)
+				video.GET("/models", h.VideoWorkbench.Models)
+				video.GET("/capabilities", h.VideoWorkbench.Capabilities)
+				video.POST("/uploads", h.VideoWorkbench.Upload)
+				video.GET("/uploads/:media_id/content", h.VideoWorkbench.MediaContent)
+				video.POST("/jobs", h.VideoWorkbench.Create)
+				video.GET("/jobs", h.VideoWorkbench.List)
+				video.GET("/jobs/:job_id", h.VideoWorkbench.Get)
+				video.POST("/jobs/:job_id/cancel", h.VideoWorkbench.Cancel)
+				video.DELETE("/jobs/:job_id", h.VideoWorkbench.Cancel)
+				video.GET("/jobs/:job_id/content", h.VideoWorkbench.Content)
+			}
 		}
 
 	}

@@ -41,6 +41,49 @@ func TestExtractXiaoVideoModelSpecsSupportsNestedCreditPrices(t *testing.T) {
 	require.Equal(t, "CREDITS", specs[0].CostCurrency)
 }
 
+func TestExtractCTMOAIVideoModelSpecs(t *testing.T) {
+	t.Parallel()
+	specs, err := extractCTMOAIVideoModelSpecs([]byte(`{"data":[{"id":"seedance2.0-stable-full-720p","resolution":"720p","durations_seconds":[4,8,15],"ratios":["16:9","9:16"],"max_images":9,"pricing":{"mode":"per_second","amount":0.55,"currency":"USD"}},{"id":"minimax-h3-original-cf-4k","durations_seconds":[4,8,15],"pricing":{"mode":"per_second","amount":0.19,"currency":"USD"}}]}`))
+	require.NoError(t, err)
+	require.Len(t, specs, 2)
+	seedance := specs[1]
+	require.Equal(t, "seedance2.0-stable-full-720p", seedance.ID)
+	require.Equal(t, "720p", seedance.Resolution)
+	require.Equal(t, "second", seedance.CostUnit)
+	require.Equal(t, "USD", seedance.CostCurrency)
+	require.Equal(t, 4, seedance.DefaultDuration)
+	require.Equal(t, []string{"16:9", "9:16"}, seedance.AspectRatios)
+	require.Equal(t, 9, seedance.MaxReferences["image"])
+	h3 := specs[0]
+	require.Equal(t, "4K", h3.Resolution)
+	require.True(t, h3.SupportsStartFrame)
+}
+
+func TestExtractCTMOAIVideoModelSpecsSupportsPerTaskPricing(t *testing.T) {
+	t.Parallel()
+
+	specs, err := extractCTMOAIVideoModelSpecs([]byte(`{"data":[{"id":"seedance2.0-select-value-480p","resolution":"480p","durations_seconds":[15],"ratios":["16:9","9:16"],"max_images":9,"max_videos":3,"max_audios":3,"pricing":{"mode":"per_task","amount":3.8,"currency":"CNY"}}]}`))
+	require.NoError(t, err)
+	require.Len(t, specs, 1)
+	require.Equal(t, "seedance2.0-select-value-480p", specs[0].ID)
+	require.Equal(t, "480p", specs[0].Resolution)
+	require.Equal(t, "request", specs[0].CostUnit)
+	require.Equal(t, "CNY", specs[0].CostCurrency)
+	require.Equal(t, 3.8, *specs[0].UpstreamCost)
+	require.Equal(t, 15, specs[0].DefaultDuration)
+	require.Equal(t, map[string]int{"image": 9, "video": 3, "audio": 3}, specs[0].MaxReferences)
+}
+
+func TestExtractCTMOAIVideoModelSpecsPreservesUnsupportedReferenceKinds(t *testing.T) {
+	t.Parallel()
+
+	specs, err := extractCTMOAIVideoModelSpecs([]byte(`{"data":[{"id":"minimax-h3-quantized-768p","resolution":"768p","durations_seconds":[4,5,6,7,8,9,10],"ratios":["16:9","9:16"],"max_images":4,"max_videos":0,"max_audios":0}]}`))
+	require.NoError(t, err)
+	require.Len(t, specs, 1)
+	require.Equal(t, map[string]int{"image": 4, "video": 0, "audio": 0}, specs[0].MaxReferences)
+	require.True(t, specs[0].SupportsGuidances)
+}
+
 func TestExtractAIStartLabVideoModelSpecsUsesNestedPricingAndFiltersImages(t *testing.T) {
 	t.Parallel()
 

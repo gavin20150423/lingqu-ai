@@ -308,6 +308,10 @@ export const useAppStore = defineStore('app', () => {
       site_name: resolveBrandName(config.site_name),
       site_logo: resolveBrandLogo(config.site_logo),
       site_subtitle: resolveBrandSubtitle(config.site_subtitle),
+      user_menu_config: {
+        visibility: config.user_menu_config?.visibility || {},
+        order: config.user_menu_config?.order || [],
+      },
     }
     if (typeof window !== 'undefined') {
       window.__APP_CONFIG__ = { ...normalizedConfig }
@@ -374,6 +378,7 @@ export const useAppStore = defineStore('app', () => {
         table_page_size_options: [10, 20, 50, 100],
         custom_menu_items: [],
         custom_endpoints: [],
+        user_menu_config: { visibility: {}, order: [] },
         linuxdo_oauth_enabled: false,
         wechat_oauth_enabled: false,
         wechat_oauth_open_enabled: false,

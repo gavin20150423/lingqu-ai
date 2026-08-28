@@ -125,6 +125,8 @@
                   >
                     <option value="native">{{ t('admin.xiaoVideo.protocolNative') }}</option>
                     <option value="openai_sora">{{ t('admin.xiaoVideo.protocolOpenAISora') }}</option>
+                    <option value="ctmoai">{{ t('admin.xiaoVideo.protocolCTMOAI') }}</option>
+                    <option value="custom_json">{{ t('admin.xiaoVideo.protocolCustomJSON') }}</option>
                   </select>
                 </label>
 
@@ -183,6 +185,21 @@
                     class="input resize-y"
                     data-testid="xiao-notes"
                   />
+                </label>
+
+                <label v-if="form.protocol === 'custom_json'" class="min-w-0 md:col-span-2">
+                  <span class="input-label">{{ t('admin.xiaoVideo.adapterConfig') }}</span>
+                  <textarea
+                    v-model="form.adapterJSON"
+                    rows="12"
+                    spellcheck="false"
+                    class="input resize-y font-mono text-xs leading-5"
+                    :placeholder="t('admin.xiaoVideo.adapterConfigPlaceholder')"
+                    data-testid="xiao-adapter-config"
+                  />
+                  <span class="mt-1 block text-xs text-gray-500 dark:text-gray-400">
+                    {{ t('admin.xiaoVideo.adapterConfigHint') }}
+                  </span>
                 </label>
               </div>
 
@@ -424,6 +441,7 @@ import Icon from '@/components/icons/Icon.vue'
 import XiaoVideoConfigEditor from '@/components/account/XiaoVideoConfigEditor.vue'
 import {
   createXiaoVideoPricingRule,
+  normalizeBillingUnit,
   normalizeXiaoVideoPricing,
   readXiaoVideoPricing,
   validateXiaoVideoPricing,
@@ -436,7 +454,7 @@ import type { Account, AdminGroup } from '@/types'
 import type { UpstreamModelSpec } from '@/api/admin/accounts'
 
 type EditableStatus = 'active' | 'inactive' | 'error'
-type VideoProtocol = 'native' | 'openai_sora'
+type VideoProtocol = 'native' | 'openai_sora' | 'ctmoai' | 'custom_json'
 
 const AISTARTLAB_BASE_URL = 'https://api.video.aistarslab.com/openai'
 
@@ -444,6 +462,7 @@ interface XiaoVideoForm {
   name: string
   notes: string
   protocol: VideoProtocol
+  adapterJSON: string
   baseUrl: string
   apiKey: string
   concurrency: number
@@ -482,6 +501,7 @@ const form = reactive<XiaoVideoForm>({
   name: '',
   notes: '',
   protocol: 'native',
+  adapterJSON: '',
   baseUrl: '',
   apiKey: '',
   concurrency: 1,
@@ -509,7 +529,7 @@ const specsByModel = computed(() => {
   return grouped
 })
 const hasConvertiblePricing = computed(() =>
-  upstreamModelSpecs.value.some((spec) => internalCostPerSecond(spec) !== null)
+  upstreamModelSpecs.value.some((spec) => internalUnitCost(spec) !== null)
 )
 const pricingSourceLabel = computed(() => {
   if (upstreamPricingSource.value === 'aistartlab_config') return t('admin.xiaoVideo.pricingSourceAIStartLab')
@@ -572,6 +592,7 @@ function resetForm() {
     name: '',
     notes: '',
     protocol: 'native' as VideoProtocol,
+    adapterJSON: '',
     baseUrl: '',
     apiKey: '',
     concurrency: 1,
@@ -590,7 +611,14 @@ function syncForm(account: Account) {
   Object.assign(form, {
     name: account.name,
     notes: account.notes ?? '',
-    protocol: credentials.video_protocol === 'openai_sora' ? 'openai_sora' : 'native',
+    protocol: credentials.video_protocol === 'openai_sora'
+      ? 'openai_sora'
+      : credentials.video_protocol === 'ctmoai'
+        ? 'ctmoai'
+        : credentials.video_protocol === 'custom_json' ? 'custom_json' : 'native',
+    adapterJSON: typeof credentials.video_adapter === 'string'
+      ? credentials.video_adapter
+      : credentials.video_adapter ? JSON.stringify(credentials.video_adapter, null, 2) : '',
     baseUrl: typeof credentials.base_url === 'string' ? credentials.base_url : '',
     apiKey: '',
     concurrency: account.concurrency || 1,
@@ -677,9 +705,12 @@ function toggleGroup(groupId: number, event: Event) {
 }
 
 function applyProtocolDefaults() {
-  if (form.protocol === 'openai_sora' && !form.baseUrl.trim()) {
-    form.baseUrl = AISTARTLAB_BASE_URL
-  }
+	if (form.protocol === 'openai_sora' && !form.baseUrl.trim()) {
+		form.baseUrl = AISTARTLAB_BASE_URL
+	}
+	if (form.protocol === 'ctmoai' && !form.baseUrl.trim()) {
+		form.baseUrl = 'https://video.ctmoai.com'
+	}
 }
 
 function resetUpstreamModelPicker() {
@@ -697,8 +728,20 @@ function savedConnectionMatchesForm(): boolean {
   if (!selectedAccount.value) return false
   const credentials = (selectedAccount.value.credentials ?? {}) as Record<string, unknown>
   const savedBaseURL = typeof credentials.base_url === 'string' ? credentials.base_url.trim() : ''
-  const savedProtocol = credentials.video_protocol === 'openai_sora' ? 'openai_sora' : 'native'
-  return savedBaseURL === form.baseUrl.trim() && savedProtocol === form.protocol
+  const savedProtocol = credentials.video_protocol === 'openai_sora'
+    ? 'openai_sora'
+    : credentials.video_protocol === 'ctmoai'
+      ? 'ctmoai'
+      : credentials.video_protocol === 'custom_json' ? 'custom_json' : 'native'
+  if (savedBaseURL !== form.baseUrl.trim() || savedProtocol !== form.protocol) return false
+  if (form.protocol !== 'custom_json') return true
+  const savedAdapter = credentials.video_adapter
+  try {
+    return JSON.stringify(typeof savedAdapter === 'string' ? JSON.parse(savedAdapter) : savedAdapter) ===
+      JSON.stringify(JSON.parse(form.adapterJSON))
+  } catch {
+    return false
+  }
 }
 
 async function fetchUpstreamModels() {
@@ -717,6 +760,8 @@ async function fetchUpstreamModels() {
 
   fetchingModels.value = true
   try {
+    const adapter = parseAdapterJSON()
+    if (form.protocol === 'custom_json' && !adapter) return
     const result = canUseSavedCredentials && selectedAccount.value
       ? await adminAPI.accounts.syncUpstreamModels(selectedAccount.value.id)
       : await adminAPI.accounts.syncUpstreamModelsPreview({
@@ -724,7 +769,8 @@ async function fetchUpstreamModels() {
           type: 'apikey',
           base_url: form.baseUrl.trim(),
           api_key: apiKey,
-          video_protocol: form.protocol
+          video_protocol: form.protocol,
+          ...(adapter ? { video_adapter: adapter } : {})
         })
     const models = [...new Set(result.models.map((model) => model.trim()).filter(Boolean))]
       .sort((left, right) => left.localeCompare(right))
@@ -738,6 +784,9 @@ async function fetchUpstreamModels() {
     )
     upstreamPricingSource.value = result.pricing_source ?? 'none'
     upstreamPricingNote.value = result.pricing_note ?? ''
+    // Existing mappings should be usable as soon as the upstream catalog is refreshed.
+    // Keep non-zero values intact so a manually configured selling price is not replaced.
+    fillMissingMappedPricing()
     selectedUpstreamModels.value = models.filter(canImportUpstreamModel)
     modelSearch.value = ''
     modelPickerOpen.value = true
@@ -776,23 +825,24 @@ function nextPublicModelName(upstreamModel: string, usedNames: Set<string>): str
   return candidate
 }
 
-function internalCostPerSecond(spec: UpstreamModelSpec): number | null {
+function specBillingUnit(spec: UpstreamModelSpec): 'per_second' | 'per_request' | null {
+  const unit = spec.cost_unit?.trim().toLowerCase()
+  if (unit === 'second') return 'per_second'
+  if (unit === 'request') return 'per_request'
+  return null
+}
+
+function internalUnitCost(spec: UpstreamModelSpec): number | null {
   const rawCost = Number(spec.upstream_cost)
   if (!Number.isFinite(rawCost) || rawCost < 0) return null
 
   const currency = spec.cost_currency?.trim().toUpperCase()
   const currencyFactor = currency === 'USD'
     ? 1
+    : currency === 'CNY' && form.protocol === 'ctmoai' ? 1
     : currency === 'CREDITS' && upstreamPricingSource.value === 'aistartlab_config' ? 0.01 : null
   if (currencyFactor === null) return null
-
-  const unit = spec.cost_unit?.trim().toLowerCase()
-  if (unit === 'second') return rawCost * currencyFactor
-  const duration = Number(spec.default_duration)
-  if (unit === 'request' && Number.isFinite(duration) && duration > 0) {
-    return rawCost * currencyFactor / duration
-  }
-  return null
+  return specBillingUnit(spec) ? rawCost * currencyFactor : null
 }
 
 function formatPrice(value: number): string {
@@ -815,10 +865,15 @@ function formatSpecCost(spec: UpstreamModelSpec): string {
     : unit === 'request'
       ? t('admin.xiaoVideo.perRequestSuffix')
       : unit ? `/${unit}` : ''
-  const internalCost = internalCostPerSecond(spec)
+  const internalCost = internalUnitCost(spec)
   const converted = internalCost === null
     ? ''
-    : t('admin.xiaoVideo.internalCostEquivalent', { price: formatPrice(internalCost) })
+    : t('admin.xiaoVideo.internalCostEquivalent', {
+        price: formatPrice(internalCost),
+        unit: specBillingUnit(spec) === 'per_request'
+          ? t('admin.xiaoVideo.perRequestSuffix')
+          : t('admin.xiaoVideo.perSecondSuffix')
+      })
   return [resolution, `${value}${suffix}`, converted].filter(Boolean).join(' · ')
 }
 
@@ -836,7 +891,7 @@ function modelCostSummary(model: string): string {
 }
 
 function suggestedPrice(spec: UpstreamModelSpec): number | null {
-  const internalCost = internalCostPerSecond(spec)
+  const internalCost = internalUnitCost(spec)
   if (internalCost === null) return null
   const multiplier = Number(markupMultiplier.value)
   if (!Number.isFinite(multiplier) || multiplier < 0) return null
@@ -847,7 +902,10 @@ function modelSuggestedSummary(model: string): string {
   const summaries = effectiveModelSpecs(model).flatMap((spec) => {
     const price = suggestedPrice(spec)
     if (price === null) return []
-    return [[spec.resolution?.trim(), `$${formatPrice(price)}${t('admin.xiaoVideo.perSecondSuffix')}`]
+    const suffix = specBillingUnit(spec) === 'per_request'
+      ? t('admin.xiaoVideo.perRequestSuffix')
+      : t('admin.xiaoVideo.perSecondSuffix')
+    return [[spec.resolution?.trim(), `$${formatPrice(price)}${suffix}`]
       .filter(Boolean).join(' · ')]
   })
   return summaries.length > 0 ? summaries.join(' / ') : t('admin.xiaoVideo.manualPricingRequired')
@@ -859,7 +917,7 @@ function pricingSpecsForImport(model: string): UpstreamModelSpec[] {
   for (const spec of specs) {
     const resolution = spec.resolution?.trim() || '720p'
     const current = byResolution.get(resolution)
-    if (!current || (internalCostPerSecond(spec) !== null && internalCostPerSecond(current) === null)) {
+    if (!current || (internalUnitCost(spec) !== null && internalUnitCost(current) === null)) {
       byResolution.set(resolution, spec)
     }
   }
@@ -899,6 +957,33 @@ function appendSuggestedPricing(publicModel: string, specs: UpstreamModelSpec[])
     )
     const preferredDefault = explicitDefaultIndex >= 0 ? index === explicitDefaultIndex : index === 0
     if (existing) {
+      const price = suggestedPrice(spec)
+      let currentPrice = Number(existing.price_per_second)
+      const targetUnit = specBillingUnit(spec)
+      const currentUnit = normalizeBillingUnit(existing.billing_unit)
+      const legacyDuration = Number(existing.default_duration)
+      if (targetUnit && targetUnit !== currentUnit) {
+        if (targetUnit === 'per_request' && Number.isFinite(currentPrice) && Number.isFinite(legacyDuration) && legacyDuration > 0) {
+          currentPrice *= legacyDuration
+          existing.price_per_second = Number(currentPrice.toFixed(6))
+        } else if (targetUnit === 'per_second' && Number.isFinite(currentPrice) && Number.isFinite(legacyDuration) && legacyDuration > 0) {
+          currentPrice /= legacyDuration
+          existing.price_per_second = Number(currentPrice.toFixed(6))
+        }
+        existing.billing_unit = targetUnit === 'per_request' ? 'per_request' : undefined
+        added += 1
+      }
+      if (price !== null && (!Number.isFinite(currentPrice) || currentPrice <= 0)) {
+        existing.price_per_second = price
+        added += 1
+      }
+      const defaultDuration = Number(spec.default_duration)
+      const currentDuration = Number(existing.default_duration)
+      if (Number.isInteger(defaultDuration) && defaultDuration > 0 &&
+        (!Number.isFinite(currentDuration) || currentDuration <= 0)) {
+        existing.default_duration = defaultDuration
+        added += 1
+      }
       if (!hasDefault && preferredDefault) {
         existing.default_resolution = true
         hasDefault = true
@@ -915,6 +1000,7 @@ function appendSuggestedPricing(publicModel: string, specs: UpstreamModelSpec[])
     }
     rule.model = publicModel
     rule.resolution = resolution
+    rule.billing_unit = specBillingUnit(spec) === 'per_request' ? 'per_request' : undefined
     rule.price_per_second = price
     rule.default_duration = Number(spec.default_duration)
     rule.default_resolution = !hasDefault && preferredDefault
@@ -922,6 +1008,18 @@ function appendSuggestedPricing(publicModel: string, specs: UpstreamModelSpec[])
     added += 1
   }
   return added
+}
+
+function fillMissingMappedPricing(): number {
+  let filled = 0
+  for (const upstreamModel of upstreamModels.value) {
+    const specs = pricingSpecsForImport(upstreamModel)
+    if (specs.length === 0) continue
+    for (const publicModel of mappedPublicModels(upstreamModel)) {
+      filled += appendSuggestedPricing(publicModel, specs)
+    }
+  }
+  return filled
 }
 
 function importSelectedModels() {
@@ -964,6 +1062,22 @@ function validBaseUrl(value: string): boolean {
     return (url.protocol === 'http:' || url.protocol === 'https:') && !url.search && !url.hash
   } catch {
     return false
+  }
+}
+
+function parseAdapterJSON(showError = true): Record<string, unknown> | null {
+  if (form.protocol !== 'custom_json') return null
+  if (!form.adapterJSON.trim()) {
+    if (showError) appStore.showError(t('admin.xiaoVideo.validation.adapterRequired'))
+    return null
+  }
+  try {
+    const parsed = JSON.parse(form.adapterJSON)
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('object required')
+    return parsed as Record<string, unknown>
+  } catch {
+    if (showError) appStore.showError(t('admin.xiaoVideo.validation.adapterInvalid'))
+    return null
   }
 }
 
@@ -1032,6 +1146,7 @@ function validateForm(): boolean {
     appStore.showError(t('admin.xiaoVideo.validation.baseUrlInvalid'))
     return false
   }
+  if (form.protocol === 'custom_json' && !parseAdapterJSON()) return false
   if (!Number.isInteger(form.concurrency) || form.concurrency < 1 || form.concurrency > 10000) {
     appStore.showError(t('admin.xiaoVideo.validation.concurrencyInvalid'))
     return false
@@ -1060,6 +1175,12 @@ function buildCredentials(): Record<string, unknown> {
     base_url: form.baseUrl.trim(),
     video_protocol: form.protocol,
     video_pricing: normalizeXiaoVideoPricing(pricing.value)
+  }
+  if (form.protocol === 'custom_json') {
+    const adapter = parseAdapterJSON(false)
+    if (adapter) credentials.video_adapter = adapter
+  } else {
+    delete credentials.video_adapter
   }
   const videoCapabilities = buildVideoCapabilityMap()
   if (Object.keys(videoCapabilities).length > 0) credentials.video_capabilities = videoCapabilities

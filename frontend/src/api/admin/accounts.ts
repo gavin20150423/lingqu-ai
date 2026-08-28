@@ -579,6 +579,7 @@ export interface SyncUpstreamPreviewParams {
   base_url?: string
   api_key: string
   video_protocol?: string
+  video_adapter?: Record<string, unknown> | string
 }
 
 /**

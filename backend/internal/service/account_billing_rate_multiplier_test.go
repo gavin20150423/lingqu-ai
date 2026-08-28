@@ -53,11 +53,35 @@ func TestAccount_XiaoVideoPriceUsesDynamicResolutionDurationAndAudioRates(t *tes
 	require.InDelta(t, 3.0, amount, 0.00000001)
 }
 
+func TestAccount_XiaoVideoPricePerRequestDoesNotMultiplyByDuration(t *testing.T) {
+	a := Account{Credentials: map[string]any{
+		XiaoVideoPricingCredentialKey: []any{
+			map[string]any{
+				"model":              "seedance-task",
+				"resolution":         "480p",
+				"billing_unit":       "per_request",
+				"price_per_second":   4.5,
+				"default_resolution": true,
+				"default_duration":   4,
+			},
+		},
+	}}
+
+	for _, duration := range []int{4, 10, 15} {
+		amount, resolution, resolvedDuration, ok := a.XiaoVideoPrice("seedance-task", "480p", duration, false)
+		require.True(t, ok)
+		require.Equal(t, "480p", resolution)
+		require.Equal(t, duration, resolvedDuration)
+		require.InDelta(t, 4.5, amount, 0.00000001)
+	}
+}
+
 func TestAccount_XiaoVideoPricingRejectsInvalidAndAmbiguousRules(t *testing.T) {
 	tests := []any{
 		nil,
 		[]any{},
 		[]any{map[string]any{"model": "video-public", "resolution": "720p", "price_per_second": -1}},
+		[]any{map[string]any{"model": "video-public", "resolution": "720p", "billing_unit": "per_frame", "price_per_second": 1}},
 		[]any{
 			map[string]any{"model": "video-public", "resolution": "720p", "price_per_second": 1},
 			map[string]any{"model": "video-public", "resolution": "720p", "price_per_second": 2},

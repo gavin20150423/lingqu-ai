@@ -219,6 +219,7 @@ type IconName =
   | 'play'
   | 'server'
   | 'shield'
+  | 'sparkles'
   | 'sync'
   | 'user'
   | 'users'
@@ -329,6 +330,7 @@ function buildSelfNavItems(withDashboard: boolean): NavItem[] {
     { path: '/account-share', label: '账号共享', icon: 'users', hideInSimpleMode: true },
     { path: '/conversations', label: t('nav.conversations'), icon: 'chat', hideInSimpleMode: true },
     { path: '/batch-image', label: t('nav.batchImage'), icon: 'grid', hideInSimpleMode: true, featureFlag: flagBatchImageAccess },
+    { path: '/ai-creation', label: 'AI 创作', icon: 'sparkles', hideInSimpleMode: true },
     { path: '/usage', label: t('nav.usage'), icon: 'chart', hideInSimpleMode: true },
     { path: '/available-channels', label: t('nav.availableChannels'), icon: 'server', hideInSimpleMode: true, featureFlag: flagAvailableChannels },
     { path: '/monitor', label: t('nav.channelStatus'), icon: 'sync', featureFlag: flagChannelMonitor },

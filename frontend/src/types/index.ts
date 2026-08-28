@@ -245,6 +245,11 @@ export interface CustomEndpoint {
   description: string
 }
 
+export interface UserMenuConfig {
+  visibility: Record<string, boolean>
+  order: string[]
+}
+
 export interface LoginAgreementDocument {
   id: string
   title: string
@@ -300,6 +305,7 @@ export interface PublicSettings {
   table_page_size_options: number[]
   custom_menu_items: CustomMenuItem[]
   custom_endpoints: CustomEndpoint[]
+  user_menu_config: UserMenuConfig
   linuxdo_oauth_enabled: boolean
   dingtalk_oauth_enabled?: boolean
   wechat_oauth_enabled: boolean

@@ -89,6 +89,13 @@ export const storeAPI = {
     })
   },
 
+  getOrders(params?: Pick<StoreListParams, 'page' | 'page_size'>) {
+    return apiClient.get<BasePaginationResponse<StoreOrder>>('/shop/orders', { params }).then((response) => {
+      response.data.items = (response.data.items || []).map(normalizeOrder)
+      return response
+    })
+  },
+
   async downloadOrderFile(orderId: number, cardId: number, filename: string) {
     const { data } = await apiClient.get<Blob>(`/shop/orders/${orderId}/files/${cardId}/download`, { responseType: 'blob' })
     downloadBlob(data, filename || `shop-file-${cardId}`)

@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -55,15 +56,19 @@ type VideoOwner struct {
 }
 
 type VideoMedia struct {
-	MediaID         string
-	UpstreamMediaID string
-	AccountID       int64
-	UserID          int64
-	APIKeyID        int64
-	UpstreamURL     string
-	MediaType       string
-	ExpiresAt       time.Time
-	CreatedAt       time.Time
+	MediaID          string
+	UpstreamMediaID  string
+	AccountID        int64
+	UserID           int64
+	APIKeyID         int64
+	UpstreamURL      string
+	MediaType        string
+	MediaContentType string
+	MIMEType         string
+	Container        string
+	DurationUS       int64
+	ExpiresAt        time.Time
+	CreatedAt        time.Time
 }
 
 type VideoJob struct {
@@ -236,6 +241,13 @@ func (s *XiaoVideoService) ListModels(ctx context.Context, owner VideoOwner) ([]
 	var firstErr error
 	for i := range accounts {
 		account := &accounts[i]
+		adapter, adapterErr := videoProviderAdapterForAccount(account)
+		if adapterErr != nil {
+			if firstErr == nil {
+				firstErr = ErrVideoUpstreamUnavailable.WithCause(adapterErr)
+			}
+			continue
+		}
 		pricing, pricingErr := account.XiaoVideoPricingRules()
 		if pricingErr != nil {
 			if firstErr == nil {
@@ -243,7 +255,7 @@ func (s *XiaoVideoService) ListModels(ctx context.Context, owner VideoOwner) ([]
 			}
 			continue
 		}
-		resp, requestErr := s.upstreamWithAccount(ctx, account, http.MethodGet, "/v1/models", "", nil, "", "")
+		resp, requestErr := s.upstreamVideoOperation(ctx, account, videoOperationModels, "", "", "", nil, "", "")
 		if requestErr != nil {
 			if firstErr == nil {
 				firstErr = requestErr
@@ -262,16 +274,14 @@ func (s *XiaoVideoService) ListModels(ctx context.Context, owner VideoOwner) ([]
 			}
 			continue
 		}
-		var envelope struct {
-			Data []map[string]any `json:"data"`
-		}
-		if json.Unmarshal(raw, &envelope) != nil {
+		upstreamModels, decodeErr := adapter.DecodeModels(raw)
+		if decodeErr != nil {
 			if firstErr == nil {
-				firstErr = ErrVideoUpstreamUnavailable
+				firstErr = ErrVideoUpstreamUnavailable.WithCause(decodeErr)
 			}
 			continue
 		}
-		accountModels := pricedVideoModelsForAccount(account, pricing, envelope.Data)
+		accountModels := pricedVideoModelsForAccount(account, pricing, upstreamModels)
 		if len(accountModels) == 0 && firstErr == nil {
 			firstErr = ErrVideoPricingUnavailable
 		}
@@ -298,13 +308,227 @@ func (s *XiaoVideoService) ListModels(ctx context.Context, owner VideoOwner) ([]
 	return out, nil
 }
 
-func (s *XiaoVideoService) Upload(ctx context.Context, owner VideoOwner, body io.Reader, contentType string) (*VideoMedia, error) {
+// ListCapabilities reads the upstream capability catalogue for every video
+// account visible to the owner. Capability data is deliberately fetched at
+// request time because providers can change limits independently of pricing.
+func (s *XiaoVideoService) ListCapabilities(ctx context.Context, owner VideoOwner) (int, []map[string]any, error) {
+	accounts, err := s.videoAccounts(ctx, owner.GroupID, false)
+	if err != nil {
+		return 0, nil, err
+	}
+	if len(accounts) == 0 {
+		return 0, nil, ErrVideoUpstreamUnavailable
+	}
+	byID := make(map[string]map[string]any)
+	schemaVersion := 1
+	var firstErr error
+	for i := range accounts {
+		account := &accounts[i]
+		adapter, adapterErr := videoProviderAdapterForAccount(account)
+		if adapterErr != nil {
+			if firstErr == nil {
+				firstErr = ErrVideoUpstreamUnavailable.WithCause(adapterErr)
+			}
+			continue
+		}
+		pricing, pricingErr := account.XiaoVideoPricingRules()
+		if pricingErr != nil {
+			if firstErr == nil {
+				firstErr = ErrVideoPricingUnavailable.WithCause(pricingErr)
+			}
+			continue
+		}
+		if _, supported := adapter.Endpoint(videoOperationCapabilities, ""); !supported {
+			// Some providers (including CTMOAI) publish capability metadata on
+			// their model catalogue instead of exposing a separate endpoint. Use
+			// the live catalogue first so limits do not go stale in admin config.
+			merged, modelsErr := s.mergeLiveVideoModelCapabilities(ctx, account, adapter, pricing, byID)
+			if !merged {
+				mergeStoredVideoCapabilities(byID, account, pricing)
+				if modelsErr != nil && firstErr == nil && len(byID) == 0 {
+					firstErr = modelsErr
+				}
+			}
+			continue
+		}
+		resp, requestErr := s.upstreamVideoOperation(ctx, account, videoOperationCapabilities, "", "", "", nil, "", "")
+		if requestErr != nil {
+			if firstErr == nil {
+				firstErr = requestErr
+			}
+			continue
+		}
+		raw, readErr := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
+		_ = resp.Body.Close()
+		if readErr != nil || resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			if firstErr == nil {
+				if readErr != nil {
+					firstErr = ErrVideoUpstreamUnavailable.WithCause(readErr)
+				} else {
+					firstErr = upstreamVideoError(resp, raw)
+				}
+			}
+			continue
+		}
+		upstreamSchemaVersion, capabilities, decodeErr := adapter.DecodeCapabilities(raw)
+		if decodeErr != nil {
+			if firstErr == nil {
+				firstErr = ErrVideoUpstreamUnavailable.WithCause(decodeErr)
+			}
+			continue
+		}
+		if upstreamSchemaVersion > schemaVersion {
+			schemaVersion = upstreamSchemaVersion
+		}
+		for _, capability := range capabilities {
+			upstreamID := videoStringValue(capability["id"])
+			if upstreamID == "" {
+				continue
+			}
+			publicID := upstreamID
+			for _, rule := range pricing {
+				if resolveVideoUpstreamModel(account, rule.Model) == upstreamID {
+					publicID = rule.Model
+					break
+				}
+			}
+			copy := make(map[string]any, len(capability)+1)
+			for key, value := range capability {
+				copy[key] = value
+			}
+			copy["id"] = publicID
+			if _, exists := byID[publicID]; !exists {
+				byID[publicID] = copy
+			}
+		}
+	}
+	if len(byID) == 0 && firstErr != nil {
+		return 0, nil, firstErr
+	}
+	ids := make([]string, 0, len(byID))
+	for id := range byID {
+		ids = append(ids, id)
+	}
+	sortStrings(ids)
+	data := make([]map[string]any, 0, len(ids))
+	for _, id := range ids {
+		data = append(data, byID[id])
+	}
+	return schemaVersion, data, nil
+}
+
+// mergeLiveVideoModelCapabilities maps provider model metadata into the
+// public capability shape. It is intentionally best-effort: callers can fall
+// back to the administrator-saved catalogue when a provider's model endpoint
+// is temporarily unavailable.
+func (s *XiaoVideoService) mergeLiveVideoModelCapabilities(ctx context.Context, account *Account, adapter videoProviderAdapter, pricing []XiaoVideoPricingRule, byID map[string]map[string]any) (bool, error) {
+	if account == nil || adapter == nil {
+		return false, nil
+	}
+	if _, supported := adapter.Endpoint(videoOperationModels, ""); !supported {
+		return false, nil
+	}
+	resp, requestErr := s.upstreamVideoOperation(ctx, account, videoOperationModels, "", "", "", nil, "", "")
+	if requestErr != nil {
+		return false, requestErr
+	}
+	raw, readErr := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
+	_ = resp.Body.Close()
+	if readErr != nil {
+		return false, ErrVideoUpstreamUnavailable.WithCause(readErr)
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return false, upstreamVideoError(resp, raw)
+	}
+	models, decodeErr := adapter.DecodeModels(raw)
+	if decodeErr != nil {
+		return false, decodeErr
+	}
+	merged := false
+	for _, model := range models {
+		upstreamID := videoStringValue(model["id"])
+		if upstreamID == "" {
+			continue
+		}
+		publicID := upstreamID
+		for _, rule := range pricing {
+			if resolveVideoUpstreamModel(account, rule.Model) == upstreamID {
+				publicID = rule.Model
+				break
+			}
+		}
+		// A model catalogue is not necessarily a capability catalogue. Only
+		// publish entries that contain at least one capability field.
+		if !hasVideoCapabilityMetadata(model) {
+			continue
+		}
+		copy := make(map[string]any, len(model)+1)
+		for key, value := range model {
+			copy[key] = value
+		}
+		copy["id"] = publicID
+		if _, exists := byID[publicID]; !exists {
+			byID[publicID] = copy
+		}
+		merged = true
+	}
+	return merged, nil
+}
+
+func hasVideoCapabilityMetadata(model map[string]any) bool {
+	for _, key := range []string{
+		"resolutions", "durations", "durations_seconds", "aspect_ratios", "ratios",
+		"supports_guidances", "max_references", "max_images", "max_videos", "max_audios",
+	} {
+		if model[key] != nil {
+			return true
+		}
+	}
+	return false
+}
+
+// mergeStoredVideoCapabilities keeps capability-aware clients working for
+// providers that expose model metadata but no separate capabilities endpoint.
+// The administrator-supplied catalogue is already used for request validation,
+// so exposing the same data here avoids making the UI guess provider support.
+func mergeStoredVideoCapabilities(byID map[string]map[string]any, account *Account, pricing []XiaoVideoPricingRule) {
+	if account == nil {
+		return
+	}
+	for upstreamID, capability := range videoCapabilitiesForAccount(account) {
+		upstreamID = strings.TrimSpace(upstreamID)
+		if upstreamID == "" {
+			continue
+		}
+		publicID := upstreamID
+		for _, rule := range pricing {
+			if resolveVideoUpstreamModel(account, rule.Model) == upstreamID {
+				publicID = rule.Model
+				break
+			}
+		}
+		copy := make(map[string]any, len(capability)+1)
+		for key, value := range capability {
+			copy[key] = value
+		}
+		copy["id"] = publicID
+		if _, exists := byID[publicID]; !exists {
+			byID[publicID] = copy
+		}
+	}
+}
+
+func (s *XiaoVideoService) Upload(ctx context.Context, owner VideoOwner, body io.Reader, contentType string, idempotencyKeys ...string) (*VideoMedia, error) {
 	account, release, err := s.selectVideoAccountForUpload(ctx, owner)
 	if err != nil {
 		return nil, err
 	}
 	defer release()
-	resp, err := s.upstreamWithAccount(ctx, account, http.MethodPost, "/v1/videos/uploads", contentType, body, "", "")
+	idempotencyKey := ""
+	if len(idempotencyKeys) > 0 {
+		idempotencyKey = strings.TrimSpace(idempotencyKeys[0])
+	}
+	resp, err := s.upstreamVideoOperation(ctx, account, videoOperationUpload, "", "", contentType, body, "", videoUpstreamIdempotencyScope(owner.APIKeyID, idempotencyKey))
 	if err != nil {
 		return nil, err
 	}
@@ -316,36 +540,40 @@ func (s *XiaoVideoService) Upload(ctx context.Context, owner VideoOwner, body io
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, upstreamVideoError(resp, raw)
 	}
-	var upstream struct {
-		MediaID   string    `json:"media_id"`
-		URL       string    `json:"url"`
-		Type      string    `json:"type"`
-		ExpiresAt time.Time `json:"expires_at"`
+	adapter, adapterErr := videoProviderAdapterForAccount(account)
+	if adapterErr != nil {
+		return nil, ErrVideoUpstreamUnavailable.WithCause(adapterErr)
 	}
-	if err := json.Unmarshal(raw, &upstream); err != nil || strings.TrimSpace(upstream.MediaID) == "" || strings.TrimSpace(upstream.URL) == "" {
+	upstream, decodeErr := adapter.DecodeUpload(raw)
+	if decodeErr != nil || videoStringValue(upstream["media_id"]) == "" || videoStringValue(upstream["url"]) == "" {
 		return nil, ErrVideoUpstreamUnavailable.WithCause(errors.New("invalid upload response"))
 	}
-	if upstream.ExpiresAt.IsZero() {
-		upstream.ExpiresAt = time.Now().Add(24 * time.Hour)
+	expiresAt := time.Now().Add(24 * time.Hour)
+	if parsed, parseErr := time.Parse(time.RFC3339, videoStringValue(upstream["expires_at"])); parseErr == nil {
+		expiresAt = parsed
 	}
 	mediaID, err := newVideoID("vidmedia_")
 	if err != nil {
 		return nil, err
 	}
-	mediaType := upstream.Type
+	mediaType := videoStringValue(upstream["type"])
 	if mediaType == "" {
 		mediaType = "UPLOADED"
 	}
 	media := &VideoMedia{
-		MediaID:         mediaID,
-		UpstreamMediaID: upstream.MediaID,
-		AccountID:       account.ID,
-		UserID:          owner.UserID,
-		APIKeyID:        owner.APIKeyID,
-		UpstreamURL:     upstream.URL,
-		MediaType:       mediaType,
-		ExpiresAt:       upstream.ExpiresAt,
-		CreatedAt:       time.Now(),
+		MediaID:          mediaID,
+		UpstreamMediaID:  videoStringValue(upstream["media_id"]),
+		AccountID:        account.ID,
+		UserID:           owner.UserID,
+		APIKeyID:         owner.APIKeyID,
+		UpstreamURL:      videoStringValue(upstream["url"]),
+		MediaType:        mediaType,
+		MediaContentType: videoStringValue(upstream["media_type"]),
+		MIMEType:         videoStringValue(upstream["mime_type"]),
+		Container:        videoStringValue(upstream["container"]),
+		DurationUS:       int64(videoFloatValue(upstream["duration_us"])),
+		ExpiresAt:        expiresAt,
+		CreatedAt:        time.Now(),
 	}
 	if err := s.repo.CreateMedia(ctx, media); err != nil {
 		return nil, err
@@ -361,7 +589,12 @@ func (s *XiaoVideoService) selectVideoAccountForUpload(ctx context.Context, owne
 	excluded := make(map[int64]struct{})
 	hasUploadCapableAccount := false
 	for i := range accounts {
-		if accounts[i].XiaoVideoProtocol() == XiaoVideoProtocolOpenAISora {
+		adapter, adapterErr := videoProviderAdapterForAccount(&accounts[i])
+		if adapterErr != nil {
+			excluded[accounts[i].ID] = struct{}{}
+			continue
+		}
+		if _, supported := adapter.Endpoint(videoOperationUpload, ""); !supported {
 			excluded[accounts[i].ID] = struct{}{}
 			continue
 		}
@@ -382,11 +615,14 @@ func (s *XiaoVideoService) OpenMedia(ctx context.Context, owner VideoOwner, medi
 	if err != nil {
 		return nil, err
 	}
-	path := "/v1/videos/uploads/" + url.PathEscape(media.UpstreamMediaID) + "/content"
-	if strings.TrimSpace(rawQuery) != "" {
-		path += "?" + rawQuery
+	if adapter, adapterErr := videoProviderAdapterForAccount(account); adapterErr == nil {
+		if _, supported := adapter.Endpoint(videoOperationUploadContent, media.UpstreamMediaID); !supported {
+			if resultURL, ok := safeVideoResultURL(media.UpstreamURL); ok {
+				return s.openExternalVideoContent(ctx, account, resultURL, rangeHeader)
+			}
+		}
 	}
-	return s.upstreamWithAccount(ctx, account, http.MethodGet, path, "", nil, rangeHeader, "")
+	return s.upstreamVideoOperation(ctx, account, videoOperationUploadContent, media.UpstreamMediaID, rawQuery, "", nil, rangeHeader, "")
 }
 
 func (s *XiaoVideoService) Create(ctx context.Context, owner VideoOwner, body []byte, idempotencyKey string) (*VideoJob, error) {
@@ -521,7 +757,7 @@ func (s *XiaoVideoService) Create(ctx context.Context, owner VideoOwner, body []
 				return nil, rewriteErr
 			}
 		}
-		resp, requestErr := s.upstreamWithAccount(ctx, account, http.MethodPost, videoCreatePath(account), "application/json", bytes.NewReader(upstreamBody), "", videoUpstreamIdempotencyScope(owner.APIKeyID, idempotencyKey))
+		resp, requestErr := s.upstreamVideoOperation(ctx, account, videoOperationCreate, "", "", "application/json", bytes.NewReader(upstreamBody), "", videoUpstreamIdempotencyScope(owner.APIKeyID, idempotencyKey))
 		release()
 		if requestErr != nil {
 			if idempotencyKey != "" {
@@ -662,18 +898,42 @@ func (s *XiaoVideoService) rewriteGenerationRequest(ctx context.Context, owner V
 	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
 		return nil, videoGenerationMeta{}, "", 0, ErrVideoRequestInvalid
 	}
-	allowed := map[string]struct{}{"model": {}, "prompt": {}, "resolution": {}, "duration": {}, "aspect_ratio": {}, "audio": {}, "prompt_enhance": {}, "image_url": {}, "start_frame_url": {}, "end_frame_url": {}, "guidances": {}}
+	allowed := map[string]struct{}{"model": {}, "prompt": {}, "generation_mode": {}, "quality": {}, "resolution": {}, "duration": {}, "seconds": {}, "aspect_ratio": {}, "audio": {}, "watermark": {}, "prompt_enhance": {}, "image_url": {}, "start_frame_url": {}, "end_frame_url": {}, "guidances": {}}
 	for key := range request {
 		if _, ok := allowed[key]; !ok {
 			return nil, videoGenerationMeta{}, "", 0, ErrVideoRequestInvalid
 		}
 	}
-	for _, key := range []string{"model", "prompt", "resolution", "aspect_ratio", "prompt_enhance", "image_url", "start_frame_url", "end_frame_url"} {
+	for _, key := range []string{"model", "prompt", "generation_mode", "quality", "resolution", "aspect_ratio", "prompt_enhance", "image_url", "start_frame_url", "end_frame_url"} {
 		if value, exists := request[key]; exists && value != nil {
 			if _, ok := value.(string); !ok {
 				return nil, videoGenerationMeta{}, "", 0, ErrVideoRequestInvalid
 			}
 		}
+	}
+	if rawWatermark, exists := request["watermark"]; exists && rawWatermark != nil {
+		if _, ok := rawWatermark.(bool); !ok {
+			return nil, videoGenerationMeta{}, "", 0, ErrVideoRequestInvalid
+		}
+	}
+	// CTMOAI and several OpenAI-compatible providers call this field
+	// "seconds". The public Gavin2API contract uses "duration", but accepting
+	// the alias keeps provider-native clients interoperable. Reject conflicting
+	// values instead of silently choosing one.
+	if rawSeconds, exists := request["seconds"]; exists && rawSeconds != nil {
+		seconds, ok := rawSeconds.(json.Number)
+		if !ok || strings.TrimSpace(seconds.String()) == "" {
+			return nil, videoGenerationMeta{}, "", 0, ErrVideoRequestInvalid
+		}
+		if rawDuration, hasDuration := request["duration"]; hasDuration && rawDuration != nil {
+			duration, ok := rawDuration.(json.Number)
+			if !ok || duration.String() != seconds.String() {
+				return nil, videoGenerationMeta{}, "", 0, ErrVideoRequestInvalid
+			}
+		} else {
+			request["duration"] = seconds
+		}
+		delete(request, "seconds")
 	}
 	meta := videoGenerationMeta{
 		Model:          videoStringValue(request["model"]),
@@ -878,8 +1138,15 @@ func (s *XiaoVideoService) mapMediaURL(ctx context.Context, owner VideoOwner, va
 	if err != nil || parsed.Path == "" {
 		return value, 0, nil
 	}
-	marker := "/v1/videos/uploads/"
-	index := strings.Index(parsed.Path, marker)
+	markers := []string{"/v1/videos/uploads/", "/api/v1/video/uploads/", "/api/video/uploads/"}
+	marker := ""
+	index := -1
+	for _, candidate := range markers {
+		if candidateIndex := strings.Index(parsed.Path, candidate); candidateIndex >= 0 {
+			marker, index = candidate, candidateIndex
+			break
+		}
+	}
 	if index < 0 {
 		if strings.HasPrefix(strings.ToLower(strings.TrimSpace(value)), "http://") || strings.HasPrefix(strings.ToLower(strings.TrimSpace(value)), "https://") {
 			return value, 0, nil
@@ -931,10 +1198,14 @@ func (s *XiaoVideoService) Cancel(ctx context.Context, owner VideoOwner, jobID s
 	if err != nil {
 		return nil, err
 	}
-	if account.XiaoVideoProtocol() == XiaoVideoProtocolOpenAISora {
+	adapter, adapterErr := videoProviderAdapterForAccount(account)
+	if adapterErr != nil {
+		return nil, ErrVideoUpstreamUnavailable.WithCause(adapterErr)
+	}
+	if _, supported := adapter.Endpoint(videoOperationCancel, job.UpstreamJobID); !supported {
 		return nil, ErrVideoJobNotCancelable
 	}
-	resp, err := s.upstreamWithAccount(ctx, account, http.MethodDelete, videoJobPath(account, job.UpstreamJobID), "", nil, "", "")
+	resp, err := s.upstreamVideoOperation(ctx, account, videoOperationCancel, job.UpstreamJobID, "", "", nil, "", "")
 	if err != nil {
 		return nil, err
 	}
@@ -944,7 +1215,8 @@ func (s *XiaoVideoService) Cancel(ctx context.Context, owner VideoOwner, jobID s
 		return nil, upstreamVideoError(resp, raw)
 	}
 	var upstream map[string]any
-	if json.Unmarshal(raw, &upstream) == nil {
+	if decoded, decodeErr := adapter.DecodeJob(raw); decodeErr == nil {
+		upstream = decoded
 		status := videoStringValue(upstream["status"])
 		if isVideoStatus(status) {
 			var finished *time.Time
@@ -998,32 +1270,18 @@ func (s *XiaoVideoService) OpenContent(ctx context.Context, owner VideoOwner, jo
 	if err != nil {
 		return nil, err
 	}
-	if account.XiaoVideoProtocol() == XiaoVideoProtocolOpenAISora {
-		if resultURL, ok := openAISoraResultURL(job.UpstreamResponse); ok {
-			return s.openExternalVideoContent(ctx, account, resultURL, rangeHeader)
-		}
+	adapter, adapterErr := videoProviderAdapterForAccount(account)
+	if adapterErr != nil {
+		return nil, ErrVideoUpstreamUnavailable.WithCause(adapterErr)
 	}
-	path := videoContentPath(account, job.UpstreamJobID)
-	if strings.TrimSpace(rawQuery) != "" {
-		path += "?" + rawQuery
+	if resultURL, ok := adapter.ResultURL(job.UpstreamResponse); ok {
+		return s.openExternalVideoContent(ctx, account, resultURL, rangeHeader)
 	}
-	return s.upstreamWithAccount(ctx, account, http.MethodGet, path, "", nil, rangeHeader, "")
+	return s.upstreamVideoOperation(ctx, account, videoOperationContent, job.UpstreamJobID, rawQuery, "", nil, rangeHeader, "")
 }
 
 func openAISoraResultURL(raw []byte) (string, bool) {
-	var envelope struct {
-		Metadata struct {
-			ResultURL string `json:"result_url"`
-		} `json:"metadata"`
-	}
-	if json.Unmarshal(raw, &envelope) != nil {
-		return "", false
-	}
-	resultURL, err := url.Parse(strings.TrimSpace(envelope.Metadata.ResultURL))
-	if err != nil || resultURL.Host == "" || (resultURL.Scheme != "http" && resultURL.Scheme != "https") {
-		return "", false
-	}
-	return resultURL.String(), true
+	return openAISoraVideoAdapter{}.ResultURL(raw)
 }
 
 func (s *XiaoVideoService) openExternalVideoContent(ctx context.Context, account *Account, resultURL, rangeHeader string) (*http.Response, error) {
@@ -1071,7 +1329,7 @@ func (s *XiaoVideoService) refresh(ctx context.Context, job *VideoJob) (*VideoJo
 	if err != nil {
 		return nil, err
 	}
-	resp, err := s.upstreamWithAccount(ctx, account, http.MethodGet, videoJobPath(account, job.UpstreamJobID), "", nil, "", "")
+	resp, err := s.upstreamVideoOperation(ctx, account, videoOperationStatus, job.UpstreamJobID, "", "", nil, "", "")
 	if err != nil {
 		return nil, err
 	}
@@ -1117,7 +1375,7 @@ func (s *XiaoVideoService) refresh(ctx context.Context, job *VideoJob) (*VideoJo
 }
 
 func (s *XiaoVideoService) fetchUpstreamJob(ctx context.Context, account *Account, upstreamID string) (map[string]any, []byte, error) {
-	resp, err := s.upstreamWithAccount(ctx, account, http.MethodGet, videoJobPath(account, upstreamID), "", nil, "", "")
+	resp, err := s.upstreamVideoOperation(ctx, account, videoOperationStatus, upstreamID, "", "", nil, "", "")
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1137,12 +1395,16 @@ func (s *XiaoVideoService) fetchUpstreamJob(ctx context.Context, account *Accoun
 }
 
 func (s *XiaoVideoService) cancelUpstream(ctx context.Context, account *Account, upstreamID string) error {
-	if account != nil && account.XiaoVideoProtocol() == XiaoVideoProtocolOpenAISora {
+	adapter, adapterErr := videoProviderAdapterForAccount(account)
+	if adapterErr != nil {
+		return ErrVideoUpstreamUnavailable.WithCause(adapterErr)
+	}
+	if _, supported := adapter.Endpoint(videoOperationCancel, upstreamID); !supported {
 		return ErrVideoJobNotCancelable
 	}
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	resp, err := s.upstreamWithAccount(ctx, account, http.MethodDelete, videoJobPath(account, upstreamID), "", nil, "", "")
+	resp, err := s.upstreamVideoOperation(ctx, account, videoOperationCancel, upstreamID, "", "", nil, "", "")
 	if err != nil {
 		return err
 	}
@@ -1288,12 +1550,43 @@ func (s *XiaoVideoService) videoAccounts(ctx context.Context, groupID *int64, in
 	return out, nil
 }
 
+func (s *XiaoVideoService) upstreamVideoOperation(ctx context.Context, account *Account, operation videoProviderOperation, resourceID, rawQuery, contentType string, body io.Reader, rangeHeader, idempotencyKey string) (*http.Response, error) {
+	adapter, err := videoProviderAdapterForAccount(account)
+	if err != nil {
+		return nil, ErrVideoUpstreamUnavailable.WithCause(err)
+	}
+	endpoint, supported := adapter.Endpoint(operation, resourceID)
+	if !supported {
+		switch operation {
+		case videoOperationUpload, videoOperationUploadContent:
+			return nil, ErrVideoUploadUnsupported
+		case videoOperationCancel:
+			return nil, ErrVideoJobNotCancelable
+		default:
+			return nil, ErrVideoUpstreamUnavailable.WithCause(fmt.Errorf("video adapter does not support %s", operation))
+		}
+	}
+	path := endpoint.Path
+	if query := strings.TrimSpace(rawQuery); query != "" {
+		separator := "?"
+		if strings.Contains(path, "?") {
+			separator = "&"
+		}
+		path += separator + query
+	}
+	return s.upstreamWithAccount(ctx, account, endpoint.Method, path, contentType, body, rangeHeader, idempotencyKey)
+}
+
 func (s *XiaoVideoService) upstreamWithAccount(ctx context.Context, account *Account, method, path, contentType string, body io.Reader, rangeHeader, idempotencyKey string) (*http.Response, error) {
 	if !s.Enabled() {
 		return nil, ErrVideoExecutionDisabled
 	}
 	if account == nil {
 		return nil, ErrVideoUpstreamUnavailable
+	}
+	adapter, err := videoProviderAdapterForAccount(account)
+	if err != nil {
+		return nil, ErrVideoUpstreamUnavailable.WithCause(err)
 	}
 	endpoint, err := accountVideoEndpoint(account.GetCredential("base_url"), path)
 	if err != nil {
@@ -1303,11 +1596,16 @@ func (s *XiaoVideoService) upstreamWithAccount(ctx context.Context, account *Acc
 	if err != nil {
 		return nil, ErrVideoUpstreamUnavailable.WithCause(err)
 	}
-	req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(account.GetCredential("api_key")))
+	adapter.Authorize(req, strings.TrimSpace(account.GetCredential("api_key")))
+	for name, value := range adapter.StaticHeaders() {
+		req.Header.Set(name, value)
+	}
 	if contentType != "" {
 		req.Header.Set("Content-Type", contentType)
 	}
-	if method == http.MethodPost && path == "/v1/videos/generations" {
+	createEndpoint, hasCreateEndpoint := adapter.Endpoint(videoOperationCreate, "")
+	requestPath, _ := url.Parse(path)
+	if hasCreateEndpoint && createEndpoint.PreferRespondAsync && method == createEndpoint.Method && requestPath != nil && requestPath.Path == createEndpoint.Path {
 		req.Header.Set("Prefer", "respond-async")
 	}
 	if strings.TrimSpace(rangeHeader) != "" {
@@ -1315,8 +1613,11 @@ func (s *XiaoVideoService) upstreamWithAccount(ctx context.Context, account *Acc
 	}
 	if strings.TrimSpace(idempotencyKey) != "" {
 		digest := sha256.Sum256([]byte(strconv.FormatInt(account.ID, 10) + ":" + idempotencyKey))
-		req.Header.Set("Idempotency-Key", "sub2api-"+hex.EncodeToString(digest[:]))
+		if header := strings.TrimSpace(adapter.IdempotencyHeader()); header != "" {
+			req.Header.Set(header, "sub2api-"+hex.EncodeToString(digest[:]))
+		}
 	}
+	account.ApplyHeaderOverrides(req.Header)
 	proxyURL := ""
 	if account.ProxyID != nil && account.Proxy != nil {
 		proxyURL = account.Proxy.URL()
@@ -1378,10 +1679,11 @@ func rewriteVideoRequest(body []byte, model, resolution string, duration int) ([
 }
 
 func rewriteVideoRequestForAccount(account *Account, body []byte, model, resolution string, duration int) ([]byte, error) {
-	if account == nil || account.XiaoVideoProtocol() != XiaoVideoProtocolOpenAISora {
-		return rewriteVideoRequest(body, model, resolution, duration)
+	adapter, err := videoProviderAdapterForAccount(account)
+	if err != nil {
+		return nil, ErrVideoUpstreamUnavailable.WithCause(err)
 	}
-	return rewriteOpenAISoraVideoRequest(account, body, model, resolution, duration)
+	return adapter.RewriteCreate(account, body, model, resolution, duration)
 }
 
 func rewriteOpenAISoraVideoRequest(account *Account, body []byte, model, resolution string, duration int) ([]byte, error) {
@@ -1541,54 +1843,38 @@ func videoGuidanceURLs(guidances map[string]any, listKey, mediaKey string) []str
 }
 
 func videoCreatePath(account *Account) string {
-	if account != nil && account.XiaoVideoProtocol() == XiaoVideoProtocolOpenAISora {
-		return "/v1/videos"
+	adapter, err := videoProviderAdapterForAccount(account)
+	if err != nil {
+		return ""
 	}
-	return "/v1/videos/generations"
+	endpoint, _ := adapter.Endpoint(videoOperationCreate, "")
+	return endpoint.Path
 }
 
 func videoJobPath(account *Account, upstreamID string) string {
-	prefix := "/v1/videos/jobs/"
-	if account != nil && account.XiaoVideoProtocol() == XiaoVideoProtocolOpenAISora {
-		prefix = "/v1/videos/"
+	adapter, err := videoProviderAdapterForAccount(account)
+	if err != nil {
+		return ""
 	}
-	return prefix + url.PathEscape(upstreamID)
+	endpoint, _ := adapter.Endpoint(videoOperationStatus, upstreamID)
+	return endpoint.Path
 }
 
 func videoContentPath(account *Account, upstreamID string) string {
-	return videoJobPath(account, upstreamID) + "/content"
+	adapter, err := videoProviderAdapterForAccount(account)
+	if err != nil {
+		return ""
+	}
+	endpoint, _ := adapter.Endpoint(videoOperationContent, upstreamID)
+	return endpoint.Path
 }
 
 func decodeVideoUpstreamResponse(account *Account, raw []byte) (map[string]any, error) {
-	var upstream map[string]any
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.UseNumber()
-	if err := decoder.Decode(&upstream); err != nil {
+	adapter, err := videoProviderAdapterForAccount(account)
+	if err != nil {
 		return nil, err
 	}
-	if account == nil || account.XiaoVideoProtocol() != XiaoVideoProtocolOpenAISora {
-		return upstream, nil
-	}
-	upstream["job_id"] = videoStringValue(upstream["id"])
-	switch videoStringValue(upstream["status"]) {
-	case "queued":
-		upstream["status"] = "pending"
-	case "in_progress":
-		upstream["status"] = "running"
-	case "completed", "failed":
-	default:
-		return nil, errors.New("invalid OpenAI/Sora video status")
-	}
-	upstream["duration"] = videoStringValue(upstream["seconds"])
-	upstream["aspect_ratio"] = videoStringValue(upstream["size"])
-	if metadata, ok := upstream["metadata"].(map[string]any); ok {
-		upstream["resolution"] = videoStringValue(metadata["resolution"])
-	}
-	// The compatibility API does not expose credit consumption. Downstream
-	// settlement continues to use the configured selling price.
-	upstream["amount"] = "0"
-	upstream["currency"] = "CREDITS"
-	return upstream, nil
+	return adapter.DecodeJob(raw)
 }
 
 func seedanceSupportsGeneratedAudio(model string) bool {
@@ -1704,6 +1990,7 @@ func pricedVideoModelsForAccount(account *Account, pricing []XiaoVideoPricingRul
 		resolutions := make([]string, 0, len(rules))
 		defaultResolution := ""
 		defaultDuration := 0
+		pricingVariants := make([]map[string]any, 0, len(rules))
 		for _, rule := range rules {
 			if len(supportedResolutions) > 0 {
 				if _, ok := supportedResolutions[rule.Resolution]; !ok {
@@ -1711,6 +1998,25 @@ func pricedVideoModelsForAccount(account *Account, pricing []XiaoVideoPricingRul
 				}
 			}
 			resolutions = append(resolutions, rule.Resolution)
+			billingUnit := normalizeXiaoVideoBillingUnit(rule.BillingUnit)
+			if billingUnit == "" {
+				billingUnit = "per_second"
+			}
+			unitPrice := rule.PricePerSecond
+			if strings.TrimSpace(rule.BillingUnit) == "" && videoCapabilityBillingUnit(capability) == "per_request" {
+				// Early imports flattened a per-request price into a per-second rate.
+				// Reconstruct the task price so old accounts render correctly before
+				// their next administrator save.
+				billingUnit = "per_request"
+				unitPrice *= float64(rule.DefaultDuration)
+			}
+			pricingVariants = append(pricingVariants, map[string]any{
+				"billing_unit":     billingUnit,
+				"resolution":       rule.Resolution,
+				"unit_price":       strconv.FormatFloat(unitPrice, 'f', -1, 64),
+				"audio_unit_price": strconv.FormatFloat(rule.AudioPricePerSecond, 'f', -1, 64),
+				"currency":         "USD",
+			})
 			if rule.DefaultResolution {
 				defaultResolution = rule.Resolution
 				defaultDuration = rule.DefaultDuration
@@ -1745,10 +2051,18 @@ func pricedVideoModelsForAccount(account *Account, pricing []XiaoVideoPricingRul
 		if defaultDuration > 0 {
 			model["default_duration"] = defaultDuration
 		}
-		for _, key := range []string{"default_aspect_ratio", "supports_guidances", "supports_start_frame", "requires_start_frame", "supports_end_frame", "max_references", "durations", "aspect_ratios"} {
-			if value, ok := storedCapability[key]; ok {
+		if len(pricingVariants) > 0 {
+			model["pricing_variants"] = pricingVariants
+		}
+		// The live model catalogue is authoritative for capability fields. A
+		// provider can change limits independently of the administrator's saved
+		// snapshot (for example, H3 quantized currently returns max_videos=0 and
+		// max_audios=0). Use the saved capability only for fields the live model
+		// does not publish.
+		for _, key := range []string{"display_name", "generation_modes", "qualities", "default_quality", "supports_watermark", "default_aspect_ratio", "supports_guidances", "supports_start_frame", "requires_start_frame", "supports_end_frame", "max_references", "durations", "aspect_ratios"} {
+			if value, ok := capability[key]; ok {
 				model[key] = value
-			} else if value, ok := capability[key]; ok {
+			} else if value, ok := storedCapability[key]; ok {
 				model[key] = value
 			}
 		}
@@ -1763,6 +2077,23 @@ func pricedVideoModelsForAccount(account *Account, pricing []XiaoVideoPricingRul
 		out[publicModel] = model
 	}
 	return out
+}
+
+func videoCapabilityBillingUnit(capability map[string]any) string {
+	if capability == nil {
+		return ""
+	}
+	if pricing, ok := capability["pricing"].(map[string]any); ok {
+		if unit := videoStringValue(pricing["mode"]); unit != "" {
+			return normalizeXiaoVideoBillingUnit(unit)
+		}
+	}
+	for _, key := range []string{"billing_unit", "cost_unit"} {
+		if unit := videoStringValue(capability[key]); unit != "" {
+			return normalizeXiaoVideoBillingUnit(unit)
+		}
+	}
+	return ""
 }
 
 func videoStringSet(value any) map[string]struct{} {
@@ -1823,12 +2154,26 @@ func mergePricedVideoModel(target, source map[string]any) {
 	} else if sourceSource != "" && sourceSource != targetSource {
 		target["capability_source"] = "mixed"
 	}
-	for _, key := range []string{"default_resolution", "default_duration", "default_aspect_ratio", "supports_guidances", "supports_start_frame", "requires_start_frame", "supports_end_frame"} {
+	for _, key := range []string{"display_name", "default_resolution", "default_duration", "default_aspect_ratio", "default_quality", "pricing_variants", "supports_guidances", "supports_start_frame", "requires_start_frame", "supports_end_frame", "max_references", "supports_watermark"} {
 		if _, exists := target[key]; exists {
 			continue
 		}
 		if value, exists := source[key]; exists {
 			target[key] = value
+		}
+	}
+	for _, key := range []string{"generation_modes", "qualities"} {
+		values := videoStringSet(target[key])
+		for value := range videoStringSet(source[key]) {
+			values[value] = struct{}{}
+		}
+		if len(values) > 0 {
+			mergedValues := make([]string, 0, len(values))
+			for value := range values {
+				mergedValues = append(mergedValues, value)
+			}
+			sort.Strings(mergedValues)
+			target[key] = mergedValues
 		}
 	}
 	if sourceMultiplier := videoFloatValue(source["reference_video_multiplier"]); sourceMultiplier > videoFloatValue(target["reference_video_multiplier"]) {
@@ -2077,6 +2422,26 @@ func videoStringValue(value any) string {
 		return value.String()
 	case float64:
 		return strconv.FormatFloat(value, 'f', -1, 64)
+	case int:
+		return strconv.Itoa(value)
+	case int8:
+		return strconv.FormatInt(int64(value), 10)
+	case int16:
+		return strconv.FormatInt(int64(value), 10)
+	case int32:
+		return strconv.FormatInt(int64(value), 10)
+	case int64:
+		return strconv.FormatInt(value, 10)
+	case uint:
+		return strconv.FormatUint(uint64(value), 10)
+	case uint8:
+		return strconv.FormatUint(uint64(value), 10)
+	case uint16:
+		return strconv.FormatUint(uint64(value), 10)
+	case uint32:
+		return strconv.FormatUint(uint64(value), 10)
+	case uint64:
+		return strconv.FormatUint(value, 10)
 	default:
 		return ""
 	}

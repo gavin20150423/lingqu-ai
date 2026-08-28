@@ -143,6 +143,10 @@ func RegisterGatewayRoutes(
 		}
 	}
 	videoStatusHandler := func(c *gin.Context) {
+		if getGroupPlatform(c) == service.PlatformXiaoAPI && h.XiaoVideo != nil {
+			h.XiaoVideo.Get(c)
+			return
+		}
 		// Video status requests do not carry a model, so composite groups cannot
 		// be resolved by compositeTargetPlatformMiddleware. Route them through
 		// the Grok handler and let scheduler/account selection enforce capacity.
@@ -159,6 +163,10 @@ func RegisterGatewayRoutes(
 		})
 	}
 	videoContentHandler := func(c *gin.Context) {
+		if getGroupPlatform(c) == service.PlatformXiaoAPI && h.XiaoVideo != nil {
+			h.XiaoVideo.Content(c)
+			return
+		}
 		// Video content requests do not carry a model, so composite groups cannot
 		// be resolved by compositeTargetPlatformMiddleware. Route them through
 		// the Grok handler just like video status lookups.
@@ -294,6 +302,9 @@ func RegisterGatewayRoutes(
 		gateway.DELETE("/images/batches/:id", h.BatchImage.DeleteRecord)
 		gateway.DELETE("/images/batches/:id/outputs", h.BatchImage.DeleteOutputs)
 		gateway.POST("/videos/generations", videoGenerationHandler)
+		// OpenAI-style alias. The generations route remains supported for
+		// existing workbench clients; both create the same async job contract.
+		gateway.POST("/videos", videoGenerationHandler)
 		gateway.POST("/videos/uploads", xiaoVideoOnly(h.XiaoVideo.Upload))
 		gateway.GET("/videos/uploads/:media_id/content", xiaoVideoOnly(h.XiaoVideo.MediaContent))
 		gateway.GET("/videos/jobs", xiaoVideoOnly(h.XiaoVideo.List))
@@ -378,6 +389,7 @@ func RegisterGatewayRoutes(
 	r.POST("/images/edits/async", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), compositeTarget, requireGroupAnthropic, h.AsyncImage.Submit)
 	r.GET("/images/tasks/:task_id", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), compositeTarget, requireGroupAnthropic, imageTaskHandler)
 	r.POST("/videos/generations", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), compositeTarget, requireGroupAnthropic, videoGenerationHandler)
+	r.POST("/videos", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), compositeTarget, requireGroupAnthropic, videoGenerationHandler)
 	r.POST("/videos/edits", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), compositeTarget, requireGroupAnthropic, videoEditHandler)
 	r.POST("/videos/extensions", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), compositeTarget, requireGroupAnthropic, videoExtensionHandler)
 	r.GET("/videos/:request_id", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), compositeTarget, requireGroupAnthropic, videoStatusHandler)

@@ -146,6 +146,20 @@ func (h *ShopHandler) GetOrder(c *gin.Context) {
 	response.Success(c, order)
 }
 
+func (h *ShopHandler) ListOrders(c *gin.Context) {
+	subject, ok := requireAuth(c)
+	if !ok {
+		return
+	}
+	page, pageSize := response.ParsePagination(c)
+	orders, total, err := h.shopService.ListOrdersForUser(c.Request.Context(), subject.UserID, page, pageSize)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Paginated(c, orders, int64(total), page, pageSize)
+}
+
 func (h *ShopHandler) DownloadOrderFile(c *gin.Context) {
 	subject, ok := requireAuth(c)
 	if !ok {

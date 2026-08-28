@@ -78,6 +78,7 @@ type Handlers struct {
 	AsyncImage       *AsyncImageHandler
 	BatchImage       *BatchImageHandler
 	XiaoVideo        *XiaoVideoHandler
+	VideoWorkbench   *VideoWorkbenchHandler
 	Community        *CommunityHandler
 }
 

@@ -169,6 +169,47 @@ func TestSecurityHeaders(t *testing.T) {
 		assert.Equal(t, "SAMEORIGIN", w.Header().Get("X-Frame-Options"))
 		assert.Contains(t, csp, "frame-ancestors 'self'")
 		assert.NotContains(t, csp, "frame-ancestors 'none'")
+		assert.False(t, directiveHasValue(csp, "script-src", "blob:"))
+		assert.False(t, directiveHasValue(csp, "connect-src", "blob:"))
+	})
+
+	t.Run("blob_scripts_remain_blocked_outside_ai_creation", func(t *testing.T) {
+		cfg := config.CSPConfig{
+			Enabled: true,
+			Policy:  "default-src 'self'; script-src 'self' __CSP_NONCE__",
+		}
+		middleware := SecurityHeaders(cfg, nil)
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodGet, "/", nil)
+
+		middleware(c)
+
+		csp := w.Header().Get("Content-Security-Policy")
+		assert.False(t, directiveHasValue(csp, "script-src", "blob:"))
+		assert.False(t, directiveHasValue(csp, "connect-src", "blob:"))
+	})
+
+	t.Run("ai_creation_can_be_embedded_by_same_origin", func(t *testing.T) {
+		cfg := config.CSPConfig{
+			Enabled: true,
+			Policy:  "default-src 'self'; frame-ancestors 'none'; script-src 'self' __CSP_NONCE__",
+		}
+		middleware := SecurityHeaders(cfg, nil)
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodGet, "/ai-creation/index.html", nil)
+
+		middleware(c)
+
+		csp := w.Header().Get("Content-Security-Policy")
+		assert.Equal(t, "SAMEORIGIN", w.Header().Get("X-Frame-Options"))
+		assert.Contains(t, csp, "frame-ancestors 'self'")
+		assert.NotContains(t, csp, "frame-ancestors 'none'")
+		assert.True(t, directiveHasValue(csp, "script-src", "blob:"))
+		assert.True(t, directiveHasValue(csp, "connect-src", "blob:"))
 	})
 
 	t.Run("app_pages_can_embed_same_origin_frames", func(t *testing.T) {

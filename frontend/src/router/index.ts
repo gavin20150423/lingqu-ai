@@ -249,6 +249,26 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/ai-creation',
+    name: 'AICreation',
+    component: () => import('@/views/user/AICreationView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      title: 'AI 创作'
+    }
+  },
+  {
+    path: '/video-workbench',
+    name: 'VideoWorkbenchStarter',
+    component: () => import('@/views/user/AICreationView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      title: '视频创作台'
+    }
+  },
+  {
     path: '/videos/history',
     name: 'VideoHistory',
     component: () => import('@/views/user/VideoHistoryView.vue'),
