@@ -25,8 +25,9 @@ ARG NPM_CONFIG_REGISTRY
 
 WORKDIR /app/frontend
 
-# Install pnpm (pinned to v9 to match CI and keep builds reproducible)
-RUN corepack enable && corepack prepare pnpm@9 --activate
+# Infinite Canvas uses pnpm's allowBuilds workspace setting, which requires
+# pnpm 11. Keep the container build pinned for reproducibility.
+RUN corepack enable && corepack prepare pnpm@11 --activate
 
 # Install dependencies first (better caching)
 COPY frontend/package.json frontend/pnpm-lock.yaml ./
