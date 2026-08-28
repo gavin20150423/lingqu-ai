@@ -25,9 +25,9 @@ ARG NPM_CONFIG_REGISTRY
 
 WORKDIR /app/frontend
 
-# Infinite Canvas uses pnpm's allowBuilds workspace setting, which requires
-# pnpm 11. Keep the container build pinned for reproducibility.
-RUN corepack enable && corepack prepare pnpm@11 --activate
+# pnpm 10 supports both the main frontend lockfile and Infinite Canvas'
+# allowBuilds workspace setting. Keep the container build pinned.
+RUN corepack enable && corepack prepare pnpm@10 --activate
 
 # Install dependencies first (better caching)
 COPY frontend/package.json frontend/pnpm-lock.yaml ./
