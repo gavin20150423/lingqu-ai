@@ -495,6 +495,29 @@ func TestXiaoVideoCTMOAIAdapterMapsSeedanceAndH3Contracts(t *testing.T) {
 	require.ErrorIs(t, err, ErrVideoOptionUnsupported)
 }
 
+func TestCTMOAIVideoAdapterDecodesUploadCollections(t *testing.T) {
+	adapter := ctmoaiVideoAdapter{}
+
+	for _, tc := range []struct {
+		name string
+		raw  string
+		want string
+	}{
+		{name: "canonical URL", raw: `{"url":"https://video.ctmoai.com/sd-media/images/direct.png"}`, want: "https://video.ctmoai.com/sd-media/images/direct.png"},
+		{name: "image collection", raw: `{"images":["https://video.ctmoai.com/sd-media/images/reference.png?date=2026-08-28"]}`, want: "https://video.ctmoai.com/sd-media/images/reference.png?date=2026-08-28"},
+		{name: "video collection", raw: `{"videos":["https://video.ctmoai.com/sd-media/videos/reference.mp4"]}`, want: "https://video.ctmoai.com/sd-media/videos/reference.mp4"},
+		{name: "audio collection", raw: `{"audios":["https://video.ctmoai.com/sd-media/audios/reference.mp3"]}`, want: "https://video.ctmoai.com/sd-media/audios/reference.mp3"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			decoded, err := adapter.DecodeUpload([]byte(tc.raw))
+			require.NoError(t, err)
+			require.Equal(t, tc.want, decoded["url"])
+			require.NotEmpty(t, decoded["media_id"])
+			require.Equal(t, "UPLOADED", decoded["type"])
+		})
+	}
+}
+
 func mustVideoStatus(t *testing.T, adapter videoProviderAdapter, raw []byte) string {
 	t.Helper()
 	value, err := adapter.DecodeJob(raw)

@@ -371,7 +371,20 @@ func (ctmoaiVideoAdapter) DecodeUpload(raw []byte) (map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
-	value := videoStringValue(result["url"])
+	// CTMOAI's upload endpoint returns media URLs in a typed collection
+	// (currently {"images":[...]}) instead of the canonical {"url":"..."}
+	// shape used by the workbench. Normalize the first URL before the shared
+	// media persistence path validates the response.
+	value := firstVideoString(result, "url")
+	if value == "" {
+		for _, field := range []string{"images", "videos", "audios"} {
+			value = firstVideoCollectionURL(result[field])
+			if value != "" {
+				result["url"] = value
+				break
+			}
+		}
+	}
 	if value == "" {
 		return nil, errors.New("CTMOAI upload response has no url")
 	}
@@ -393,6 +406,24 @@ func (ctmoaiVideoAdapter) DecodeUpload(raw []byte) (map[string]any, error) {
 	return result, nil
 }
 func (ctmoaiVideoAdapter) ResultURL([]byte) (string, bool) { return "", false }
+
+func firstVideoCollectionURL(value any) string {
+	switch values := value.(type) {
+	case []any:
+		for _, item := range values {
+			if url := videoStringValue(item); url != "" {
+				return url
+			}
+		}
+	case []string:
+		for _, item := range values {
+			if url := strings.TrimSpace(item); url != "" {
+				return url
+			}
+		}
+	}
+	return ""
+}
 
 func isCTMOAICFModel(model string) bool {
 	model = strings.ToLower(strings.TrimSpace(model))
