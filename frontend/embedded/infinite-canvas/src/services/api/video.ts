@@ -274,7 +274,7 @@ async function pollLingquVideoTask(config: AiConfig, task: VideoGenerationTask, 
 
 async function uploadLingquImage(config: AiConfig, image: ReferenceImage, index: number, options?: RequestOptions) {
     const file = dataUrlToFile({ ...image, dataUrl: await imageToDataUrl(image) });
-    return uploadLingquFile(config, file, `reference-${index + 1}.png`, options);
+    return uploadLingquFile(config, file, `reference-${index + 1}.png`, "images", options);
 }
 
 async function uploadLingquVideo(config: AiConfig, video: ReferenceVideo, index: number, options?: RequestOptions) {
@@ -282,7 +282,7 @@ async function uploadLingquVideo(config: AiConfig, video: ReferenceVideo, index:
     let blob: Blob | null = video.storageKey ? await getMediaBlob(video.storageKey) : null;
     if (!blob && video.url?.startsWith("blob:")) blob = await (await fetch(video.url)).blob();
     if (!blob) throw new Error(apiText("invalidReferenceVideo"));
-    return uploadLingquFile(config, blob, `reference-video-${index + 1}.mp4`, options);
+    return uploadLingquFile(config, blob, `reference-video-${index + 1}.mp4`, "videos", options);
 }
 
 async function uploadLingquAudio(config: AiConfig, audio: ReferenceAudio, index: number, options?: RequestOptions) {
@@ -290,11 +290,14 @@ async function uploadLingquAudio(config: AiConfig, audio: ReferenceAudio, index:
     let blob: Blob | null = audio.storageKey ? await getMediaBlob(audio.storageKey) : null;
     if (!blob && audio.url?.startsWith("blob:")) blob = await (await fetch(audio.url)).blob();
     if (!blob) throw new Error(apiText("invalidReferenceAudio"));
-    return uploadLingquFile(config, blob, `reference-audio-${index + 1}.${blob.type.includes("wav") ? "wav" : "mp3"}`, options);
+    return uploadLingquFile(config, blob, `reference-audio-${index + 1}.${blob.type.includes("wav") ? "wav" : "mp3"}`, "audios", options);
 }
 
-async function uploadLingquFile(config: AiConfig, blob: Blob, filename: string, options?: RequestOptions) {
+async function uploadLingquFile(config: AiConfig, blob: Blob, filename: string, mediaType: "images" | "videos" | "audios", options?: RequestOptions) {
     const body = new FormData();
+    // CTMOAI's local-media endpoint requires the plural media type in addition
+    // to the file part. The server forwards this multipart body unchanged.
+    body.append("type", mediaType);
     body.append("file", blob, filename);
     const response = await axios.post<{ url?: string }>(lingquVideoApiUrl("/uploads"), body, { headers: lingquVideoHeaders(), signal: options?.signal });
     if (!response.data.url) throw new Error(apiText("referenceImageReadFailed"));

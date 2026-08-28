@@ -79,6 +79,7 @@ import Icon from '@/components/icons/Icon.vue'
 import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
 import type { ApiKey } from '@/types'
+import { isImageCreationKey } from '@/utils/creationAccess'
 
 const LINGQU_BRIDGE_STORAGE_KEY = 'lingqu:image-playground:bridge'
 const LINGQU_SELECTED_KEY_STORAGE_KEY = 'lingqu:image-playground:selected-key-id'
@@ -96,7 +97,7 @@ const frameSrc = ref('')
 const frameKey = ref(0)
 
 const imageKeys = computed(() => {
-  return apiKeys.value.filter((key) => key.status === 'active' && key.group?.platform === 'openai')
+  return apiKeys.value.filter(isImageCreationKey)
 })
 
 const selectedKey = computed(() => {
@@ -109,7 +110,7 @@ const emptyTitle = computed(() => {
 })
 
 const emptyHint = computed(() => {
-  if (imageKeys.value.length === 0) return '创建一个 OpenAI 分组 Key 后，就能直接打开图工坊。'
+  if (imageKeys.value.length === 0) return '创建一个开启生图权限的 OpenAI 分组 Key 后，就能直接打开图工坊。'
   return '图工坊会自动接入当前 Key，生成记录会走灵渠AI后端。'
 })
 
@@ -205,12 +206,12 @@ async function launchWorkspace(openInNewWindow = false, silent = false) {
 async function loadApiKeys() {
   loadingKeys.value = true
   try {
-    const response = await keysAPI.list(1, 100, {
+    const allKeys = await keysAPI.listAll(100, {
       status: 'active',
       sort_by: 'created_at',
       sort_order: 'desc',
     })
-    apiKeys.value = response.items
+    apiKeys.value = allKeys
   } catch (error) {
     console.error('Failed to load image keys:', error)
     appStore.showError('Key 加载失败，请稍后重试')

@@ -17,6 +17,13 @@ type LingquBridge = {
     imageApiKey?: string;
     imageKeyName?: string;
     imageGroupName?: string;
+    imageKeys?: Array<{
+        id?: number;
+        apiKey?: string;
+        keyName?: string;
+        groupName?: string;
+        model?: string;
+    }>;
     videoKeyId?: number;
     videoApiKey?: string;
     videoKeyName?: string;
@@ -56,8 +63,26 @@ export function ClientRootInit({ children }: { children: ReactNode }) {
 
         const imageApiKey = bridge.imageApiKey || bridge.apiKey || "";
         const videoApiKey = bridge.videoApiKey || bridge.apiKey || "";
+        const imageChannels = bridge.apiUrl
+            ? (bridge.imageKeys || [])
+                  .map((entry, index) => {
+                      const apiKey = entry.apiKey?.trim() || "";
+                      if (!apiKey) return null;
+                      return createModelChannel({
+                          id: entry.id ? `lingqu-image-${entry.id}` : `lingqu-image-${index + 1}`,
+                          name: entry.groupName || entry.keyName || t("config.channels.defaultName"),
+                          baseUrl: bridge.apiUrl,
+                          apiKey,
+                          apiFormat: "openai",
+                          asyncImageTasks: true,
+                          models: [{ name: entry.model || bridge.model || "gpt-image-2", capability: "image" }],
+                      });
+                  })
+                  .filter((channel): channel is NonNullable<typeof channel> => Boolean(channel))
+            : [];
         const imageChannel =
-            bridge.apiUrl && imageApiKey
+            imageChannels[0] ||
+            (bridge.apiUrl && imageApiKey
                 ? createModelChannel({
                       id: "lingqu-image",
                       name: bridge.imageGroupName || bridge.imageKeyName || bridge.groupName || bridge.keyName || t("config.channels.defaultName"),
@@ -67,7 +92,7 @@ export function ClientRootInit({ children }: { children: ReactNode }) {
                       asyncImageTasks: true,
                       models: [{ name: bridge.model || "gpt-image-2", capability: "image" }],
                   })
-                : null;
+                : null);
         const videoChannel = bridge.videoApiUrl && videoApiKey
             ? createModelChannel({
                   id: "lingqu-video",
@@ -81,7 +106,10 @@ export function ClientRootInit({ children }: { children: ReactNode }) {
         // In host-managed mode, only channels injected by the host are valid.
         // Dropping locally persisted channels prevents stale endpoints or keys
         // from bypassing the system-owned credential boundary.
-        const channels = [...(imageChannel ? [imageChannel] : []), ...(videoChannel ? [videoChannel] : [])];
+        const channels = [
+            ...(imageChannels.length > 0 ? imageChannels : imageChannel ? [imageChannel] : []),
+            ...(videoChannel ? [videoChannel] : []),
+        ];
         if (!channels.length) channels.push(createModelChannel({ id: "default", name: t("config.channels.defaultName") }));
         const imageModel = imageChannel ? encodeChannelModel(imageChannel.id, imageChannel.models[0].name) : config.imageModel;
         updateConfig("channels", channels);

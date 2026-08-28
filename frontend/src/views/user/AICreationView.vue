@@ -34,6 +34,7 @@ import { keysAPI } from '@/api'
 import type { ApiKey } from '@/types'
 import Icon from '@/components/icons/Icon.vue'
 import UserWorkspaceLayout from '@/components/layout/UserWorkspaceLayout.vue'
+import { isImageCreationKey } from '@/utils/creationAccess'
 
 const BRIDGE_STORAGE_KEY = 'lingqu:ai-creation:bridge'
 const ENTRY_PATH = import.meta.env.DEV ? '/ai-creation/index.html' : '/ai-creation/'
@@ -48,8 +49,12 @@ const activeKeys = computed(() => {
   return keys.value.filter((key) => key.status === 'active' && key.group)
 })
 
+const imageKeys = computed(() => {
+  return keys.value.filter(isImageCreationKey)
+})
+
 const imageKey = computed(() => {
-  return activeKeys.value.find((key) => key.group?.platform === 'openai') || null
+  return imageKeys.value[0] || null
 })
 
 const videoKey = computed(() => {
@@ -65,7 +70,7 @@ const creationSection = computed(() => requestedSection())
 const requiredKey = computed(() => creationSection.value === 'video' ? videoKey.value : imageKey.value)
 const hasCreationKey = computed(() => Boolean(requiredKey.value))
 const emptyStateTitle = computed(() => creationSection.value === 'video' ? '还没有可用的视频创作 Key' : creationSection.value === 'image' ? '还没有可用的生图 Key' : '还没有可用的创作 Key')
-const emptyStateDescription = computed(() => creationSection.value === 'video' ? '先创建一个视频渠道 Key，再回来使用视频创作。' : creationSection.value === 'image' ? '先创建一个生图渠道 Key，再回来使用生图工作台。' : '先创建一个可用 Key，再回来使用无限画布、生图和视频创作。')
+const emptyStateDescription = computed(() => creationSection.value === 'video' ? '先创建一个视频渠道 Key，再回来使用视频创作。' : creationSection.value === 'image' ? '先创建一个 OpenAI 分组且开启生图权限的 Key，再回来使用生图工作台。' : '先创建一个可用的 OpenAI 生图 Key，再回来使用无限画布、生图和视频创作。')
 
 function writeBridge() {
   const image = imageKey.value
@@ -78,6 +83,13 @@ function writeBridge() {
     imageApiKey: image?.key || '',
     imageKeyName: image?.name || '',
     imageGroupName: image?.group?.name || '',
+    imageKeys: imageKeys.value.map((key) => ({
+      id: key.id,
+      apiKey: key.key,
+      keyName: key.name,
+      groupName: key.group?.name || key.name,
+      model: 'gpt-image-2',
+    })),
     keyId: image?.id || video?.id,
     apiKey: image?.key || video?.key || '',
     keyName: image?.name || video?.name || '',
@@ -102,12 +114,12 @@ function writeBridge() {
 
 async function launch() {
   try {
-    const response = await keysAPI.list(1, 100, {
+    const allKeys = await keysAPI.listAll(100, {
       status: 'active',
       sort_by: 'created_at',
       sort_order: 'desc',
     })
-    keys.value = response.items
+    keys.value = allKeys
     if (!hasCreationKey.value) return
     writeBridge()
     const section = requestedSection()

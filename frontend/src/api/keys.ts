@@ -35,6 +35,30 @@ export async function list(
   return data
 }
 
+/** Fetch every page of the current user's keys for workbench/bootstrap flows. */
+export async function listAll(
+  pageSize: number = 100,
+  filters?: {
+    search?: string
+    status?: string
+    group_id?: number | string
+    sort_by?: string
+    sort_order?: 'asc' | 'desc'
+  },
+  options?: { signal?: AbortSignal }
+): Promise<ApiKey[]> {
+  const firstPage = await list(1, pageSize, filters, options)
+  const pages = Math.max(1, firstPage.pages || 1)
+  if (pages === 1) return firstPage.items
+
+  const items = [...firstPage.items]
+  for (let page = 2; page <= pages; page += 1) {
+    const response = await list(page, pageSize, filters, options)
+    items.push(...response.items)
+  }
+  return items
+}
+
 /**
  * Get API key by ID
  * @param id - API key ID
@@ -133,6 +157,7 @@ export async function toggleStatus(id: number, status: 'active' | 'inactive'): P
 
 export const keysAPI = {
   list,
+  listAll,
   getById,
   create,
   update,
