@@ -59,6 +59,8 @@ config.local.yaml
 # Logs
 *.log
 logs/
+**/logs/
+backend/logs/
 
 # Temporary files
 tmp/

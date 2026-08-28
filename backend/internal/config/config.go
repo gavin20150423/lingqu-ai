@@ -2532,10 +2532,11 @@ func setDefaults() {
 	viper.SetDefault("gateway.openai_http2.fallback_window_seconds", 60)
 	viper.SetDefault("gateway.openai_http2.fallback_ttl_seconds", 600)
 	viper.SetDefault("gateway.openai_proxy_stream_circuit.disabled", false)
-	// Keep transient upstream cooldown markers for observability, but do not let
-	// them prevent the gateway from attempting an active account.
-	viper.SetDefault("gateway.ignore_account_cooldowns", true)
-	viper.SetDefault("gateway.passthrough_upstream_errors", true)
+	// These compatibility switches change core scheduling and error semantics.
+	// Keep them opt-in so a routine upgrade cannot bypass production cooldowns
+	// or expose raw provider errors unexpectedly.
+	viper.SetDefault("gateway.ignore_account_cooldowns", false)
+	viper.SetDefault("gateway.passthrough_upstream_errors", false)
 	viper.SetDefault("gateway.openai_proxy_stream_circuit.failure_threshold", 2)
 	viper.SetDefault("gateway.openai_proxy_stream_circuit.window_seconds", 60)
 	viper.SetDefault("gateway.openai_proxy_stream_circuit.ttl_seconds", 600)
