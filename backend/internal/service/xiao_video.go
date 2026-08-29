@@ -1424,27 +1424,7 @@ func (s *XiaoVideoService) selectVideoAccount(ctx context.Context, owner VideoOw
 			return nil, func() {}, err
 		}
 		if !s.accountEligibleForVideo(owner, account, model) {
-			// Uploaded media is initially assigned by the upload scheduler, which
-			// does not know the model that will be selected later. If that account
-			// cannot serve the model, keep the media on the same upstream and use a
-			// model-capable account instead of rejecting the task immediately.
-			selected, release, fallbackErr := s.selectVideoAccountForSameUpstream(
-				ctx, owner, model, account, excluded,
-			)
-			if fallbackErr == nil {
-				slog.InfoContext(ctx, "xiao_video.media_account_switched",
-					"media_account_id", account.ID,
-					"selected_account_id", selected.ID,
-					"model", model,
-				)
-				return selected, release, nil
-			}
-			slog.WarnContext(ctx, "xiao_video.media_account_ineligible",
-				"media_account_id", account.ID,
-				"model", model,
-				"fallback_error", fallbackErr,
-			)
-			return nil, func() {}, fallbackErr
+			return nil, func() {}, ErrVideoUpstreamUnavailable
 		}
 		return s.acquireVideoSlot(ctx, account)
 	}
@@ -1452,7 +1432,21 @@ func (s *XiaoVideoService) selectVideoAccount(ctx context.Context, owner VideoOw
 	if err != nil {
 		return nil, func() {}, ErrVideoUpstreamUnavailable.WithCause(err)
 	}
-	sortVideoAccounts(accounts)
+	sort.SliceStable(accounts, func(i, j int) bool {
+		if accounts[i].Priority != accounts[j].Priority {
+			return accounts[i].Priority < accounts[j].Priority
+		}
+		switch {
+		case accounts[i].LastUsedAt == nil && accounts[j].LastUsedAt != nil:
+			return true
+		case accounts[i].LastUsedAt != nil && accounts[j].LastUsedAt == nil:
+			return false
+		case accounts[i].LastUsedAt != nil && accounts[j].LastUsedAt != nil && !accounts[i].LastUsedAt.Equal(*accounts[j].LastUsedAt):
+			return accounts[i].LastUsedAt.Before(*accounts[j].LastUsedAt)
+		default:
+			return accounts[i].ID < accounts[j].ID
+		}
+	})
 
 	eligible := 0
 	for i := range accounts {
@@ -1476,61 +1470,6 @@ func (s *XiaoVideoService) selectVideoAccount(ctx context.Context, owner VideoOw
 		"eligible_accounts", eligible,
 	)
 	return nil, func() {}, ErrVideoCapacityExhausted
-}
-
-func (s *XiaoVideoService) selectVideoAccountForSameUpstream(ctx context.Context, owner VideoOwner, model string, mediaAccount *Account, excluded map[int64]struct{}) (*Account, func(), error) {
-	if mediaAccount == nil {
-		return nil, func() {}, ErrVideoUpstreamUnavailable
-	}
-	identity := videoUpstreamIdentity(mediaAccount)
-	if identity == "" {
-		return nil, func() {}, ErrVideoUpstreamUnavailable
-	}
-	accounts, err := s.videoAccounts(ctx, owner.GroupID, true)
-	if err != nil {
-		return nil, func() {}, ErrVideoUpstreamUnavailable.WithCause(err)
-	}
-	sortVideoAccounts(accounts)
-	eligible := 0
-	for i := range accounts {
-		account := &accounts[i]
-		if account.ID == mediaAccount.ID || account.ID <= 0 {
-			continue
-		}
-		if _, skip := excluded[account.ID]; skip || videoUpstreamIdentity(account) != identity || !s.accountEligibleForVideo(owner, account, model) {
-			continue
-		}
-		eligible++
-		selected, release, acquireErr := s.acquireVideoSlot(ctx, account)
-		if acquireErr == nil {
-			return selected, release, nil
-		}
-		if !errors.Is(acquireErr, ErrVideoCapacityExhausted) {
-			return nil, func() {}, acquireErr
-		}
-	}
-	if eligible > 0 {
-		return nil, func() {}, ErrVideoCapacityExhausted
-	}
-	return nil, func() {}, ErrVideoUpstreamUnavailable
-}
-
-func sortVideoAccounts(accounts []Account) {
-	sort.SliceStable(accounts, func(i, j int) bool {
-		if accounts[i].Priority != accounts[j].Priority {
-			return accounts[i].Priority < accounts[j].Priority
-		}
-		switch {
-		case accounts[i].LastUsedAt == nil && accounts[j].LastUsedAt != nil:
-			return true
-		case accounts[i].LastUsedAt != nil && accounts[j].LastUsedAt == nil:
-			return false
-		case accounts[i].LastUsedAt != nil && accounts[j].LastUsedAt != nil && !accounts[i].LastUsedAt.Equal(*accounts[j].LastUsedAt):
-			return accounts[i].LastUsedAt.Before(*accounts[j].LastUsedAt)
-		default:
-			return accounts[i].ID < accounts[j].ID
-		}
-	})
 }
 
 func (s *XiaoVideoService) acquireVideoSlot(ctx context.Context, account *Account) (*Account, func(), error) {
@@ -1719,24 +1658,6 @@ func accountVideoEndpoint(rawBase, path string) (string, error) {
 	base.RawPath = ""
 	base.RawQuery = requestURL.RawQuery
 	return base.String(), nil
-}
-
-// videoUpstreamIdentity is intentionally limited to the provider protocol and
-// endpoint. API keys may be split across accounts by model, while uploaded
-// media URLs remain valid for the same upstream service.
-func videoUpstreamIdentity(account *Account) string {
-	if account == nil {
-		return ""
-	}
-	base, err := url.Parse(strings.TrimSpace(account.GetCredential("base_url")))
-	if err != nil || base.Scheme == "" || base.Host == "" || base.RawQuery != "" || base.Fragment != "" {
-		return ""
-	}
-	base.Scheme = strings.ToLower(base.Scheme)
-	base.Host = strings.ToLower(base.Host)
-	base.Path = strings.TrimRight(base.Path, "/")
-	base.RawPath = ""
-	return strings.ToLower(strings.TrimSpace(account.XiaoVideoProtocol())) + "|" + base.String()
 }
 
 func rewriteVideoRequest(body []byte, model, resolution string, duration int) ([]byte, error) {
