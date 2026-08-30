@@ -104,8 +104,9 @@ func (s *GatewayService) ReportSubPilotFailure(ctx context.Context, input SubPil
 	}
 	// Content-policy refusals belong to this request, not to the selected
 	// account. Do not feed them into SubPilot health metrics or retry/failover
-	// feedback; the lease is still released by the report endpoint.
+	// feedback, but still release the dispatch lease immediately.
 	if isNonRetryableRequestFailure(input.StatusCode, input.ErrorCode, input.ErrorMessage) {
+		releaseSubPilotLeaseForFailure(client, ctx, input)
 		return SubPilotRetryDirective{}
 	}
 	stream := input.Stream
@@ -132,6 +133,7 @@ func (s *OpenAIGatewayService) ReportSubPilotFailure(ctx context.Context, input 
 		return SubPilotRetryDirective{}
 	}
 	if isNonRetryableRequestFailure(input.StatusCode, input.ErrorCode, input.ErrorMessage) {
+		releaseSubPilotLeaseForFailure(client, ctx, input)
 		return SubPilotRetryDirective{}
 	}
 	stream := input.Stream
@@ -170,6 +172,17 @@ func isNonRetryableRequestFailure(statusCode int, errorCode, message string) boo
 		}
 	}
 	return false
+}
+
+func releaseSubPilotLeaseForFailure(client *subPilotClient, ctx context.Context, input SubPilotFailureInput) {
+	if client == nil || input.LeaseID == "" || input.Account == nil {
+		return
+	}
+	client.releaseLease(ctx, subPilotReleaseLeaseRequest{
+		RequestID: subPilotReportRequestID(ctx, input.RequestID),
+		LeaseID:   input.LeaseID,
+		AccountID: strconv.FormatInt(input.Account.ID, 10),
+	})
 }
 
 func (input SubPilotFailureInput) normalizedRequestType() string {

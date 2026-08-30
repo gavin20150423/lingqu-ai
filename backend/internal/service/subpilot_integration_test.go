@@ -103,6 +103,44 @@ func TestSubPilotReportFailureFallsBackToContextAPIKeyID(t *testing.T) {
 	}
 }
 
+func TestSubPilotContentPolicyFailureReleasesLeaseWithoutHealthReport(t *testing.T) {
+	released := make(chan subPilotReleaseLeaseRequest, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case subPilotReleaseLeasePath:
+			var req subPilotReleaseLeaseRequest
+			require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
+			released <- req
+			w.WriteHeader(http.StatusNoContent)
+		case subPilotReportFailurePath:
+			t.Errorf("content-policy failure must not update SubPilot health")
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			t.Errorf("unexpected SubPilot path: %s", r.URL.Path)
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	svc := &OpenAIGatewayService{cfg: &config.Config{Gateway: config.GatewayConfig{
+		SubPilot: config.SubPilotConfig{Enabled: true, BaseURL: server.URL, TimeoutMS: 500},
+	}}}
+	directive := svc.ReportSubPilotFailure(context.Background(), SubPilotFailureInput{
+		LeaseID: "lease-policy", Account: &Account{ID: 11}, RequestID: "request-policy",
+		Platform: PlatformOpenAI, GroupID: "22", Model: "gpt-5.4", StatusCode: http.StatusForbidden,
+		ErrorCode: "content_policy_error", ErrorMessage: "blocked by content policy",
+	})
+
+	require.False(t, directive.Available)
+	select {
+	case req := <-released:
+		require.Equal(t, "lease-policy", req.LeaseID)
+		require.Equal(t, "11", req.AccountID)
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for SubPilot lease release")
+	}
+}
+
 func TestSubPilotReportFailureConsumesRetryDirective(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		require.Equal(t, subPilotReportFailurePath, r.URL.Path)
@@ -186,6 +224,49 @@ func TestOpenAISubPilotSuccessReportCarriesLeaseAndSession(t *testing.T) {
 		require.Equal(t, "gpt-5.6", req.Model)
 	case <-time.After(time.Second):
 		t.Fatal("timed out waiting for SubPilot success report")
+	}
+}
+
+func TestOpenAIRecordUsageReportsSuccessAndReleasesSubPilotLease(t *testing.T) {
+	reports := make(chan subPilotReportSuccessRequest, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, subPilotReportSuccessPath, r.URL.Path)
+		var req subPilotReportSuccessRequest
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
+		reports <- req
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+
+	svc := newOpenAIRecordUsageServiceWithBillingRepoForTest(
+		&openAIRecordUsageLogRepoStub{inserted: true},
+		&openAIRecordUsageBillingRepoStub{result: &UsageBillingApplyResult{Applied: true}},
+		&openAIRecordUsageUserRepoStub{},
+		&openAIRecordUsageSubRepoStub{},
+		nil,
+	)
+	svc.cfg.Gateway.SubPilot = config.SubPilotConfig{Enabled: true, BaseURL: server.URL, TimeoutMS: 500}
+	groupID := int64(22)
+	err := svc.RecordUsage(context.Background(), &OpenAIRecordUsageInput{
+		Result: &OpenAIForwardResult{
+			RequestID: "request-record-usage", Model: "gpt-5.4", UpstreamModel: "gpt-5.4",
+			Duration: time.Second,
+		},
+		APIKey: &APIKey{ID: 456, GroupID: &groupID, Group: &Group{ID: groupID, RateMultiplier: 1}},
+		User:   &User{ID: 789}, Account: &Account{ID: 11, Platform: PlatformOpenAI, Type: AccountTypeOAuth},
+		SubPilotLeaseID: "lease-record-usage", SubPilotSessionKey: "session-record-usage",
+		QuotaPlatform: PlatformOpenAI,
+	})
+	require.NoError(t, err)
+
+	select {
+	case req := <-reports:
+		require.Equal(t, "lease-record-usage", req.LeaseID)
+		require.Equal(t, "11", req.AccountID)
+		require.Equal(t, "22", req.GroupID)
+		require.Equal(t, "session-record-usage", req.SessionKey)
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for SubPilot success report from RecordUsage")
 	}
 }
 

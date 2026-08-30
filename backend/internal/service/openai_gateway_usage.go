@@ -428,6 +428,11 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 			tokens, cost.TotalCost,
 		)
 	}
+	// Release the SubPilot lease for every successful OpenAI request. The
+	// native Redis account slot is released by the handler immediately after
+	// forwarding; without this callback SubPilot keeps its separate in-memory
+	// lease until the 60-second TTL and falsely reports the account as full.
+	s.reportSubPilotSuccess(ctx, usageLog, input, cost, accountRateMultiplier)
 
 	if s.cfg != nil && s.cfg.RunMode == config.RunModeSimple {
 		writeUsageLogBestEffort(ctx, s.usageLogRepo, usageLog, "service.openai_gateway")
