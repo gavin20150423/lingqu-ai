@@ -34,7 +34,7 @@ import { keysAPI } from '@/api'
 import type { ApiKey } from '@/types'
 import Icon from '@/components/icons/Icon.vue'
 import UserWorkspaceLayout from '@/components/layout/UserWorkspaceLayout.vue'
-import { isImageCreationKey } from '@/utils/creationAccess'
+import { getTextCreationKeys, isImageCreationKey } from '@/utils/creationAccess'
 
 const BRIDGE_STORAGE_KEY = 'lingqu:ai-creation:bridge'
 const ENTRY_PATH = import.meta.env.DEV ? '/ai-creation/index.html' : '/ai-creation/'
@@ -51,6 +51,10 @@ const activeKeys = computed(() => {
 
 const imageKeys = computed(() => {
   return keys.value.filter(isImageCreationKey)
+})
+
+const textKeys = computed(() => {
+  return getTextCreationKeys(keys.value)
 })
 
 const imageKey = computed(() => {
@@ -74,10 +78,11 @@ const emptyStateDescription = computed(() => creationSection.value === 'video' ?
 
 function writeBridge() {
   const image = imageKey.value
+  const text = textKeys.value[0] || null
   const video = videoKey.value
   const creationTheme = window.localStorage.getItem('theme') === 'dark' ? 'dark' : 'light'
   const payload = JSON.stringify({
-    apiUrl: image ? `${window.location.origin}/v1` : undefined,
+    apiUrl: image || text ? `${window.location.origin}/v1` : undefined,
     videoApiUrl: video ? `${window.location.origin}/api/v1/video` : undefined,
     imageKeyId: image?.id,
     imageApiKey: image?.key || '',
@@ -90,10 +95,21 @@ function writeBridge() {
       groupName: key.group?.name || key.name,
       model: 'gpt-image-2',
     })),
-    keyId: image?.id || video?.id,
-    apiKey: image?.key || video?.key || '',
-    keyName: image?.name || video?.name || '',
-    groupName: image?.group?.name || '',
+    textKeyId: text?.id,
+    textApiKey: text?.key || '',
+    textKeyName: text?.name || '',
+    textGroupName: text?.group?.name || '',
+    textKeys: textKeys.value.map((key) => ({
+      id: key.id,
+      apiKey: key.key,
+      keyName: key.name,
+      groupName: key.group?.name || key.name,
+      model: 'gpt-5.5',
+    })),
+    keyId: image?.id || text?.id || video?.id,
+    apiKey: image?.key || text?.key || video?.key || '',
+    keyName: image?.name || text?.name || video?.name || '',
+    groupName: image?.group?.name || text?.group?.name || '',
     videoKeyId: video?.id,
     videoApiKey: video?.key || '',
     videoKeyName: video?.name || '',

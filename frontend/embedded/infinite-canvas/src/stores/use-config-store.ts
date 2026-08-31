@@ -229,6 +229,7 @@ export function resolveModelForCapability(config: AiConfig, currentModel: string
     const fallbackModel = capability === "image" ? defaultConfig.imageModel : capability === "video" ? defaultConfig.videoModel : capability === "audio" ? defaultConfig.audioModel : defaultConfig.textModel;
     if (currentModel && modelMatchesCapability(config, currentModel, capability)) return currentModel;
     if (defaultModel && modelMatchesCapability(config, defaultModel, capability)) return defaultModel;
+    if (config.credentialsManagedByHost) return "";
     return fallbackModel;
 }
 

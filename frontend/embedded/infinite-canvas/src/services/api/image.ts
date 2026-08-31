@@ -1,7 +1,7 @@
 import axios from "axios";
 
 import i18n from "@/i18n";
-import { buildApiUrl, resolveModelRequestConfig, resolveModelScript, type AiConfig, type ModelChannel } from "@/stores/use-config-store";
+import { buildApiUrl, modelMatchesCapability, resolveModelRequestConfig, resolveModelScript, type AiConfig, type ModelChannel } from "@/stores/use-config-store";
 import { normalizePluginImages, runModelPlugin } from "./model-plugin";
 import { nanoid } from "nanoid";
 import { dataUrlToFile } from "@/lib/image-utils";
@@ -1057,8 +1057,11 @@ export async function requestEdit(config: AiConfig, prompt: string, references: 
 }
 
 export async function requestImageQuestion(config: AiConfig, messages: AiTextMessage[], onDelta: (text: string) => void, options?: RequestOptions) {
-    const requestConfig = resolveModelRequestConfig(config, config.model || config.textModel);
-    const script = resolveModelScript(config, config.model || config.textModel);
+    // Text requests must never resolve an image/video model's channel just because
+    // the legacy shared `model` field is still populated with that model.
+    const textModel = modelMatchesCapability(config, config.model, "text") ? config.model : config.textModel;
+    const requestConfig = resolveModelRequestConfig(config, textModel);
+    const script = resolveModelScript(config, textModel);
     if (script) {
         try {
             const answer = await runModelPlugin<string>({
