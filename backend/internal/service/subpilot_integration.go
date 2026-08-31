@@ -109,6 +109,7 @@ func (s *GatewayService) trySubPilotRecommend(ctx context.Context, groupID *int6
 		selection.SubPilotLeaseID = rec.LeaseID
 		selection.SubPilotRequestID = rec.RequestID
 		selection.SubPilotAttemptTimeout = rec.AttemptTimeout
+		selection.SubPilotLastResort = rec.LastResort
 		return selection, true, nil
 	}
 }
@@ -262,6 +263,7 @@ func (s *OpenAIGatewayService) trySubPilotRecommend(ctx context.Context, groupID
 		selection.SubPilotLeaseID = rec.LeaseID
 		selection.SubPilotRequestID = rec.RequestID
 		selection.SubPilotAttemptTimeout = rec.AttemptTimeout
+		selection.SubPilotLastResort = rec.LastResort
 		return selection, true, nil
 	}
 }
@@ -343,7 +345,7 @@ func mergeSubPilotExcludedIDs(target map[int64]struct{}, source map[int64]struct
 
 func subPilotDecisionIsExclusive(decision string) bool {
 	switch strings.ToLower(strings.TrimSpace(decision)) {
-	case "no_channel", "disabled", "rejected":
+	case "disabled", "rejected":
 		return true
 	default:
 		return false

@@ -651,7 +651,7 @@ func TestOpenAIGatewayService_SelectAccountWithScheduler_DefaultDisabledUsesSubP
 	}
 }
 
-func TestOpenAIGatewayService_SubPilotNoChannelDoesNotFallBackToNativeScheduler(t *testing.T) {
+func TestOpenAIGatewayService_SubPilotNoChannelFallsBackToNativeScheduler(t *testing.T) {
 	resetOpenAIAdvancedSchedulerSettingCacheForTest()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -679,9 +679,11 @@ func TestOpenAIGatewayService_SubPilotNoChannelDoesNotFallBackToNativeScheduler(
 		context.Background(), &groupID, "", "", "gpt-5.4", nil,
 		OpenAIUpstreamTransportAny, false,
 	)
-	require.ErrorIs(t, err, ErrNoAvailableAccounts)
-	require.Nil(t, selection)
-	require.Equal(t, "subpilot", decision.Layer)
+	require.NoError(t, err)
+	require.NotNil(t, selection)
+	require.NotNil(t, selection.Account)
+	require.Equal(t, int64(36101), selection.Account.ID)
+	require.Equal(t, openAIAccountScheduleLayerLoadBalance, decision.Layer)
 }
 
 func TestOpenAIGatewayService_SubPilotNoAvailableFallsBackToNativeScheduler(t *testing.T) {
@@ -797,6 +799,9 @@ func TestOpenAIGatewayService_SubPilotAcceptsExplicitLastResortExcludedAccount(t
 	require.NoError(t, err)
 	require.Equal(t, int64(36131), selection.Account.ID)
 	require.Equal(t, "lease-36131", selection.SubPilotLeaseID)
+	require.True(t, selection.SubPilotLastResort)
+	require.NotNil(t, selection.OpenAIDispatchRequirements)
+	require.True(t, selection.OpenAIDispatchRequirements.SubPilotLastResort)
 	require.Equal(t, "subpilot", decision.Layer)
 	require.Zero(t, cache.setCalls)
 	require.Zero(t, cache.refreshCalls)

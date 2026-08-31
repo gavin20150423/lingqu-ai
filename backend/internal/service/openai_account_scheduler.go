@@ -2158,6 +2158,7 @@ func setOpenAIDispatchRequirements(selection *AccountSelectionResult, requestedM
 		RequiredImageCapability:    requiredImageCapability,
 		RequiredPlatform:           requiredPlatform,
 		RequireCompact:             requireCompact,
+		SubPilotLastResort:         selection.SubPilotLastResort,
 	}
 }
 

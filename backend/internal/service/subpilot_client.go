@@ -280,11 +280,20 @@ func (c *subPilotClient) recommendAccountWithOwnership(ctx context.Context, req 
 		AccountID:      accountID,
 		LeaseID:        strings.TrimSpace(resp.Lease.ID),
 		RequestID:      req.RequestID,
-		LastResort:     resp.Reason == "last_resort",
+		LastResort:     subPilotReasonIsLastResort(resp.Reason),
 		AttemptTimeout: boundedSubPilotAttemptTimeout(resp.RetryPolicy.AttemptTimeoutMS),
 		Decision:       strings.TrimSpace(resp.Decision),
 		Reason:         strings.TrimSpace(resp.Reason),
 	}, true, nil
+}
+
+func subPilotReasonIsLastResort(reason string) bool {
+	switch strings.ToLower(strings.TrimSpace(reason)) {
+	case "last_resort", "fallback_degraded", "fallback_unhealthy":
+		return true
+	default:
+		return false
+	}
 }
 
 func boundedSubPilotAttemptTimeout(value int64) time.Duration {

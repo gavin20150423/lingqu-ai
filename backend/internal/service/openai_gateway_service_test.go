@@ -62,6 +62,31 @@ func TestOpenAIGatewayServiceRevalidateSelectedAccountForDispatchUsesLatestPubli
 	require.Nil(t, latest)
 }
 
+func TestOpenAIGatewayServiceRevalidateSelectedAccountForDispatchAllowsSubPilotLastResortSoftDegradation(t *testing.T) {
+	groupID := int64(7124)
+	resetAt := time.Now().Add(time.Hour)
+	account := Account{
+		ID: 552, Platform: PlatformOpenAI, Type: AccountTypeOAuth, Status: StatusActive,
+		Schedulable: true, Concurrency: 3, GroupIDs: []int64{groupID}, RateLimitResetAt: &resetAt,
+	}
+	repo := &stubOpenAIAccountRepo{accounts: []Account{account}}
+	svc := &OpenAIGatewayService{accountRepo: repo}
+	requirements := OpenAIAccountDispatchRequirements{
+		RequestedModel: "gpt-5", RequiredPlatform: PlatformOpenAI,
+		RequiredTransport: OpenAIUpstreamTransportAny, SubPilotLastResort: true,
+	}
+
+	latest, err := svc.RevalidateSelectedOpenAIAccountForDispatch(context.Background(), &groupID, &account, requirements)
+	require.NoError(t, err)
+	require.NotNil(t, latest)
+	require.Equal(t, account.ID, latest.ID)
+
+	repo.accounts[0].Status = StatusDisabled
+	latest, err = svc.RevalidateSelectedOpenAIAccountForDispatch(context.Background(), &groupID, &account, requirements)
+	require.ErrorIs(t, err, ErrNoAvailableAccounts)
+	require.Nil(t, latest)
+}
+
 func TestOpenAIGatewayServiceRevalidateSelectedAccountForDispatchUsesModeMembership(t *testing.T) {
 	modeGroupID := int64(8123)
 	ownerUserID := int64(101)

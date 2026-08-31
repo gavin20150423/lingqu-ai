@@ -46,6 +46,15 @@ func (r subPilotSoftCooldownAccountRepo) ListSchedulableByGroupIDAndPlatform(con
 	return nil, nil
 }
 
+func TestSubPilotFallbackReasonsUseLastResortValidation(t *testing.T) {
+	for _, reason := range []string{"last_resort", "fallback_degraded", "fallback_unhealthy"} {
+		t.Run(reason, func(t *testing.T) {
+			require.True(t, subPilotReasonIsLastResort(reason))
+		})
+	}
+	require.False(t, subPilotReasonIsLastResort("highest_score"))
+}
+
 func TestNewSubPilotSelectRequestIncludesAPIKeyID(t *testing.T) {
 	ctx := WithSubPilotAPIKeyID(context.Background(), 123)
 

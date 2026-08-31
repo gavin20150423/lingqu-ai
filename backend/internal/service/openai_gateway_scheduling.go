@@ -1702,8 +1702,19 @@ func (s *OpenAIGatewayService) RevalidateSelectedOpenAIAccountForDispatch(ctx co
 		return nil, fmt.Errorf("revalidate selected OpenAI account: %w", err)
 	}
 	platform := normalizeOpenAICompatiblePlatform(requirements.RequiredPlatform)
-	if latest == nil || latest.ID != account.ID ||
-		!isOpenAICompatibleAccountEligibleForRequest(ctx, latest, platform, requirements.RequestedModel, requirements.RequireCompact, requirements.RequiredEndpointCapability) ||
+	if latest == nil || latest.ID != account.ID {
+		return nil, ErrNoAvailableAccounts
+	}
+	if requirements.SubPilotLastResort {
+		if !isSubPilotHardEligibleAccount(latest) || latest.Platform != platform || !latest.IsOpenAICompatible() ||
+			(requirements.RequestedModel != "" && !latest.IsModelSupported(requirements.RequestedModel)) ||
+			(requirements.RequireCompact && (!latest.IsOpenAI() || openAICompactSupportTier(latest) == 0)) ||
+			!parentHealthyForShadow(latest, s.parentAccountLookup(ctx)) ||
+			!s.isOpenAIAccountTransportCompatible(latest, requirements.RequiredTransport) ||
+			!accountSupportsOpenAICapabilities(latest, requirements.RequiredEndpointCapability, requirements.RequiredImageCapability) {
+			return nil, ErrNoAvailableAccounts
+		}
+	} else if !isOpenAICompatibleAccountEligibleForRequest(ctx, latest, platform, requirements.RequestedModel, requirements.RequireCompact, requirements.RequiredEndpointCapability) ||
 		!parentHealthyForShadow(latest, s.parentAccountLookup(ctx)) ||
 		s.isOpenAIAccountRequestRuntimeBlocked(latest, requirements.RequestedModel) ||
 		s.isOpenAIProxyStreamQuarantined(ctx, latest) ||
