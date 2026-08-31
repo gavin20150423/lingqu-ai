@@ -172,6 +172,7 @@ func (r *videoRepositoryStub) ReserveJob(_ context.Context, reservation VideoJob
 		Amount:           reservation.PreauthorizationAmount,
 		Currency:         "USD",
 		SettlementStatus: "held",
+		StorageRequested: reservation.StorageRequested,
 		CreatedAt:        time.Now(),
 		UpdatedAt:        time.Now(),
 	}
@@ -278,6 +279,31 @@ func (r *videoRepositoryStub) ListJobsForOwner(_ context.Context, apiKeyID int64
 
 func (r *videoRepositoryStub) ListActiveJobs(_ context.Context, _ int) ([]*VideoJob, error) {
 	return nil, nil
+}
+
+func (r *videoRepositoryStub) ListCompletedJobsMissingStorage(_ context.Context, limit int) ([]*VideoJob, error) {
+	jobs := make([]*VideoJob, 0)
+	for _, job := range r.jobs {
+		if len(jobs) >= limit || job.Status != "completed" || !job.StorageRequested || job.StorageProvider != "" {
+			continue
+		}
+		copy := *job
+		jobs = append(jobs, &copy)
+	}
+	return jobs, nil
+}
+
+func (r *videoRepositoryStub) SetJobStorage(_ context.Context, jobID, provider, key, contentType string) error {
+	job := r.jobs[jobID]
+	if job == nil {
+		return ErrVideoResourceNotFound
+	}
+	if job.StorageRequested && job.StorageProvider == "" {
+		job.StorageProvider = provider
+		job.StorageKey = key
+		job.StorageContentType = contentType
+	}
+	return nil
 }
 
 func (r *videoRepositoryStub) UpdateJobAndSettle(_ context.Context, update VideoJobUpdate) (*VideoJob, error) {

@@ -259,7 +259,7 @@ BASE_URL=https://api.gavinteam.online
 3. 调用 `POST /v1/videos/generations`，同时携带 `Prefer: respond-async` 和唯一的 `Idempotency-Key`。
 4. 保存响应中的 `job_id`，按照 `status_url` 轮询。
 5. 状态为 `completed` 后，通过 `content_url` 下载成品。
-6. 将成品转存到自己的对象存储。平台不承诺固定保存天数。
+6. 未启用平台 OSS 持久化时，将成品转存到自己的对象存储；管理员可以在系统设置中为指定用户开启私有 OSS 保存，开启后的新任务由平台保存并继续通过鉴权接口访问。
 
 建议从 5 秒轮询间隔开始，长任务逐步退避到 30 秒。不要高频固定轮询。
 

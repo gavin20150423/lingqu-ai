@@ -691,6 +691,34 @@ func ProvideImageStorageSettingService(
 	return NewImageStorageSettingService(settingRepo, encryptor, backup, factory, cfg.ImageStorage)
 }
 
+// ProvideVideoStorageSettingService creates the runtime-reloadable private OSS
+// configuration used for selected users' generated videos.
+func ProvideVideoStorageSettingService(
+	settingRepo SettingRepository,
+	encryptor SecretEncryptor,
+	backup *BackupService,
+	factory VideoObjectStoreFactory,
+) *VideoStorageSettingService {
+	return NewVideoStorageSettingService(settingRepo, encryptor, backup, factory)
+}
+
+// ProvideXiaoVideoService keeps the public constructor small for unit tests
+// while wiring the optional video persistence service in production.
+func ProvideXiaoVideoService(
+	repo VideoRepository,
+	accountRepo AccountRepository,
+	openAIGateway *OpenAIGatewayService,
+	httpUpstream HTTPUpstream,
+	authCache APIKeyAuthCacheInvalidator,
+	billingCache *BillingCacheService,
+	cfg *config.Config,
+	videoStorage *VideoStorageSettingService,
+) *XiaoVideoService {
+	svc := NewXiaoVideoService(repo, accountRepo, openAIGateway, httpUpstream, authCache, billingCache, cfg)
+	svc.SetVideoStorageSettingService(videoStorage)
+	return svc
+}
+
 // ProvideImageTaskService 构造异步图片任务服务。
 //
 // 生成结果必须先转存再写入 Redis：S3 已启用且配置完整时使用 S3，否则使用本地持久化目录。
@@ -860,10 +888,11 @@ var ProviderSet = wire.NewSet(
 	NewGatewayService,
 	NewOpenAIGatewayService,
 	ProvideImageStorageSettingService,
+	ProvideVideoStorageSettingService,
 	ProvideImageTaskService,
 	ProvideBatchImageModelPricingResolver,
 	NewBatchImagePublicService,
-	NewXiaoVideoService,
+	ProvideXiaoVideoService,
 	NewXiaoVideoRuntime,
 	NewBatchImageDownloadService,
 	ProvideBatchImageCleanupService,

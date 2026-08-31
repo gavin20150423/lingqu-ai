@@ -53,11 +53,11 @@ func (r *videoRepository) ReserveJob(ctx context.Context, p service.VideoJobRese
 		INSERT INTO video_jobs (
 			job_id, upstream_job_id, account_id, user_id, api_key_id, group_id, idempotency_key,
 			request_hash, model, resolution, duration, aspect_ratio, status, amount,
-			currency, settlement_status, upstream_response
-		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'pending',$13,'USD','held','{}'::jsonb)
+			currency, settlement_status, upstream_response, storage_requested
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'pending',$13,'USD','held','{}'::jsonb,$14)
 		ON CONFLICT DO NOTHING
 	`, p.JobID, upstreamPlaceholder, p.AccountID, p.Owner.UserID, p.Owner.APIKeyID, p.Owner.GroupID, idempotency,
-		p.RequestHash, p.Model, p.Resolution, p.Duration, p.AspectRatio, p.PreauthorizationAmount)
+		p.RequestHash, p.Model, p.Resolution, p.Duration, p.AspectRatio, p.PreauthorizationAmount, p.StorageRequested)
 	if err != nil {
 		return nil, false, err
 	}
@@ -278,6 +278,26 @@ func (r *videoRepository) ListActiveJobs(ctx context.Context, limit int) ([]*ser
 	return scanVideoJobs(rows)
 }
 
+func (r *videoRepository) ListCompletedJobsMissingStorage(ctx context.Context, limit int) ([]*service.VideoJob, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	rows, err := r.db.QueryContext(ctx, videoJobSelect+` WHERE status='completed' AND storage_requested=TRUE AND storage_provider='' ORDER BY finished_at ASC NULLS LAST LIMIT $1`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	return scanVideoJobs(rows)
+}
+
+func (r *videoRepository) SetJobStorage(ctx context.Context, jobID, provider, key, contentType string) error {
+	_, err := r.db.ExecContext(ctx, `
+		UPDATE video_jobs SET storage_provider=$2,storage_key=$3,storage_content_type=$4,updated_at=NOW()
+		WHERE job_id=$1 AND storage_requested=TRUE AND storage_provider=''
+	`, jobID, provider, key, contentType)
+	return err
+}
+
 func (r *videoRepository) UpdateJobAndSettle(ctx context.Context, p service.VideoJobUpdate) (_ *service.VideoJob, err error) {
 	nextRank := videoJobStatusRank(p.Status)
 	if nextRank < 0 {
@@ -380,7 +400,7 @@ func insertCapturedVideoUsageLog(ctx context.Context, tx *sql.Tx, jobID string) 
 	return err
 }
 
-const videoJobSelect = `SELECT job_id,upstream_job_id,account_id,user_id,api_key_id,group_id,idempotency_key,request_hash,model,resolution,duration,aspect_ratio,status,amount,currency,upstream_amount,upstream_currency,settlement_status,upstream_response,created_at,updated_at,finished_at,settled_at FROM video_jobs`
+const videoJobSelect = `SELECT job_id,upstream_job_id,account_id,user_id,api_key_id,group_id,idempotency_key,request_hash,model,resolution,duration,aspect_ratio,status,amount,currency,upstream_amount,upstream_currency,settlement_status,upstream_response,storage_provider,storage_key,storage_content_type,storage_requested,created_at,updated_at,finished_at,settled_at FROM video_jobs`
 
 type videoRowScanner interface{ Scan(...any) error }
 
@@ -390,8 +410,9 @@ func scanVideoJob(row videoRowScanner) (*service.VideoJob, error) {
 	var idem sql.NullString
 	var upstreamAmount sql.NullFloat64
 	var upstreamCurrency sql.NullString
+	var storageProvider, storageKey, storageContentType sql.NullString
 	var finished, settled sql.NullTime
-	err := row.Scan(&j.JobID, &j.UpstreamJobID, &j.AccountID, &j.UserID, &j.APIKeyID, &group, &idem, &j.RequestHash, &j.Model, &j.Resolution, &j.Duration, &j.AspectRatio, &j.Status, &j.Amount, &j.Currency, &upstreamAmount, &upstreamCurrency, &j.SettlementStatus, &j.UpstreamResponse, &j.CreatedAt, &j.UpdatedAt, &finished, &settled)
+	err := row.Scan(&j.JobID, &j.UpstreamJobID, &j.AccountID, &j.UserID, &j.APIKeyID, &group, &idem, &j.RequestHash, &j.Model, &j.Resolution, &j.Duration, &j.AspectRatio, &j.Status, &j.Amount, &j.Currency, &upstreamAmount, &upstreamCurrency, &j.SettlementStatus, &j.UpstreamResponse, &storageProvider, &storageKey, &storageContentType, &j.StorageRequested, &j.CreatedAt, &j.UpdatedAt, &finished, &settled)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, service.ErrVideoResourceNotFound
 	}
@@ -409,6 +430,15 @@ func scanVideoJob(row videoRowScanner) (*service.VideoJob, error) {
 	}
 	if upstreamCurrency.Valid {
 		j.UpstreamCurrency = upstreamCurrency.String
+	}
+	if storageProvider.Valid {
+		j.StorageProvider = storageProvider.String
+	}
+	if storageKey.Valid {
+		j.StorageKey = storageKey.String
+	}
+	if storageContentType.Valid {
+		j.StorageContentType = storageContentType.String
 	}
 	if finished.Valid {
 		j.FinishedAt = &finished.Time

@@ -25,8 +25,8 @@
       <section class="video-retention-notice" aria-label="视频保存提醒">
         <span class="video-retention-notice__icon"><Icon name="exclamationTriangle" size="md" /></span>
         <div>
-          <strong>成品视频不是永久存储</strong>
-          <p>当前接口没有承诺固定保存天数，上游可能回收成片文件。任务显示“已完成”后请立即下载，并保存到自己的设备或对象存储。</p>
+          <strong>成品视频的保存方式取决于平台配置</strong>
+          <p>未配置平台 OSS 持久化的任务仍可能因上游回收而失效。任务显示“已完成”后请及时下载；管理员已为当前用户开启 OSS 的新任务会由平台长期保存。</p>
         </div>
         <span class="video-retention-notice__tag">及时下载</span>
       </section>

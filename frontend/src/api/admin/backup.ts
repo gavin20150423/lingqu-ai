@@ -101,6 +101,27 @@ export interface ImageStorageConfigResponse {
   secret_configured: boolean
 }
 
+// Private OSS persistence for generated videos. The selected users are stored
+// with each newly created job, so future selection edits do not rewrite jobs
+// already in progress.
+export interface VideoStorageConfig {
+  enabled: boolean
+  reuse_backup_s3: boolean
+  bucket: string
+  prefix: string
+  user_ids: number[]
+  endpoint: string
+  region: string
+  access_key_id: string
+  secret_access_key?: string
+  force_path_style: boolean
+}
+
+export interface VideoStorageConfigResponse {
+  config: VideoStorageConfig
+  secret_configured: boolean
+}
+
 export async function getImageStorageConfig(): Promise<ImageStorageConfigResponse> {
   const { data } = await apiClient.get<ImageStorageConfigResponse>('/admin/backups/image-storage')
   return data
@@ -118,6 +139,28 @@ export async function testImageStorageConnection(
 ): Promise<TestS3Response> {
   const { data } = await apiClient.post<TestS3Response>(
     '/admin/backups/image-storage/test',
+    config,
+  )
+  return data
+}
+
+export async function getVideoStorageConfig(): Promise<VideoStorageConfigResponse> {
+  const { data } = await apiClient.get<VideoStorageConfigResponse>('/admin/backups/video-storage')
+  return data
+}
+
+export async function updateVideoStorageConfig(
+  config: VideoStorageConfig,
+): Promise<VideoStorageConfig> {
+  const { data } = await apiClient.put<VideoStorageConfig>('/admin/backups/video-storage', config)
+  return data
+}
+
+export async function testVideoStorageConnection(
+  config: VideoStorageConfig,
+): Promise<TestS3Response> {
+  const { data } = await apiClient.post<TestS3Response>(
+    '/admin/backups/video-storage/test',
     config,
   )
   return data
@@ -172,6 +215,9 @@ export const backupAPI = {
   getImageStorageConfig,
   updateImageStorageConfig,
   testImageStorageConnection,
+  getVideoStorageConfig,
+  updateVideoStorageConfig,
+  testVideoStorageConnection,
   getSchedule,
   updateSchedule,
   createBackup,

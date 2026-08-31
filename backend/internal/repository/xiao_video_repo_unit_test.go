@@ -59,7 +59,8 @@ func TestVideoRepository_ReserveJobHoldsBeforeReturning(t *testing.T) {
 	mock.ExpectExec("INSERT INTO video_jobs").
 		WithArgs(reservation.JobID, "creating:"+reservation.JobID, reservation.AccountID, reservation.Owner.UserID,
 			reservation.Owner.APIKeyID, reservation.Owner.GroupID, reservation.IdempotencyKey, reservation.RequestHash,
-			reservation.Model, reservation.Resolution, reservation.Duration, reservation.AspectRatio, reservation.PreauthorizationAmount).
+			reservation.Model, reservation.Resolution, reservation.Duration, reservation.AspectRatio, reservation.PreauthorizationAmount,
+			reservation.StorageRequested).
 		WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectQuery("UPDATE users").
 		WithArgs(reservation.PreauthorizationAmount, reservation.Owner.UserID).
@@ -98,7 +99,8 @@ func TestVideoRepository_ReserveJobInsufficientBalanceRollsBack(t *testing.T) {
 	mock.ExpectExec("INSERT INTO video_jobs").
 		WithArgs(reservation.JobID, "creating:"+reservation.JobID, reservation.AccountID, reservation.Owner.UserID,
 			reservation.Owner.APIKeyID, reservation.Owner.GroupID, nil, reservation.RequestHash, reservation.Model,
-			reservation.Resolution, reservation.Duration, reservation.AspectRatio, reservation.PreauthorizationAmount).
+			reservation.Resolution, reservation.Duration, reservation.AspectRatio, reservation.PreauthorizationAmount,
+			reservation.StorageRequested).
 		WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectQuery("UPDATE users").
 		WithArgs(reservation.PreauthorizationAmount, reservation.Owner.UserID).
@@ -273,6 +275,6 @@ func videoJobRows(jobID, upstreamID, status string, amount float64, settlement s
 	return sqlmock.NewRows([]string{
 		"job_id", "upstream_job_id", "account_id", "user_id", "api_key_id", "group_id", "idempotency_key", "request_hash",
 		"model", "resolution", "duration", "aspect_ratio", "status", "amount", "currency", "upstream_amount", "upstream_currency", "settlement_status", "upstream_response",
-		"created_at", "updated_at", "finished_at", "settled_at",
-	}).AddRow(jobID, upstreamID, int64(42), int64(11), int64(22), int64(7), nil, "hash", "video-public", "480p", 4, "16:9", status, amount, "USD", upstreamAmount, upstreamCurrency, settlement, []byte(`{}`), now, now, nil, nil)
+		"storage_provider", "storage_key", "storage_content_type", "storage_requested", "created_at", "updated_at", "finished_at", "settled_at",
+	}).AddRow(jobID, upstreamID, int64(42), int64(11), int64(22), int64(7), nil, "hash", "video-public", "480p", 4, "16:9", status, amount, "USD", upstreamAmount, upstreamCurrency, settlement, []byte(`{}`), nil, nil, nil, false, now, now, nil, nil)
 }

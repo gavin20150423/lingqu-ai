@@ -116,6 +116,16 @@ export default {
         presignExpiryHours: '预签名链接有效期（小时）',
         saved: '异步生图存储配置已保存'
       },
+      videoStorage: {
+        title: '生成视频 OSS 存储',
+        description: '仅为选中的用户保存新生成的视频到私有 OSS。视频将长期保留，通过本平台已鉴权的视频接口读取。',
+        enabled: '将选中用户的视频保存到 OSS',
+        disabledHint: '当前不保存生成视频到 OSS，视频继续按原有上游访问方式提供。',
+        reuseBackupS3: '复用上方备份的 S3/OSS 配置（只用不同的存储桶/前缀）',
+        bucketInherited: '留空则沿用备份存储桶',
+        users: '使用 OSS 的用户',
+        saved: '生成视频 OSS 存储配置已保存'
+      },
       schedule: {
         title: '定时备份',
         description: '配置自动定时备份',

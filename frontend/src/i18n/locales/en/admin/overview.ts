@@ -116,6 +116,16 @@ export default {
         presignExpiryHours: 'Presigned link TTL (hours)',
         saved: 'Async image storage saved'
       },
+      videoStorage: {
+        title: 'Generated video OSS storage',
+        description: 'New videos for selected users are copied to private OSS and retained there. They remain available through this platform\'s authenticated video endpoint.',
+        enabled: 'Store selected users\' videos in OSS',
+        disabledHint: 'Generated videos are not copied to OSS and continue to use the existing upstream delivery path.',
+        reuseBackupS3: 'Reuse the backup S3/OSS configuration above (different bucket/prefix only)',
+        bucketInherited: 'Leave empty to use the backup bucket',
+        users: 'Users using OSS',
+        saved: 'Generated video OSS storage saved'
+      },
       schedule: {
         title: 'Scheduled Backup',
         description: 'Configure automatic scheduled backups',

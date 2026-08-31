@@ -6,12 +6,16 @@ import BackupView from '../BackupView.vue'
 const {
   getS3Config,
   getImageStorageConfig,
+
+  getVideoStorageConfig,
   getSchedule,
   listBackups,
   getDownloadURL,
 } = vi.hoisted(() => ({
   getS3Config: vi.fn(),
   getImageStorageConfig: vi.fn(),
+
+  getVideoStorageConfig: vi.fn(),
   getSchedule: vi.fn(),
   listBackups: vi.fn(),
   getDownloadURL: vi.fn(),
@@ -26,6 +30,9 @@ vi.mock('@/api', () => ({
       getImageStorageConfig,
       updateImageStorageConfig: vi.fn(),
       testImageStorageConnection: vi.fn(),
+      getVideoStorageConfig,
+      updateVideoStorageConfig: vi.fn(),
+      testVideoStorageConnection: vi.fn(),
       getSchedule,
       updateSchedule: vi.fn(),
       createBackup: vi.fn(),
@@ -54,6 +61,12 @@ vi.mock('@/composables/useStepUp', () => ({
 }))
 
 vi.mock('vue-i18n', () => ({
+  createI18n: () => ({
+    global: {
+      locale: { value: 'en' },
+      setLocaleMessage: vi.fn(),
+    },
+  }),
   useI18n: () => ({
     t: (key: string, params?: Record<string, unknown>) =>
       params?.index === undefined ? key : `${key}:${params.index}`,
@@ -86,6 +99,7 @@ describe('admin BackupView 分卷备份', () => {
   beforeEach(() => {
     getS3Config.mockResolvedValue({})
     getImageStorageConfig.mockResolvedValue({ config: {}, secret_configured: false })
+    getVideoStorageConfig.mockResolvedValue({ config: {}, secret_configured: false })
     getSchedule.mockResolvedValue({ enabled: false, cron_expr: '', retain_days: 14, retain_count: 10 })
     getDownloadURL.mockReset()
     vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})

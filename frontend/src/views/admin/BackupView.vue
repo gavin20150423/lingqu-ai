@@ -133,6 +133,83 @@
         </div>
       </div>
 
+      <!-- Generated videos can be retained privately in OSS for selected users. -->
+      <div class="card p-6">
+        <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 class="text-base font-semibold text-gray-900 dark:text-white">
+              {{ t('admin.backup.videoStorage.title') }}
+            </h3>
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              {{ t('admin.backup.videoStorage.description') }}
+            </p>
+          </div>
+          <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+            <input v-model="videoStorageForm.enabled" type="checkbox" />
+            <span>{{ t('admin.backup.videoStorage.enabled') }}</span>
+          </label>
+        </div>
+
+        <p v-if="!videoStorageForm.enabled" class="rounded-md bg-gray-50 px-3 py-2 text-sm text-gray-600 dark:bg-dark-800 dark:text-gray-300">
+          {{ t('admin.backup.videoStorage.disabledHint') }}
+        </p>
+
+        <template v-else>
+          <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+            <input v-model="videoStorageForm.reuse_backup_s3" type="checkbox" />
+            <span>{{ t('admin.backup.videoStorage.reuseBackupS3') }}</span>
+          </label>
+
+          <div class="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+            <div>
+              <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">{{ t('admin.backup.s3.bucket') }}</label>
+              <input v-model="videoStorageForm.bucket" class="input w-full" :placeholder="videoStorageForm.reuse_backup_s3 ? t('admin.backup.videoStorage.bucketInherited') : ''" />
+            </div>
+            <div>
+              <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">{{ t('admin.backup.s3.prefix') }}</label>
+              <input v-model="videoStorageForm.prefix" class="input w-full" placeholder="videos/" />
+            </div>
+
+            <template v-if="!videoStorageForm.reuse_backup_s3">
+              <div>
+                <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">{{ t('admin.backup.s3.endpoint') }}</label>
+                <input v-model="videoStorageForm.endpoint" class="input w-full" placeholder="https://oss-<region>.aliyuncs.com" />
+              </div>
+              <div>
+                <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">{{ t('admin.backup.s3.region') }}</label>
+                <input v-model="videoStorageForm.region" class="input w-full" placeholder="auto" />
+              </div>
+              <div>
+                <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">{{ t('admin.backup.s3.accessKeyId') }}</label>
+                <input v-model="videoStorageForm.access_key_id" class="input w-full" />
+              </div>
+              <div>
+                <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">{{ t('admin.backup.s3.secretAccessKey') }}</label>
+                <input v-model="videoStorageForm.secret_access_key" type="password" class="input w-full" :placeholder="videoStorageSecretConfigured ? t('admin.backup.s3.secretConfigured') : ''" />
+              </div>
+              <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 md:col-span-2">
+                <input v-model="videoStorageForm.force_path_style" type="checkbox" />
+                <span>{{ t('admin.backup.s3.forcePathStyle') }}</span>
+              </label>
+            </template>
+          </div>
+
+          <div class="mt-4 max-w-2xl">
+            <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">{{ t('admin.backup.videoStorage.users') }}</label>
+            <OpenAIFastPolicyUserSelector v-model="videoStorageForm.user_ids" />
+          </div>
+        </template>
+
+        <div class="mt-4 flex flex-wrap gap-2">
+          <button v-if="videoStorageForm.enabled" type="button" class="btn btn-secondary btn-sm" :disabled="testingVideoStorage" @click="testVideoStorage">
+            {{ testingVideoStorage ? t('common.loading') : t('admin.backup.s3.testConnection') }}
+          </button>
+          <button type="button" class="btn btn-primary btn-sm" :disabled="savingVideoStorage" @click="saveVideoStorageConfig">
+            {{ savingVideoStorage ? t('common.loading') : t('common.save') }}
+          </button>
+        </div>
+      </div>
+
       <!-- Schedule Config -->
       <div class="card p-6">
         <div class="mb-4">
@@ -414,9 +491,11 @@ import type {
   BackupRecord,
   BackupDownloadPart,
   ImageStorageConfig,
+  VideoStorageConfig,
 } from '@/api/admin/backup'
 import { useStepUp, isStepUpBlocked, isStepUpCancelled, stepUpBlockReason } from '@/composables/useStepUp'
 import TotpStepUpDialog from '@/components/auth/TotpStepUpDialog.vue'
+import OpenAIFastPolicyUserSelector from '@/views/admin/settings/OpenAIFastPolicyUserSelector.vue'
 
 const { t } = useI18n()
 const appStore = useAppStore()
@@ -466,6 +545,22 @@ const imageStorageForm = ref<ImageStorageConfig>({
 const imageStorageSecretConfigured = ref(false)
 const savingImageStorage = ref(false)
 const testingImageStorage = ref(false)
+
+const videoStorageForm = ref<VideoStorageConfig>({
+  enabled: false,
+  reuse_backup_s3: true,
+  bucket: '',
+  prefix: 'videos/',
+  user_ids: [],
+  endpoint: '',
+  region: 'auto',
+  access_key_id: '',
+  secret_access_key: '',
+  force_path_style: false,
+})
+const videoStorageSecretConfigured = ref(false)
+const savingVideoStorage = ref(false)
+const testingVideoStorage = ref(false)
 
 // Schedule config
 const scheduleForm = ref<BackupScheduleConfig>({
@@ -685,6 +780,55 @@ async function testImageStorage() {
   }
 }
 
+async function loadVideoStorageConfig() {
+  try {
+    const { config, secret_configured } = await adminAPI.backup.getVideoStorageConfig()
+    videoStorageForm.value = {
+      ...config,
+      prefix: config.prefix || 'videos/',
+      region: config.region || 'auto',
+      user_ids: config.user_ids || [],
+      secret_access_key: '',
+    }
+    videoStorageSecretConfigured.value = secret_configured
+  } catch (error) {
+    appStore.showError((error as { message?: string })?.message || t('errors.networkError'))
+  }
+}
+
+async function saveVideoStorageConfig() {
+  savingVideoStorage.value = true
+  try {
+    await backupStepUp.run(() => adminAPI.backup.updateVideoStorageConfig(videoStorageForm.value))
+    appStore.showSuccess(t('admin.backup.videoStorage.saved'))
+    await loadVideoStorageConfig()
+  } catch (error) {
+    if (isStepUpCancelled(error)) {
+      savingVideoStorage.value = false
+      return
+    }
+    appStore.showError((error as { message?: string })?.message || t('errors.networkError'))
+  } finally {
+    savingVideoStorage.value = false
+  }
+}
+
+async function testVideoStorage() {
+  testingVideoStorage.value = true
+  try {
+    const result = await adminAPI.backup.testVideoStorageConnection(videoStorageForm.value)
+    if (result.ok) {
+      appStore.showSuccess(result.message || t('admin.backup.s3.testSuccess'))
+    } else {
+      appStore.showError(result.message || t('admin.backup.s3.testFailed'))
+    }
+  } catch (error) {
+    appStore.showError((error as { message?: string })?.message || t('errors.networkError'))
+  } finally {
+    testingVideoStorage.value = false
+  }
+}
+
 async function testS3() {
   testingS3.value = true
   try {
@@ -855,7 +999,7 @@ function formatDate(value?: string): string {
 
 onMounted(async () => {
   document.addEventListener('visibilitychange', handleVisibilityChange)
-  await Promise.all([loadS3Config(), loadImageStorageConfig(), loadSchedule(), loadBackups()])
+  await Promise.all([loadS3Config(), loadImageStorageConfig(), loadVideoStorageConfig(), loadSchedule(), loadBackups()])
 
   // 如果有正在 running 的备份，恢复轮询
   const runningBackup = backups.value.find(r => r.status === 'running')

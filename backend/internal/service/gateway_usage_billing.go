@@ -269,6 +269,10 @@ func postUsageBilling(ctx context.Context, p *postUsageBillingParams, deps *bill
 }
 
 func resolveUsageBillingRequestID(ctx context.Context, upstreamRequestID string) string {
+	// Durable money-event IDs must win over reusable client request IDs.
+	if requestID := strings.TrimSpace(upstreamRequestID); isForcedUsageBillingRequestID(requestID) {
+		return requestID
+	}
 	if ctx != nil {
 		if clientRequestID, _ := ctx.Value(ctxkey.ClientRequestID).(string); strings.TrimSpace(clientRequestID) != "" {
 			return "client:" + strings.TrimSpace(clientRequestID)
@@ -281,6 +285,14 @@ func resolveUsageBillingRequestID(ctx context.Context, upstreamRequestID string)
 		return requestID
 	}
 	return "generated:" + generateRequestID()
+}
+
+func isForcedUsageBillingRequestID(requestID string) bool {
+	id := strings.TrimSpace(requestID)
+	return strings.HasPrefix(id, "web_search:") ||
+		strings.HasPrefix(id, "grok-video:") ||
+		strings.HasPrefix(id, "grok_audio:") ||
+		strings.HasPrefix(id, "grok_realtime:")
 }
 
 func resolveUsageBillingPayloadFingerprint(ctx context.Context, requestPayloadHash string) string {

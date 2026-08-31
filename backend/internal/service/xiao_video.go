@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"mime"
 	"net/http"
 	"net/url"
 	"sort"
@@ -76,29 +77,33 @@ type VideoMedia struct {
 }
 
 type VideoJob struct {
-	JobID            string
-	UpstreamJobID    string
-	AccountID        int64
-	UserID           int64
-	APIKeyID         int64
-	GroupID          *int64
-	IdempotencyKey   *string
-	RequestHash      string
-	Model            string
-	Resolution       string
-	Duration         int
-	AspectRatio      string
-	Status           string
-	Amount           float64
-	Currency         string
-	UpstreamAmount   *float64
-	UpstreamCurrency string
-	SettlementStatus string
-	UpstreamResponse []byte
-	CreatedAt        time.Time
-	UpdatedAt        time.Time
-	FinishedAt       *time.Time
-	SettledAt        *time.Time
+	JobID              string
+	UpstreamJobID      string
+	AccountID          int64
+	UserID             int64
+	APIKeyID           int64
+	GroupID            *int64
+	IdempotencyKey     *string
+	RequestHash        string
+	Model              string
+	Resolution         string
+	Duration           int
+	AspectRatio        string
+	Status             string
+	Amount             float64
+	Currency           string
+	UpstreamAmount     *float64
+	UpstreamCurrency   string
+	SettlementStatus   string
+	UpstreamResponse   []byte
+	StorageProvider    string
+	StorageKey         string
+	StorageContentType string
+	StorageRequested   bool
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
+	FinishedAt         *time.Time
+	SettledAt          *time.Time
 }
 
 type VideoJobReservation struct {
@@ -112,6 +117,7 @@ type VideoJobReservation struct {
 	Duration               int
 	AspectRatio            string
 	PreauthorizationAmount float64
+	StorageRequested       bool
 }
 
 type VideoJobFinalization struct {
@@ -147,7 +153,9 @@ type VideoRepository interface {
 	GetJobForOwner(context.Context, string, int64) (*VideoJob, error)
 	ListJobsForOwner(context.Context, int64, int) ([]*VideoJob, error)
 	ListActiveJobs(context.Context, int) ([]*VideoJob, error)
+	ListCompletedJobsMissingStorage(context.Context, int) ([]*VideoJob, error)
 	UpdateJobAndSettle(context.Context, VideoJobUpdate) (*VideoJob, error)
+	SetJobStorage(context.Context, string, string, string, string) error
 }
 
 type VideoUpstreamError struct {
@@ -178,6 +186,15 @@ type XiaoVideoService struct {
 	client        *http.Client
 	authCache     APIKeyAuthCacheInvalidator
 	billingCache  *BillingCacheService
+	videoStorage  *VideoStorageSettingService
+}
+
+// SetVideoStorageSettingService injects the runtime-reloadable OSS selector.
+// Keeping this as a setter preserves the lightweight constructor used by unit tests.
+func (s *XiaoVideoService) SetVideoStorageSettingService(storage *VideoStorageSettingService) {
+	if s != nil {
+		s.videoStorage = storage
+	}
 }
 
 func NewXiaoVideoService(
@@ -709,6 +726,7 @@ func (s *XiaoVideoService) Create(ctx context.Context, owner VideoOwner, body []
 			Duration:               resolvedMeta.Duration,
 			AspectRatio:            meta.AspectRatio,
 			PreauthorizationAmount: preauthorizationAmount,
+			StorageRequested:       s.videoStorage != nil && s.videoStorage.SelectedForUser(owner.UserID),
 		})
 		if reserveErr != nil {
 			release()
@@ -869,6 +887,7 @@ func (s *XiaoVideoService) Create(ctx context.Context, owner VideoOwner, body []
 			return nil, finalizeErr
 		}
 		s.invalidateBalance(ctx, owner.UserID)
+		s.persistCompletedVideo(ctx, job)
 		return job, nil
 	}
 	if pricingUnavailable {
@@ -1248,6 +1267,7 @@ func (s *XiaoVideoService) Cancel(ctx context.Context, owner VideoOwner, jobID s
 			if updated.SettlementStatus != job.SettlementStatus {
 				s.invalidateBalance(ctx, updated.UserID)
 			}
+			s.persistCompletedVideo(ctx, updated)
 			return updated, nil
 		}
 	}
@@ -1270,6 +1290,31 @@ func (s *XiaoVideoService) OpenContent(ctx context.Context, owner VideoOwner, jo
 	if job.Status != "completed" {
 		return nil, ErrVideoResourceNotFound
 	}
+	if job.StorageProvider == "oss" && job.StorageKey != "" && s.videoStorage != nil {
+		if store, ok := s.videoStorage.StoredStore(); ok {
+			resp, storageErr := store.Open(ctx, job.StorageKey, rangeHeader)
+			if storageErr == nil {
+				return resp, nil
+			}
+			slog.WarnContext(ctx, "xiao_video.oss_open_failed; falling back to upstream",
+				"job_id", job.JobID, "error", storageErr)
+		}
+	}
+
+	// A failed completion-time copy gets one more chance while the upstream
+	// object is still available. This does not change the completed task state.
+	s.persistCompletedVideo(ctx, job)
+	if job.StorageProvider == "oss" && job.StorageKey != "" && s.videoStorage != nil {
+		if store, ok := s.videoStorage.StoredStore(); ok {
+			if resp, storageErr := store.Open(ctx, job.StorageKey, rangeHeader); storageErr == nil {
+				return resp, nil
+			}
+		}
+	}
+	return s.openUpstreamVideoContent(ctx, job, rawQuery, rangeHeader)
+}
+
+func (s *XiaoVideoService) openUpstreamVideoContent(ctx context.Context, job *VideoJob, rawQuery, rangeHeader string) (*http.Response, error) {
 	account, err := s.accountByID(ctx, job.AccountID)
 	if err != nil {
 		return nil, err
@@ -1282,6 +1327,47 @@ func (s *XiaoVideoService) OpenContent(ctx context.Context, owner VideoOwner, jo
 		return s.openExternalVideoContent(ctx, account, resultURL, rangeHeader)
 	}
 	return s.upstreamVideoOperation(ctx, account, videoOperationContent, job.UpstreamJobID, rawQuery, "", nil, rangeHeader, "")
+}
+
+func (s *XiaoVideoService) persistCompletedVideo(ctx context.Context, job *VideoJob) {
+	if s == nil || s.videoStorage == nil || job == nil || !job.StorageRequested || job.Status != "completed" || job.StorageProvider != "" {
+		return
+	}
+	store, prefix, maxBytes, available := s.videoStorage.Store()
+	if !available {
+		return
+	}
+	resp, err := s.openUpstreamVideoContent(ctx, job, "", "")
+	if err != nil {
+		slog.WarnContext(ctx, "xiao_video.oss_copy_source_failed", "job_id", job.JobID, "error", err)
+		return
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		slog.WarnContext(ctx, "xiao_video.oss_copy_source_status", "job_id", job.JobID, "status", resp.StatusCode)
+		return
+	}
+	contentType := videoStorageContentType(resp.Header.Get("Content-Type"))
+	key := prefix + job.JobID + ".mp4"
+	if err := store.Upload(ctx, key, resp.Body, contentType, resp.ContentLength, maxBytes); err != nil {
+		slog.WarnContext(ctx, "xiao_video.oss_copy_failed", "job_id", job.JobID, "error", err)
+		return
+	}
+	if err := s.repo.SetJobStorage(ctx, job.JobID, "oss", key, contentType); err != nil {
+		slog.ErrorContext(ctx, "xiao_video.oss_reference_save_failed", "job_id", job.JobID, "error", err)
+		return
+	}
+	job.StorageProvider = "oss"
+	job.StorageKey = key
+	job.StorageContentType = contentType
+}
+
+func videoStorageContentType(value string) string {
+	mediaType, _, err := mime.ParseMediaType(strings.TrimSpace(value))
+	if err == nil && strings.HasPrefix(strings.ToLower(mediaType), "video/") {
+		return mediaType
+	}
+	return "video/mp4"
 }
 
 func openAISoraResultURL(raw []byte) (string, bool) {
@@ -1324,6 +1410,16 @@ func (s *XiaoVideoService) Reconcile(ctx context.Context, limit int) error {
 			return ctx.Err()
 		}
 		_, _ = s.refresh(ctx, job)
+	}
+	completed, err := s.repo.ListCompletedJobsMissingStorage(ctx, limit)
+	if err != nil {
+		return err
+	}
+	for _, job := range completed {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		s.persistCompletedVideo(ctx, job)
 	}
 	return nil
 }
@@ -1374,6 +1470,9 @@ func (s *XiaoVideoService) refresh(ctx context.Context, job *VideoJob) (*VideoJo
 	})
 	if err == nil && updated.SettlementStatus != job.SettlementStatus {
 		s.invalidateBalance(ctx, updated.UserID)
+	}
+	if err == nil {
+		s.persistCompletedVideo(ctx, updated)
 	}
 	return updated, err
 }
