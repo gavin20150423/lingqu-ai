@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import type { ApiKey } from '@/types'
-import { getTextCreationKeys, isImageCreationKey, isTextCreationKey } from '../creationAccess'
+import {
+  getOpenAIModelIds,
+  getTextCreationGroupKeys,
+  getTextCreationKeys,
+  isImageCreationKey,
+  isTextCreationKey,
+} from '../creationAccess'
 
 describe('image creation key access', () => {
   it('only accepts active OpenAI groups with image generation enabled', () => {
@@ -44,5 +50,30 @@ describe('text creation key access', () => {
     } as ApiKey
 
     expect(getTextCreationKeys([imageKey, generalKey]).map((key) => key.id)).toEqual([2, 1])
+  })
+
+  it('keeps one preferred key per OpenAI group', () => {
+    const keys = [
+      { id: 1, status: 'active', group: { id: 10, status: 'active', platform: 'openai', allow_image_generation: false } },
+      { id: 2, status: 'active', group: { id: 10, status: 'active', platform: 'openai', allow_image_generation: false } },
+      { id: 3, status: 'active', group: { id: 20, status: 'active', platform: 'openai', allow_image_generation: true } },
+      { id: 4, status: 'active', group: { id: 30, status: 'active', platform: 'anthropic', allow_image_generation: false } },
+    ] as ApiKey[]
+
+    expect(getTextCreationGroupKeys(keys).map((key) => key.id)).toEqual([1, 3])
+  })
+})
+
+describe('OpenAI model list parsing', () => {
+  it('extracts trimmed unique ids in upstream order', () => {
+    expect(getOpenAIModelIds({
+      object: 'list',
+      data: [{ id: 'gpt-5.5' }, { id: ' gpt-5.6 ' }, { id: 'gpt-5.5' }, {}, null],
+    })).toEqual(['gpt-5.5', 'gpt-5.6'])
+  })
+
+  it('rejects malformed model responses', () => {
+    expect(getOpenAIModelIds(null)).toEqual([])
+    expect(getOpenAIModelIds({ data: 'gpt-5.5' })).toEqual([])
   })
 })

@@ -30,10 +30,11 @@ type LingquBridge = {
     textGroupName?: string;
     textKeys?: Array<{
         id?: number;
+        keyId?: number;
         apiKey?: string;
         keyName?: string;
         groupName?: string;
-        model?: string;
+        models?: string[];
     }>;
     videoKeyId?: number;
     videoApiKey?: string;
@@ -109,21 +110,21 @@ export function ClientRootInit({ children }: { children: ReactNode }) {
             ? (bridge.textKeys || [])
                   .map((entry, index) => {
                       const apiKey = entry.apiKey?.trim() || "";
-                      if (!apiKey) return null;
+                      const models = Array.from(new Set((entry.models || []).map((model) => model.trim()).filter(Boolean)));
+                      if (!apiKey || !models.length) return null;
                       return createModelChannel({
                           id: entry.id ? `lingqu-text-${entry.id}` : `lingqu-text-${index + 1}`,
                           name: entry.groupName || entry.keyName || t("config.channels.defaultName"),
                           baseUrl: bridge.apiUrl!,
                           apiKey,
                           apiFormat: "openai",
-                          models: [{ name: entry.model || "gpt-5.5", capability: "text" }],
+                          models: models.map((name) => ({ name, capability: "text" as const })),
                       });
                   })
                   .filter((channel): channel is NonNullable<typeof channel> => Boolean(channel))
             : [];
-        const textChannel =
-            textChannels[0] ||
-            (bridge.apiUrl && textApiKey
+        const textChannel = textChannels[0] ||
+            (bridge.apiUrl && textApiKey && !(bridge.textKeys || []).length
                 ? createModelChannel({
                       id: "lingqu-text",
                       name: bridge.textGroupName || bridge.textKeyName || t("config.channels.defaultName"),

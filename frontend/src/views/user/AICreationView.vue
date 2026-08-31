@@ -34,7 +34,11 @@ import { keysAPI } from '@/api'
 import type { ApiKey } from '@/types'
 import Icon from '@/components/icons/Icon.vue'
 import UserWorkspaceLayout from '@/components/layout/UserWorkspaceLayout.vue'
-import { getTextCreationKeys, isImageCreationKey } from '@/utils/creationAccess'
+import {
+  getOpenAIModelIds,
+  getTextCreationGroupKeys,
+  isImageCreationKey,
+} from '@/utils/creationAccess'
 
 const BRIDGE_STORAGE_KEY = 'lingqu:ai-creation:bridge'
 const ENTRY_PATH = import.meta.env.DEV ? '/ai-creation/index.html' : '/ai-creation/'
@@ -45,6 +49,13 @@ const loading = ref(true)
 const frameSrc = ref('')
 const frameKey = ref(0)
 
+type TextCreationGroup = {
+  key: ApiKey
+  models: string[]
+}
+
+const textCreationGroups = ref<TextCreationGroup[]>([])
+
 const activeKeys = computed(() => {
   return keys.value.filter((key) => key.status === 'active' && key.group)
 })
@@ -53,8 +64,8 @@ const imageKeys = computed(() => {
   return keys.value.filter(isImageCreationKey)
 })
 
-const textKeys = computed(() => {
-  return getTextCreationKeys(keys.value)
+const textGroupKeys = computed(() => {
+  return getTextCreationGroupKeys(keys.value)
 })
 
 const imageKey = computed(() => {
@@ -71,14 +82,49 @@ function requestedSection() {
 }
 
 const creationSection = computed(() => requestedSection())
-const requiredKey = computed(() => creationSection.value === 'video' ? videoKey.value : imageKey.value)
+const requiredKey = computed(() => {
+  if (creationSection.value === 'video') return videoKey.value
+  if (creationSection.value === 'image') return imageKey.value
+  return imageKey.value || textCreationGroups.value[0]?.key || null
+})
 const hasCreationKey = computed(() => Boolean(requiredKey.value))
 const emptyStateTitle = computed(() => creationSection.value === 'video' ? '还没有可用的视频创作 Key' : creationSection.value === 'image' ? '还没有可用的生图 Key' : '还没有可用的创作 Key')
-const emptyStateDescription = computed(() => creationSection.value === 'video' ? '先创建一个视频渠道 Key，再回来使用视频创作。' : creationSection.value === 'image' ? '先创建一个 OpenAI 分组且开启生图权限的 Key，再回来使用生图工作台。' : '先创建一个可用的 OpenAI 生图 Key，再回来使用无限画布、生图和视频创作。')
+const emptyStateDescription = computed(() => creationSection.value === 'video' ? '先创建一个视频渠道 Key，再回来使用视频创作。' : creationSection.value === 'image' ? '先创建一个 OpenAI 分组且开启生图权限的 Key，再回来使用生图工作台。' : '先创建一个可用的 OpenAI 文本或生图 Key，再回来使用无限画布。')
+
+function textGroupDisplayName(key: ApiKey) {
+  const name = key.group?.name || key.name
+  const duplicateName = textGroupKeys.value.some((candidate) => (
+    candidate.group?.id !== key.group?.id &&
+    (candidate.group?.name || candidate.name) === name
+  ))
+  return duplicateName ? `${name} (#${key.group?.id})` : name
+}
+
+async function loadTextCreationGroups() {
+  const groups = await Promise.all(textGroupKeys.value.map(async (key): Promise<TextCreationGroup | null> => {
+    try {
+      const response = await fetch(`${window.location.origin}/v1/models`, {
+        credentials: 'same-origin',
+        headers: {
+          Accept: 'application/json',
+          Authorization: `Bearer ${key.key}`,
+        },
+      })
+      if (!response.ok) return null
+      const models = getOpenAIModelIds(await response.json())
+      return models.length ? { key, models } : null
+    } catch {
+      return null
+    }
+  }))
+
+  textCreationGroups.value = groups.filter((group): group is TextCreationGroup => Boolean(group))
+}
 
 function writeBridge() {
   const image = imageKey.value
-  const text = textKeys.value[0] || null
+  const textGroup = textCreationGroups.value[0] || null
+  const text = textGroup?.key || null
   const video = videoKey.value
   const creationTheme = window.localStorage.getItem('theme') === 'dark' ? 'dark' : 'light'
   const payload = JSON.stringify({
@@ -99,12 +145,13 @@ function writeBridge() {
     textApiKey: text?.key || '',
     textKeyName: text?.name || '',
     textGroupName: text?.group?.name || '',
-    textKeys: textKeys.value.map((key) => ({
-      id: key.id,
+    textKeys: textCreationGroups.value.map(({ key, models }) => ({
+      id: key.group?.id || key.id,
+      keyId: key.id,
       apiKey: key.key,
       keyName: key.name,
-      groupName: key.group?.name || key.name,
-      model: 'gpt-5.5',
+      groupName: textGroupDisplayName(key),
+      models,
     })),
     keyId: image?.id || text?.id || video?.id,
     apiKey: image?.key || text?.key || video?.key || '',
@@ -136,6 +183,7 @@ async function launch() {
       sort_order: 'desc',
     })
     keys.value = allKeys
+    await loadTextCreationGroups()
     if (!hasCreationKey.value) return
     writeBridge()
     const section = requestedSection()
