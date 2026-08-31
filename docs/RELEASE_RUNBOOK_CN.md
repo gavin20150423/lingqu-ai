@@ -128,6 +128,7 @@ docker save local/gavin2api:<version>-<short-commit> | gzip > gavin2api-<version
 - 没有明确必要不得重启 PostgreSQL、Redis、Caddy 或 SubPilot；应用发布只允许启动/停止 `gavin2api` 新旧容器及执行 Caddy reload。
 - 数据库迁移必须是新增、可回滚、经过测试的迁移；若迁移风险无法确认，先停止发布，不得通过重启数据库规避问题。
 - 新容器必须使用现有 `.env` 和现有外部依赖，不得在发布过程中改密码、JWT、存储桶或数据库连接信息。
+- 新容器必须沿用现有应用的数据库连接池配置；不得为蓝绿发布临时设置或缩小 `DATABASE_MAX_OPEN_CONNS`、`DATABASE_MAX_IDLE_CONNS`。如需调整连接池，必须作为独立、评审过的配置变更执行。
 - 新容器健康检查失败时优先 Caddy 回切旧容器；回滚不得触碰数据库和 Redis。
 - 每次已完成的代码修改必须提交到 `main`；下一次功能修改必须从最新 `main` 检出新工作分支，完成后再合并回 `main`。
 
