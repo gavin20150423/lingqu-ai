@@ -21,6 +21,11 @@
 local/gavin2api:<version>-<short-commit>
 ```
 
+正式版本号必须遵循 `<上游 Sub2API 版本>-lingqu.<本地小版本序号>`，例如上游为
+`0.1.186` 时，本地首个定制发布使用 `0.1.186-lingqu.1`，同一上游版本的后续
+定制发布依次递增 `.2`、`.3`；上游版本变化时重新从 `.1` 开始。`backend/cmd/server/VERSION`、
+Release Log、镜像标签和发布报告必须使用同一个完整版本号。
+
 镜像必须由当前 `main` 的 Dockerfile 构建，禁止以旧容器为基础执行 `docker create`、`docker cp` 或 `docker commit`。生产 Compose 只允许临时指向已记录摘要的本地构建镜像；发布完成后保留上一版本镜像作为回滚点。
 
 生产 Compose 如果为应用声明了固定的 `container_name: gavin2api`，不得通过复用
@@ -65,7 +70,7 @@ git push lingqu v<version>
 
 ## 4. 本地构建与上传
 
-发布前在仓库根目录执行并记录以下信息（版本号示例为 `0.1.187`）：
+发布前在仓库根目录执行并记录以下信息（版本号示例为 `0.1.186-lingqu.1`）：
 
 ```bash
 git switch main
