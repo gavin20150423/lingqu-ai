@@ -133,6 +133,10 @@
                 @change="applyFilters"
               />
             </div>
+            <div v-if="activeTab !== 'errors'" class="lingqu-console-filter-field">
+              <label class="input-label">{{ t('usage.compactionFilter') }}</label>
+              <Select v-model="filters.native_compaction_v2" :options="compactionOptions" @change="applyFilters" />
+            </div>
 
             <template v-else>
               <div class="lingqu-console-filter-field">
@@ -764,6 +768,11 @@ const apiKeyOptions = computed(() => {
   ]
 })
 
+const compactionOptions = computed<SelectOption[]>(() => [
+  { value: null, label: t('usage.allCompactionTypes') },
+  { value: true, label: t('usage.compactionOnly') }
+])
+
 // Helper function to format date in local timezone
 const formatLocalDate = (date: Date): string => {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
@@ -789,7 +798,8 @@ const getInitialApiKeyFilter = (): number | undefined => {
 const filters = ref<UsageQueryParams>({
   api_key_id: getInitialApiKeyFilter(),
   start_date: undefined,
-  end_date: undefined
+  end_date: undefined,
+  native_compaction_v2: null
 })
 
 // Initialize filters with date range
@@ -963,7 +973,8 @@ const resetFilters = () => {
   filters.value = {
     api_key_id: undefined,
     start_date: undefined,
-    end_date: undefined
+    end_date: undefined,
+    native_compaction_v2: null
   }
   // Reset date range to default (last 7 days)
   const now = new Date()

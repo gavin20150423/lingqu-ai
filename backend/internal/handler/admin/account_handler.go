@@ -2801,6 +2801,8 @@ func (h *AccountHandler) SyncUpstreamModels(c *gin.Context) {
 			switch syncErr.Kind {
 			case service.UpstreamModelSyncErrorConfiguration, service.UpstreamModelSyncErrorUnsupported:
 				response.BadRequest(c, syncErr.SafeMessage())
+			case service.UpstreamModelSyncErrorInternal:
+				response.InternalError(c, syncErr.SafeMessage())
 			default:
 				slog.Warn("sync_upstream_models_failed", "account_id", accountID, "kind", syncErr.Kind)
 				response.Error(c, http.StatusBadGateway, syncErr.SafeMessage())
@@ -2820,16 +2822,21 @@ func (h *AccountHandler) SyncUpstreamModels(c *gin.Context) {
 // POST /api/v1/admin/accounts/models/sync-upstream-preview
 func (h *AccountHandler) SyncUpstreamModelsPreview(c *gin.Context) {
 	var req struct {
-		Platform      string `json:"platform" binding:"required"`
-		Type          string `json:"type" binding:"required"`
-		BaseURL       string `json:"base_url"`
-		APIKey        string `json:"api_key" binding:"required"`
-		VideoProtocol string `json:"video_protocol"`
-		VideoAdapter  any    `json:"video_adapter"`
+		Platform      string            `json:"platform" binding:"required"`
+		Type          string            `json:"type" binding:"required"`
+		BaseURL       string            `json:"base_url"`
+		APIKey        string            `json:"api_key" binding:"required"`
+		VideoProtocol string            `json:"video_protocol"`
+		VideoAdapter  any               `json:"video_adapter"`
+		ModelMapping  map[string]string `json:"model_mapping"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.BadRequest(c, "Invalid request: "+err.Error())
 		return
+	}
+	modelMapping := make(map[string]any, len(req.ModelMapping))
+	for sourceModel, upstreamModel := range req.ModelMapping {
+		modelMapping[sourceModel] = upstreamModel
 	}
 
 	tempAccount := &service.Account{
@@ -2840,6 +2847,7 @@ func (h *AccountHandler) SyncUpstreamModelsPreview(c *gin.Context) {
 			"base_url":       req.BaseURL,
 			"video_protocol": req.VideoProtocol,
 			"video_adapter":  req.VideoAdapter,
+			"model_mapping":  modelMapping,
 		},
 	}
 
@@ -2855,6 +2863,8 @@ func (h *AccountHandler) SyncUpstreamModelsPreview(c *gin.Context) {
 			switch syncErr.Kind {
 			case service.UpstreamModelSyncErrorConfiguration, service.UpstreamModelSyncErrorUnsupported:
 				response.BadRequest(c, syncErr.SafeMessage())
+			case service.UpstreamModelSyncErrorInternal:
+				response.InternalError(c, syncErr.SafeMessage())
 			default:
 				slog.Warn("sync_upstream_models_preview_failed", "platform", req.Platform, "kind", syncErr.Kind)
 				response.Error(c, http.StatusBadGateway, syncErr.SafeMessage())

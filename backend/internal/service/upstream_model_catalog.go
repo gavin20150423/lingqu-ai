@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	upstreamModelsBodyLimit                  = 1 << 20
+	upstreamVideoModelsBodyLimit             = 1 << 20
 	upstreamPricingSourceNone                = "none"
 	upstreamPricingSourceModelList           = "model_list"
 	upstreamPricingSourceAIStartLabConfig    = "aistartlab_config"
@@ -45,20 +45,23 @@ type UpstreamModelSpec struct {
 
 // UpstreamModelCatalog extends the common model list with optional pricing metadata.
 type UpstreamModelCatalog struct {
-	Models        []string            `json:"models"`
-	ModelSpecs    []UpstreamModelSpec `json:"model_specs,omitempty"`
-	PricingSource string              `json:"pricing_source"`
-	PricingNote   string              `json:"pricing_note,omitempty"`
+	Models        []string                         `json:"models"`
+	ModelSpecs    []UpstreamModelSpec              `json:"model_specs,omitempty"`
+	PricingSource string                           `json:"pricing_source"`
+	PricingNote   string                           `json:"pricing_note,omitempty"`
+	Metadata      map[string]UpstreamModelMetadata `json:"metadata,omitempty"`
+	Warnings      []UpstreamModelSyncWarning       `json:"warnings,omitempty"`
 }
 
 // FetchUpstreamModelCatalog keeps the common model sync contract while enriching XiaoAPI video accounts.
 func (s *AccountTestService) FetchUpstreamModelCatalog(ctx context.Context, account *Account) (*UpstreamModelCatalog, error) {
 	if account == nil || account.Platform != PlatformXiaoAPI {
-		models, err := s.FetchUpstreamSupportedModels(ctx, account)
+		catalog, err := s.SyncUpstreamModelCatalog(ctx, account)
 		if err != nil {
 			return nil, err
 		}
-		return &UpstreamModelCatalog{Models: models, PricingSource: upstreamPricingSourceNone}, nil
+		catalog.PricingSource = upstreamPricingSourceNone
+		return catalog, nil
 	}
 
 	// AIStartLab's OpenAI-compatible model endpoint intentionally omits pricing.
@@ -229,12 +232,12 @@ func (s *AccountTestService) fetchUpstreamCatalogBody(req *http.Request, account
 		return nil, newUpstreamModelSyncUpstreamError("Failed to request "+label, err)
 	}
 	defer func() { _ = resp.Body.Close() }()
-	body, err := io.ReadAll(io.LimitReader(resp.Body, upstreamModelsBodyLimit+1))
+	body, err := io.ReadAll(io.LimitReader(resp.Body, upstreamVideoModelsBodyLimit+1))
 	if err != nil {
 		return nil, newUpstreamModelSyncUpstreamError("Failed to read "+label, err)
 	}
-	if int64(len(body)) > upstreamModelsBodyLimit {
-		return nil, newUpstreamModelSyncUpstreamError(label+" response is too large", fmt.Errorf("response exceeds %d bytes", upstreamModelsBodyLimit))
+	if int64(len(body)) > upstreamVideoModelsBodyLimit {
+		return nil, newUpstreamModelSyncUpstreamError(label+" response is too large", fmt.Errorf("response exceeds %d bytes", upstreamVideoModelsBodyLimit))
 	}
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
 		return nil, newUpstreamModelSyncUpstreamError(
