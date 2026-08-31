@@ -175,6 +175,21 @@
                       data-testid="xiao-concurrency"
                     />
                   </label>
+                  <label class="min-w-0">
+                    <span class="input-label">{{ t('admin.xiaoVideo.videoMarkupMultiplier') }}</span>
+                    <div class="relative">
+                      <input
+                        v-model.number="form.markupMultiplier"
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.05"
+                        class="input pr-8 tabular-nums"
+                        data-testid="xiao-account-markup-multiplier"
+                      />
+                      <span class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">×</span>
+                    </div>
+                  </label>
                 </div>
 
                 <label class="min-w-0 md:col-span-2">
@@ -303,7 +318,7 @@
                     <span class="input-label">{{ t('admin.xiaoVideo.markupMultiplier') }}</span>
                     <div class="relative">
                       <input
-                        v-model.number="markupMultiplier"
+                        v-model.number="form.markupMultiplier"
                         type="number"
                         min="0"
                         max="100"
@@ -466,6 +481,7 @@ interface XiaoVideoForm {
   baseUrl: string
   apiKey: string
   concurrency: number
+  markupMultiplier: number
   status: EditableStatus
   groupIds: number[]
 }
@@ -493,7 +509,6 @@ const upstreamPricingSource = ref('none')
 const upstreamPricingNote = ref('')
 const selectedUpstreamModels = ref<string[]>([])
 const modelSearch = ref('')
-const markupMultiplier = ref(1.3)
 const baseline = ref('')
 let selectionRequest = 0
 
@@ -505,6 +520,7 @@ const form = reactive<XiaoVideoForm>({
   baseUrl: '',
   apiKey: '',
   concurrency: 1,
+  markupMultiplier: 1.3,
   status: 'active',
   groupIds: []
 })
@@ -596,6 +612,7 @@ function resetForm() {
     baseUrl: '',
     apiKey: '',
     concurrency: 1,
+    markupMultiplier: 1.3,
     status: 'active' as EditableStatus,
     groupIds: [] as number[]
   })
@@ -622,6 +639,9 @@ function syncForm(account: Account) {
     baseUrl: typeof credentials.base_url === 'string' ? credentials.base_url : '',
     apiKey: '',
     concurrency: account.concurrency || 1,
+    markupMultiplier: Number.isFinite(Number(credentials.video_markup_multiplier)) && Number(credentials.video_markup_multiplier) >= 0
+      ? Number(credentials.video_markup_multiplier)
+      : 1.3,
     status: editableStatus(account),
     groupIds: [...(account.group_ids ?? [])]
   })
@@ -893,7 +913,7 @@ function modelCostSummary(model: string): string {
 function suggestedPrice(spec: UpstreamModelSpec): number | null {
   const internalCost = internalUnitCost(spec)
   if (internalCost === null) return null
-  const multiplier = Number(markupMultiplier.value)
+  const multiplier = Number(form.markupMultiplier)
   if (!Number.isFinite(multiplier) || multiplier < 0) return null
   return Number((internalCost * multiplier).toFixed(6))
 }
@@ -1151,6 +1171,10 @@ function validateForm(): boolean {
     appStore.showError(t('admin.xiaoVideo.validation.concurrencyInvalid'))
     return false
   }
+  if (!Number.isFinite(form.markupMultiplier) || form.markupMultiplier < 0 || form.markupMultiplier > 100) {
+    appStore.showError(t('admin.xiaoVideo.validation.markupMultiplierInvalid'))
+    return false
+  }
   if (!form.apiKey.trim() && !hasExistingApiKey.value) {
     appStore.showError(t('admin.xiaoVideo.validation.apiKeyRequired'))
     return false
@@ -1174,6 +1198,7 @@ function buildCredentials(): Record<string, unknown> {
     ...currentCredentials,
     base_url: form.baseUrl.trim(),
     video_protocol: form.protocol,
+    video_markup_multiplier: Number(form.markupMultiplier.toFixed(6)),
     video_pricing: normalizeXiaoVideoPricing(pricing.value)
   }
   if (form.protocol === 'custom_json') {

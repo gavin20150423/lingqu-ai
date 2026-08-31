@@ -14,6 +14,7 @@ export default {
     fetchedModels: '{count} upstream models fetched',
     fetchedModelsHint: 'Select models to create same-name mappings and suggested selling prices. Existing mappings are preserved.',
     markupMultiplier: 'Selling multiplier',
+    videoMarkupMultiplier: 'Video markup multiplier',
     markupMultiplierHint: 'AIStartLab uses 100 credits = $1 internal; native XiaoAPI USD costs use a 1:1 internal rate.',
     noConvertiblePricing: 'The upstream did not return a convertible billing unit. Models can still be mapped, but no selling rules will be generated automatically.',
     pricingNoteAIStartLabUnavailable: 'The AIStartLab pricing-config endpoint was unavailable. Only the model list was fetched; no selling prices were generated.',
@@ -84,6 +85,7 @@ export default {
       adapterRequired: 'Custom JSON adapter configuration is required.',
       adapterInvalid: 'Custom JSON adapter configuration must be a valid JSON object.',
       concurrencyInvalid: 'Concurrency must be an integer from 1 to 10000.',
+      markupMultiplierInvalid: 'Selling multiplier must be a number from 0 to 100.',
       mapping: {
         required: 'Every mapping requires both a public model and an upstream model.',
         wildcard: 'A public model wildcard may appear once at the end only.',

@@ -120,6 +120,7 @@ const openAIEndpointCapabilitiesCredentialKey = "openai_capabilities"
 
 const (
 	XiaoVideoPricingCredentialKey  = "video_pricing"
+	XiaoVideoMarkupMultiplierCredentialKey = "video_markup_multiplier"
 	XiaoVideoProtocolCredentialKey = "video_protocol"
 	XiaoVideoAdapterCredentialKey  = "video_adapter"
 	// XiaoVideoReferenceVideoMultiplierCredentialKey optionally overrides the
@@ -147,6 +148,34 @@ func (a *Account) XiaoVideoProtocol() string {
 	default:
 		return ""
 	}
+}
+
+// XiaoVideoMarkupMultiplier returns the account-level selling multiplier used
+// by video price synchronization. Missing or invalid values keep the legacy 1x behavior.
+func (a *Account) XiaoVideoMarkupMultiplier() float64 {
+	if a == nil {
+		return 1.0
+	}
+	var value float64
+	var err error
+	if raw, ok := a.Credentials[XiaoVideoMarkupMultiplierCredentialKey]; ok {
+		switch typed := raw.(type) {
+		case float64:
+			value = typed
+		case float32:
+			value = float64(typed)
+		case json.Number:
+			value, err = typed.Float64()
+		default:
+			value, err = strconv.ParseFloat(strings.TrimSpace(a.GetCredential(XiaoVideoMarkupMultiplierCredentialKey)), 64)
+		}
+	} else {
+		err = errors.New("missing video markup multiplier")
+	}
+	if err != nil || math.IsNaN(value) || math.IsInf(value, 0) || value < 0 {
+		return 1.0
+	}
+	return value
 }
 
 // XiaoVideoReferenceVideoMultiplier returns the surcharge applied when a

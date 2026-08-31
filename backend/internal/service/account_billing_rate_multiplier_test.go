@@ -26,6 +26,17 @@ func TestAccount_BillingRateMultiplier_NegativeFallsBackToOne(t *testing.T) {
 	require.Equal(t, 1.0, a.BillingRateMultiplier())
 }
 
+func TestAccount_XiaoVideoMarkupMultiplierReadsCredential(t *testing.T) {
+	a := Account{Credentials: map[string]any{XiaoVideoMarkupMultiplierCredentialKey: 1.25}}
+	require.Equal(t, 1.25, a.XiaoVideoMarkupMultiplier())
+
+	a.Credentials[XiaoVideoMarkupMultiplierCredentialKey] = "invalid"
+	require.Equal(t, 1.0, a.XiaoVideoMarkupMultiplier())
+
+	a.Credentials[XiaoVideoMarkupMultiplierCredentialKey] = -0.5
+	require.Equal(t, 1.0, a.XiaoVideoMarkupMultiplier())
+}
+
 func TestAccount_XiaoVideoPriceUsesDynamicResolutionDurationAndAudioRates(t *testing.T) {
 	a := Account{Credentials: map[string]any{
 		XiaoVideoPricingCredentialKey: []any{

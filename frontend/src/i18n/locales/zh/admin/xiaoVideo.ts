@@ -14,6 +14,7 @@ export default {
     fetchedModels: '已获取 {count} 个上游模型',
     fetchedModelsHint: '选择后批量生成同名映射，并按上游成本和倍率生成建议售价；已有映射不会被覆盖。',
     markupMultiplier: '售价倍率',
+    videoMarkupMultiplier: '视频加价倍率',
     markupMultiplierHint: 'AIStartLab 按 100 积分 = 1 站内美元换算；原生 XiaoAPI 美元成本按 1:1 换算。',
     noConvertiblePricing: '上游未返回可换算的计费单位；模型仍可导入映射，但不会自动生成销售规则。',
     pricingNoteAIStartLabUnavailable: 'AIStartLab 价格配置接口不可用，本次只获取到模型列表；不会自动生成售价。',
@@ -84,6 +85,7 @@ export default {
       adapterRequired: '请填写自定义 JSON 适配器配置',
       adapterInvalid: '自定义 JSON 适配器必须是有效的 JSON 对象',
       concurrencyInvalid: '并发数必须是 1 到 10000 的整数',
+      markupMultiplierInvalid: '售价倍率必须是 0 到 100 之间的数字',
       mapping: {
         required: '每条模型映射都必须填写对外模型和上游模型',
         wildcard: '对外模型的通配符只能在末尾出现一次',
