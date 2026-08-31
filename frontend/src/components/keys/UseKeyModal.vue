@@ -1232,6 +1232,7 @@ function generateRoutedCodexFiles(
     kimi: 'Kimi',
     zhipu: 'Zhipu',
     deepseek: 'DeepSeek',
+    xiaoapi: 'XiaoAPI',
     composite: 'Composite'
   }
   const label = labels[platform]
