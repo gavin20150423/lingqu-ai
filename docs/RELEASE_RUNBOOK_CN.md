@@ -49,7 +49,7 @@ git log -1 --oneline
 - 版本号、提交短哈希、镜像摘要和回滚镜像均已记录。
 - `docs/RELEASE_LOG.md` 已新增当前版本条目，并分别写明“修复了什么”、“增加了什么”和“当前已有功能”；没有新增功能时必须明确写“无新增”，不得省略。
 
-GitHub 非交互认证失败不是切换发布方式的理由。本机已经配置 SSH key 时，必须先确认当前进程实际使用了正确的 `IdentityFile`，并检查 SSH agent、密钥口令会话、`GIT_SSH_COMMAND` 和 Git remote 配置。不得仅凭一次 `Permission denied (publickey)` 就认定本机没有 GitHub 凭据。仍无法认证时必须停止发布，报告当前进程的认证问题，由维护者恢复正常 SSH 会话或在可用终端中完成推送。
+GitHub 非交互认证失败只阻止远端同步，不阻止已经完成本地测试、镜像摘要校验和蓝绿检查的本地镜像发布。本机已经配置 SSH key 时，仍应确认当前进程实际使用了正确的 `IdentityFile`，并检查 SSH agent、密钥口令会话、`GIT_SSH_COMMAND` 和 Git remote 配置。不得仅凭一次 `Permission denied (publickey)` 就用不确定的旧代码或未审查产物发布；远端同步应在认证恢复后补做并记录。
 
 ## 3. 可选的远端同步
 
