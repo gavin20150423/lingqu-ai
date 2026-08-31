@@ -23,6 +23,13 @@ local/gavin2api:<version>-<short-commit>
 
 镜像必须由当前 `main` 的 Dockerfile 构建，禁止以旧容器为基础执行 `docker create`、`docker cp` 或 `docker commit`。生产 Compose 只允许临时指向已记录摘要的本地构建镜像；发布完成后保留上一版本镜像作为回滚点。
 
+生产 Compose 如果为应用声明了固定的 `container_name: gavin2api`，不得通过复用
+`gavin2api` 服务名的临时 override 来创建蓝绿候选；即使 override 指定了新的
+`container_name`，Compose 仍可能先重建或删除原服务容器。蓝绿候选必须使用独立的
+Compose 服务/项目标识，或直接使用显式参数执行 `docker run`，并明确不绑定旧应用的
+宿主端口。候选启动后必须立即核对旧线上容器 ID、状态和端口没有变化；若发生变化，
+停止后续切流，先依据备份恢复原应用容器。
+
 ## 2. 发布前检查
 
 在创建版本标签或开始本地构建前完成以下检查：
