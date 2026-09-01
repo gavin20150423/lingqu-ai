@@ -28,6 +28,7 @@
 - **回滚顺序固定**：新容器异常时，先保证旧容器 `running/healthy`，再 reload Caddy 回旧 upstream，确认公网恢复 200 后才处理新容器。旧容器已经被误停时，禁止继续等待或清理，必须立即启动旧容器并完成同样的公网验证。
 - **禁止并发发布**：发布开始前在生产目录创建带持有者和时间的发布锁；发现其他发布、Caddy reload 或 Compose 操作正在进行时必须暂停，不得两个会话同时改 Caddy 或应用容器。
 - **配置文件挂载必须核对**：如果 Caddy 使用单文件 bind mount，必须比较宿主机文件和容器内 `/etc/caddy/Caddyfile` 的摘要，并确认容器重启后仍能读取新文件。文件 inode 未同步时，只能使用已确认的运行时 reload；不得把“宿主机文件已修改”当作当前运行配置已切换。
+- **单文件 bind mount 不一致时禁止从挂载路径 reload**：宿主机与容器内 `/etc/caddy/Caddyfile` 的 inode、大小或摘要不一致时，必须停止当前切换动作；只能将已备份并通过 `caddy validate` 的候选配置复制到 Caddy 容器内临时路径，再通过 `127.0.0.1:2019` reload，并重新核对 `/config/`。第一次 reload 出现公网 `5xx` 后，必须按失败发布处理并记录事故。
 
 本地发布镜像必须采用以下命名：
 
@@ -200,7 +201,15 @@ docker save local/gavin2api:<version>-<short-commit> | gzip > gavin2api-<version
 
 不得把本地提交、本地标签或健康的本地镜像等同于 GitHub Actions 发布；本项目的正式生产发布以本 Runbook 规定的本地镜像蓝绿切换和健康检查完成为准。
 
-## 10. 事故记录：v0.1.186-lingqu.2 发布期间短暂 502（2026-09-01）
+## 10. 事故记录：v0.1.186-lingqu.3 切换尝试短暂 502（2026-09-01）
+
+本次 `.3` 发布中，候选启动后首次 Caddy reload 读取了既有单文件 bind mount 的旧 inode，运行时 upstream 仍为不存在的 `gavin2api-canvas-text-key-0186-lingqu-1-default-pool`，API/CDN 本机检查出现短暂 `502`。旧应用当时仍在运行，因此没有扩大为旧应用停止后的持续故障。
+
+已按回滚顺序用 Caddy 容器内 `127.0.0.1:2019` 加载备份旧配置，确认 API/CDN 恢复 `200`；随后将候选配置复制到容器内临时路径，通过 `caddy validate` 和管理 API `/config/` 确认新 upstream 后重新切换。最终候选承载流量，旧容器优雅停止并保留，PostgreSQL、Redis、Caddy、SubPilot 的容器 ID、启动时间和重启次数未变化。
+
+这次事件说明仅仅“旧容器尚未停止”仍不够：Caddy 配置文件 inode 和运行时 upstream 必须在每次 reload 前后都被证明一致。后续发布按第 5 节新增硬门禁执行；该发布记录为“恢复后完成部署，但包含短暂 502 的发布事故”，不得标记为无事故发布。
+
+## 11. 事故记录：v0.1.186-lingqu.2 发布期间短暂 502（2026-09-01）
 
 本节记录本次发布事故，作为后续发布的强制反例和检查依据。详细复盘见
 `docs/RELEASE_INCIDENT_20260901_CN.md`。

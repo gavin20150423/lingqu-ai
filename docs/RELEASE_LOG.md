@@ -29,6 +29,8 @@
 - 后端账号批量删除定向测试通过，覆盖串行执行、单项失败后继续、影子账号联动和请求取消场景。
 - 后端测试、主前端类型检查、Lint 和生产构建通过。
 - 正式部署依照 Runbook 使用本地构建镜像进行蓝绿预热，确认健康后平滑切换 Caddy；不重启数据库、Redis、Caddy 或 SubPilot。
+- 生产实录：镜像 `local/gavin2api:0.1.186-lingqu.3-3953d796`（`sha256:ed6c5ae6...668b710`）已切换，API/CDN `/health` 连续验证为 `200`，未授权 `/v1/models` 为 `401`。
+- 事故注记：首次 Caddy reload 读到既有单文件 bind mount 的旧 inode，短暂产生 `502`；已立即回滚并确认公网恢复后，改用 Caddy 管理 API 加载已校验配置完成切换。详见 `docs/RELEASE_INCIDENT_20260901_CN.md`。
 
 ## v0.1.186-lingqu.2 - 2026-09-01
 

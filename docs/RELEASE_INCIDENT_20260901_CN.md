@@ -102,3 +102,26 @@
 - 失败时已按顺序完成旧容器恢复、Caddy 回切和公网验证。
 
 本复盘与 `docs/RELEASE_RUNBOOK_CN.md` 同步维护。Runbook 与本记录冲突时，以更严格的平滑发布门禁为准。
+
+## 8. 复发记录：v0.1.186-lingqu.3 首次切换尝试短暂 502（2026-09-01）
+
+本节记录在修复上述流程后，本次 `.3` 发布中仍发生的一次切换失误。最终版本已经完成生产切换，但本次发布不能被视为无事故发布。
+
+### 事实与影响
+
+- 发布目标：`0.1.186-lingqu.3`，提交 `3953d796b`，镜像 `sha256:ed6c5ae61b9b0d0f8b6aa5b9afc74c28fda4867eeebcc2bb8b50eda1c668b710`。
+- 候选容器 `gavin2api-release-0.1.186-lingqu.3` 已经 `running/healthy`，旧容器在整个首次切换尝试期间仍保持运行，没有先停止旧应用。
+- 第一次 reload 错误地使用了容器内 `/etc/caddy/Caddyfile`。该路径是旧的单文件 bind mount inode，实际内容仍指向不存在的 `gavin2api-canvas-text-key-0186-lingqu-1-default-pool`，因此 API/CDN 的本机入口短暂返回 `502`。
+- 发现后立即使用已备份的旧配置在容器内通过 `127.0.0.1:2019` 回滚，API/CDN `/health` 恢复 `200`；随后使用容器内临时配置通过同一管理 API 加载候选 upstream。
+- 候选 upstream 在运行时 `/config/` 中确认出现 2 处、旧 upstream 为 0 处；API/CDN 外部域名连续 3 次为 `200`，未授权 `/v1/models` 为 `401`，之后才优雅停止旧容器。
+
+### 直接原因
+
+此前已经记录了单文件 bind mount 的 inode 漂移风险，但本次操作仍执行了从 `/etc/caddy/Caddyfile` reload 的命令，没有在 reload 前阻断并强制使用已校验的容器内临时配置。宿主机文件已修改不代表容器内 bind mount 文件已更新。
+
+### 新增永久措施
+
+- 发布前必须比较宿主机 Caddyfile、容器内 `/etc/caddy/Caddyfile` 的 inode、大小和摘要；不一致时禁止从 `/etc/caddy/Caddyfile` reload。
+- Caddy 使用单文件 bind mount 时，候选配置必须先复制到 Caddy 容器内临时路径，执行 `caddy validate`，再使用 `127.0.0.1:2019` reload；切换成功必须以管理 API `/config/` 的 upstream 为准。
+- 第一次 reload 出现任何公网 `5xx` 时，发布进入回滚状态：先恢复旧 upstream 并验证公网，再决定是否重新开始一个新的发布窗口；不得把“回滚后继续”当作无事故成功发布。
+- 本次服务器报告保存在 `/opt/gavin2api/deployment-backups/20260901T065522Z-0.1.186-lingqu.3-3953d796/release-report.txt`，其中保留了镜像、候选、旧容器和验证结果。
