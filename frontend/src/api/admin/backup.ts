@@ -101,20 +101,18 @@ export interface ImageStorageConfigResponse {
   secret_configured: boolean
 }
 
-// Private OSS persistence for generated videos. The selected users are stored
+// Private Alibaba Cloud OSS persistence for generated videos. The selected users are stored
 // with each newly created job, so future selection edits do not rewrite jobs
 // already in progress.
 export interface VideoStorageConfig {
   enabled: boolean
-  reuse_backup_s3: boolean
   bucket: string
   prefix: string
   user_ids: number[]
   endpoint: string
   region: string
   access_key_id: string
-  secret_access_key?: string
-  force_path_style: boolean
+  access_key_secret?: string
 }
 
 export interface VideoStorageConfigResponse {

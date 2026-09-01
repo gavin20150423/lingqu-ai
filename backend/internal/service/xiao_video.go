@@ -1333,7 +1333,7 @@ func (s *XiaoVideoService) persistCompletedVideo(ctx context.Context, job *Video
 	if s == nil || s.videoStorage == nil || job == nil || !job.StorageRequested || job.Status != "completed" || job.StorageProvider != "" {
 		return
 	}
-	store, prefix, maxBytes, available := s.videoStorage.Store()
+	store, prefix, maxBytes, available := s.videoStorage.StoreForRequestedJob()
 	if !available {
 		return
 	}

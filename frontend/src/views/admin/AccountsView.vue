@@ -1889,9 +1889,17 @@ const handleBulkDelete = async () => {
   try {
     const result = await adminAPI.accounts.batchDelete(accountIds)
     if (result.failed > 0) {
-      appStore.showError(t('admin.accounts.bulkActions.partialSuccess', {
+      const firstFailure = result.errors?.[0]
+      const details = firstFailure
+        ? t('admin.accounts.bulkActions.deleteFailureDetail', {
+            accountId: firstFailure.account_id,
+            error: firstFailure.error
+          })
+        : ''
+      appStore.showError(t('admin.accounts.bulkActions.deletePartialSuccess', {
         success: result.success,
-        failed: result.failed
+        failed: result.failed,
+        details
       }))
       setSelectedIds(result.failed_ids?.length ? result.failed_ids : accountIds)
     } else {

@@ -1576,7 +1576,7 @@ func (h *AccountHandler) RevertProxyFallback(c *gin.Context) {
 	response.Success(c, gin.H{"message": "reverted"})
 }
 
-// BatchDelete handles deleting multiple accounts with bounded concurrency.
+// BatchDelete handles deleting multiple accounts one by one.
 // POST /api/v1/admin/accounts/batch-delete
 func (h *AccountHandler) BatchDelete(c *gin.Context) {
 	var req struct {
@@ -1665,40 +1665,30 @@ func (h *AccountHandler) BatchDelete(c *gin.Context) {
 		rootIDs = append(rootIDs, accountID)
 	}
 
-	const maxConcurrency = 5
-	g, gctx := errgroup.WithContext(batchCtx)
-	g.SetLimit(maxConcurrency)
-
-	var mu sync.Mutex
 	successIDs := make([]int64, 0, len(accountIDs))
 
-	// Every worker returns nil so one account failure does not cancel the remaining deletions.
-	for _, id := range rootIDs {
-		accountID := id
-		g.Go(func() error {
-			err := h.adminService.DeleteAccount(gctx, accountID)
-
-			mu.Lock()
-			defer mu.Unlock()
-			affectedIDs := append([]int64{accountID}, dependentIDs[accountID]...)
-			if err != nil {
-				for _, affectedID := range affectedIDs {
-					failedIDs = append(failedIDs, affectedID)
-					errorsByAccount = append(errorsByAccount, deleteError{
-						AccountID: affectedID,
-						Error:     err.Error(),
-					})
-				}
-				return nil
+	// Account deletion spans several database statements and scheduler updates.
+	// Keep the requests serial so those transactions cannot contend with each
+	// other; an individual failure is recorded and must not stop later IDs.
+	for _, accountID := range rootIDs {
+		err := h.adminService.DeleteAccount(batchCtx, accountID)
+		affectedIDs := append([]int64{accountID}, dependentIDs[accountID]...)
+		if err != nil {
+			for _, affectedID := range affectedIDs {
+				failedIDs = append(failedIDs, affectedID)
+				errorsByAccount = append(errorsByAccount, deleteError{
+					AccountID: affectedID,
+					Error:     err.Error(),
+				})
+				slog.Warn("admin_account_batch_delete_failed",
+					"account_id", affectedID,
+					"root_account_id", accountID,
+					"error", err,
+				)
 			}
-			successIDs = append(successIDs, affectedIDs...)
-			return nil
-		})
-	}
-
-	if err := g.Wait(); err != nil {
-		response.ErrorFrom(c, err)
-		return
+			continue
+		}
+		successIDs = append(successIDs, affectedIDs...)
 	}
 
 	sort.Slice(successIDs, func(i, j int) bool { return successIDs[i] < successIDs[j] })
@@ -1706,6 +1696,11 @@ func (h *AccountHandler) BatchDelete(c *gin.Context) {
 	sort.Slice(errorsByAccount, func(i, j int) bool {
 		return errorsByAccount[i].AccountID < errorsByAccount[j].AccountID
 	})
+	slog.Info("admin_account_batch_delete_completed",
+		"total", len(accountIDs),
+		"success", len(successIDs),
+		"failed", len(failedIDs),
+	)
 
 	response.Success(c, gin.H{
 		"total":       len(accountIDs),

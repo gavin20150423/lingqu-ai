@@ -691,15 +691,15 @@ func ProvideImageStorageSettingService(
 	return NewImageStorageSettingService(settingRepo, encryptor, backup, factory, cfg.ImageStorage)
 }
 
-// ProvideVideoStorageSettingService creates the runtime-reloadable private OSS
-// configuration used for selected users' generated videos.
+// ProvideVideoStorageSettingService creates the runtime-reloadable Alibaba
+// Cloud OSS configuration used for selected users' generated videos.
 func ProvideVideoStorageSettingService(
 	settingRepo SettingRepository,
 	encryptor SecretEncryptor,
-	backup *BackupService,
+	cfg *config.Config,
 	factory VideoObjectStoreFactory,
 ) *VideoStorageSettingService {
-	return NewVideoStorageSettingService(settingRepo, encryptor, backup, factory)
+	return NewVideoStorageSettingService(settingRepo, encryptor, cfg.Totp.EncryptionKeyConfigured, factory)
 }
 
 // ProvideXiaoVideoService keeps the public constructor small for unit tests

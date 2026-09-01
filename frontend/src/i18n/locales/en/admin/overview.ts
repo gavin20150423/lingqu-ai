@@ -117,14 +117,24 @@ export default {
         saved: 'Async image storage saved'
       },
       videoStorage: {
-        title: 'Generated video OSS storage',
-        description: 'New videos for selected users are copied to private OSS and retained there. They remain available through this platform\'s authenticated video endpoint.',
-        enabled: 'Store selected users\' videos in OSS',
-        disabledHint: 'Generated videos are not copied to OSS and continue to use the existing upstream delivery path.',
-        reuseBackupS3: 'Reuse the backup S3/OSS configuration above (different bucket/prefix only)',
-        bucketInherited: 'Leave empty to use the backup bucket',
-        users: 'Users using OSS',
-        saved: 'Generated video OSS storage saved'
+        title: 'Generated video Alibaba Cloud OSS storage',
+        description: 'New videos for selected users are copied to a dedicated Alibaba Cloud OSS bucket. OSS objects are excluded from platform retention cleanup and remain available through the authenticated video endpoint.',
+        enabled: 'Store selected users\' videos in Alibaba Cloud OSS',
+        disabledHint: 'Generated videos are not copied to Alibaba Cloud OSS and continue to use the existing upstream delivery path.',
+        endpoint: 'Endpoint',
+        endpointPlaceholder: 'https://oss-cn-hangzhou.aliyuncs.com',
+        region: 'Region',
+        regionPlaceholder: 'cn-hangzhou',
+        bucket: 'Bucket',
+        prefix: 'Object prefix',
+        accessKeyId: 'AccessKey ID',
+        accessKeySecret: 'AccessKey Secret',
+        secretConfigured: 'Configured; leave blank to keep it',
+        users: 'Users using Alibaba Cloud OSS',
+        testConnection: 'Test Alibaba Cloud OSS connection',
+        testSuccess: 'Alibaba Cloud OSS connection succeeded',
+        testFailed: 'Alibaba Cloud OSS connection failed',
+        saved: 'Generated video Alibaba Cloud OSS settings saved'
       },
       schedule: {
         title: 'Scheduled Backup',

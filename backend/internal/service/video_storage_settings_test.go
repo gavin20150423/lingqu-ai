@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/stretchr/testify/require"
 )
 
@@ -41,19 +40,16 @@ func (s *recordingVideoObjectStore) HeadBucket(context.Context) error {
 	return nil
 }
 
-func newVideoStorageFixture(t *testing.T) (*VideoStorageSettingService, *stubSettingRepo, *[]BackupS3Config, *recordingVideoObjectStore) {
+func newVideoStorageFixture(t *testing.T) (*VideoStorageSettingService, *stubSettingRepo, *[]AliyunOSSConfig, *recordingVideoObjectStore) {
 	t.Helper()
 	repo := newStubSettingRepo()
-	backup := NewBackupService(repo, &config.Config{
-		Totp: config.TotpConfig{EncryptionKeyConfigured: true},
-	}, reversibleEncryptor{}, nil, nil)
-	var built []BackupS3Config
+	var built []AliyunOSSConfig
 	store := &recordingVideoObjectStore{}
-	factory := func(_ context.Context, cfg *BackupS3Config) (VideoObjectStore, error) {
+	factory := func(_ context.Context, cfg *AliyunOSSConfig) (VideoObjectStore, error) {
 		built = append(built, *cfg)
 		return store, nil
 	}
-	return NewVideoStorageSettingService(repo, reversibleEncryptor{}, backup, factory), repo, &built, store
+	return NewVideoStorageSettingService(repo, reversibleEncryptor{}, true, factory), repo, &built, store
 }
 
 func TestVideoStorageSettingsPersistsSelectedUsersAndOwnSecret(t *testing.T) {
@@ -62,17 +58,17 @@ func TestVideoStorageSettingsPersistsSelectedUsersAndOwnSecret(t *testing.T) {
 
 	saved, err := svc.Update(ctx, VideoStorageSettings{
 		Enabled: true, Bucket: "video-bucket", Endpoint: "https://oss-cn-hangzhou.aliyuncs.com",
-		AccessKeyID: "ak", SecretAccessKey: "secret", Prefix: "/archive/videos/",
+		Region: "cn-hangzhou", AccessKeyID: "ak", AccessKeySecret: "secret", Prefix: "/archive/videos/",
 		UserIDs: []int64{9, 3, 9, 0, -1},
 	})
 	require.NoError(t, err)
-	require.Empty(t, saved.SecretAccessKey)
+	require.Empty(t, saved.AccessKeySecret)
 	require.Equal(t, []int64{3, 9}, saved.UserIDs)
 	require.Equal(t, "archive/videos/", saved.Prefix)
 
 	raw, err := repo.GetValue(ctx, settingKeyVideoStorageConfig)
 	require.NoError(t, err)
-	require.NotContains(t, raw, `"secret_access_key":"secret"`)
+	require.NotContains(t, raw, `"access_key_secret":"secret"`)
 	require.Contains(t, raw, "enc:secret")
 
 	require.True(t, svc.SelectedForUser(3))
@@ -83,25 +79,35 @@ func TestVideoStorageSettingsPersistsSelectedUsersAndOwnSecret(t *testing.T) {
 	require.Equal(t, "archive/videos/", prefix)
 	require.Positive(t, maxBytes)
 	require.Len(t, *built, 1)
-	require.Equal(t, "secret", (*built)[0].SecretAccessKey)
+	require.Equal(t, "https://oss-cn-hangzhou.aliyuncs.com", (*built)[0].Endpoint)
+	require.Equal(t, "cn-hangzhou", (*built)[0].Region)
+	require.Equal(t, "video-bucket", (*built)[0].Bucket)
+	require.Equal(t, "ak", (*built)[0].AccessKeyID)
+	require.Equal(t, "secret", (*built)[0].AccessKeySecret)
 }
 
-func TestVideoStorageSettingsReuseBackupCredentialsAndTestConnection(t *testing.T) {
-	svc, repo, built, store := newVideoStorageFixture(t)
+func TestVideoStorageSettingsUsesIndependentAliyunOSSConfigAndTestConnection(t *testing.T) {
+	svc, _, built, store := newVideoStorageFixture(t)
 	ctx := context.Background()
-	seedBackupS3(t, repo, BackupS3Config{
-		Endpoint: "https://oss-cn-hangzhou.aliyuncs.com", Region: "cn-hangzhou",
-		Bucket: "backup-bucket", AccessKeyID: "backup-ak", SecretAccessKey: "backup-secret",
-	})
 
-	_, err := svc.Update(ctx, VideoStorageSettings{Enabled: true, ReuseBackupS3: true, Prefix: "videos", UserIDs: []int64{41}})
+	_, err := svc.Update(ctx, VideoStorageSettings{
+		Enabled: true, Endpoint: "https://oss-cn-shanghai.aliyuncs.com", Region: "cn-shanghai",
+		Bucket: "video-bucket", AccessKeyID: "video-ak", AccessKeySecret: "video-secret",
+		Prefix: "videos", UserIDs: []int64{41},
+	})
 	require.NoError(t, err)
 	require.True(t, svc.SelectedForUser(41))
 	require.Len(t, *built, 1)
-	require.Equal(t, "backup-bucket", (*built)[0].Bucket)
-	require.Equal(t, "backup-secret", (*built)[0].SecretAccessKey)
+	require.Equal(t, "https://oss-cn-shanghai.aliyuncs.com", (*built)[0].Endpoint)
+	require.Equal(t, "cn-shanghai", (*built)[0].Region)
+	require.Equal(t, "video-bucket", (*built)[0].Bucket)
+	require.Equal(t, "video-ak", (*built)[0].AccessKeyID)
+	require.Equal(t, "video-secret", (*built)[0].AccessKeySecret)
 
-	err = svc.TestConnection(ctx, VideoStorageSettings{ReuseBackupS3: true, Prefix: "videos"})
+	err = svc.TestConnection(ctx, VideoStorageSettings{
+		Endpoint: "https://oss-cn-shanghai.aliyuncs.com", Region: "cn-shanghai",
+		Bucket: "video-bucket", AccessKeyID: "video-ak", Prefix: "videos",
+	})
 	require.NoError(t, err)
 	require.Equal(t, 1, store.headBucketCalls)
 }
@@ -126,7 +132,10 @@ func TestXiaoVideoPersistsCompletedContentToOSSBeforeServingIt(t *testing.T) {
 		require.Equal(t, int64(42), accountID)
 		upstreamCalls++
 		require.Equal(t, http.MethodGet, req.Method)
-		require.Equal(t, "/v1/videos/jobs/upstream-oss/content", req.URL.Path)
+		require.Contains(t, []string{
+			"/v1/videos/jobs/upstream-oss/content",
+			"/v1/videos/jobs/upstream-oss-late/content",
+		}, req.URL.Path)
 		return &http.Response{
 			StatusCode: http.StatusOK,
 			Header:     http.Header{"Content-Type": []string{"video/mp4"}},
@@ -137,7 +146,7 @@ func TestXiaoVideoPersistsCompletedContentToOSSBeforeServingIt(t *testing.T) {
 	settings, _, _, store := newVideoStorageFixture(t)
 	_, err := settings.Update(context.Background(), VideoStorageSettings{
 		Enabled: true, Bucket: "video-bucket", Endpoint: "https://oss-cn-hangzhou.aliyuncs.com",
-		AccessKeyID: "ak", SecretAccessKey: "secret", UserIDs: []int64{11},
+		Region: "cn-hangzhou", AccessKeyID: "ak", AccessKeySecret: "secret", UserIDs: []int64{11},
 	})
 	require.NoError(t, err)
 	svc.SetVideoStorageSettingService(settings)
@@ -166,4 +175,24 @@ func TestXiaoVideoPersistsCompletedContentToOSSBeforeServingIt(t *testing.T) {
 	require.NoError(t, resp.Body.Close())
 	require.Equal(t, []byte("upstream-video"), body)
 	require.Equal(t, 1, upstreamCalls)
+
+	// Turning off future uploads must not cancel a job that already recorded
+	// StorageRequested=true before it finished.
+	repo.jobs["vidjob_oss_late"] = &VideoJob{
+		JobID: "vidjob_oss_late", UpstreamJobID: "upstream-oss-late", AccountID: 42, UserID: 11, APIKeyID: 22,
+		Status: "completed", Model: "video-public", Resolution: "720p", Duration: 4, AspectRatio: "16:9",
+		Amount: 1, Currency: "USD", SettlementStatus: "captured", StorageRequested: true,
+		UpstreamResponse: []byte(`{"status":"completed"}`), CreatedAt: time.Now(), UpdatedAt: time.Now(),
+	}
+	resp, err = svc.OpenContent(context.Background(), VideoOwner{UserID: 11, APIKeyID: 22, GroupID: videoInt64Ptr(7)}, "vidjob_oss_late", "", "")
+	require.NoError(t, err)
+	body, err = io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.NoError(t, resp.Body.Close())
+	require.Equal(t, []byte("upstream-video"), body)
+	require.Equal(t, 2, upstreamCalls)
+	require.Equal(t, []string{"videos/vidjob_oss.mp4", "videos/vidjob_oss_late.mp4"}, store.uploadedKeys)
+	require.Equal(t, []string{"videos/vidjob_oss.mp4", "videos/vidjob_oss.mp4", "videos/vidjob_oss_late.mp4"}, store.openedKeys)
+	require.Equal(t, "oss", repo.jobs["vidjob_oss_late"].StorageProvider)
+	require.Equal(t, "videos/vidjob_oss_late.mp4", repo.jobs["vidjob_oss_late"].StorageKey)
 }

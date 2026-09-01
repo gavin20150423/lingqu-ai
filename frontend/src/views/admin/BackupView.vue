@@ -133,7 +133,7 @@
         </div>
       </div>
 
-      <!-- Generated videos can be retained privately in OSS for selected users. -->
+      <!-- Generated videos can be retained privately in Alibaba Cloud OSS for selected users. -->
       <div class="card p-6">
         <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -155,43 +155,31 @@
         </p>
 
         <template v-else>
-          <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-            <input v-model="videoStorageForm.reuse_backup_s3" type="checkbox" />
-            <span>{{ t('admin.backup.videoStorage.reuseBackupS3') }}</span>
-          </label>
-
           <div class="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
             <div>
-              <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">{{ t('admin.backup.s3.bucket') }}</label>
-              <input v-model="videoStorageForm.bucket" class="input w-full" :placeholder="videoStorageForm.reuse_backup_s3 ? t('admin.backup.videoStorage.bucketInherited') : ''" />
+              <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">{{ t('admin.backup.videoStorage.bucket') }}</label>
+              <input v-model="videoStorageForm.bucket" class="input w-full" />
             </div>
             <div>
-              <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">{{ t('admin.backup.s3.prefix') }}</label>
+              <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">{{ t('admin.backup.videoStorage.prefix') }}</label>
               <input v-model="videoStorageForm.prefix" class="input w-full" placeholder="videos/" />
             </div>
-
-            <template v-if="!videoStorageForm.reuse_backup_s3">
-              <div>
-                <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">{{ t('admin.backup.s3.endpoint') }}</label>
-                <input v-model="videoStorageForm.endpoint" class="input w-full" placeholder="https://oss-<region>.aliyuncs.com" />
-              </div>
-              <div>
-                <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">{{ t('admin.backup.s3.region') }}</label>
-                <input v-model="videoStorageForm.region" class="input w-full" placeholder="auto" />
-              </div>
-              <div>
-                <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">{{ t('admin.backup.s3.accessKeyId') }}</label>
-                <input v-model="videoStorageForm.access_key_id" class="input w-full" />
-              </div>
-              <div>
-                <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">{{ t('admin.backup.s3.secretAccessKey') }}</label>
-                <input v-model="videoStorageForm.secret_access_key" type="password" class="input w-full" :placeholder="videoStorageSecretConfigured ? t('admin.backup.s3.secretConfigured') : ''" />
-              </div>
-              <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 md:col-span-2">
-                <input v-model="videoStorageForm.force_path_style" type="checkbox" />
-                <span>{{ t('admin.backup.s3.forcePathStyle') }}</span>
-              </label>
-            </template>
+            <div>
+              <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">{{ t('admin.backup.videoStorage.endpoint') }}</label>
+              <input v-model="videoStorageForm.endpoint" class="input w-full" :placeholder="t('admin.backup.videoStorage.endpointPlaceholder')" />
+            </div>
+            <div>
+              <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">{{ t('admin.backup.videoStorage.region') }}</label>
+              <input v-model="videoStorageForm.region" class="input w-full" :placeholder="t('admin.backup.videoStorage.regionPlaceholder')" />
+            </div>
+            <div>
+              <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">{{ t('admin.backup.videoStorage.accessKeyId') }}</label>
+              <input v-model="videoStorageForm.access_key_id" class="input w-full" autocomplete="off" />
+            </div>
+            <div>
+              <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">{{ t('admin.backup.videoStorage.accessKeySecret') }}</label>
+              <input v-model="videoStorageForm.access_key_secret" type="password" class="input w-full" autocomplete="new-password" :placeholder="videoStorageSecretConfigured ? t('admin.backup.videoStorage.secretConfigured') : ''" />
+            </div>
           </div>
 
           <div class="mt-4 max-w-2xl">
@@ -202,7 +190,7 @@
 
         <div class="mt-4 flex flex-wrap gap-2">
           <button v-if="videoStorageForm.enabled" type="button" class="btn btn-secondary btn-sm" :disabled="testingVideoStorage" @click="testVideoStorage">
-            {{ testingVideoStorage ? t('common.loading') : t('admin.backup.s3.testConnection') }}
+            {{ testingVideoStorage ? t('common.loading') : t('admin.backup.videoStorage.testConnection') }}
           </button>
           <button type="button" class="btn btn-primary btn-sm" :disabled="savingVideoStorage" @click="saveVideoStorageConfig">
             {{ savingVideoStorage ? t('common.loading') : t('common.save') }}
@@ -548,15 +536,13 @@ const testingImageStorage = ref(false)
 
 const videoStorageForm = ref<VideoStorageConfig>({
   enabled: false,
-  reuse_backup_s3: true,
   bucket: '',
   prefix: 'videos/',
   user_ids: [],
   endpoint: '',
-  region: 'auto',
+  region: 'cn-hangzhou',
   access_key_id: '',
-  secret_access_key: '',
-  force_path_style: false,
+  access_key_secret: '',
 })
 const videoStorageSecretConfigured = ref(false)
 const savingVideoStorage = ref(false)
@@ -784,11 +770,14 @@ async function loadVideoStorageConfig() {
   try {
     const { config, secret_configured } = await adminAPI.backup.getVideoStorageConfig()
     videoStorageForm.value = {
-      ...config,
+      enabled: Boolean(config.enabled),
+      bucket: config.bucket || '',
       prefix: config.prefix || 'videos/',
-      region: config.region || 'auto',
       user_ids: config.user_ids || [],
-      secret_access_key: '',
+      endpoint: config.endpoint || '',
+      region: config.region || 'cn-hangzhou',
+      access_key_id: config.access_key_id || '',
+      access_key_secret: '',
     }
     videoStorageSecretConfigured.value = secret_configured
   } catch (error) {
@@ -818,9 +807,9 @@ async function testVideoStorage() {
   try {
     const result = await adminAPI.backup.testVideoStorageConnection(videoStorageForm.value)
     if (result.ok) {
-      appStore.showSuccess(result.message || t('admin.backup.s3.testSuccess'))
+      appStore.showSuccess(result.message || t('admin.backup.videoStorage.testSuccess'))
     } else {
-      appStore.showError(result.message || t('admin.backup.s3.testFailed'))
+      appStore.showError(result.message || t('admin.backup.videoStorage.testFailed'))
     }
   } catch (error) {
     appStore.showError((error as { message?: string })?.message || t('errors.networkError'))

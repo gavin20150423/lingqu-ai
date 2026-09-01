@@ -557,7 +557,9 @@ export default {
         probeUpstreamBilling: '探测上游倍率',
         resetStatusSuccess: '已成功重置 {count} 个账号状态',
         refreshTokenSuccess: '已成功刷新 {count} 个账号令牌',
-        partialSuccess: '操作部分完成：{success} 成功，{failed} 失败'
+        partialSuccess: '操作部分完成：{success} 成功，{failed} 失败',
+        deletePartialSuccess: '批量删除部分完成：{success} 成功，{failed} 失败。{details}',
+        deleteFailureDetail: '首个失败账号 #{accountId}：{error}'
       },
       bulkEdit: {
         title: '批量编辑账号',

@@ -74,7 +74,7 @@ func setupAccountBatchDeleteRouter(adminSvc *batchDeleteAdminService) *gin.Engin
 	return router
 }
 
-func TestAccountHandlerBatchDeleteReturnsStablePerAccountResults(t *testing.T) {
+func TestAccountHandlerBatchDeleteProcessesAccountsSerially(t *testing.T) {
 	adminSvc := &batchDeleteAdminService{
 		stubAdminService: newStubAdminService(),
 		deleteErrorsByID: map[int64]error{
@@ -115,8 +115,8 @@ func TestAccountHandlerBatchDeleteReturnsStablePerAccountResults(t *testing.T) {
 	require.Equal(t, []int64{3}, payload.Data.FailedIDs)
 	require.Equal(t, int64(3), payload.Data.Errors[0].AccountID)
 	require.Equal(t, "delete failed", payload.Data.Errors[0].Error)
-	require.LessOrEqual(t, adminSvc.maxActive, 5)
-	require.Greater(t, adminSvc.maxActive, 1)
+	require.ElementsMatch(t, []int64{1, 2, 3, 4, 5}, adminSvc.deletedIDs)
+	require.Equal(t, 1, adminSvc.maxActive)
 }
 
 func TestAccountHandlerBatchDeleteDoesNotRaceSelectedShadowWithParent(t *testing.T) {

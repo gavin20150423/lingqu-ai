@@ -21,7 +21,7 @@ const (
 	defaultVideoMaxObjectBytes   = int64(4 << 30)
 )
 
-var ErrVideoStorageIncomplete = errors.New("video OSS storage is enabled but bucket/access_key_id/secret_access_key are incomplete")
+var ErrVideoStorageIncomplete = errors.New("Alibaba Cloud OSS storage is enabled but endpoint/region/bucket/access_key_id/access_key_secret are incomplete")
 
 // VideoObjectStore is the private object-store surface used by generated videos.
 // Objects are intentionally served through the authenticated video endpoint.
@@ -31,11 +31,26 @@ type VideoObjectStore interface {
 	HeadBucket(context.Context) error
 }
 
-type VideoObjectStoreFactory func(context.Context, *BackupS3Config) (VideoObjectStore, error)
+// AliyunOSSConfig is the independent Alibaba Cloud OSS configuration used by
+// generated video persistence. It intentionally has no relationship to the
+// backup S3 configuration.
+type AliyunOSSConfig struct {
+	Endpoint        string `json:"endpoint"`
+	Region          string `json:"region"`
+	Bucket          string `json:"bucket"`
+	AccessKeyID     string `json:"access_key_id"`
+	AccessKeySecret string `json:"access_key_secret,omitempty"`
+	Prefix          string `json:"prefix"`
+}
+
+func (c *AliyunOSSConfig) IsConfigured() bool {
+	return c != nil && c.Endpoint != "" && c.Region != "" && c.Bucket != "" && c.AccessKeyID != "" && c.AccessKeySecret != ""
+}
+
+type VideoObjectStoreFactory func(context.Context, *AliyunOSSConfig) (VideoObjectStore, error)
 
 type VideoStorageSettings struct {
-	Enabled       bool `json:"enabled"`
-	ReuseBackupS3 bool `json:"reuse_backup_s3"`
+	Enabled bool `json:"enabled"`
 
 	Bucket  string  `json:"bucket"`
 	Prefix  string  `json:"prefix"`
@@ -44,8 +59,7 @@ type VideoStorageSettings struct {
 	Endpoint        string `json:"endpoint"`
 	Region          string `json:"region"`
 	AccessKeyID     string `json:"access_key_id"`
-	SecretAccessKey string `json:"secret_access_key,omitempty"` //nolint:revive // field name follows AWS convention
-	ForcePathStyle  bool   `json:"force_path_style"`
+	AccessKeySecret string `json:"access_key_secret,omitempty"`
 }
 
 type resolvedVideoStorage struct {
@@ -60,10 +74,10 @@ type resolvedVideoStorage struct {
 // VideoStorageSettingService stores the OSS credentials and the users whose
 // newly completed videos should be copied to OSS.
 type VideoStorageSettingService struct {
-	settingRepo SettingRepository
-	encryptor   SecretEncryptor
-	backup      *BackupService
-	factory     VideoObjectStoreFactory
+	settingRepo             SettingRepository
+	encryptor               SecretEncryptor
+	encryptionKeyConfigured bool
+	factory                 VideoObjectStoreFactory
 
 	mu       sync.Mutex
 	resolved bool
@@ -73,10 +87,13 @@ type VideoStorageSettingService struct {
 func NewVideoStorageSettingService(
 	settingRepo SettingRepository,
 	encryptor SecretEncryptor,
-	backup *BackupService,
+	encryptionKeyConfigured bool,
 	factory VideoObjectStoreFactory,
 ) *VideoStorageSettingService {
-	return &VideoStorageSettingService{settingRepo: settingRepo, encryptor: encryptor, backup: backup, factory: factory}
+	return &VideoStorageSettingService{
+		settingRepo: settingRepo, encryptor: encryptor,
+		encryptionKeyConfigured: encryptionKeyConfigured, factory: factory,
+	}
 }
 
 func (s *VideoStorageSettingService) Get(ctx context.Context) (*VideoStorageSettings, error) {
@@ -85,9 +102,9 @@ func (s *VideoStorageSettingService) Get(ctx context.Context) (*VideoStorageSett
 		return nil, err
 	}
 	if settings == nil {
-		settings = &VideoStorageSettings{Prefix: defaultVideoStoragePrefix, Region: "auto", ReuseBackupS3: true, UserIDs: []int64{}}
+		settings = &VideoStorageSettings{Prefix: defaultVideoStoragePrefix, Region: "cn-hangzhou", UserIDs: []int64{}}
 	}
-	settings.SecretAccessKey = ""
+	settings.AccessKeySecret = ""
 	return settings, nil
 }
 
@@ -96,37 +113,27 @@ func (s *VideoStorageSettingService) SecretConfigured(ctx context.Context) bool 
 	if err != nil || settings == nil || !settings.Enabled {
 		return false
 	}
-	if settings.ReuseBackupS3 {
-		cfg, loadErr := s.backupCredentials(ctx)
-		return loadErr == nil && cfg != nil && cfg.SecretAccessKey != ""
-	}
-	return settings.SecretAccessKey != ""
+	return settings.AccessKeySecret != ""
 }
 
 func (s *VideoStorageSettingService) Update(ctx context.Context, in VideoStorageSettings) (*VideoStorageSettings, error) {
 	normalizeVideoStorageSettings(&in)
-	if in.ReuseBackupS3 {
-		in.Endpoint, in.Region, in.AccessKeyID, in.SecretAccessKey = "", "", "", ""
-		in.ForcePathStyle = false
-	} else if in.SecretAccessKey == "" {
-		if old, err := s.load(ctx); err == nil && old != nil && !old.ReuseBackupS3 {
-			in.SecretAccessKey = old.SecretAccessKey
+	if in.AccessKeySecret == "" {
+		if old, err := s.load(ctx); err == nil && old != nil {
+			in.AccessKeySecret = old.AccessKeySecret
 		}
 	} else {
-		if s.backup == nil || !s.backup.EncryptionKeyConfigured() {
+		if !s.encryptionKeyConfigured {
 			return nil, ErrSecretEncryptionKeyNotConfigured
 		}
-		encrypted, err := s.encryptor.Encrypt(in.SecretAccessKey)
+		encrypted, err := s.encryptor.Encrypt(in.AccessKeySecret)
 		if err != nil {
-			return nil, fmt.Errorf("encrypt video storage secret: %w", err)
+			return nil, fmt.Errorf("encrypt video OSS access key secret: %w", err)
 		}
-		in.SecretAccessKey = encrypted
+		in.AccessKeySecret = encrypted
 	}
 	if in.Enabled {
-		cfg, err := s.toS3Config(ctx, &in)
-		if err != nil {
-			return nil, err
-		}
+		cfg := s.toAliyunOSSConfig(&in)
 		if !cfg.IsConfigured() {
 			return nil, ErrVideoStorageIncomplete
 		}
@@ -140,23 +147,23 @@ func (s *VideoStorageSettingService) Update(ctx context.Context, in VideoStorage
 		return nil, fmt.Errorf("save video storage settings: %w", err)
 	}
 	s.Invalidate()
-	in.SecretAccessKey = ""
+	in.AccessKeySecret = ""
 	return &in, nil
 }
 
 func (s *VideoStorageSettingService) TestConnection(ctx context.Context, in VideoStorageSettings) error {
 	normalizeVideoStorageSettings(&in)
-	if !in.ReuseBackupS3 && in.SecretAccessKey == "" {
-		if old, err := s.load(ctx); err == nil && old != nil && !old.ReuseBackupS3 {
-			in.SecretAccessKey = old.SecretAccessKey
+	if in.AccessKeySecret == "" {
+		if old, err := s.load(ctx); err == nil && old != nil {
+			in.AccessKeySecret = old.AccessKeySecret
 		}
 	}
-	cfg, err := s.toS3Config(ctx, &in)
-	if err != nil {
-		return err
-	}
+	cfg := s.toAliyunOSSConfig(&in)
 	if !cfg.IsConfigured() {
 		return ErrVideoStorageIncomplete
+	}
+	if s.factory == nil {
+		return errors.New("Alibaba Cloud OSS client factory is not configured")
 	}
 	store, err := s.factory(ctx, cfg)
 	if err != nil {
@@ -188,14 +195,6 @@ func (s *VideoStorageSettingService) SelectedForUser(userID int64) bool {
 	return selected
 }
 
-func (s *VideoStorageSettingService) Store() (VideoObjectStore, string, int64, bool) {
-	storage := s.resolve()
-	if storage == nil || !storage.enabled {
-		return nil, "", 0, false
-	}
-	return storage.store, storage.prefix, storage.maxObjectBytes, true
-}
-
 // StoredStore returns the configured object store even when new uploads are
 // disabled. Completed jobs already referencing an OSS key must remain readable
 // after an administrator changes the selection or turns off future uploads.
@@ -205,6 +204,17 @@ func (s *VideoStorageSettingService) StoredStore() (VideoObjectStore, bool) {
 		return nil, false
 	}
 	return storage.store, true
+}
+
+// StoreForRequestedJob returns the configured store and upload limits for a job
+// that already recorded StorageRequested=true. The current Enabled flag only
+// controls new jobs and must not interrupt an in-flight persistence attempt.
+func (s *VideoStorageSettingService) StoreForRequestedJob() (VideoObjectStore, string, int64, bool) {
+	storage := s.resolve()
+	if storage == nil {
+		return nil, "", 0, false
+	}
+	return storage.store, storage.prefix, storage.maxObjectBytes, true
 }
 
 func (s *VideoStorageSettingService) SelectedUserIDs() []int64 {
@@ -233,9 +243,9 @@ func (s *VideoStorageSettingService) resolve() *resolvedVideoStorage {
 		}
 		return nil
 	}
-	cfg, err := s.toS3Config(context.Background(), settings)
-	if err != nil || !cfg.IsConfigured() {
-		logger.L().Warn("video_storage.settings_invalid", zap.Error(err))
+	cfg := s.toAliyunOSSConfig(settings)
+	if !cfg.IsConfigured() {
+		logger.L().Warn("video_storage.settings_invalid", zap.String("provider", "aliyun_oss"), zap.Error(ErrVideoStorageIncomplete))
 		return nil
 	}
 	if s.factory == nil {
@@ -285,41 +295,21 @@ func (s *VideoStorageSettingService) load(ctx context.Context) (*VideoStorageSet
 	return &settings, nil
 }
 
-func (s *VideoStorageSettingService) toS3Config(ctx context.Context, in *VideoStorageSettings) (*BackupS3Config, error) {
-	cfg := &BackupS3Config{
-		Endpoint: in.Endpoint, Region: in.Region, Bucket: in.Bucket, AccessKeyID: in.AccessKeyID,
-		SecretAccessKey: in.SecretAccessKey, Prefix: in.Prefix, ForcePathStyle: in.ForcePathStyle,
+func (s *VideoStorageSettingService) toAliyunOSSConfig(in *VideoStorageSettings) *AliyunOSSConfig {
+	cfg := &AliyunOSSConfig{
+		Endpoint: in.Endpoint, Region: in.Region, Bucket: in.Bucket,
+		AccessKeyID: in.AccessKeyID, AccessKeySecret: in.AccessKeySecret,
+		Prefix: in.Prefix,
 	}
-	if in.ReuseBackupS3 {
-		backupCfg, err := s.backupCredentials(ctx)
-		if err != nil {
-			return nil, err
-		}
-		if backupCfg == nil {
-			return nil, errors.New("video storage is set to reuse backup S3, but backup S3 is not configured")
-		}
-		cfg.Endpoint, cfg.Region = backupCfg.Endpoint, backupCfg.Region
-		cfg.AccessKeyID, cfg.SecretAccessKey = backupCfg.AccessKeyID, backupCfg.SecretAccessKey
-		cfg.ForcePathStyle = backupCfg.ForcePathStyle
-		if cfg.Bucket == "" {
-			cfg.Bucket = backupCfg.Bucket
-		}
-	} else if cfg.SecretAccessKey != "" {
-		decrypted, err := s.encryptor.Decrypt(cfg.SecretAccessKey)
+	if cfg.AccessKeySecret != "" {
+		decrypted, err := s.encryptor.Decrypt(cfg.AccessKeySecret)
 		if err == nil {
-			cfg.SecretAccessKey = decrypted
+			cfg.AccessKeySecret = decrypted
 		} else {
-			logger.L().Warn("video_storage secret decrypt failed; treating stored value as plaintext", zap.Error(err))
+			logger.L().Warn("video_storage access key secret decrypt failed; treating stored value as plaintext", zap.Error(err))
 		}
 	}
-	return cfg, nil
-}
-
-func (s *VideoStorageSettingService) backupCredentials(ctx context.Context) (*BackupS3Config, error) {
-	if s.backup == nil {
-		return nil, errors.New("backup service is unavailable")
-	}
-	return s.backup.loadS3Config(ctx)
+	return cfg
 }
 
 func normalizeVideoStorageSettings(in *VideoStorageSettings) {
@@ -327,14 +317,14 @@ func normalizeVideoStorageSettings(in *VideoStorageSettings) {
 	in.Region = strings.TrimSpace(in.Region)
 	in.Bucket = strings.TrimSpace(in.Bucket)
 	in.AccessKeyID = strings.TrimSpace(in.AccessKeyID)
-	in.SecretAccessKey = strings.TrimSpace(in.SecretAccessKey)
+	in.AccessKeySecret = strings.TrimSpace(in.AccessKeySecret)
 	in.Prefix = strings.Trim(strings.TrimSpace(in.Prefix), "/")
 	if in.Prefix == "" {
 		in.Prefix = strings.TrimSuffix(defaultVideoStoragePrefix, "/")
 	}
 	in.Prefix += "/"
 	if in.Region == "" {
-		in.Region = "auto"
+		in.Region = "cn-hangzhou"
 	}
 	seen := make(map[int64]struct{}, len(in.UserIDs))
 	userIDs := make([]int64, 0, len(in.UserIDs))
