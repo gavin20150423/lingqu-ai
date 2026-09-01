@@ -12,8 +12,22 @@
 4. 备份生产 Compose、Caddy 配置和当前容器状态；通过 `docker save`/`docker load` 将镜像上传到服务器，不上传裸二进制替换正在运行的应用。
 5. 使用相同生产环境变量和网络启动新的 `gavin2api` 容器，使用独立容器名和未占用端口进行预热；只允许应用容器连接现有 PostgreSQL、Redis 和其他依赖，禁止重启这些依赖。
 6. 新容器通过容器健康检查、内部 `/health`、关键 API 冒烟检查和日志检查后，才让 Caddy 将上游切换到新容器，并使用 reload 平滑加载配置。
-7. 切换后再次执行公网健康检查和关键 API 冒烟检查；确认 PostgreSQL、Redis、Caddy、SubPilot 的容器 ID 和启动时间未变化，再停止旧应用容器。
-8. 任一步骤失败都保持旧容器承载流量，或立即将 Caddy reload 回旧容器；确认回切健康后再清理新容器。不得以数据库重启或整栈重启作为排障手段。
+7. 切换前必须确认 Caddy 的实际运行配置已经解析到新 upstream；切换时只能执行 Caddy 的平滑 reload，禁止先停止旧应用容器。切换后必须再次执行公网健康检查和关键 API 冒烟检查，并确认请求确实进入新容器。
+8. 只有在新容器已承载流量、连续观察窗口通过、且 PostgreSQL、Redis、Caddy、SubPilot 的容器 ID 和启动时间均未变化后，才允许停止旧应用容器。旧容器在此之前必须保持运行，作为即时回滚点。
+9. 任一步骤失败都保持旧容器承载流量，或先启动旧容器并确认健康，再将 Caddy reload 回旧容器；确认回切公网健康后才允许停止/清理新容器。不得以数据库重启或整栈重启作为排障手段。
+
+### 平滑发布硬门禁
+
+以下规则是不可跳过的发布门禁，任何一条无法证明时都必须暂停发布：
+
+- **先验证、后切流、最后停旧**：旧线上容器在切流前、切流中和公网验证完成前必须保持 `running`，不得先 `docker stop`、`docker rm` 或通过 Compose 重建旧服务。
+- **候选必须隔离**：候选容器使用独立名称、独立 Compose project/service 或显式 `docker run`，不得绑定旧应用宿主端口，不得复用固定 `container_name`。
+- **Caddy 配置必须双重确认**：先对即将加载的文件执行 `caddy validate`，再从 Caddy 管理 API `/config/` 或等价的运行时状态确认 upstream 已从旧容器变为候选容器。只检查宿主机文件内容不算切换成功。
+- **reload 必须检查返回值**：Caddy reload 的管理地址必须使用合法格式（例如容器内 `127.0.0.1:2019`，不能写成 `http://127.0.0.1:2019` 传给会自动补协议的参数）。命令非零退出、管理 API 不可达或运行时 upstream 未变化时，立即停止后续动作。
+- **公网成功才算切流**：切流后至少连续三次检查 API/CDN `/health`，并执行一个未授权 `/v1/models` 检查；任一返回 5xx、DNS upstream 解析失败或管理 API 仍显示旧 upstream，都必须先回切旧容器。
+- **回滚顺序固定**：新容器异常时，先保证旧容器 `running/healthy`，再 reload Caddy 回旧 upstream，确认公网恢复 200 后才处理新容器。旧容器已经被误停时，禁止继续等待或清理，必须立即启动旧容器并完成同样的公网验证。
+- **禁止并发发布**：发布开始前在生产目录创建带持有者和时间的发布锁；发现其他发布、Caddy reload 或 Compose 操作正在进行时必须暂停，不得两个会话同时改 Caddy 或应用容器。
+- **配置文件挂载必须核对**：如果 Caddy 使用单文件 bind mount，必须比较宿主机文件和容器内 `/etc/caddy/Caddyfile` 的摘要，并确认容器重启后仍能读取新文件。文件 inode 未同步时，只能使用已确认的运行时 reload；不得把“宿主机文件已修改”当作当前运行配置已切换。
 
 本地发布镜像必须采用以下命名：
 
@@ -97,13 +111,17 @@ docker save local/gavin2api:<version>-<short-commit> | gzip > gavin2api-<version
 
 部署步骤：
 
-1. 记录当前 `gavin2api` 镜像、容器状态和健康状态。
-2. 将 `compose.yml`、Caddy 配置和当前容器信息复制到带 UTC 时间戳的 `deploy-backups` 子目录。
-3. `docker load` 新镜像，并用独立容器名、独立端口启动新 `gavin2api`；不得执行 `docker compose down`，不得重启 PostgreSQL、Redis、Caddy 或 SubPilot。
-4. 执行容器健康检查、内部 `/health`、关键 API 冒烟请求和 `docker logs` 错误检查。
-5. 只修改 Caddy 的应用 upstream 指向新容器，执行 `caddy reload`（或等价的零停机 reload），不执行 Caddy stop/start。
-6. 通过公网域名执行 `/health` 和关键 API 冒烟检查，确认请求已进入新容器。
-7. 记录 PostgreSQL、Redis、Caddy、SubPilot 的容器 ID 和启动时间，确认均未变化；确认无误后停止旧 `gavin2api` 容器。
+1. 创建生产发布锁，并记录当前时间、操作者、目标提交和目标镜像；发现锁已存在时停止。
+2. 记录当前旧 `gavin2api` 容器的名称、ID、镜像、状态、健康状态、端口和启动时间；旧容器不允许在后续候选验证完成前停止。
+3. 将 `compose.yml`、Caddy 配置、实际运行配置和当前容器信息复制到带 UTC 时间戳的 `deploy-backups` 子目录。
+4. `docker load` 新镜像，并用独立容器名、独立端口启动新 `gavin2api`；不得执行 `docker compose down`，不得重启 PostgreSQL、Redis、Caddy 或 SubPilot。启动后立即重新核对旧容器 ID、状态和端口没有变化。
+5. 执行候选容器健康检查、内部 `/health`、关键 API 冒烟请求、候选容器日志错误检查，并确认候选能访问现有数据库/Redis。
+6. 在不停止旧容器的前提下，生成只包含新 upstream 的 Caddy 配置，执行 `caddy validate`，然后 reload；检查 reload 返回值，并从 Caddy 运行时管理 API 确认 upstream 已经变成候选容器。
+7. 通过 API 和 CDN 公网域名连续至少三次执行 `/health`，执行关键 API 冒烟检查和 `/v1/models` 未授权检查；同时查看 Caddy 日志，确认没有 5xx、DNS upstream 解析失败或旧 upstream 请求。
+8. 记录 PostgreSQL、Redis、Caddy、SubPilot 的容器 ID、启动时间和重启次数，确认均未变化；确认观察窗口通过后，才停止旧 `gavin2api` 容器。旧容器镜像至少保留一个发布周期。
+9. 释放发布锁，并将版本、镜像摘要、切流时间、验证结果、旧容器和回滚点写入发布报告。
+
+任何步骤失败时，必须按“先恢复旧容器、再 reload 旧 upstream、再验证公网、最后处理候选”的顺序回滚；未完成回滚验证不得释放发布锁，也不得报告发布成功。
 
 发布操作不得覆盖或修改 `.env`、数据库、Redis 数据、Docker volumes、网络或凭据。
 
@@ -181,3 +199,29 @@ docker save local/gavin2api:<version>-<short-commit> | gzip > gavin2api-<version
 - 本次发布日志中记录的修复、新增和当前已有功能。
 
 不得把本地提交、本地标签或健康的本地镜像等同于 GitHub Actions 发布；本项目的正式生产发布以本 Runbook 规定的本地镜像蓝绿切换和健康检查完成为准。
+
+## 10. 事故记录：v0.1.186-lingqu.2 发布期间短暂 502（2026-09-01）
+
+本节记录本次发布事故，作为后续发布的强制反例和检查依据。详细复盘见
+`docs/RELEASE_INCIDENT_20260901_CN.md`。
+
+### 事故概况
+
+- 发布目标：`0.1.186-lingqu.2`，提交 `130ce1222`。
+- 事故表现：旧应用容器停止后，Caddy 实际仍指向旧 upstream；旧容器已停止，公网 API/CDN 一度返回 HTTP 502。
+- 影响范围：`api.gavinteam.online`、`cdn.gavinteam.online` 的请求在切换窗口内失败；数据库、Redis、SubPilot 未重启，数据未丢失。
+- 恢复方式：保持候选应用运行，在 Caddy 容器内用正确的管理地址 reload 候选配置，确认运行时 upstream 和公网健康恢复后完成发布。
+
+### 根因与永久措施
+
+1. 违反“先切流验证、后停旧”的平滑发布顺序，在 Caddy 运行时配置未确认前停止了旧容器。
+2. Caddy reload 参数把带协议的地址传给会自动补协议的参数，实际请求变成了 `http:///127.0.0.1:2019`，reload 失败未被当作硬门禁拦截。
+3. 只验证了宿主机 Caddy 文件，没有在切流前确认 Caddy 管理 API 的实际 upstream；同时单文件 bind mount 的容器内 inode 与宿主机文件不同步，增加了误判风险。
+4. 发布过程中缺少发布锁和统一的失败即回滚脚本，导致故障窗口扩大。
+
+### 后续发布禁止事项
+
+- 禁止在公网切换成功并连续验证通过前停止旧应用容器。
+- 禁止忽略 Caddy reload 的非零退出、管理 API 错误或运行时 upstream 未变化。
+- 禁止只看宿主机配置文件就认为 Caddy 已完成切流。
+- 禁止多个会话同时执行发布、Caddy reload 或应用容器启停。
