@@ -2,6 +2,33 @@
 
 每次正式发布都必须新增版本条目，并分别写清楚“修复了什么”、“增加了什么”和“当前已有功能”。没有新增功能时也必须明确记录。
 
+## v0.2.0-lingqu.2 - 2026-09-03
+
+### 修复了什么
+
+- 修复 SubPilot 切号重试会让每个新账号重新获得完整超时的问题；现在一次请求的总重试预算在切号、并发槽等待和 OpenAI 首 token 阶段共享且只能收紧。
+- 修复 WebSocket 首轮凭证成功后仍携带旧连接级预算的问题；首轮接入完成后清除连接级预算，避免影响后续独立的 `response.create` 请求。
+- 兼容旧版 SubPilot 未返回剩余预算的响应，未提供预算时保持原有超时行为。
+
+### 增加了什么
+
+- SubPilot 选择响应增加剩余重试预算元数据，并在 Gavin2API 内统一传播到请求上下文。
+- 增加预算上限、预算耗尽停止切号、槽位等待上限、首 token 上限和 WebSocket 预算生命周期的回归测试。
+- 无其他独立业务功能新增；本版本专注于慢请求故障转移和超时一致性。
+
+### 当前已有功能
+
+- OAuth 与 API Key 多账号管理，支持账号级并发限制、健康状态管理和 SubPilot 智能调度。
+- OpenAI、Anthropic（含 Fable 5.1）、Gemini、Grok、Kimi、智谱、DeepSeek、Antigravity 等平台接入，以及 Composite 多供应商分组。
+- API Key 分发、精确计费、速率限制、用户/账号并发控制、管理后台、渠道监控、用量统计和支付充值。
+- 异步图片任务、视频工作台、视频上游价格同步与阿里云 OSS 持久化、无限画布和 CDN/API 双域名访问。
+
+### 验证重点
+
+- Gavin2API `go test ./internal/service`、`go test ./internal/handler` 及 SubPilot `go test ./...` 通过。
+- 正式发布必须由本标签触发 GitHub Actions，使用成功 Actions 生成的 GHCR 镜像；部署后再执行容器、内部 `/health`、公网健康和关键 API 冒烟检查。
+- 发布范围仅替换 Gavin2API 应用容器；PostgreSQL、Redis、Caddy、SubPilot、Docker 卷、网络和凭据保持不变。
+
 ## v0.2.0-lingqu.1 - 2026-09-02
 
 ### 修复了什么

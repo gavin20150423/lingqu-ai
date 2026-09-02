@@ -2549,7 +2549,11 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 		}
 
 		account := selection.Account
-		c.Request = c.Request.WithContext(service.WithSubPilotAttemptTimeout(c.Request.Context(), selection))
+		// Keep the request-level retry deadline on the shared connection context.
+		// It is metadata (not context.WithDeadline), so it caps each upstream
+		// attempt/failover without forcibly terminating an otherwise idle WS.
+		ctx = service.WithSubPilotAttemptTimeout(c.Request.Context(), selection)
+		c.Request = c.Request.WithContext(ctx)
 		accountMaxConcurrency := account.Concurrency
 		if selection.WaitPlan != nil && selection.WaitPlan.MaxConcurrency > 0 {
 			accountMaxConcurrency = selection.WaitPlan.MaxConcurrency
@@ -2638,6 +2642,13 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 			closeOpenAIClientWS(wsConn, coderws.StatusInternalError, "failed to get access token")
 			return
 		}
+		// On a long-lived WebSocket the dispatch budget covers account selection,
+		// admission, and credential failover. Once credentials are valid, remove
+		// that deadline so later independent response.create turns are not rejected
+		// because the original connection budget elapsed. The per-attempt first
+		// output timeout remains in place for every turn.
+		ctx = service.WithoutSubPilotRetryDeadline(ctx)
+		c.Request = c.Request.WithContext(ctx)
 
 		reqLog.Debug("openai.websocket_account_selected",
 			zap.Int64("account_id", account.ID),

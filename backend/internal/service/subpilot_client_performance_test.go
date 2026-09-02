@@ -60,6 +60,27 @@ func TestSubPilotRuntimeConfigRefreshIsCoalesced(t *testing.T) {
 	require.Equal(t, int64(64), selectCalls.Load())
 }
 
+func TestSubPilotSelectParsesAttemptAndRemainingBudget(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, subPilotSelectPath, r.URL.Path)
+		_, _ = w.Write([]byte(`{"decision":"selected","account":{"id":"1"},"lease":{"id":"lease-1"},"retry_policy":{"attempt_timeout_ms":30000,"remaining_budget_ms":90000}}`))
+	}))
+	defer server.Close()
+
+	client := newSubPilotClient(config.SubPilotConfig{
+		Enabled: true, BaseURL: server.URL, TimeoutMS: 200, FailOpen: true,
+	})
+	rec, err := client.recommendAccount(context.Background(), subPilotSelectRequest{
+		RequestID: "req-budget", Platform: PlatformOpenAI, GroupID: "1", Model: "gpt-test",
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, rec)
+	require.Equal(t, 30*time.Second, rec.AttemptTimeout)
+	require.NotNil(t, rec.RemainingBudget)
+	require.Equal(t, 90*time.Second, *rec.RemainingBudget)
+}
+
 func TestSubPilotReportEnqueueDoesNotWaitForNetwork(t *testing.T) {
 	called := make(chan struct{}, 1)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

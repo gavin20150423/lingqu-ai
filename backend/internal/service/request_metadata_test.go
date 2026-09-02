@@ -3,10 +3,101 @@ package service
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	"github.com/stretchr/testify/require"
 )
+
+func TestSubPilotRetryDeadlineCannotBeExtendedByFailover(t *testing.T) {
+	base := time.UnixMilli(1_000_000)
+	firstBudget := 10 * time.Second
+	ctx := withSubPilotAttemptTimeoutAt(context.Background(), &AccountSelectionResult{
+		SubPilotAttemptTimeout:  8 * time.Second,
+		SubPilotRemainingBudget: &firstBudget,
+	}, base)
+
+	remaining, ok := subPilotRetryRemainingAt(ctx, base.Add(3*time.Second))
+	require.True(t, ok)
+	require.Equal(t, 7*time.Second, remaining)
+
+	// A fresh-looking budget from a later account must not restart the clock.
+	secondBudget := 10 * time.Second
+	ctx = withSubPilotAttemptTimeoutAt(ctx, &AccountSelectionResult{
+		SubPilotAttemptTimeout:  6 * time.Second,
+		SubPilotRemainingBudget: &secondBudget,
+	}, base.Add(3*time.Second))
+	remaining, ok = subPilotRetryRemainingAt(ctx, base.Add(3*time.Second))
+	require.True(t, ok)
+	require.Equal(t, 7*time.Second, remaining)
+	require.Equal(t, 6*time.Second, SubPilotAttemptTimeoutFromContext(ctx))
+
+	// A smaller authoritative remainder is allowed to tighten the deadline.
+	shorterBudget := 2 * time.Second
+	ctx = withSubPilotAttemptTimeoutAt(ctx, &AccountSelectionResult{
+		SubPilotAttemptTimeout:  4 * time.Second,
+		SubPilotRemainingBudget: &shorterBudget,
+	}, base.Add(3*time.Second))
+	remaining, ok = subPilotRetryRemainingAt(ctx, base.Add(3*time.Second))
+	require.True(t, ok)
+	require.Equal(t, 2*time.Second, remaining)
+}
+
+func TestSubPilotZeroRemainingBudgetIsExhausted(t *testing.T) {
+	zero := time.Duration(0)
+	ctx := WithSubPilotAttemptTimeout(context.Background(), &AccountSelectionResult{
+		SubPilotAttemptTimeout:  30 * time.Second,
+		SubPilotRemainingBudget: &zero,
+	})
+
+	require.True(t, SubPilotRetryBudgetExhausted(ctx))
+}
+
+func TestSubPilotRetryBudgetClampsOversizedValues(t *testing.T) {
+	oversized := 24 * time.Hour
+	ctx := withSubPilotAttemptTimeoutAt(context.Background(), &AccountSelectionResult{
+		SubPilotRemainingBudget: &oversized,
+	}, time.UnixMilli(1_000_000))
+
+	remaining, ok := subPilotRetryRemainingAt(ctx, time.UnixMilli(1_000_000))
+	require.True(t, ok)
+	require.Equal(t, maxSubPilotRetryBudget, remaining)
+
+	ctx = WithSubPilotRetryDirective(context.Background(), SubPilotRetryDirective{
+		Available:         true,
+		Action:            "retry_next",
+		RemainingBudgetMS: int64((24 * time.Hour) / time.Millisecond),
+	})
+	remaining, ok = subPilotRetryRemainingAt(ctx, time.Now())
+	require.True(t, ok)
+	require.LessOrEqual(t, remaining, maxSubPilotRetryBudget)
+	require.Greater(t, remaining, maxSubPilotRetryBudget-time.Second)
+}
+
+func TestCapSubPilotRetryTimeoutUsesRemainingBudget(t *testing.T) {
+	base := time.UnixMilli(1_000_000)
+	budget := 10 * time.Second
+	ctx := withSubPilotAttemptTimeoutAt(context.Background(), &AccountSelectionResult{
+		SubPilotRemainingBudget: &budget,
+	}, base)
+
+	require.Equal(t, 7*time.Second, capSubPilotRetryTimeoutAt(ctx, 7*time.Second, base.Add(3*time.Second)))
+	require.Equal(t, 7*time.Second, capSubPilotRetryTimeoutAt(ctx, 30*time.Second, base.Add(3*time.Second)))
+	require.Zero(t, capSubPilotRetryTimeoutAt(ctx, 30*time.Second, base.Add(11*time.Second)))
+}
+
+func TestWithoutSubPilotRetryDeadlineRetainsAttemptTimeout(t *testing.T) {
+	budget := 10 * time.Second
+	ctx := WithSubPilotAttemptTimeout(context.Background(), &AccountSelectionResult{
+		SubPilotAttemptTimeout:  30 * time.Second,
+		SubPilotRemainingBudget: &budget,
+	})
+	ctx = WithoutSubPilotRetryDeadline(ctx)
+
+	_, hasDeadline := subPilotRetryRemainingAt(ctx, time.Now())
+	require.False(t, hasDeadline)
+	require.Equal(t, 30*time.Second, SubPilotAttemptTimeoutFromContext(ctx))
+}
 
 func TestRequestMetadataWriteAndRead_NoBridge(t *testing.T) {
 	ctx := context.Background()

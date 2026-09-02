@@ -109,6 +109,7 @@ func (s *GatewayService) trySubPilotRecommend(ctx context.Context, groupID *int6
 		selection.SubPilotLeaseID = rec.LeaseID
 		selection.SubPilotRequestID = rec.RequestID
 		selection.SubPilotAttemptTimeout = rec.AttemptTimeout
+		selection.SubPilotRemainingBudget = rec.RemainingBudget
 		selection.SubPilotLastResort = rec.LastResort
 		return selection, true, nil
 	}
@@ -263,6 +264,7 @@ func (s *OpenAIGatewayService) trySubPilotRecommend(ctx context.Context, groupID
 		selection.SubPilotLeaseID = rec.LeaseID
 		selection.SubPilotRequestID = rec.RequestID
 		selection.SubPilotAttemptTimeout = rec.AttemptTimeout
+		selection.SubPilotRemainingBudget = rec.RemainingBudget
 		selection.SubPilotLastResort = rec.LastResort
 		return selection, true, nil
 	}

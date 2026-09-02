@@ -224,6 +224,10 @@ func (s *FailoverState) HandleFailoverError(
 		return FailoverCanceled
 	}
 	s.LastFailoverErr = failoverErr
+	if service.SubPilotRetryBudgetExhausted(ctx) {
+		s.FailedAccountIDs[accountID] = struct{}{}
+		return FailoverExhausted
+	}
 	directive, subPilotControlled := service.SubPilotRetryDirectiveFromContext(ctx)
 	if subPilotControlled && directive.ShouldStop() {
 		s.FailedAccountIDs[accountID] = struct{}{}
@@ -301,6 +305,9 @@ func storeSubPilotRetryDirective(c *gin.Context, directive service.SubPilotRetry
 func subPilotRetryShouldStop(c *gin.Context) bool {
 	if c == nil || c.Request == nil {
 		return false
+	}
+	if service.SubPilotRetryBudgetExhausted(c.Request.Context()) {
+		return true
 	}
 	directive, ok := service.SubPilotRetryDirectiveFromContext(c.Request.Context())
 	return ok && directive.ShouldStop()

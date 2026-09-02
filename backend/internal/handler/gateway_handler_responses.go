@@ -203,6 +203,8 @@ func (h *GatewayHandler) Responses(c *gin.Context) {
 			}
 		}
 		account := selection.Account
+		requestCtx = service.WithSubPilotAttemptTimeout(requestCtx, selection)
+		c.Request = c.Request.WithContext(requestCtx)
 		setOpsSelectedAccount(c, account.ID, account.Platform)
 
 		// 4. Acquire account concurrency slot

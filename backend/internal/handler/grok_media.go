@@ -275,6 +275,8 @@ func (h *OpenAIGatewayHandler) handleGrokMedia(c *gin.Context, endpoint service.
 		)
 
 		account := selection.Account
+		requestCtx = service.WithSubPilotAttemptTimeout(requestCtx, selection)
+		c.Request = c.Request.WithContext(requestCtx)
 		if endpoint.IsGenerationRequest() {
 			eligible, eligibilityReason, eligibilityErr := h.ensureGrokMediaAccountEligibility(requestCtx, account)
 			if !eligible {

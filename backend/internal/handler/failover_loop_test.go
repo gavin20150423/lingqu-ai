@@ -183,6 +183,19 @@ func TestHandleFailoverErrorSubPilotRetryNextSkipsSameAccountRetry(t *testing.T)
 	require.Contains(t, fs.FailedAccountIDs, int64(101))
 }
 
+func TestSubPilotRetryStopsWhenLocalBudgetIsExhausted(t *testing.T) {
+	zero := time.Duration(0)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	ctx := service.WithSubPilotAttemptTimeout(context.Background(), &service.AccountSelectionResult{
+		SubPilotAttemptTimeout:  30 * time.Second,
+		SubPilotRemainingBudget: &zero,
+	})
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil).WithContext(ctx)
+
+	require.True(t, subPilotRetryShouldStop(c))
+}
+
 // ---------------------------------------------------------------------------
 // sleepWithContext 测试
 // ---------------------------------------------------------------------------

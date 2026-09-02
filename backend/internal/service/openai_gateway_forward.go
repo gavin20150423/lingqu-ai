@@ -972,7 +972,7 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 	}
 	firstOutputTimeout := time.Duration(0)
 	if reqStream && account.Platform == PlatformOpenAI {
-		firstOutputTimeout = s.openAIFirstOutputTimeoutForContext(ctx, reasoningEffortValue)
+		firstOutputTimeout = s.openAIFirstOutputTimeoutForContext(ctx, reasoningEffortValue, startTime)
 	}
 
 	httpInvalidEncryptedContentRetryTried := false

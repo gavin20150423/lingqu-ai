@@ -170,9 +170,26 @@ func TestOpenAIFirstOutputTimeoutUsesSubPilotAttemptEnvelope(t *testing.T) {
 	svc := &OpenAIGatewayService{cfg: &cfg}
 	selection := &AccountSelectionResult{SubPilotAttemptTimeout: 1200 * time.Millisecond}
 	ctx := WithSubPilotAttemptTimeout(context.Background(), selection)
+	attemptStartedAt := time.Now()
 
-	require.Equal(t, 1200*time.Millisecond, svc.openAIFirstOutputTimeoutForContext(ctx, "low"))
-	require.Equal(t, 30*time.Second, svc.openAIFirstOutputTimeoutForContext(context.Background(), "low"))
+	require.Equal(t, 1200*time.Millisecond, svc.openAIFirstOutputTimeoutForContext(ctx, "low", attemptStartedAt))
+	require.Equal(t, 30*time.Second, svc.openAIFirstOutputTimeoutForContext(context.Background(), "low", attemptStartedAt))
+}
+
+func TestOpenAIFirstOutputTimeoutCannotExceedSubPilotRequestBudget(t *testing.T) {
+	cfg := config.Config{}
+	cfg.Gateway.OpenAIFirstOutputTimeoutSeconds = 120
+	svc := &OpenAIGatewayService{cfg: &cfg}
+	base := time.UnixMilli(2_000_000)
+	remainingBudget := 90 * time.Second
+	ctx := withSubPilotAttemptTimeoutAt(context.Background(), &AccountSelectionResult{
+		SubPilotAttemptTimeout:  60 * time.Second,
+		SubPilotRemainingBudget: &remainingBudget,
+	}, base)
+
+	// Forty seconds were already spent before the failover attempt starts.
+	require.Equal(t, 50*time.Second, svc.openAIFirstOutputTimeoutForContext(ctx, "low", base.Add(40*time.Second)))
+	require.Equal(t, time.Nanosecond, svc.openAIFirstOutputTimeoutForContext(ctx, "low", base.Add(91*time.Second)))
 }
 
 func TestOpenAIFirstOutputStageDefaultLimitIsIndependentFromScannerLimit(t *testing.T) {

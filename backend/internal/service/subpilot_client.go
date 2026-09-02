@@ -118,18 +118,20 @@ type subPilotSelectResponse struct {
 		ID string `json:"id"`
 	} `json:"lease"`
 	RetryPolicy struct {
-		AttemptTimeoutMS int64 `json:"attempt_timeout_ms"`
+		AttemptTimeoutMS  int64  `json:"attempt_timeout_ms"`
+		RemainingBudgetMS *int64 `json:"remaining_budget_ms"`
 	} `json:"retry_policy"`
 }
 
 type subPilotSelectResult struct {
-	AccountID      int64
-	LeaseID        string
-	RequestID      string
-	LastResort     bool
-	AttemptTimeout time.Duration
-	Decision       string
-	Reason         string
+	AccountID       int64
+	LeaseID         string
+	RequestID       string
+	LastResort      bool
+	AttemptTimeout  time.Duration
+	RemainingBudget *time.Duration
+	Decision        string
+	Reason          string
 }
 
 type subPilotReleaseLeaseRequest struct {
@@ -277,13 +279,14 @@ func (c *subPilotClient) recommendAccountWithOwnership(ctx context.Context, req 
 		return nil, handledErr != nil, handledErr
 	}
 	return &subPilotSelectResult{
-		AccountID:      accountID,
-		LeaseID:        strings.TrimSpace(resp.Lease.ID),
-		RequestID:      req.RequestID,
-		LastResort:     subPilotReasonIsLastResort(resp.Reason),
-		AttemptTimeout: boundedSubPilotAttemptTimeout(resp.RetryPolicy.AttemptTimeoutMS),
-		Decision:       strings.TrimSpace(resp.Decision),
-		Reason:         strings.TrimSpace(resp.Reason),
+		AccountID:       accountID,
+		LeaseID:         strings.TrimSpace(resp.Lease.ID),
+		RequestID:       req.RequestID,
+		LastResort:      subPilotReasonIsLastResort(resp.Reason),
+		AttemptTimeout:  boundedSubPilotAttemptTimeout(resp.RetryPolicy.AttemptTimeoutMS),
+		RemainingBudget: boundedSubPilotRemainingBudget(resp.RetryPolicy.RemainingBudgetMS),
+		Decision:        strings.TrimSpace(resp.Decision),
+		Reason:          strings.TrimSpace(resp.Reason),
 	}, true, nil
 }
 
@@ -304,6 +307,21 @@ func boundedSubPilotAttemptTimeout(value int64) time.Duration {
 		value = int64((5 * time.Minute) / time.Millisecond)
 	}
 	return time.Duration(value) * time.Millisecond
+}
+
+func boundedSubPilotRemainingBudget(value *int64) *time.Duration {
+	if value == nil {
+		return nil
+	}
+	bounded := *value
+	if bounded < 0 {
+		bounded = 0
+	}
+	if bounded > int64((5*time.Minute)/time.Millisecond) {
+		bounded = int64((5 * time.Minute) / time.Millisecond)
+	}
+	duration := time.Duration(bounded) * time.Millisecond
+	return &duration
 }
 
 func (c *subPilotClient) takeoverActive(ctx context.Context) bool {

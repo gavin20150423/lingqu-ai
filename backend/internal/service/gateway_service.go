@@ -595,7 +595,11 @@ type AccountSelectionResult struct {
 	SubPilotLeaseID            string
 	SubPilotRequestID          string
 	SubPilotAttemptTimeout     time.Duration
-	SubPilotLastResort         bool
+	// SubPilotRemainingBudget is the retry budget remaining after this
+	// selection. The handler turns the first value into a request-level
+	// deadline so switching accounts cannot restart the full budget.
+	SubPilotRemainingBudget *time.Duration
+	SubPilotLastResort      bool
 	// profitGate 携带本次选号真实生效的利润门（无门为 nil）。门安装在调度栈的
 	// 局部 ctx 上，handler 必须经 ContextWithSelectionProfitGate 重放后才能在
 	// 调度栈之外做抢槽后终检与准入后粘性绑定。
