@@ -72,7 +72,7 @@
                 ? defaultCNBaseUrl(account.platform, editAccountMode, editApiProtocol)
                 : account.platform === 'zhipu'
                   ? defaultCNBaseUrl(account.platform, editAccountMode, editApiProtocol)
-                  : account.platform === 'deepseek'
+                  : !cnSupportsNativeResponses(account.platform)
                     ? defaultCNBaseUrl(account.platform, editAccountMode, editApiProtocol)
                     : account.platform === 'openai'
                 ? 'https://api.openai.com'
@@ -158,7 +158,7 @@
                 ? 'sk-...'
                 : account.platform === 'zhipu'
                   ? '<api-key>.<secret>'
-                  : account.platform === 'deepseek'
+                  : !cnSupportsNativeResponses(account.platform)
                     ? 'sk-...'
                     : account.platform === 'openai'
                 ? 'sk-proj-...'
@@ -2920,6 +2920,7 @@ import {
   isHeaderOverrideCapable,
   splitHeaderOverridesObject,
   validateHeaderOverrideRows,
+  cnSupportsNativeResponses,
   defaultCNAdaptiveBaseUrls,
   defaultCNBaseUrl,
   type CnAccountMode,
@@ -3047,7 +3048,7 @@ const cnProtocolOptions = computed<Array<{ value: CnApiProtocol; labelKey: strin
     { value: 'chat_completions', labelKey: 'chatCompletions' },
     { value: 'anthropic', labelKey: 'anthropic' }
   ]
-  if (props.account?.platform === 'deepseek') options.push({ value: 'responses', labelKey: 'responses' })
+  if (cnSupportsNativeResponses(props.account?.platform ?? '')) options.push({ value: 'responses', labelKey: 'responses' })
   return options
 })
 const editAdaptiveProtocolOptions = computed<Array<{ value: CnNativeApiProtocol; labelKey: string }>>(() => {
@@ -3055,7 +3056,7 @@ const editAdaptiveProtocolOptions = computed<Array<{ value: CnNativeApiProtocol;
     { value: 'chat_completions', labelKey: 'chatCompletions' },
     { value: 'anthropic', labelKey: 'anthropic' }
   ]
-  if (props.account?.platform === 'deepseek') options.push({ value: 'responses', labelKey: 'responses' })
+  if (cnSupportsNativeResponses(props.account?.platform ?? '')) options.push({ value: 'responses', labelKey: 'responses' })
   return options
 })
 function onCnPresetSelect(preset: { mode: CnAccountMode; protocol: CnApiProtocol; url: string }) {
@@ -3916,7 +3917,7 @@ const syncFormFromAccount = (newAccount: Account | null) => {
       editApiProtocol.value = storedProtocol === 'adaptive' || storedProtocol === 'chat_completions' || storedProtocol === 'anthropic' || storedProtocol === 'responses'
         ? storedProtocol
         : 'chat_completions'
-      if (newAccount.platform !== 'deepseek' && editApiProtocol.value === 'responses') editApiProtocol.value = 'chat_completions'
+      if (!cnSupportsNativeResponses(newAccount.platform) && editApiProtocol.value === 'responses') editApiProtocol.value = 'chat_completions'
       const defaults = defaultCNAdaptiveBaseUrls(newAccount.platform, editAccountMode.value)
       const rawStored = credentials.api_base_urls as Record<string, unknown> | undefined
       const stored = rawStored || {}
