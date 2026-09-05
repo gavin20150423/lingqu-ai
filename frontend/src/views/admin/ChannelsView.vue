@@ -632,7 +632,7 @@ import { extractApiErrorMessage } from '@/utils/apiError'
 import { adminAPI } from '@/api/admin'
 import type { Channel, ChannelModelPricing, CreateChannelRequest, UpdateChannelRequest, AccountStatsPricingRule } from '@/api/admin/channels'
 import type { PricingFormEntry } from '@/components/admin/channel/types'
-import { mTokToPerToken, perTokenToMTok, apiIntervalsToForm, formIntervalsToAPI, apiTimePricingToForm, formTimePricingToAPI, createDefaultTimePricingForm, findModelConflict, validateIntervals } from '@/components/admin/channel/types'
+import { mTokToPerToken, perTokenToMTok, apiIntervalsToForm, formIntervalsToAPI, apiTimePricingToForm, formTimePricingToAPI, createDefaultTimePricingForm, findModelConflict, validateIntervals, isValidPositiveMultiplier } from '@/components/admin/channel/types'
 import type { AdminGroup, GroupPlatform } from '@/types'
 import type { Column } from '@/components/common/types'
 import { platformTextClass, platformBadgeLightClass } from '@/utils/platformColors'
@@ -855,8 +855,11 @@ function addPricingEntry(sectionIdx: number) {
     input_price: null,
     output_price: null,
     cache_write_price: null,
-    cache_write_1h_price: null,
-    cache_read_price: null,
+		cache_write_1h_price: null,
+		cache_read_price: null,
+		fast_multiplier: null,
+		flex_multiplier: null,
+		max_reasoning_effort_multiplier: null,
     image_input_price: null,
     image_output_price: null,
     per_request_price: null,
@@ -890,8 +893,11 @@ async function syncLatestModels(sectionIdx: number) {
       input_price: null,
       output_price: null,
       cache_write_price: null,
-      cache_write_1h_price: null,
-      cache_read_price: null,
+		cache_write_1h_price: null,
+		cache_read_price: null,
+		fast_multiplier: null,
+		flex_multiplier: null,
+		max_reasoning_effort_multiplier: null,
       image_input_price: null,
       image_output_price: null,
       per_request_price: null,
@@ -1118,8 +1124,11 @@ function formToAPI(): { group_ids: number[], model_pricing: ChannelModelPricing[
         input_price: mTokToPerToken(entry.input_price),
         output_price: mTokToPerToken(entry.output_price),
         cache_write_price: mTokToPerToken(entry.cache_write_price),
-        cache_write_1h_price: mTokToPerToken(entry.cache_write_1h_price),
-        cache_read_price: mTokToPerToken(entry.cache_read_price),
+		cache_write_1h_price: mTokToPerToken(entry.cache_write_1h_price),
+		cache_read_price: mTokToPerToken(entry.cache_read_price),
+		fast_multiplier: entry.fast_multiplier != null && entry.fast_multiplier !== '' ? Number(entry.fast_multiplier) : null,
+		flex_multiplier: entry.flex_multiplier != null && entry.flex_multiplier !== '' ? Number(entry.flex_multiplier) : null,
+		max_reasoning_effort_multiplier: entry.max_reasoning_effort_multiplier != null && entry.max_reasoning_effort_multiplier !== '' ? Number(entry.max_reasoning_effort_multiplier) : null,
         image_input_price: mTokToPerToken(entry.image_input_price),
         image_output_price: mTokToPerToken(entry.image_output_price),
         per_request_price: entry.per_request_price != null && entry.per_request_price !== '' ? Number(entry.per_request_price) : null,
@@ -1217,8 +1226,11 @@ function apiToForm(channel: Channel): PlatformSection[] {
         input_price: perTokenToMTok(p.input_price),
         output_price: perTokenToMTok(p.output_price),
         cache_write_price: perTokenToMTok(p.cache_write_price),
-        cache_write_1h_price: perTokenToMTok(p.cache_write_1h_price),
-        cache_read_price: perTokenToMTok(p.cache_read_price),
+		cache_write_1h_price: perTokenToMTok(p.cache_write_1h_price),
+		cache_read_price: perTokenToMTok(p.cache_read_price),
+		fast_multiplier: p.fast_multiplier,
+		flex_multiplier: p.flex_multiplier,
+		max_reasoning_effort_multiplier: p.max_reasoning_effort_multiplier,
         image_input_price: perTokenToMTok(p.image_input_price),
         image_output_price: perTokenToMTok(p.image_output_price),
         per_request_price: p.per_request_price,
@@ -1523,8 +1535,17 @@ async function handleSubmit() {
   }
 
   // 校验区间合法性（范围、重叠等）
-  for (const section of form.platforms.filter(s => s.enabled)) {
-    for (const entry of section.model_pricing) {
+	for (const section of form.platforms.filter(s => s.enabled)) {
+		for (const entry of section.model_pricing) {
+			if (!isValidPositiveMultiplier(entry.fast_multiplier) ||
+				!isValidPositiveMultiplier(entry.flex_multiplier) ||
+				!isValidPositiveMultiplier(entry.max_reasoning_effort_multiplier)) {
+        const platformLabel = t('admin.groups.platforms.' + section.platform, section.platform)
+        const modelLabel = entry.models.join(', ') || t('admin.channels.form.unnamed')
+        appStore.showError(`${platformLabel} - ${modelLabel}: ${t('admin.channels.form.multiplierPositive')}`)
+        activeTab.value = section.platform
+				return
+			}
       if (!entry.intervals || entry.intervals.length === 0) continue
       const intervalErr = validateIntervals(entry.intervals, entry.billing_mode, t)
       if (intervalErr) {

@@ -648,6 +648,8 @@ func (s *OpenAIGatewayService) forwardOpenAIImagesAPIKey(
 		upstreamMsg = sanitizeUpstreamErrorMessage(upstreamMsg)
 		if s.shouldFailoverOpenAIUpstreamResponse(resp.StatusCode, upstreamMsg, respBody) {
 			appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
+				ProxyID:            opsUpstreamProxyID(account),
+				ProxyName:          opsUpstreamProxyName(account),
 				Platform:           account.Platform,
 				AccountID:          account.ID,
 				AccountName:        account.Name,
@@ -680,6 +682,7 @@ func (s *OpenAIGatewayService) forwardOpenAIImagesAPIKey(
 			if streamCount > 0 {
 				return &OpenAIForwardResult{
 					RequestID:        resp.Header.Get("x-request-id"),
+					UpstreamHeaders:  resp.Header,
 					Usage:            streamUsage,
 					Model:            requestModel,
 					UpstreamModel:    upstreamModel,
@@ -701,6 +704,7 @@ func (s *OpenAIGatewayService) forwardOpenAIImagesAPIKey(
 		firstTokenMs = ttft
 		return &OpenAIForwardResult{
 			RequestID:        resp.Header.Get("x-request-id"),
+			UpstreamHeaders:  resp.Header,
 			Usage:            usage,
 			Model:            requestModel,
 			UpstreamModel:    upstreamModel,
@@ -714,7 +718,7 @@ func (s *OpenAIGatewayService) forwardOpenAIImagesAPIKey(
 			ImageOutputSizes: imageOutputSizes,
 		}, nil
 	} else {
-		nonStreamUsage, nonStreamCount, nonStreamSizes, upstreamDuration, err := s.handleOpenAIImagesNonStreamingResponse(resp, c, upstreamStart)
+		nonStreamUsage, nonStreamCount, nonStreamSizes, upstreamDuration, err := s.handleOpenAIImagesNonStreamingResponse(upstreamCtx, resp, c, account, parsed, upstreamStart)
 		if err != nil {
 			return nil, err
 		}
@@ -724,6 +728,7 @@ func (s *OpenAIGatewayService) forwardOpenAIImagesAPIKey(
 		}
 		return &OpenAIForwardResult{
 			RequestID:        resp.Header.Get("x-request-id"),
+			UpstreamHeaders:  resp.Header,
 			Usage:            usage,
 			Model:            requestModel,
 			UpstreamModel:    upstreamModel,
@@ -886,8 +891,11 @@ func cloneMultipartHeader(src textproto.MIMEHeader) textproto.MIMEHeader {
 }
 
 func (s *OpenAIGatewayService) handleOpenAIImagesNonStreamingResponse(
+	ctx context.Context,
 	resp *http.Response,
 	c *gin.Context,
+	account *Account,
+	parsed *OpenAIImagesRequest,
 	startTime time.Time,
 ) (OpenAIUsage, int, []string, time.Duration, error) {
 	body, err := s.readOpenAIImagesNonStreamingResponseBody(resp, c)
@@ -898,10 +906,10 @@ func (s *OpenAIGatewayService) handleOpenAIImagesNonStreamingResponse(
 	// the downstream response. A delayed chunked-body EOF must not turn into
 	// minutes of reported model time once the JSON payload is complete.
 	upstreamDuration := time.Since(startTime)
+	body = s.backfillOpenAIImagesB64JSON(ctx, account, parsed, body)
 	usage, _ := extractOpenAIUsageFromJSONBytes(body)
 	imageCount := extractOpenAIImageCountFromJSONBytes(body)
 	imageOutputSizes := collectOpenAIResponseImageOutputSizesFromJSONBytes(body)
-
 	responseheaders.WriteFilteredHeaders(c.Writer.Header(), resp.Header, s.responseHeaderFilter)
 	contentType := "application/json"
 	if s.cfg != nil && !s.cfg.Security.ResponseHeaders.Enabled {
