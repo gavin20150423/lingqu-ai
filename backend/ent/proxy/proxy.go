@@ -49,8 +49,8 @@ const (
 	FieldExpiryWarnDays = "expiry_warn_days"
 	// EdgeAccounts holds the string denoting the accounts edge name in mutations.
 	EdgeAccounts = "accounts"
-	// EdgeOwner holds the string denoting the owner edge name in mutations.
-	EdgeOwner = "owner"
+	// EdgePrimaryProxies holds the string denoting the primary_proxies edge name in mutations.
+	EdgePrimaryProxies = "primary_proxies"
 	// EdgeBackupProxy holds the string denoting the backup_proxy edge name in mutations.
 	EdgeBackupProxy = "backup_proxy"
 	// Table holds the table name of the proxy in the database.
@@ -62,13 +62,10 @@ const (
 	AccountsInverseTable = "accounts"
 	// AccountsColumn is the table column denoting the accounts relation/edge.
 	AccountsColumn = "proxy_id"
-	// OwnerTable is the table that holds the owner relation/edge.
-	OwnerTable = "proxies"
-	// OwnerInverseTable is the table name for the User entity.
-	// It exists in this package in order to avoid circular dependency with the "user" package.
-	OwnerInverseTable = "users"
-	// OwnerColumn is the table column denoting the owner relation/edge.
-	OwnerColumn = "owner_user_id"
+	// PrimaryProxiesTable is the table that holds the primary_proxies relation/edge.
+	PrimaryProxiesTable = "proxies"
+	// PrimaryProxiesColumn is the table column denoting the primary_proxies relation/edge.
+	PrimaryProxiesColumn = "backup_proxy_id"
 	// BackupProxyTable is the table that holds the backup_proxy relation/edge.
 	BackupProxyTable = "proxies"
 	// BackupProxyColumn is the table column denoting the backup_proxy relation/edge.
@@ -248,10 +245,17 @@ func ByAccounts(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 	}
 }
 
-// ByOwnerField orders the results by owner field.
-func ByOwnerField(field string, opts ...sql.OrderTermOption) OrderOption {
+// ByPrimaryProxiesCount orders the results by primary_proxies count.
+func ByPrimaryProxiesCount(opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborTerms(s, newOwnerStep(), sql.OrderByField(field, opts...))
+		sqlgraph.OrderByNeighborsCount(s, newPrimaryProxiesStep(), opts...)
+	}
+}
+
+// ByPrimaryProxies orders the results by primary_proxies terms.
+func ByPrimaryProxies(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newPrimaryProxiesStep(), append([]sql.OrderTerm{term}, terms...)...)
 	}
 }
 
@@ -268,17 +272,17 @@ func newAccountsStep() *sqlgraph.Step {
 		sqlgraph.Edge(sqlgraph.O2M, true, AccountsTable, AccountsColumn),
 	)
 }
-func newOwnerStep() *sqlgraph.Step {
+func newPrimaryProxiesStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
-		sqlgraph.To(OwnerInverseTable, FieldID),
-		sqlgraph.Edge(sqlgraph.M2O, true, OwnerTable, OwnerColumn),
+		sqlgraph.To(Table, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, true, PrimaryProxiesTable, PrimaryProxiesColumn),
 	)
 }
 func newBackupProxyStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(Table, FieldID),
-		sqlgraph.Edge(sqlgraph.O2O, false, BackupProxyTable, BackupProxyColumn),
+		sqlgraph.Edge(sqlgraph.M2O, false, BackupProxyTable, BackupProxyColumn),
 	)
 }

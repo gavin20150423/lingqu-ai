@@ -4663,15 +4663,15 @@ func (c *ProxyClient) QueryAccounts(_m *Proxy) *AccountQuery {
 	return query
 }
 
-// QueryOwner queries the owner edge of a Proxy.
-func (c *ProxyClient) QueryOwner(_m *Proxy) *UserQuery {
-	query := (&UserClient{config: c.config}).Query()
+// QueryPrimaryProxies queries the primary_proxies edge of a Proxy.
+func (c *ProxyClient) QueryPrimaryProxies(_m *Proxy) *ProxyQuery {
+	query := (&ProxyClient{config: c.config}).Query()
 	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
 		id := _m.ID
 		step := sqlgraph.NewStep(
 			sqlgraph.From(proxy.Table, proxy.FieldID, id),
-			sqlgraph.To(user.Table, user.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, true, proxy.OwnerTable, proxy.OwnerColumn),
+			sqlgraph.To(proxy.Table, proxy.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, true, proxy.PrimaryProxiesTable, proxy.PrimaryProxiesColumn),
 		)
 		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
 		return fromV, nil
@@ -4687,7 +4687,7 @@ func (c *ProxyClient) QueryBackupProxy(_m *Proxy) *ProxyQuery {
 		step := sqlgraph.NewStep(
 			sqlgraph.From(proxy.Table, proxy.FieldID, id),
 			sqlgraph.To(proxy.Table, proxy.FieldID),
-			sqlgraph.Edge(sqlgraph.O2O, false, proxy.BackupProxyTable, proxy.BackupProxyColumn),
+			sqlgraph.Edge(sqlgraph.M2O, false, proxy.BackupProxyTable, proxy.BackupProxyColumn),
 		)
 		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
 		return fromV, nil

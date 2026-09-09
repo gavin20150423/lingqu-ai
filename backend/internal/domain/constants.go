@@ -23,11 +23,12 @@ const (
 	PlatformGemini      = "gemini"
 	PlatformAntigravity = "antigravity"
 	PlatformGrok        = "grok"
-	PlatformKimi        = "kimi"
-	PlatformZhipu       = "zhipu"
-	PlatformDeepseek    = "deepseek"
-	PlatformXiaoAPI     = "xiaoapi"
-	PlatformComposite   = "composite"
+	// 国产 OpenAI 兼容供应商（经 OpenAI 网关转发，按 Chat Completions 协议）。
+	PlatformKimi      = "kimi"     // Kimi (月之暗面 / Moonshot)
+	PlatformZhipu     = "zhipu"    // 智谱 GLM (bigmodel)
+	PlatformDeepseek  = "deepseek" // DeepSeek
+	PlatformMiniMax   = "minimax"  // MiniMax (M 系列)
+	PlatformComposite = "composite"
 )
 
 // Account mode and protocol constants for mainland China providers.
@@ -39,7 +40,7 @@ const (
 // 模式决定额度监控方式。同协议请求零转换直通；跨协议组合才走转换链。
 	APIProtocolChatCompletions = "chat_completions" // OpenAI Chat Completions（默认）
 	APIProtocolAnthropic       = "anthropic"        // 原生 Anthropic /v1/messages（适配 Claude Code）
-	APIProtocolResponses       = "responses"        // OpenAI Responses（deepseek / kimi 原生端点，适配 Codex）
+	APIProtocolResponses       = "responses"        // OpenAI Responses（deepseek / kimi / minimax 原生端点，适配 Codex）
 	APIProtocolAdaptive        = "adaptive"         // 按入站协议优先选择供应商原生端点
 )
 

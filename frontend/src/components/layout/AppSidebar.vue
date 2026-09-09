@@ -294,6 +294,13 @@ const sidebarNavRef = ref<HTMLElement | null>(null)
 // state so an active group can still be collapsed manually.
 const groupExpandOverrides = ref<Map<string, boolean>>(new Map())
 
+// Per-group expand/collapse overrides. A group with no entry follows the
+// automatic behavior (expanded while the active route is one of its children);
+// a chevron click records the user's choice, which wins over the automatic
+// state so an active group can still be collapsed manually.
+const groupExpandOverrides = ref<Map<string, boolean>>(new Map())
+
+// Site settings from appStore (cached, no flicker)
 const siteName = computed(() => appStore.siteName)
 const siteLogo = computed(() => sanitizeUrl(appStore.siteLogo || '', { allowRelative: true, allowDataUrl: true }))
 const siteVersion = computed(() => appStore.siteVersion)
@@ -363,12 +370,10 @@ const userNavItems = computed((): NavItem[] => finalizeNav(buildSelfNavItems(tru
 
 const adminNavItems = computed((): NavItem[] => {
   const baseItems: NavItem[] = [
-    { path: '/admin/dashboard', label: t('nav.dashboard'), icon: 'grid' },
-    { path: '/admin/ops', label: t('nav.ops'), icon: 'chart', featureFlag: flagOpsMonitoring },
-    { path: '/admin/users', label: t('nav.users'), icon: 'users', hideInSimpleMode: true },
-    { path: '/admin/groups', label: t('nav.groups'), icon: 'grid' },
-    { path: '/admin/accounts', label: t('nav.accounts'), icon: 'globe' },
-    { path: '/admin/xiao-video', label: t('nav.xiaoVideo'), icon: 'play' },
+    { path: '/admin/dashboard', label: t('nav.dashboard'), icon: DashboardIcon },
+    { path: '/admin/ops', label: t('nav.ops'), icon: ChartIcon, featureFlag: flagOpsMonitoring },
+    { path: '/admin/users', label: t('nav.users'), icon: UsersIcon, hideInSimpleMode: true },
+    { path: '/admin/groups', label: t('nav.groups'), icon: FolderIcon },
     {
       path: '/admin/channels',
       label: t('nav.channelManagement'),
