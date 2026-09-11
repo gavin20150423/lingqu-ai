@@ -27,21 +27,27 @@ func NewPromoHandler(promoService *service.PromoService) *PromoHandler {
 
 // CreatePromoCodeRequest represents create promo code request
 type CreatePromoCodeRequest struct {
-	Code        string  `json:"code"`                                  // 可选，为空则自动生成
-	BonusAmount float64 `json:"bonus_amount" binding:"required,min=0"` // 赠送余额
-	MaxUses     int     `json:"max_uses" binding:"min=0"`              // 最大使用次数，0=无限
-	ExpiresAt   *int64  `json:"expires_at"`                            // 过期时间戳（秒）
-	Notes       string  `json:"notes"`                                 // 备注
+	Code                   string  `json:"code"`                                  // 可选，为空则自动生成
+	BonusAmount            float64 `json:"bonus_amount" binding:"required,min=0"` // 赠送余额
+	MaxUses                int     `json:"max_uses" binding:"min=0"`              // 最大使用次数，0=无限
+	ExpiresAt              *int64  `json:"expires_at"`                            // 过期时间戳（秒）
+	Notes                  string  `json:"notes"`                                 // 备注
+	DiscountPercent        float64 `json:"discount_percent" binding:"min=0,max=100"`
+	AppliesToSubscriptions bool    `json:"applies_to_subscriptions"`
+	StartsAt               *int64  `json:"starts_at"`
 }
 
 // UpdatePromoCodeRequest represents update promo code request
 type UpdatePromoCodeRequest struct {
-	Code        *string  `json:"code"`
-	BonusAmount *float64 `json:"bonus_amount" binding:"omitempty,min=0"`
-	MaxUses     *int     `json:"max_uses" binding:"omitempty,min=0"`
-	Status      *string  `json:"status" binding:"omitempty,oneof=active disabled"`
-	ExpiresAt   *int64   `json:"expires_at"`
-	Notes       *string  `json:"notes"`
+	Code                   *string  `json:"code"`
+	BonusAmount            *float64 `json:"bonus_amount" binding:"omitempty,min=0"`
+	MaxUses                *int     `json:"max_uses" binding:"omitempty,min=0"`
+	Status                 *string  `json:"status" binding:"omitempty,oneof=active disabled"`
+	ExpiresAt              *int64   `json:"expires_at"`
+	Notes                  *string  `json:"notes"`
+	DiscountPercent        *float64 `json:"discount_percent" binding:"omitempty,min=0,max=100"`
+	AppliesToSubscriptions *bool    `json:"applies_to_subscriptions"`
+	StartsAt               *int64   `json:"starts_at"`
 }
 
 // List handles listing all promo codes with pagination
@@ -102,15 +108,21 @@ func (h *PromoHandler) Create(c *gin.Context) {
 	}
 
 	input := &service.CreatePromoCodeInput{
-		Code:        req.Code,
-		BonusAmount: req.BonusAmount,
-		MaxUses:     req.MaxUses,
-		Notes:       req.Notes,
+		Code:                   req.Code,
+		BonusAmount:            req.BonusAmount,
+		DiscountPercent:        req.DiscountPercent,
+		AppliesToSubscriptions: req.AppliesToSubscriptions,
+		MaxUses:                req.MaxUses,
+		Notes:                  req.Notes,
 	}
 
 	if req.ExpiresAt != nil {
 		t := time.Unix(*req.ExpiresAt, 0)
 		input.ExpiresAt = &t
+	}
+	if req.StartsAt != nil {
+		t := time.Unix(*req.StartsAt, 0)
+		input.StartsAt = &t
 	}
 
 	code, err := h.promoService.Create(c.Request.Context(), input)
@@ -138,11 +150,13 @@ func (h *PromoHandler) Update(c *gin.Context) {
 	}
 
 	input := &service.UpdatePromoCodeInput{
-		Code:        req.Code,
-		BonusAmount: req.BonusAmount,
-		MaxUses:     req.MaxUses,
-		Status:      req.Status,
-		Notes:       req.Notes,
+		Code:                   req.Code,
+		BonusAmount:            req.BonusAmount,
+		DiscountPercent:        req.DiscountPercent,
+		AppliesToSubscriptions: req.AppliesToSubscriptions,
+		MaxUses:                req.MaxUses,
+		Status:                 req.Status,
+		Notes:                  req.Notes,
 	}
 
 	if req.ExpiresAt != nil {
@@ -152,6 +166,14 @@ func (h *PromoHandler) Update(c *gin.Context) {
 		} else {
 			t := time.Unix(*req.ExpiresAt, 0)
 			input.ExpiresAt = &t
+		}
+	}
+	if req.StartsAt != nil {
+		if *req.StartsAt == 0 {
+			input.StartsAt = &time.Time{}
+		} else {
+			t := time.Unix(*req.StartsAt, 0)
+			input.StartsAt = &t
 		}
 	}
 

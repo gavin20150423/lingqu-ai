@@ -13,6 +13,7 @@ import (
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/paymentorder"
+	"github.com/Wei-Shaw/sub2api/ent/promocode"
 	"github.com/Wei-Shaw/sub2api/internal/payment"
 	"github.com/Wei-Shaw/sub2api/internal/payment/provider"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
@@ -60,6 +61,20 @@ func (s *PaymentService) CreateOrder(ctx context.Context, req CreateOrderRequest
 		limitAmount = plan.Price
 	} else if req.OrderType == payment.OrderTypeBalance {
 		orderAmount = calculateCreditedBalance(req.Amount, cfg.BalanceRechargeMultiplier)
+	}
+	discountPercent := 0.0
+	discountAmount := 0.0
+	if plan != nil && strings.TrimSpace(req.PromoCode) != "" {
+		promo, promoErr := s.entClient.PromoCode.Query().Where(promocode.CodeEqualFold(strings.TrimSpace(req.PromoCode))).Only(ctx)
+		if promoErr != nil {
+			return nil, infraerrors.BadRequest("PROMO_CODE_INVALID", "promo code is invalid")
+		}
+		if !promo.AppliesToSubscriptions || promo.Status != PromoCodeStatusActive || (promo.StartsAt != nil && time.Now().Before(*promo.StartsAt)) || (promo.ExpiresAt != nil && time.Now().After(*promo.ExpiresAt)) || (promo.MaxUses > 0 && promo.UsedCount >= promo.MaxUses) {
+			return nil, infraerrors.BadRequest("PROMO_CODE_INVALID", "promo code is not available for this subscription")
+		}
+		discountPercent = math.Min(100, math.Max(0, promo.DiscountPercent))
+		discountAmount = math.Round(orderAmount*discountPercent) / 100
+		limitAmount = math.Max(0, orderAmount-discountAmount)
 	}
 	feeRate := cfg.RechargeFeeRate
 	methodCurrency := payment.DefaultPaymentCurrency
@@ -109,6 +124,9 @@ func (s *PaymentService) CreateOrder(ctx context.Context, req CreateOrderRequest
 		_, _ = s.entClient.PaymentOrder.UpdateOneID(order.ID).
 			SetStatus(OrderStatusFailed).
 			Save(ctx)
+		if releaseErr := s.releaseSubscriptionPromoReservation(ctx, order); releaseErr != nil {
+			slog.Error("release subscription promo reservation after provider failure", "orderID", order.ID, "error", releaseErr)
+		}
 		return nil, err
 	}
 	return resp, nil
@@ -226,6 +244,17 @@ func (s *PaymentService) createOrderInTx(ctx context.Context, req CreateOrderReq
 	order, err = tx.PaymentOrder.UpdateOneID(order.ID).SetRechargeCode(code).Save(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("set recharge code: %w", err)
+	}
+	if normalizedPromo := strings.ToUpper(strings.TrimSpace(req.PromoCode)); normalizedPromo != "" {
+		if _, err := tx.ExecContext(ctx, "UPDATE payment_orders SET promo_code=$1 WHERE id=$2", normalizedPromo, order.ID); err != nil {
+			return nil, fmt.Errorf("set promo code: %w", err)
+		}
+		order.PromoCode = &normalizedPromo
+		if plan != nil {
+			if err := s.reserveSubscriptionPromoCode(ctx, tx, order.ID, normalizedPromo); err != nil {
+				return nil, err
+			}
+		}
 	}
 	if err := tx.Commit(); err != nil {
 		return nil, fmt.Errorf("commit order transaction: %w", err)
@@ -493,6 +522,11 @@ func (s *PaymentService) invokeProvider(ctx context.Context, order *dbent.Paymen
 		resultType = payment.CreatePaymentResultOrderCreated
 	}
 	resp := buildCreateOrderResponse(order, req, payAmount, sel, pr, resultType)
+	if plan != nil && order.Amount > limitAmount {
+		resp.DiscountAmount = order.Amount - limitAmount
+		resp.DiscountPercent = resp.DiscountAmount / order.Amount * 100
+		resp.PromoCode = strings.ToUpper(strings.TrimSpace(req.PromoCode))
+	}
 	resp.ResumeToken = resumeToken
 	resp.AlipayMobilePrecreateDeepLink = providerReq.AlipayMobilePrecreate && strings.TrimSpace(pr.QRCode) != ""
 	return resp, nil

@@ -231,6 +231,12 @@ func (_c *UserSubscriptionCreate) SetNillableNotes(v *string) *UserSubscriptionC
 	return _c
 }
 
+// SetEntitlements sets the "entitlements" field.
+func (_c *UserSubscriptionCreate) SetEntitlements(v map[string]interface{}) *UserSubscriptionCreate {
+	_c.mutation.SetEntitlements(v)
+	return _c
+}
+
 // SetUser sets the "user" edge to the User entity.
 func (_c *UserSubscriptionCreate) SetUser(v *User) *UserSubscriptionCreate {
 	return _c.SetUserID(v.ID)
@@ -349,6 +355,13 @@ func (_c *UserSubscriptionCreate) defaults() error {
 		v := usersubscription.DefaultAssignedAt()
 		_c.mutation.SetAssignedAt(v)
 	}
+	if _, ok := _c.mutation.Entitlements(); !ok {
+		if usersubscription.DefaultEntitlements == nil {
+			return fmt.Errorf("ent: uninitialized usersubscription.DefaultEntitlements (forgotten import ent/runtime?)")
+		}
+		v := usersubscription.DefaultEntitlements()
+		_c.mutation.SetEntitlements(v)
+	}
 	return nil
 }
 
@@ -391,6 +404,9 @@ func (_c *UserSubscriptionCreate) check() error {
 	}
 	if _, ok := _c.mutation.AssignedAt(); !ok {
 		return &ValidationError{Name: "assigned_at", err: errors.New(`ent: missing required field "UserSubscription.assigned_at"`)}
+	}
+	if _, ok := _c.mutation.Entitlements(); !ok {
+		return &ValidationError{Name: "entitlements", err: errors.New(`ent: missing required field "UserSubscription.entitlements"`)}
 	}
 	if len(_c.mutation.UserIDs()) == 0 {
 		return &ValidationError{Name: "user", err: errors.New(`ent: missing required edge "UserSubscription.user"`)}
@@ -480,6 +496,10 @@ func (_c *UserSubscriptionCreate) createSpec() (*UserSubscription, *sqlgraph.Cre
 	if value, ok := _c.mutation.Notes(); ok {
 		_spec.SetField(usersubscription.FieldNotes, field.TypeString, value)
 		_node.Notes = &value
+	}
+	if value, ok := _c.mutation.Entitlements(); ok {
+		_spec.SetField(usersubscription.FieldEntitlements, field.TypeJSON, value)
+		_node.Entitlements = value
 	}
 	if nodes := _c.mutation.UserIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
@@ -846,6 +866,18 @@ func (u *UserSubscriptionUpsert) ClearNotes() *UserSubscriptionUpsert {
 	return u
 }
 
+// SetEntitlements sets the "entitlements" field.
+func (u *UserSubscriptionUpsert) SetEntitlements(v map[string]interface{}) *UserSubscriptionUpsert {
+	u.Set(usersubscription.FieldEntitlements, v)
+	return u
+}
+
+// UpdateEntitlements sets the "entitlements" field to the value that was provided on create.
+func (u *UserSubscriptionUpsert) UpdateEntitlements() *UserSubscriptionUpsert {
+	u.SetExcluded(usersubscription.FieldEntitlements)
+	return u
+}
+
 // UpdateNewValues updates the mutable fields using the new values that were set on create.
 // Using this option is equivalent to using:
 //
@@ -1175,6 +1207,20 @@ func (u *UserSubscriptionUpsertOne) UpdateNotes() *UserSubscriptionUpsertOne {
 func (u *UserSubscriptionUpsertOne) ClearNotes() *UserSubscriptionUpsertOne {
 	return u.Update(func(s *UserSubscriptionUpsert) {
 		s.ClearNotes()
+	})
+}
+
+// SetEntitlements sets the "entitlements" field.
+func (u *UserSubscriptionUpsertOne) SetEntitlements(v map[string]interface{}) *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.SetEntitlements(v)
+	})
+}
+
+// UpdateEntitlements sets the "entitlements" field to the value that was provided on create.
+func (u *UserSubscriptionUpsertOne) UpdateEntitlements() *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.UpdateEntitlements()
 	})
 }
 
@@ -1673,6 +1719,20 @@ func (u *UserSubscriptionUpsertBulk) UpdateNotes() *UserSubscriptionUpsertBulk {
 func (u *UserSubscriptionUpsertBulk) ClearNotes() *UserSubscriptionUpsertBulk {
 	return u.Update(func(s *UserSubscriptionUpsert) {
 		s.ClearNotes()
+	})
+}
+
+// SetEntitlements sets the "entitlements" field.
+func (u *UserSubscriptionUpsertBulk) SetEntitlements(v map[string]interface{}) *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.SetEntitlements(v)
+	})
+}
+
+// UpdateEntitlements sets the "entitlements" field to the value that was provided on create.
+func (u *UserSubscriptionUpsertBulk) UpdateEntitlements() *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.UpdateEntitlements()
 	})
 }
 

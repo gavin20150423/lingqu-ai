@@ -149,6 +149,10 @@
               <Icon name="plus" size="md" />
               创建我的 Key
             </router-link>
+          <router-link to="/subscription-plans" class="user-start-subscription">
+              <Icon name="badge" size="md" />
+              购买订阅套餐
+            </router-link>
             <button type="button" class="user-start-secondary" @click="copyBaseUrl">
               <Icon name="copy" size="md" />
               复制接入地址
@@ -1098,6 +1102,7 @@ onMounted(() => {
 }
 
 .user-start-primary,
+.user-start-subscription,
 .user-start-secondary,
 .user-start-lite__link {
   display: inline-flex;
@@ -1115,6 +1120,7 @@ onMounted(() => {
 }
 
 .user-start-primary:hover,
+.user-start-subscription:hover,
 .user-start-secondary:hover,
 .user-start-lite__link:hover {
   transform: translateY(-2px);
@@ -1123,6 +1129,7 @@ onMounted(() => {
 }
 
 .user-start-primary:active,
+.user-start-subscription:active,
 .user-start-secondary:active,
 .user-start-lite__link:active {
   transform: translateY(1px);
@@ -1131,6 +1138,12 @@ onMounted(() => {
 
 .user-start-primary {
   background: linear-gradient(135deg, #f8e08a, #f4b4bd);
+}
+
+.user-start-subscription {
+  border-color: rgba(8, 169, 214, 0.28);
+  background: linear-gradient(135deg, #d9f7ff, #c9f2e7);
+  color: #0b657d;
 }
 
 .user-start-secondary,

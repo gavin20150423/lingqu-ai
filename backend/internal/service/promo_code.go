@@ -6,16 +6,19 @@ import (
 
 // PromoCode 注册优惠码
 type PromoCode struct {
-	ID          int64
-	Code        string
-	BonusAmount float64
-	MaxUses     int
-	UsedCount   int
-	Status      string
-	ExpiresAt   *time.Time
-	Notes       string
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	ID                     int64
+	Code                   string
+	BonusAmount            float64
+	DiscountPercent        float64
+	AppliesToSubscriptions bool
+	MaxUses                int
+	UsedCount              int
+	Status                 string
+	ExpiresAt              *time.Time
+	StartsAt               *time.Time
+	Notes                  string
+	CreatedAt              time.Time
+	UpdatedAt              time.Time
 
 	// 关联
 	UsageRecords []PromoCodeUsage
@@ -42,6 +45,9 @@ func (p *PromoCode) CanUse() bool {
 	if p.ExpiresAt != nil && time.Now().After(*p.ExpiresAt) {
 		return false
 	}
+	if p.StartsAt != nil && time.Now().Before(*p.StartsAt) {
+		return false
+	}
 	if p.MaxUses > 0 && p.UsedCount >= p.MaxUses {
 		return false
 	}
@@ -55,19 +61,25 @@ func (p *PromoCode) IsExpired() bool {
 
 // CreatePromoCodeInput 创建优惠码输入
 type CreatePromoCodeInput struct {
-	Code        string
-	BonusAmount float64
-	MaxUses     int
-	ExpiresAt   *time.Time
-	Notes       string
+	Code                   string
+	BonusAmount            float64
+	DiscountPercent        float64
+	AppliesToSubscriptions bool
+	MaxUses                int
+	ExpiresAt              *time.Time
+	StartsAt               *time.Time
+	Notes                  string
 }
 
 // UpdatePromoCodeInput 更新优惠码输入
 type UpdatePromoCodeInput struct {
-	Code        *string
-	BonusAmount *float64
-	MaxUses     *int
-	Status      *string
-	ExpiresAt   *time.Time
-	Notes       *string
+	Code                   *string
+	BonusAmount            *float64
+	DiscountPercent        *float64
+	AppliesToSubscriptions *bool
+	MaxUses                *int
+	Status                 *string
+	ExpiresAt              *time.Time
+	StartsAt               *time.Time
+	Notes                  *string
 }

@@ -479,7 +479,10 @@ func cloneGroupForOpenAIImageTask(group *service.Group) *service.Group {
 	cloned.ModelRouting = cloneStringInt64SliceMap(group.ModelRouting)
 	cloned.SupportedModelScopes = append([]string(nil), group.SupportedModelScopes...)
 	cloned.MessagesDispatchModelConfig = group.MessagesDispatchModelConfig
-	cloned.ModelsListConfig = group.ModelsListConfig
+	cloned.ModelAllowlist = service.GroupModelAllowlist{
+		Enabled: group.ModelAllowlist.Enabled,
+		Models:  append([]string(nil), group.ModelAllowlist.Models...),
+	}
 	cloned.AccountGroups = nil
 	return &cloned
 }

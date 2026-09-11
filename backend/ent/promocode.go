@@ -25,6 +25,12 @@ type PromoCode struct {
 	MaxUses int `json:"max_uses,omitempty"`
 	// 已使用次数
 	UsedCount int `json:"used_count,omitempty"`
+	// DiscountPercent holds the value of the "discount_percent" field.
+	DiscountPercent float64 `json:"discount_percent,omitempty"`
+	// AppliesToSubscriptions holds the value of the "applies_to_subscriptions" field.
+	AppliesToSubscriptions bool `json:"applies_to_subscriptions,omitempty"`
+	// StartsAt holds the value of the "starts_at" field.
+	StartsAt *time.Time `json:"starts_at,omitempty"`
 	// 状态: active, disabled
 	Status string `json:"status,omitempty"`
 	// 过期时间，null表示永不过期
@@ -64,13 +70,15 @@ func (*PromoCode) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case promocode.FieldBonusAmount:
+		case promocode.FieldAppliesToSubscriptions:
+			values[i] = new(sql.NullBool)
+		case promocode.FieldBonusAmount, promocode.FieldDiscountPercent:
 			values[i] = new(sql.NullFloat64)
 		case promocode.FieldID, promocode.FieldMaxUses, promocode.FieldUsedCount:
 			values[i] = new(sql.NullInt64)
 		case promocode.FieldCode, promocode.FieldStatus, promocode.FieldNotes:
 			values[i] = new(sql.NullString)
-		case promocode.FieldExpiresAt, promocode.FieldCreatedAt, promocode.FieldUpdatedAt:
+		case promocode.FieldStartsAt, promocode.FieldExpiresAt, promocode.FieldCreatedAt, promocode.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -116,6 +124,25 @@ func (_m *PromoCode) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field used_count", values[i])
 			} else if value.Valid {
 				_m.UsedCount = int(value.Int64)
+			}
+		case promocode.FieldDiscountPercent:
+			if value, ok := values[i].(*sql.NullFloat64); !ok {
+				return fmt.Errorf("unexpected type %T for field discount_percent", values[i])
+			} else if value.Valid {
+				_m.DiscountPercent = value.Float64
+			}
+		case promocode.FieldAppliesToSubscriptions:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field applies_to_subscriptions", values[i])
+			} else if value.Valid {
+				_m.AppliesToSubscriptions = value.Bool
+			}
+		case promocode.FieldStartsAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field starts_at", values[i])
+			} else if value.Valid {
+				_m.StartsAt = new(time.Time)
+				*_m.StartsAt = value.Time
 			}
 		case promocode.FieldStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -201,6 +228,17 @@ func (_m *PromoCode) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("used_count=")
 	builder.WriteString(fmt.Sprintf("%v", _m.UsedCount))
+	builder.WriteString(", ")
+	builder.WriteString("discount_percent=")
+	builder.WriteString(fmt.Sprintf("%v", _m.DiscountPercent))
+	builder.WriteString(", ")
+	builder.WriteString("applies_to_subscriptions=")
+	builder.WriteString(fmt.Sprintf("%v", _m.AppliesToSubscriptions))
+	builder.WriteString(", ")
+	if v := _m.StartsAt; v != nil {
+		builder.WriteString("starts_at=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
 	builder.WriteString(", ")
 	builder.WriteString("status=")
 	builder.WriteString(_m.Status)

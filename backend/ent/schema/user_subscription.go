@@ -79,6 +79,9 @@ func (UserSubscription) Fields() []ent.Field {
 			Optional().
 			Nillable().
 			SchemaType(map[string]string{dialect.Postgres: "text"}),
+		field.JSON("entitlements", map[string]any{}).
+			Default(func() map[string]any { return map[string]any{} }).
+			SchemaType(map[string]string{dialect.Postgres: "jsonb"}),
 	}
 }
 

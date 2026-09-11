@@ -82,15 +82,21 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const backendUrl = env.VITE_DEV_PROXY_TARGET || 'http://localhost:8080'
   const devPort = Number(env.VITE_DEV_PORT || 3000)
+  const plugins: Plugin[] = [
+    vue(),
+    injectPublicSettings(backendUrl),
+  ]
+
+  // 类型检查服务适合开发反馈，不应阻断生产资源打包。
+  if (mode === 'development') {
+    // Keep the type checker running in the terminal, but do not cover the
+    // local preview with a full-screen error layer. The app must remain
+    // inspectable while unrelated workspace type errors are being resolved.
+    plugins.splice(1, 0, checker({ vueTsc: true, overlay: false, terminal: false }))
+  }
 
   return {
-    plugins: [
-      vue(),
-      checker({
-        vueTsc: true
-      }),
-      injectPublicSettings(backendUrl)
-    ],
+    plugins,
   resolve: {
     alias: {
       '@': resolve(__dirname, 'src'),

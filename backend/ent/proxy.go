@@ -10,7 +10,6 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"github.com/Wei-Shaw/sub2api/ent/proxy"
-	"github.com/Wei-Shaw/sub2api/ent/user"
 )
 
 // Proxy is the model entity for the Proxy schema.
@@ -52,8 +51,9 @@ type Proxy struct {
 	ExpiryWarnDays int `json:"expiry_warn_days,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the ProxyQuery when eager-loading is set.
-	Edges        ProxyEdges `json:"edges"`
-	selectValues sql.SelectValues
+	Edges              ProxyEdges `json:"edges"`
+	user_owned_proxies *int64
+	selectValues       sql.SelectValues
 }
 
 // ProxyEdges holds the relations/edges for other nodes in the graph.
@@ -109,6 +109,8 @@ func (*Proxy) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullString)
 		case proxy.FieldCreatedAt, proxy.FieldUpdatedAt, proxy.FieldDeletedAt, proxy.FieldExpiresAt:
 			values[i] = new(sql.NullTime)
+		case proxy.ForeignKeys[0]: // user_owned_proxies
+			values[i] = new(sql.NullInt64)
 		default:
 			values[i] = new(sql.UnknownType)
 		}
@@ -231,6 +233,13 @@ func (_m *Proxy) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field expiry_warn_days", values[i])
 			} else if value.Valid {
 				_m.ExpiryWarnDays = int(value.Int64)
+			}
+		case proxy.ForeignKeys[0]:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for edge-field user_owned_proxies", value)
+			} else if value.Valid {
+				_m.user_owned_proxies = new(int64)
+				*_m.user_owned_proxies = int64(value.Int64)
 			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])

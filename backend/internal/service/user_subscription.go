@@ -24,6 +24,7 @@ type UserSubscription struct {
 	DailyUsageUSD   float64
 	WeeklyUsageUSD  float64
 	MonthlyUsageUSD float64
+	Entitlements    map[string]any
 
 	AssignedBy *int64
 	AssignedAt time.Time

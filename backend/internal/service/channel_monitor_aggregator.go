@@ -230,6 +230,18 @@ func buildUserViewFromSummary(
 	primaryLatest *ChannelMonitorLatest,
 	timelineEntries []*ChannelMonitorHistoryEntry,
 ) *UserMonitorView {
+	timeline := buildTimelinePoints(timelineEntries)
+	// Timeline is a secondary batch query. If it fails while the independent latest
+	// query succeeds, keep the latest real probe visible instead of returning an
+	// empty timeline that the client could mistake for an idle monitor.
+	if len(timeline) == 0 && primaryLatest != nil {
+		timeline = []UserMonitorTimelinePoint{{
+			Status:        primaryLatest.Status,
+			LatencyMs:     primaryLatest.LatencyMs,
+			PingLatencyMs: primaryLatest.PingLatencyMs,
+			CheckedAt:     primaryLatest.CheckedAt,
+		}}
+	}
 	view := &UserMonitorView{
 		ID:               m.ID,
 		Name:             m.Name,
@@ -240,7 +252,7 @@ func buildUserViewFromSummary(
 		PrimaryLatencyMs: summary.PrimaryLatencyMs,
 		Availability7d:   summary.Availability7d,
 		ExtraModels:      summary.ExtraModels,
-		Timeline:         buildTimelinePoints(timelineEntries),
+		Timeline:         timeline,
 	}
 	if primaryLatest != nil {
 		view.PrimaryPingLatencyMs = primaryLatest.PingLatencyMs

@@ -3078,6 +3078,12 @@ import ProxyAdBanner from '@/components/common/ProxyAdBanner.vue'
 import GroupSelector from '@/components/common/GroupSelector.vue'
 import ModelWhitelistSelector from '@/components/account/ModelWhitelistSelector.vue'
 import XiaoVideoConfigEditor from '@/components/account/XiaoVideoConfigEditor.vue'
+import {
+  normalizeXiaoVideoPricing,
+  readXiaoVideoPricing,
+  validateXiaoVideoPricing,
+  type XiaoVideoPricingRule
+} from '@/components/account/xiaoVideoPricing'
 import QuotaLimitCard from '@/components/account/QuotaLimitCard.vue'
 import GrokBaseUrlPresets from '@/components/account/GrokBaseUrlPresets.vue'
 import CnBaseUrlPresets from '@/components/account/CnBaseUrlPresets.vue'
@@ -3114,7 +3120,6 @@ import {
 } from '@/utils/format'
 import { createStableObjectKeyResolver } from '@/utils/stableObjectKey'
 import { getAccountExpiryTimestamp } from '@/components/account/accountExpiry'
-import { allSelectedGroupsEnableLongContextPricing } from '@/components/account/longContextBilling'
 import { VERTEX_LOCATION_OPTIONS } from '@/constants/account'
 import {
   OPENAI_WS_MODE_CTX_POOL,
@@ -3219,7 +3224,6 @@ const cnPresetPlatform = computed<CnProviderPlatform>(() => {
 })
 const editApiProtocol = ref<CnApiProtocol>('adaptive')
 const editAccountMode = ref<CnAccountMode>('payg')
-const editApiProtocol = ref<CnApiProtocol>('adaptive')
 // 智谱团队版 Coding Plan：组织/项目 ID，写入 credentials 供额度探测切换团队端点
 const editZhipuOrganization = ref('')
 const editZhipuProject = ref('')
@@ -3227,14 +3231,6 @@ const editAdaptiveBaseUrls = ref<Record<CnNativeApiProtocol, string>>({
   chat_completions: '',
   anthropic: '',
   responses: ''
-})
-const isCNApiKeyAccount = computed(
-  () => props.account?.type === 'apikey' &&
-    (props.account.platform === 'kimi' || props.account.platform === 'zhipu' || props.account.platform === 'deepseek')
-)
-const cnPresetPlatform = computed<'kimi' | 'zhipu' | 'deepseek'>(() => {
-  const platform = props.account?.platform
-  return platform === 'kimi' || platform === 'zhipu' || platform === 'deepseek' ? platform : 'kimi'
 })
 const isLegacyCnApiPlatform = (platform: string) =>
   (platform === 'kimi' || platform === 'zhipu' || platform === 'deepseek') && !cnSupportsNativeResponses(platform)
@@ -3250,17 +3246,21 @@ const cnProtocolOptions = computed<Array<{ value: CnApiProtocol; labelKey: strin
     { value: 'anthropic', labelKey: 'anthropic' }
   ]
   if (cnSupportsNativeResponses(props.account?.platform ?? '')) {
-    opts.push({ value: 'responses', labelKey: 'responses' })
+    options.push({ value: 'responses', labelKey: 'responses' })
   }
-  return opts
+  return options
 })
 const editAdaptiveProtocolOptions = computed<Array<{ value: CnNativeApiProtocol; labelKey: string }>>(() => {
   const options: Array<{ value: CnNativeApiProtocol; labelKey: string }> = [
     { value: 'chat_completions', labelKey: 'chatCompletions' },
     { value: 'anthropic', labelKey: 'anthropic' }
   ]
-  if (cnSupportsNativeResponses(props.account?.platform ?? '')) opts.push({ value: 'responses', labelKey: 'responses' })
-  return opts
+  if (cnSupportsNativeResponses(props.account?.platform ?? '')) options.push({ value: 'responses', labelKey: 'responses' })
+  return options
+})
+const cnProtocolDescKey = computed(() => {
+  if (editApiProtocol.value === 'chat_completions') return 'chatCompletions'
+  return editApiProtocol.value
 })
 function onCnPresetSelect(preset: { mode: CnAccountMode; protocol: CnApiProtocol; url: string }) {
   editAccountMode.value = preset.mode
@@ -4188,16 +4188,16 @@ const syncFormFromAccount = (newAccount: Account | null) => {
       if (!cnSupportsNativeResponses(newAccount.platform) && editApiProtocol.value === 'responses') {
         editApiProtocol.value = 'chat_completions'
       }
-      const adaptiveDefaults = defaultCNAdaptiveBaseUrls(newAccount.platform, editAccountMode.value)
       const storedBaseUrls = (credentials.api_base_urls as Record<string, unknown> | undefined) || {}
+      const defaults = defaultCNAdaptiveBaseUrls(newAccount.platform, editAccountMode.value)
       const legacyBaseUrl = typeof credentials.base_url === 'string' ? credentials.base_url.trim() : ''
-      const legacyAdaptiveChatUrl = editApiProtocol.value === 'adaptive' || rawStored != null ? legacyBaseUrl : ''
+      const legacyAdaptiveChatUrl = editApiProtocol.value === 'adaptive' ? legacyBaseUrl : ''
       editAdaptiveBaseUrls.value = {
-        chat_completions: typeof stored.chat_completions === 'string' && stored.chat_completions.trim()
-          ? stored.chat_completions.trim()
+        chat_completions: typeof storedBaseUrls.chat_completions === 'string' && storedBaseUrls.chat_completions.trim()
+          ? storedBaseUrls.chat_completions.trim()
           : legacyAdaptiveChatUrl || defaults.chat_completions,
-        anthropic: typeof stored.anthropic === 'string' && stored.anthropic.trim() ? stored.anthropic.trim() : defaults.anthropic,
-        responses: typeof stored.responses === 'string' && stored.responses.trim() ? stored.responses.trim() : defaults.responses
+        anthropic: typeof storedBaseUrls.anthropic === 'string' && storedBaseUrls.anthropic.trim() ? storedBaseUrls.anthropic.trim() : defaults.anthropic,
+        responses: typeof storedBaseUrls.responses === 'string' && storedBaseUrls.responses.trim() ? storedBaseUrls.responses.trim() : defaults.responses
       }
       editBaseUrl.value = editApiProtocol.value === 'adaptive'
         ? editAdaptiveBaseUrls.value.chat_completions

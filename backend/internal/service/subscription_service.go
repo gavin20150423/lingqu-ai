@@ -197,6 +197,7 @@ type AssignSubscriptionInput struct {
 	ValidityDays int
 	AssignedBy   int64
 	Notes        string
+	Entitlements map[string]any
 }
 
 // AssignSubscription 分配订阅给用户（不允许重复分配）
@@ -248,6 +249,18 @@ func (s *SubscriptionService) assignOrExtendSubscription(ctx context.Context, in
 		if err := s.updateExistingSubscriptionTerm(ctx, existingSub.ID, validityDays, input.Notes, false); err != nil {
 			return nil, false, err
 		}
+		if input.Entitlements != nil {
+			updated, getErr := s.userSubRepo.GetByID(ctx, existingSub.ID)
+			if getErr != nil {
+				return nil, false, getErr
+			}
+			updated.Entitlements = mergeEntitlements(updated.Entitlements, input.Entitlements)
+			if updateErr := s.withSubscriptionUpdateTx(ctx, func(txCtx context.Context) error {
+				return s.userSubRepo.Update(txCtx, updated)
+			}); updateErr != nil {
+				return nil, false, updateErr
+			}
+		}
 
 		// 失效订阅缓存
 		s.maybeInvalidateAssignmentCaches(input.UserID, input.GroupID, deferCacheInvalidation)
@@ -267,6 +280,36 @@ func (s *SubscriptionService) assignOrExtendSubscription(ctx context.Context, in
 	s.maybeInvalidateAssignmentCaches(input.UserID, input.GroupID, deferCacheInvalidation)
 
 	return sub, false, nil // false 表示是新建
+}
+
+func mergeEntitlements(existing, added map[string]any) map[string]any {
+	if len(existing) == 0 && len(added) == 0 {
+		return map[string]any{}
+	}
+	out := make(map[string]any, len(existing)+len(added))
+	for key, value := range existing {
+		out[key] = value
+	}
+	for key, value := range added {
+		current, ok := out[key].(float64)
+		if !ok {
+			if currentInt, intOK := out[key].(int); intOK {
+				current = float64(currentInt)
+			} else {
+				current = 0
+			}
+		}
+		valueNumber, valueOK := value.(float64)
+		if !valueOK {
+			if valueInt, intOK := value.(int); intOK {
+				valueNumber = float64(valueInt)
+			} else {
+				valueNumber = 0
+			}
+		}
+		out[key] = current + valueNumber
+	}
+	return out
 }
 
 func (s *SubscriptionService) maybeInvalidateAssignmentCaches(userID, groupID int64, deferred bool) {
@@ -424,15 +467,16 @@ func (s *SubscriptionService) createSubscription(ctx context.Context, input *Ass
 	}
 
 	sub := &UserSubscription{
-		UserID:     input.UserID,
-		GroupID:    input.GroupID,
-		StartsAt:   now,
-		ExpiresAt:  expiresAt,
-		Status:     SubscriptionStatusActive,
-		AssignedAt: now,
-		Notes:      input.Notes,
-		CreatedAt:  now,
-		UpdatedAt:  now,
+		UserID:       input.UserID,
+		GroupID:      input.GroupID,
+		StartsAt:     now,
+		ExpiresAt:    expiresAt,
+		Status:       SubscriptionStatusActive,
+		AssignedAt:   now,
+		Notes:        input.Notes,
+		Entitlements: input.Entitlements,
+		CreatedAt:    now,
+		UpdatedAt:    now,
 	}
 	// 只有当 AssignedBy > 0 时才设置（0 表示系统分配，如兑换码）
 	if input.AssignedBy > 0 {

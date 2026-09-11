@@ -10,7 +10,7 @@
         </div>
         <h3 class="text-lg font-semibold text-gray-900 dark:text-white">{{ t('payment.stripeLoadFailed') }}</h3>
         <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">{{ initError }}</p>
-        <button class="btn btn-primary mt-6" @click="router.push('/purchase')">{{ t('payment.result.backToRecharge') }}</button>
+        <button class="btn btn-primary mt-6" @click="router.push(paymentBackPath)">{{ t('payment.result.backToRecharge') }}</button>
       </div>
       <template v-else>
         <!-- 金额头部 -->
@@ -79,14 +79,14 @@
             </button>
           </div>
           <div class="text-center">
-            <button class="btn btn-secondary" @click="router.push('/purchase')">{{ t('payment.result.backToRecharge') }}</button>
+            <button class="btn btn-secondary" @click="router.push(paymentBackPath)">{{ t('payment.result.backToRecharge') }}</button>
           </div>
         </template>
 
         <!-- 错误状态 -->
         <div v-if="stripeError && !showPaymentElement" class="card p-4">
           <p class="text-sm text-red-600 dark:text-red-400">{{ stripeError }}</p>
-          <button class="btn btn-secondary mt-3 w-full" @click="router.push('/purchase')">{{ t('payment.result.backToRecharge') }}</button>
+          <button class="btn btn-secondary mt-3 w-full" @click="router.push(paymentBackPath)">{{ t('payment.result.backToRecharge') }}</button>
         </div>
       </template>
     </div>
@@ -128,6 +128,11 @@ const currency = ref('CNY')
 const wechatQrUrl = ref('')
 const redirecting = ref(false)
 const showPaymentElement = ref(false)
+
+const paymentBackPath = computed(() => {
+  const orderType = order.value?.order_type || String(route.query.order_type || '')
+  return orderType === 'subscription' ? '/subscription-plans' : '/purchase'
+})
 
 let stripeInstance: Stripe | null = null
 let elementsInstance: StripeElements | null = null
@@ -205,7 +210,9 @@ function formatGatewayAmount(value: number): string {
 
 async function confirmAlipay(stripe: Stripe, clientSecret: string, orderId: number) {
   redirecting.value = true
+  const orderType = String(route.query.order_type || '')
   const returnUrl = window.location.origin + '/payment/result?order_id=' + orderId + '&status=success'
+    + (orderType ? '&order_type=' + encodeURIComponent(orderType) : '')
   const { error } = await stripe.confirmAlipayPayment(clientSecret, { return_url: returnUrl })
   if (error) {
     redirecting.value = false
@@ -263,7 +270,8 @@ async function handleGenericPay() {
     const { error } = await stripeInstance.confirmPayment({
       elements: elementsInstance,
       confirmParams: {
-        return_url: window.location.origin + '/payment/result?order_id=' + route.query.order_id + '&status=success',
+        return_url: window.location.origin + '/payment/result?order_id=' + route.query.order_id + '&status=success'
+          + (route.query.order_type ? '&order_type=' + encodeURIComponent(String(route.query.order_type)) : ''),
       },
       redirect: 'if_required',
     })

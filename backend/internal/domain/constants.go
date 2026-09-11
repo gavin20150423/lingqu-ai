@@ -27,6 +27,8 @@ const (
 	PlatformKimi      = "kimi"     // Kimi (月之暗面 / Moonshot)
 	PlatformZhipu     = "zhipu"    // 智谱 GLM (bigmodel)
 	PlatformDeepseek  = "deepseek" // DeepSeek
+	// PlatformXiaoAPI is kept for the local XiaoAPI-compatible video adapter.
+	PlatformXiaoAPI   = "xiaoapi"
 	PlatformMiniMax   = "minimax"  // MiniMax (M 系列)
 	PlatformComposite = "composite"
 )

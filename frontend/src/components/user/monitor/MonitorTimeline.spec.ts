@@ -8,9 +8,9 @@ vi.mock('vue-i18n', () => ({
   useI18n: () => ({ t: (key: string, params?: { n?: number }) => `${key}:${params?.n ?? ''}` }),
 }))
 
-function point(checkedAt: string): MonitorTimelinePoint {
+function point(checkedAt: string, status: MonitorTimelinePoint['status'] = 'operational'): MonitorTimelinePoint {
   return {
-    status: 'operational',
+    status,
     latency_ms: 120,
     ping_latency_ms: 8,
     checked_at: checkedAt,
@@ -20,7 +20,7 @@ function point(checkedAt: string): MonitorTimelinePoint {
 describe('MonitorTimeline', () => {
   afterEach(() => vi.useRealTimers())
 
-  it('does not render old history as activity in the last hour', () => {
+  it('keeps an old probe result visible instead of expiring it as idle', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-08-05T10:00:00Z'))
 
@@ -33,26 +33,42 @@ describe('MonitorTimeline', () => {
     })
 
     const bars = wrapper.findAll('.monitor-timeline__bar')
-    expect(bars).toHaveLength(3)
-    expect(bars.every(bar => bar.classes().includes('bg-gray-300'))).toBe(true)
+    expect(bars).toHaveLength(1)
+    expect(bars[0].classes()).toContain('monitor-timeline__bar--ok')
+    expect(wrapper.text()).not.toContain('空闲')
   })
 
-  it('carries a sample forward across the remaining time buckets', () => {
+  it('renders exactly one bar for each real probe result', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-08-05T10:00:00Z'))
 
     const wrapper = mount(MonitorTimeline, {
       props: {
-        buckets: [point('2026-08-05T09:30:00Z')],
+        buckets: [
+          point('2026-08-05T09:30:00Z'),
+          point('2026-08-05T09:45:00Z', 'failed'),
+        ],
         countdownSeconds: 60,
         length: 3,
       },
     })
 
     const bars = wrapper.findAll('.monitor-timeline__bar')
-    expect(bars).toHaveLength(3)
-    expect(bars[0].classes()).toContain('bg-gray-300')
-    expect(bars[1].classes()).toContain('monitor-timeline__bar--ok')
-    expect(bars[2].classes()).toContain('monitor-timeline__bar--ok')
+    expect(bars).toHaveLength(2)
+    expect(bars[0].classes()).toContain('monitor-timeline__bar--ok')
+    expect(bars[1].classes()).toContain('monitor-timeline__bar--bad')
+  })
+
+  it('shows a probe-specific empty state before the first check', () => {
+    const wrapper = mount(MonitorTimeline, {
+      props: {
+        buckets: [],
+        countdownSeconds: 60,
+        length: 3,
+      },
+    })
+
+    expect(wrapper.findAll('.monitor-timeline__bar')).toHaveLength(0)
+    expect(wrapper.text()).toContain('monitorCommon.noProbeResults')
   })
 })

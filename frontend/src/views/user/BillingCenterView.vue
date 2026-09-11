@@ -147,11 +147,19 @@ const summaryCards = computed(() => [
 const actionCards = [
   {
     path: '/purchase',
-    kicker: '补充余额 / 开通套餐',
-    title: '充值/订阅',
+    kicker: '补充账户余额',
+    title: '充值',
     description: '补足调用额度。',
     icon: 'creditCard' as const,
     className: 'lingqu-billing__action-icon lingqu-billing__action-icon--pink'
+  },
+  {
+    path: '/subscription-plans',
+    kicker: '选择模型与额度',
+    title: '订阅套餐',
+    description: '购买或续费独立套餐额度。',
+    icon: 'badge' as const,
+    className: 'lingqu-billing__action-icon lingqu-billing__action-icon--cyan'
   },
   {
     path: '/subscriptions',

@@ -47,6 +47,9 @@ func (PromoCode) Fields() []ent.Field {
 		field.Int("used_count").
 			Default(0).
 			Comment("已使用次数"),
+		field.Float("discount_percent").SchemaType(map[string]string{dialect.Postgres: "decimal(5,2)"}).Default(0),
+		field.Bool("applies_to_subscriptions").Default(false),
+		field.Time("starts_at").Optional().Nillable().SchemaType(map[string]string{dialect.Postgres: "timestamptz"}),
 		field.String("status").
 			MaxLen(20).
 			Default(domain.PromoCodeStatusActive).

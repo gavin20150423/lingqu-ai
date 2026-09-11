@@ -108,7 +108,12 @@ async function reload(silent = false) {
   try {
     const res = await listChannelMonitorViews({ signal: ctrl.signal })
     if (ctrl.signal.aborted || abortController !== ctrl) return
-    items.value = res.items || []
+    const nextItems = Array.isArray(res.items) ? res.items : []
+    // Keep the last populated board during a transient empty background
+    // response; only a manual refresh may intentionally clear the list.
+    if (!silent || nextItems.length > 0 || items.value.length === 0) {
+      items.value = nextItems
+    }
   } catch (err: unknown) {
     const e = err as { name?: string; code?: string }
     if (e?.name === 'AbortError' || e?.code === 'ERR_CANCELED') return

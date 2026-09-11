@@ -81,10 +81,10 @@ describe("SubscriptionPlanCard", () => {
   it("uses the configured currency symbol while preserving USD for legacy plans", () => {
     const cnyPlan = mountPlanCard("openai", { currency: "CNY", original_price: 20 }).text();
 
-    expect(cnyPlan).toContain("¥10CNY");
-    expect(cnyPlan).toContain("¥20CNY");
-    expect(mountPlanCard("openai", { currency: "USD" }).text()).toContain("$10USD");
-    expect(mountPlanCard("openai", { currency: "" }).text()).toContain("$10");
+    expect(cnyPlan).toContain("¥10.00");
+    expect(cnyPlan).toContain("原价 ¥20.00");
+    expect(mountPlanCard("openai", { currency: "USD" }).text()).toContain("$10.00");
+    expect(mountPlanCard("openai", { currency: "" }).text()).toContain("$10.00");
   });
 
   it.each([
@@ -97,14 +97,7 @@ describe("SubscriptionPlanCard", () => {
 
     expect(title.text()).toBe(name);
     expect(title.attributes("title")).toBe(name);
-    expect(title.classes()).toEqual(expect.arrayContaining([
-      "min-w-0",
-      "h-12",
-      "break-words",
-      "line-clamp-2",
-      "[overflow-wrap:anywhere]",
-    ]));
-    expect(title.classes()).not.toContain("truncate");
+    expect(title.element.parentElement?.classList).toContain("subscription-plan-card__head");
   });
 
   it("keeps title, badge, price, description, and purchase action in separate bounded regions", () => {
@@ -115,37 +108,22 @@ describe("SubscriptionPlanCard", () => {
       description: "Includes advanced models and priority support.",
     });
     const title = wrapper.get("h3");
-    const badge = wrapper.findAll("span").find((node) => node.text() === "OpenAI");
-    const price = wrapper.findAll("span").find((node) => node.text() === "123.45");
+    const price = wrapper.find(".subscription-plan-card__price");
 
-    expect(title.element.parentElement?.classList).toContain("min-w-0");
-    expect(title.element.parentElement?.classList).toContain("flex-1");
-    expect(badge?.classes()).toContain("shrink-0");
-    expect([...(badge?.element.parentElement?.classList ?? [])]).toEqual(expect.arrayContaining([
-      "flex",
-      "items-center",
-      "justify-end",
-    ]));
-    expect(badge?.element.parentElement?.textContent).toContain("/ 30payment.days");
-    expect(badge?.element.parentElement?.parentElement?.classList).toContain("shrink-0");
-    expect(price?.element.parentElement?.parentElement?.classList).toContain("shrink-0");
+    expect(wrapper.find(".subscription-plan-card__identity").text()).toContain("OpenAI");
+    expect(price.text()).toContain("$123.45");
+    expect(price.text()).toContain("/ 30payment.days");
     expect(wrapper.get("p").text()).toBe("Includes advanced models and priority support.");
-    expect(wrapper.get("button").text()).toBe("payment.subscribeNow");
+    expect(wrapper.find(".subscription-plan-card__footer button").text()).toContain("立即订阅");
   });
 
   it("keeps short plan titles compact and aligned", () => {
     const wrapper = mountPlanCard("openai", { name: "Pro", description: "" });
     const title = wrapper.get("h3");
-    const badge = wrapper.findAll("span").find((node) => node.text() === "OpenAI");
 
     expect(title.text()).toBe("Pro");
     expect(title.attributes("title")).toBe("Pro");
-    expect(title.classes()).toEqual(expect.arrayContaining(["text-base", "font-bold", "h-12"]));
-    expect([...(badge?.element.parentElement?.classList ?? [])]).toEqual(expect.arrayContaining([
-      "flex",
-      "items-center",
-      "justify-end",
-    ]));
-    expect(badge?.element.parentElement?.textContent).toContain("/ 30payment.days");
+    expect(wrapper.find(".subscription-plan-card__identity").text()).toContain("OpenAI");
+    expect(wrapper.find(".subscription-plan-card__price").text()).toContain("$10.00");
   });
 });

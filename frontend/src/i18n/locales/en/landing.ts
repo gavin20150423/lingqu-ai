@@ -1,4 +1,22 @@
 export default {
+  // Shared login / register layout (left showcase panel)
+  authLayout: {
+    visualLabel: 'One key, every model',
+    homeLabel: 'home',
+    brandTagline: 'UNIVERSAL MODEL KEY',
+    eyebrow: 'One key · Every major model',
+    titleTop: 'One key',
+    titleAccent: 'for every model',
+    description:
+      'Sign in, copy your Key, and your app can start calling GPT, Claude, Gemini, DeepSeek and more.',
+    proofStable: 'Stable access',
+    proofBilling: 'Unified billing',
+    proofUsage: 'Pay as you go',
+    modelsLabel: 'Supported models',
+    moreModels: 'More models',
+    gatewayOnline: 'Gateway online',
+    payAsYouGo: 'Pay as you go · Top up anytime'
+  },
   batchImageGuide: {
     title: 'Batch Image Generation',
     description: 'Submit multiple prompts in one job and download the generated images when complete'

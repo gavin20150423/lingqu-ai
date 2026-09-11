@@ -2440,6 +2440,7 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 		closeOpenAIClientWS(wsConn, coderws.StatusPolicyViolation, "invalid JSON payload")
 		return
 	}
+	firstTurnStartedAt := time.Now()
 	reqModel := strings.TrimSpace(gjson.GetBytes(firstMessage, "model").String())
 	if reqModel == "" {
 		closeOpenAIClientWS(wsConn, coderws.StatusPolicyViolation, "model is required in first response.create payload")
@@ -2805,6 +2806,23 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 
 		maxReasoningEffort, reasoningEffortMappings, maxReasoningEffortOverLimit, _ := openAIReasoningEffortPolicyForRequest(c, apiKey)
 		var requestPayloadHash string
+		var turnStartsMu sync.Mutex
+		turnStarts := make(map[int]time.Time, 4)
+		recordTurnStart := func(turn int, startedAt time.Time) {
+			if turn <= 0 || startedAt.IsZero() {
+				return
+			}
+			turnStartsMu.Lock()
+			turnStarts[turn] = startedAt
+			turnStartsMu.Unlock()
+		}
+		getTurnStart := func(turn int) time.Time {
+			turnStartsMu.Lock()
+			startedAt := turnStarts[turn]
+			delete(turnStarts, turn)
+			turnStartsMu.Unlock()
+			return startedAt
+		}
 		// Passthrough rejects overlapping response.create frames, so one immutable
 		// turn-tagged slot preserves the exact mapping used for the in-flight request.
 		var turnChannelMapping atomic.Pointer[openAIWSTurnChannelMappingSnapshot]
@@ -2924,6 +2942,7 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 				return nil
 			},
 			AfterTurn: func(turn int, result *service.OpenAIForwardResult, turnErr error) {
+				turnStart := getTurnStart(turn)
 				cyberBlockBody := takeCyberTurnBody(turn)
 				// 每次 attempt 都清 cyber mark；failover 链结束前保留 recorded guard，
 				// 避免同一逻辑 turn 换号后重复落风控。CyberBlocked 必须在 submit 前
@@ -2998,7 +3017,7 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 				upstreamEndpoint := resolveOpenAIUpstreamEndpoint(c, account, result)
 				quotaPlatform := service.QuotaPlatform(c.Request.Context(), apiKey)
 				sessionID := service.ExtractClientSessionID(c)
-				turnRecordPricingAt := turnPricing.current()
+				turnRecordPricingAt := turnPricing.currentOr(turnStart)
 				cyberBlocked := service.GetOpsCyberPolicy(c) != nil
 				h.submitOpenAIUsageRecordTask(ctx, result, func(taskCtx context.Context) {
 					if err := h.gatewayService.RecordUsage(taskCtx, &service.OpenAIRecordUsageInput{
@@ -4218,6 +4237,38 @@ func clearCyberPolicyAttemptState(c *gin.Context, resetRecorded bool) {
 	if resetRecorded {
 		c.Set(cyberPolicyRecordedKey, false)
 	}
+}
+
+func openAIWSNextAttemptMessage(current, retryPayload []byte, retryCurrentTurn bool) ([]byte, bool) {
+	if !retryCurrentTurn {
+		return append([]byte(nil), current...), true
+	}
+	if len(retryPayload) == 0 {
+		return nil, false
+	}
+	return append([]byte(nil), retryPayload...), true
+}
+
+type cyberSessionBlockWritePlan struct {
+	scopeKey string
+	keys     []string
+}
+
+func buildCyberSessionBlockWritePlan(apiKeyID int64, c *gin.Context, body []byte) cyberSessionBlockWritePlan {
+	plan := cyberSessionBlockWritePlan{}
+	if c != nil && c.Request != nil {
+		plan.scopeKey = service.CyberSessionScopeKey(apiKeyID, c.ClientIP(), c.GetHeader("User-Agent"))
+	}
+	plan.keys = append(plan.keys, service.CyberSessionTranscriptBlockKeys(apiKeyID, body)...)
+	if explicit := service.CyberSessionExplicitBlockKey(apiKeyID, c, body); explicit != "" {
+		for _, key := range plan.keys {
+			if key == explicit {
+				return plan
+			}
+		}
+		plan.keys = append(plan.keys, explicit)
+	}
+	return plan
 }
 
 func summarizeWSCloseErrorForLog(err error) (string, string) {

@@ -214,7 +214,7 @@ function oauthOrderFixture() {
     payment_type: 'wxpay',
     result_type: 'oauth_required' as const,
     oauth: {
-      authorize_url: '/api/v1/auth/oauth/wechat/payment/start?payment_type=wxpay&redirect=%2Fpurchase%3Ffrom%3Dwechat',
+      authorize_url: '/api/v1/auth/oauth/wechat/payment/start?payment_type=wxpay&redirect=%2Fsubscription-plans%3Ffrom%3Dwechat',
       appid: 'wx123',
       scope: 'snsapi_base',
       redirect_url: '/auth/wechat/payment/callback',
@@ -224,11 +224,8 @@ function oauthOrderFixture() {
 
 async function mountSubscriptionConfirm(options: Parameters<typeof checkoutInfoWithPlansFixture>[0] = {}) {
   vi.useRealTimers()
-  routeState.path = '/purchase'
-  routeState.query = {
-    tab: 'subscription',
-    group: '3',
-  }
+  routeState.path = '/subscription-plans'
+  routeState.query = { group: '3' }
   routerReplace.mockReset().mockResolvedValue(undefined)
   routerPush.mockReset().mockResolvedValue(undefined)
   routerResolve.mockClear()
@@ -257,8 +254,8 @@ async function mountSubscriptionConfirm(options: Parameters<typeof checkoutInfoW
 
 async function mountSubscriptionPlanList(planCount: number) {
   vi.useRealTimers()
-  routeState.path = '/purchase'
-  routeState.query = { tab: 'subscription' }
+  routeState.path = '/subscription-plans'
+  routeState.query = {}
   routerReplace.mockReset().mockResolvedValue(undefined)
   routerPush.mockReset().mockResolvedValue(undefined)
   routerResolve.mockClear()
@@ -354,6 +351,48 @@ describe('PaymentView help text', () => {
   })
 })
 
+describe('PaymentView route-specific summary', () => {
+  it('hides the recharge summary cards on the standalone subscription page', async () => {
+    routeState.path = '/subscription-plans'
+    routeState.query = {}
+    getCheckoutInfo.mockReset().mockResolvedValue(checkoutInfoWithPlansFixture())
+
+    const wrapper = shallowMount(PaymentView, {
+      global: { stubs: paymentViewStubs },
+    })
+    await flushPromises()
+
+    expect(wrapper.find('.lingqu-console-stats').exists()).toBe(false)
+  })
+
+  it('keeps the subscription page clean when the URL has a trailing slash', async () => {
+    routeState.path = '/subscription-plans/'
+    routeState.query = {}
+    getCheckoutInfo.mockReset().mockResolvedValue(checkoutInfoWithPlansFixture())
+
+    const wrapper = shallowMount(PaymentView, {
+      global: { stubs: paymentViewStubs },
+    })
+    await flushPromises()
+
+    expect(wrapper.find('.lingqu-console-stats').exists()).toBe(false)
+    expect(wrapper.text()).toContain('订阅套餐')
+  })
+
+  it('keeps the account summary cards on the recharge page', async () => {
+    routeState.path = '/purchase'
+    routeState.query = {}
+    getCheckoutInfo.mockReset().mockResolvedValue(checkoutInfoFixture())
+
+    const wrapper = shallowMount(PaymentView, {
+      global: { stubs: paymentViewStubs },
+    })
+    await flushPromises()
+
+    expect(wrapper.find('.lingqu-console-stats').exists()).toBe(true)
+  })
+})
+
 describe('PaymentView subscription plan grid', () => {
   it.each([3, 4, 6])('keeps %i plans on the existing mobile/tablet/desktop grid', async (planCount) => {
     const wrapper = await mountSubscriptionPlanList(planCount)
@@ -361,11 +400,25 @@ describe('PaymentView subscription plan grid', () => {
 
     expect(cards).toHaveLength(planCount)
     expect([...(cards[0].element.parentElement?.classList ?? [])]).toEqual(expect.arrayContaining([
-      'grid',
-      'grid-cols-1',
-      'sm:grid-cols-2',
-      'lg:grid-cols-3',
+      'subscription-plan-grid',
     ]))
+  })
+})
+
+describe('PaymentView purchase route isolation', () => {
+  it('ignores the legacy subscription query on the recharge page', async () => {
+    routeState.path = '/purchase'
+    routeState.query = { tab: 'subscription', group: '3' }
+    getCheckoutInfo.mockReset().mockResolvedValue(checkoutInfoWithPlansFixture())
+
+    const wrapper = shallowMount(PaymentView, {
+      global: { stubs: paymentViewStubs },
+    })
+    await flushPromises()
+
+    expect(wrapper.find('.lingqu-console-stats').exists()).toBe(true)
+    expect(wrapper.find('.subscription-catalog').exists()).toBe(false)
+    expect(wrapper.text()).toContain('充值')
   })
 })
 
@@ -387,9 +440,7 @@ describe('PaymentView recharge rate preview', () => {
     const wrapper = shallowMount(PaymentView, {
       global: {
         stubs: {
-          AppLayout: { template: '<div><slot /></div>' },
-          Teleport: true,
-          Transition: false,
+          ...paymentViewStubs,
         },
       },
     })
@@ -623,6 +674,7 @@ describe('PaymentView WeChat JSAPI flow', () => {
         order_id: '123',
         out_trade_no: 'sub2_jsapi_123',
         resume_token: 'resume-token-123',
+        order_type: 'balance',
       },
     })
     expect(window.localStorage.getItem(PAYMENT_RECOVERY_STORAGE_KEY)).toBeNull()
@@ -726,7 +778,7 @@ describe('PaymentView WeChat JSAPI flow', () => {
 
     const originalLocation = window.location
     const locationState = {
-      href: 'http://localhost/purchase',
+      href: 'http://localhost/subscription-plans',
       origin: 'http://localhost',
     }
     Object.defineProperty(window, 'location', {
@@ -744,7 +796,7 @@ describe('PaymentView WeChat JSAPI flow', () => {
     await flushPromises()
     await flushPromises()
 
-    expect(routerReplace).toHaveBeenCalledWith({ path: '/purchase', query: {} })
+    expect(routerReplace).toHaveBeenCalledWith({ path: '/subscription-plans', query: {} })
     expect(createOrder).toHaveBeenCalledWith(expect.objectContaining({
       payment_type: 'wxpay',
       order_type: 'subscription',
@@ -753,7 +805,7 @@ describe('PaymentView WeChat JSAPI flow', () => {
     }))
     expect(locationState.href).toContain('/api/v1/auth/oauth/wechat/payment/start?')
     expect(new URL(locationState.href, 'http://localhost').searchParams.get('redirect')).toBe(
-      '/purchase?from=wechat&payment_type=wxpay&order_type=subscription&plan_id=7',
+      '/subscription-plans?from=wechat&payment_type=wxpay&order_type=subscription&plan_id=7',
     )
 
     Object.defineProperty(window, 'location', {

@@ -103,6 +103,7 @@ export interface PaymentOrder {
   refund_requested_by?: number
   refund_request_reason?: string
   plan_id?: number
+  promo_code?: string
   provider_instance_id?: string
 }
 
@@ -132,6 +133,8 @@ export interface SubscriptionPlan {
   validity_unit: string
   /** Stored as JSON string in backend; API layer should parse before use */
   features: string[]
+  /** Optional gifted USD quota by model/platform key. */
+  entitlements?: Record<string, number>
   for_sale: boolean
   sort_order: number
 }
@@ -176,6 +179,7 @@ export interface CreateOrderRequest {
   openid?: string
   wechat_resume_token?: string
   is_mobile?: boolean
+  promo_code?: string
 }
 
 export type CreateOrderResultType = 'order_created' | 'oauth_required' | 'jsapi_ready'
@@ -220,6 +224,9 @@ export interface CreateOrderResult {
   oauth?: WechatOAuthInfo
   jsapi?: WechatJSAPIPayload
   jsapi_payload?: WechatJSAPIPayload
+  promo_code?: string
+  discount_percent?: number
+  discount_amount?: number
 }
 
 export type CurrencyAmounts = Record<string, number>

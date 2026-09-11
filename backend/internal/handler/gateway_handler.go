@@ -2526,6 +2526,10 @@ func billingErrorDetails(err error) (status int, code, message string, retryAfte
 		msg := pkgerrors.Message(err)
 		return http.StatusTooManyRequests, "rate_limit_exceeded", msg, extractQuotaResetSeconds(err)
 	}
+	if errors.Is(err, service.ErrSubscriptionEntitlementExhausted) {
+		msg := pkgerrors.Message(err)
+		return http.StatusTooManyRequests, "subscription_entitlement_exhausted", msg, 0
+	}
 	msg := pkgerrors.Message(err)
 	if msg == "" {
 		logger.L().With(

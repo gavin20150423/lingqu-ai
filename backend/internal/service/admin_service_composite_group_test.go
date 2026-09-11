@@ -6,7 +6,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/Wei-Shaw/sub2api/internal/pkg/claude"
 	"github.com/stretchr/testify/require"
 )
 
@@ -206,14 +205,24 @@ func TestAdminService_CompositeModelsListCandidatesIncludeConcreteAccountMapping
 	require.Contains(t, candidates, "gemini-2.5-flash")
 }
 
-// 独立 CN 分组的模型列表候选沿用 default 分支的 Claude 默认列表；
-// composite 支持不得改变独立分组的候选语义。
-func TestAdminService_CNProviderModelsListCandidatesKeepClaudeDefaults(t *testing.T) {
-	want := make([]string, 0, len(claude.DefaultModels))
-	for _, model := range claude.DefaultModels {
-		want = append(want, model.ID)
+// 独立 CN 分组必须展示对应供应商的模型，而不能回退到 Claude 默认列表。
+func TestAdminService_CNProviderModelsListCandidatesUseProviderDefaults(t *testing.T) {
+	tests := []struct {
+		platform    string
+		contains    []string
+		notContains string
+	}{
+		{platform: PlatformKimi, contains: []string{"kimi-k3", "kimi-k2.6", "kimi-for-coding"}, notContains: "claude-sonnet-4-6"},
+		{platform: PlatformZhipu, contains: []string{"glm-5.3", "glm-5.3-flash", "glm-4.7"}, notContains: "claude-sonnet-4-6"},
+		{platform: PlatformDeepseek, contains: []string{"deepseek-v4-pro", "deepseek-v4-flash", "deepseek-r1"}, notContains: "claude-sonnet-4-6"},
+		{platform: PlatformMiniMax, contains: []string{"MiniMax-M3", "MiniMax-M2.7", "abab6.5-chat"}, notContains: "claude-sonnet-4-6"},
 	}
-	for _, platform := range []string{PlatformKimi, PlatformZhipu, PlatformDeepseek, PlatformMiniMax} {
-		require.Equal(t, want, defaultModelsListCandidateIDs(platform), "platform=%s", platform)
+
+	for _, tt := range tests {
+		candidates := defaultModelsListCandidateIDs(tt.platform)
+		for _, model := range tt.contains {
+			require.Contains(t, candidates, model, "platform=%s", tt.platform)
+		}
+		require.NotContains(t, candidates, tt.notContains, "platform=%s", tt.platform)
 	}
 }

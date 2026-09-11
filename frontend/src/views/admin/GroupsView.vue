@@ -103,6 +103,7 @@
               {{ t("admin.groups.sortOrder") }}
             </button>
             <button
+              type="button"
               @click="openCreateModal"
               class="btn btn-primary"
               data-tour="groups-create-btn"
@@ -4408,6 +4409,7 @@ import { createStableObjectKeyResolver } from "@/utils/stableObjectKey";
 import { extractApiErrorMessage } from "@/utils/apiError";
 import { useKeyedDebouncedSearch } from "@/composables/useKeyedDebouncedSearch";
 import { getPersistedPageSize } from "@/composables/usePersistedPageSize";
+import { GROUP_PLATFORM_OPTIONS } from "@/constants/platforms";
 import {
   createDefaultMessagesDispatchFormState,
   messagesDispatchConfigToFormState,
@@ -5847,7 +5849,12 @@ const handleSort = (key: string, order: 'asc' | 'desc') => {
 
 const openCreateModal = () => {
   showCreateModal.value = true;
-  loadModelAllowlistCandidates("create", 0, createForm.platform);
+  // Open the dialog immediately. Model candidates are auxiliary data and
+  // must never make the create action appear unresponsive when the request
+  // is slow or unavailable.
+  void loadModelAllowlistCandidates("create", 0, createForm.platform).catch((error) => {
+    console.error("Error loading create-group model candidates:", error);
+  });
 };
 
 const closeCreateModal = () => {
@@ -6005,7 +6012,7 @@ const handleCreateGroup = async () => {
   try {
     // 构建请求数据，包含模型路由配置
     const requestData = {
-      ...createGroupForm,
+      ...createForm,
       force_openai_fast: normalizeGroupOpenAIFast(
         createForm.platform,
         createForm.force_openai_fast,

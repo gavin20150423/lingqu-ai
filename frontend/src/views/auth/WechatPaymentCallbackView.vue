@@ -75,13 +75,18 @@ function parseFragmentParams(): URLSearchParams {
   return new URLSearchParams(hash)
 }
 
-function normalizeRedirectPath(path: string | null | undefined): string {
+function normalizeRedirectPath(path: string | null | undefined, orderType = ''): string {
+  const fallback = orderType === 'subscription' ? '/subscription-plans' : '/purchase'
   const value = (path || '').trim()
-  if (!value) return '/purchase'
-  if (!value.startsWith('/')) return '/purchase'
-  if (value.startsWith('//') || value.includes('://')) return '/purchase'
-  if (value === '/payment') return '/purchase'
-  if (value.startsWith('/payment?')) return '/purchase' + value.slice('/payment'.length)
+  if (!value) return fallback
+  if (!value.startsWith('/')) return fallback
+  if (value.startsWith('//') || value.includes('://')) return fallback
+  if (value === '/payment') return fallback
+  if (value.startsWith('/payment?')) return fallback + value.slice('/payment'.length)
+  if (orderType === 'subscription' && value === '/purchase') return '/subscription-plans'
+  if (orderType === 'subscription' && value.startsWith('/purchase?')) return '/subscription-plans' + value.slice('/purchase'.length)
+  if (orderType !== 'subscription' && value === '/subscription-plans') return '/purchase'
+  if (orderType !== 'subscription' && value.startsWith('/subscription-plans?')) return '/purchase' + value.slice('/subscription-plans'.length)
   return value
 }
 
@@ -92,7 +97,9 @@ function appendQueryParam(query: Record<string, string>, key: string, value: str
 }
 
 function goBackToPayment() {
-  void router.replace('/purchase')
+  const fragment = parseFragmentParams()
+  const orderType = readQueryString('order_type') || fragment.get('order_type') || ''
+  void router.replace(orderType === 'subscription' ? '/subscription-plans' : '/purchase')
 }
 
 onMounted(async () => {
@@ -116,7 +123,7 @@ onMounted(async () => {
   const orderType = readParam('order_type')
   const planId = readParam('plan_id')
   const redirectURL = new URL(
-    normalizeRedirectPath(readParam('redirect')),
+    normalizeRedirectPath(readParam('redirect'), orderType),
     window.location.origin,
   )
 

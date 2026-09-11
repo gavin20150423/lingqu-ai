@@ -3,7 +3,7 @@
     class="sidebar"
     :class="[
       sidebarCollapsed ? 'w-[72px]' : 'w-64',
-      { '-translate-x-full lg:translate-x-0': !mobileOpen }
+      { 'sidebar-mobile-hidden': !mobileOpen }
     ]"
   >
     <div class="sidebar-header" :class="{ 'sidebar-header-collapsed': sidebarCollapsed }">
@@ -294,12 +294,6 @@ const sidebarNavRef = ref<HTMLElement | null>(null)
 // state so an active group can still be collapsed manually.
 const groupExpandOverrides = ref<Map<string, boolean>>(new Map())
 
-// Per-group expand/collapse overrides. A group with no entry follows the
-// automatic behavior (expanded while the active route is one of its children);
-// a chevron click records the user's choice, which wins over the automatic
-// state so an active group can still be collapsed manually.
-const groupExpandOverrides = ref<Map<string, boolean>>(new Map())
-
 // Site settings from appStore (cached, no flicker)
 const siteName = computed(() => appStore.siteName)
 const siteLogo = computed(() => sanitizeUrl(appStore.siteLogo || '', { allowRelative: true, allowDataUrl: true }))
@@ -346,7 +340,8 @@ function buildSelfNavItems(withDashboard: boolean): NavItem[] {
     { path: '/available-channels', label: t('nav.availableChannels'), icon: 'server', hideInSimpleMode: true, featureFlag: flagAvailableChannels },
     { path: '/monitor', label: t('nav.channelStatus'), icon: 'sync', featureFlag: flagChannelMonitor },
     { path: '/subscriptions', label: t('nav.mySubscriptions'), icon: 'creditCard', hideInSimpleMode: true },
-    { path: '/purchase', label: t('nav.buySubscription'), icon: 'creditCard', hideInSimpleMode: true, featureFlag: flagPayment },
+    { path: '/purchase', label: '充值', icon: 'creditCard', hideInSimpleMode: true, featureFlag: flagPayment },
+    { path: '/subscription-plans', label: '订阅套餐', icon: 'creditCard', hideInSimpleMode: true, featureFlag: flagPayment },
     { path: '/orders', label: t('nav.myOrders'), icon: 'document', hideInSimpleMode: true, featureFlag: flagPayment },
     { path: '/redeem', label: t('nav.redeem'), icon: 'gift', hideInSimpleMode: true },
     { path: '/affiliate', label: t('nav.affiliate'), icon: 'users', hideInSimpleMode: true, featureFlag: flagAffiliate },
@@ -370,10 +365,10 @@ const userNavItems = computed((): NavItem[] => finalizeNav(buildSelfNavItems(tru
 
 const adminNavItems = computed((): NavItem[] => {
   const baseItems: NavItem[] = [
-    { path: '/admin/dashboard', label: t('nav.dashboard'), icon: DashboardIcon },
-    { path: '/admin/ops', label: t('nav.ops'), icon: ChartIcon, featureFlag: flagOpsMonitoring },
-    { path: '/admin/users', label: t('nav.users'), icon: UsersIcon, hideInSimpleMode: true },
-    { path: '/admin/groups', label: t('nav.groups'), icon: FolderIcon },
+    { path: '/admin/dashboard', label: t('nav.dashboard'), icon: 'grid' },
+    { path: '/admin/ops', label: t('nav.ops'), icon: 'chart', featureFlag: flagOpsMonitoring },
+    { path: '/admin/users', label: t('nav.users'), icon: 'users', hideInSimpleMode: true },
+    { path: '/admin/groups', label: t('nav.groups'), icon: 'grid' },
     {
       path: '/admin/channels',
       label: t('nav.channelManagement'),
@@ -684,6 +679,19 @@ onBeforeUnmount(() => {
   background: rgba(255, 255, 255, 0.96);
   border-right: 1px solid rgb(226 232 240);
   box-shadow: 8px 0 28px rgba(15, 23, 42, 0.04);
+  /* Desktop admin navigation must remain visible; mobileOpen only controls
+     the off-canvas behavior below the desktop breakpoint. */
+  transform: translateX(0) !important;
+}
+
+.sidebar-mobile-hidden {
+  transform: translateX(0) !important;
+}
+
+@media (max-width: 1023px) {
+  .sidebar-mobile-hidden {
+    transform: translateX(-100%) !important;
+  }
 }
 
 .sidebar-link {

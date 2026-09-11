@@ -155,6 +155,9 @@ func (s *PaymentService) cancelCore(ctx context.Context, o *dbent.PaymentOrder, 
 			auditAction = "ORDER_EXPIRED"
 		}
 		s.writeAuditLog(ctx, o.ID, auditAction, op, map[string]any{"detail": ad})
+		if err := s.releaseSubscriptionPromoReservation(ctx, o); err != nil {
+			slog.Error("release subscription promo reservation after order cancellation", "orderID", o.ID, "error", err)
+		}
 		return checkPaidResultCancelled, nil
 	}
 	if err := tx.Commit(); err != nil {

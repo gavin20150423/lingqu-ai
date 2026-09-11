@@ -3860,6 +3860,12 @@ import ProxyAdBanner from '@/components/common/ProxyAdBanner.vue'
 import GroupSelector from '@/components/common/GroupSelector.vue'
 import ModelWhitelistSelector from '@/components/account/ModelWhitelistSelector.vue'
 import XiaoVideoConfigEditor from '@/components/account/XiaoVideoConfigEditor.vue'
+import {
+  createXiaoVideoPricingRule,
+  normalizeXiaoVideoPricing,
+  validateXiaoVideoPricing,
+  type XiaoVideoPricingRule
+} from '@/components/account/xiaoVideoPricing'
 import QuotaLimitCard from '@/components/account/QuotaLimitCard.vue'
 import Toggle from '@/components/common/Toggle.vue'
 import GrokBaseUrlPresets from '@/components/account/GrokBaseUrlPresets.vue'
@@ -3876,8 +3882,6 @@ import {
   isCNProviderPlatform,
   isHeaderOverrideCapable,
   validateHeaderOverrideRows,
-  defaultCNAdaptiveBaseUrls,
-  defaultCNBaseUrl,
   type CnAccountMode,
   type CnApiProtocol,
   type CnNativeApiProtocol,
@@ -4106,17 +4110,17 @@ const cnProtocolOptions = computed<Array<{ value: CnApiProtocol; labelKey: strin
     { value: 'anthropic', labelKey: 'anthropic' }
   ]
   if (cnSupportsNativeResponses(form.platform)) {
-    opts.push({ value: 'responses', labelKey: 'responses' })
+    options.push({ value: 'responses', labelKey: 'responses' })
   }
-  return opts
+  return options
 })
 const cnAdaptiveProtocolOptions = computed<Array<{ value: CnNativeApiProtocol; labelKey: string }>>(() => {
   const options: Array<{ value: CnNativeApiProtocol; labelKey: string }> = [
     { value: 'chat_completions', labelKey: 'chatCompletions' },
     { value: 'anthropic', labelKey: 'anthropic' }
   ]
-  if (cnSupportsNativeResponses(form.platform)) opts.push({ value: 'responses', labelKey: 'responses' })
-  return opts
+  if (cnSupportsNativeResponses(form.platform)) options.push({ value: 'responses', labelKey: 'responses' })
+  return options
 })
 
 function resetAdaptiveBaseUrls(platform: CnProviderPlatform, mode: CnAccountMode) {

@@ -1,4 +1,21 @@
 export default {
+  // 登录 / 注册页左侧展示区（共用）
+  authLayout: {
+    visualLabel: '一个 Key，用所有模型',
+    homeLabel: '首页',
+    brandTagline: 'UNIVERSAL MODEL KEY',
+    eyebrow: '一个 Key · 接入全部主流模型',
+    titleTop: '一个 Key',
+    titleAccent: '用所有模型',
+    description: '登录后复制你的 Key，应用就能开始调用 GPT、Claude、Gemini、DeepSeek 等模型。',
+    proofStable: '稳定接入',
+    proofBilling: '统一计费',
+    proofUsage: '按量使用',
+    modelsLabel: '支持的主流模型',
+    moreModels: '更多模型',
+    gatewayOnline: '网关在线',
+    payAsYouGo: '按量计费 · 随时充值'
+  },
   batchImageGuide: {
     title: '图片批量生成',
     description: '一次提交多条提示词，任务完成后可统一下载图片结果'

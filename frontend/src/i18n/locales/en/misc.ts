@@ -140,6 +140,11 @@ export default {
     usageOf: '{used} of {limit}'
   },
 
+  accountShare: {
+    title: 'Account Plaza',
+    description: 'Share and discover managed AI accounts'
+  },
+
   // Onboarding Tour
   onboarding: {
     restartTour: 'Restart Onboarding Tour',

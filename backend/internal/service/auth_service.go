@@ -11,6 +11,7 @@ import (
 	"net/mail"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
@@ -87,6 +88,10 @@ type AuthService struct {
 	affiliateService      *AffiliateService
 	defaultSubAssigner    DefaultSubscriptionAssigner
 	userPlatformQuotaRepo UserPlatformQuotaRepository
+	// invitationRegistrationMu closes the validation/use gap for the legacy
+	// repository path, which cannot atomically claim an invitation before the
+	// user ID exists. The database path still uses a conditional update.
+	invitationRegistrationMu sync.Mutex
 }
 
 type CaptchaProof struct {
@@ -173,6 +178,10 @@ func (s *AuthService) RegisterWithVerification(ctx context.Context, email, passw
 	}
 	if err := s.validateRegistrationEmailAliasPolicy(ctx, email); err != nil {
 		return "", nil, err
+	}
+	if s.settingService != nil && s.settingService.IsInvitationCodeEnabled(ctx) && strings.TrimSpace(invitationCode) != "" {
+		s.invitationRegistrationMu.Lock()
+		defer s.invitationRegistrationMu.Unlock()
 	}
 
 	// 检查是否需要邀请码

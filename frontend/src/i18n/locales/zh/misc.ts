@@ -137,6 +137,11 @@ export default {
     usageOf: '已用 {used} / {limit}'
   },
 
+  accountShare: {
+    title: '账号广场',
+    description: '共享和发现托管的 AI 账号'
+  },
+
   // Onboarding Tour
   onboarding: {
     restartTour: '重新查看新手引导',

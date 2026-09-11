@@ -401,9 +401,22 @@ const routes: RouteRecordRaw[] = [
     meta: {
       requiresAuth: true,
       requiresAdmin: false,
-      title: '充值与订阅',
-      titleKey: 'nav.buySubscription',
-      descriptionKey: 'purchase.description',
+      title: '充值',
+      titleKey: 'payment.tabTopUp',
+      descriptionKey: 'payment.rechargeAccount',
+      requiresPayment: true
+    }
+  },
+  {
+    path: '/subscription-plans',
+    name: 'SubscriptionPlans',
+    component: () => import('@/views/user/SubscriptionPlansView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      title: '订阅套餐',
+      titleKey: 'nav.subscriptionPlans',
+      descriptionKey: 'payment.tabSubscribe',
       requiresPayment: true
     }
   },

@@ -84,6 +84,7 @@ type CreateOrderRequest struct {
 	PaymentSource   string
 	OrderType       string
 	PlanID          int64
+	PromoCode       string
 	Locale          string
 	ShopOrderID     int64
 	Subject         string
@@ -112,6 +113,9 @@ type CreateOrderResponse struct {
 	PaymentMode                   string                          `json:"payment_mode,omitempty"`
 	ResumeToken                   string                          `json:"resume_token,omitempty"`
 	AlipayMobilePrecreateDeepLink bool                            `json:"alipay_mobile_precreate_deep_link,omitempty"`
+	DiscountPercent               float64                         `json:"discount_percent,omitempty"`
+	DiscountAmount                float64                         `json:"discount_amount,omitempty"`
+	PromoCode                     string                          `json:"promo_code,omitempty"`
 }
 
 type OrderListParams struct {

@@ -243,6 +243,23 @@ func (s *OpenAIGatewayService) openAIFirstOutputTimeout(reasoningEffort string) 
 	return time.Duration(seconds) * time.Second
 }
 
+func (s *OpenAIGatewayService) openAIFirstOutputTimeoutForContext(ctx context.Context, reasoningEffort string, attemptStartedAt time.Time) time.Duration {
+	configured := s.openAIFirstOutputTimeout(reasoningEffort)
+	adaptive := SubPilotAttemptTimeoutFromContext(ctx)
+	if adaptive > 0 && (configured <= 0 || adaptive < configured) {
+		configured = adaptive
+	}
+	if remaining, hasDeadline := subPilotRetryRemainingAt(ctx, attemptStartedAt); hasDeadline {
+		if remaining <= 0 {
+			return time.Nanosecond
+		}
+		if configured <= 0 || remaining < configured {
+			configured = remaining
+		}
+	}
+	return configured
+}
+
 // newOpenAIFirstOutputTimeoutError records the timeout as an upstream attempt
 // and returns the failover error. proxyID/proxyName are supplied by the caller
 // because the same deadline is enforced over HTTP and WebSocket transports,

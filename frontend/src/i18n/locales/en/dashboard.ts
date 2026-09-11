@@ -511,6 +511,8 @@ export default {
     dialogLatency: 'Dialog Latency',
     endpointPing: 'Endpoint PING',
     history60pts: 'HISTORY ({n} PTS)',
+    recentProbeResults: 'Latest {n} probes',
+    noProbeResults: 'Waiting for the first probe',
     nextUpdateIn: 'NEXT UPDATE IN {n}s',
     past: 'PAST',
     now: 'NOW',

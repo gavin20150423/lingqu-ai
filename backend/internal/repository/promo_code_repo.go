@@ -43,6 +43,9 @@ func (r *promoCodeRepository) Create(ctx context.Context, code *service.PromoCod
 	code.ID = created.ID
 	code.CreatedAt = created.CreatedAt
 	code.UpdatedAt = created.UpdatedAt
+	if err := persistPromoCampaignFields(ctx, client, code); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -117,7 +120,22 @@ func (r *promoCodeRepository) Update(ctx context.Context, code *service.PromoCod
 	}
 
 	code.UpdatedAt = updated.UpdatedAt
+	if err := persistPromoCampaignFields(ctx, client, code); err != nil {
+		return err
+	}
 	return nil
+}
+
+func persistPromoCampaignFields(ctx context.Context, client *dbent.Client, code *service.PromoCode) error {
+	if client == nil || code == nil {
+		return nil
+	}
+	updateSQL := `UPDATE promo_codes SET discount_percent=$1, applies_to_subscriptions=$2, starts_at=$3, updated_at=CURRENT_TIMESTAMP WHERE id=$4`
+	if strings.EqualFold(client.Driver().Dialect(), "postgres") {
+		updateSQL = `UPDATE promo_codes SET discount_percent=$1, applies_to_subscriptions=$2, starts_at=$3, updated_at=NOW() WHERE id=$4`
+	}
+	_, err := client.ExecContext(ctx, updateSQL, code.DiscountPercent, code.AppliesToSubscriptions, code.StartsAt, code.ID)
+	return err
 }
 
 func (r *promoCodeRepository) Delete(ctx context.Context, id int64) error {
@@ -259,16 +277,19 @@ func promoCodeEntityToService(m *dbent.PromoCode) *service.PromoCode {
 		return nil
 	}
 	return &service.PromoCode{
-		ID:          m.ID,
-		Code:        m.Code,
-		BonusAmount: m.BonusAmount,
-		MaxUses:     m.MaxUses,
-		UsedCount:   m.UsedCount,
-		Status:      m.Status,
-		ExpiresAt:   m.ExpiresAt,
-		Notes:       derefString(m.Notes),
-		CreatedAt:   m.CreatedAt,
-		UpdatedAt:   m.UpdatedAt,
+		ID:                     m.ID,
+		Code:                   m.Code,
+		BonusAmount:            m.BonusAmount,
+		DiscountPercent:        m.DiscountPercent,
+		AppliesToSubscriptions: m.AppliesToSubscriptions,
+		MaxUses:                m.MaxUses,
+		UsedCount:              m.UsedCount,
+		Status:                 m.Status,
+		ExpiresAt:              m.ExpiresAt,
+		StartsAt:               m.StartsAt,
+		Notes:                  derefString(m.Notes),
+		CreatedAt:              m.CreatedAt,
+		UpdatedAt:              m.UpdatedAt,
 	}
 }
 

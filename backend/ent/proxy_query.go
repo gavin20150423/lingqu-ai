@@ -16,7 +16,6 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/account"
 	"github.com/Wei-Shaw/sub2api/ent/predicate"
 	"github.com/Wei-Shaw/sub2api/ent/proxy"
-	"github.com/Wei-Shaw/sub2api/ent/user"
 )
 
 // ProxyQuery is the builder for querying Proxy entities.
@@ -29,6 +28,7 @@ type ProxyQuery struct {
 	withAccounts       *AccountQuery
 	withPrimaryProxies *ProxyQuery
 	withBackupProxy    *ProxyQuery
+	withFKs            bool
 	modifiers          []func(*sql.Selector)
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
@@ -443,6 +443,7 @@ func (_q *ProxyQuery) prepareQuery(ctx context.Context) error {
 func (_q *ProxyQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Proxy, error) {
 	var (
 		nodes       = []*Proxy{}
+		withFKs     = _q.withFKs
 		_spec       = _q.querySpec()
 		loadedTypes = [3]bool{
 			_q.withAccounts != nil,
@@ -450,6 +451,9 @@ func (_q *ProxyQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Proxy,
 			_q.withBackupProxy != nil,
 		}
 	)
+	if withFKs {
+		_spec.Node.Columns = append(_spec.Node.Columns, proxy.ForeignKeys...)
+	}
 	_spec.ScanValues = func(columns []string) ([]any, error) {
 		return (*Proxy).scanValues(nil, columns)
 	}
@@ -537,6 +541,7 @@ func (_q *ProxyQuery) loadPrimaryProxies(ctx context.Context, query *ProxyQuery,
 			init(nodes[i])
 		}
 	}
+	query.withFKs = true
 	if len(query.ctx.Fields) > 0 {
 		query.ctx.AppendFieldOnce(proxy.FieldBackupProxyID)
 	}
@@ -620,9 +625,6 @@ func (_q *ProxyQuery) querySpec() *sqlgraph.QuerySpec {
 			if fields[i] != proxy.FieldID {
 				_spec.Node.Columns = append(_spec.Node.Columns, fields[i])
 			}
-		}
-		if _q.withOwner != nil {
-			_spec.Node.AddColumnOnce(proxy.FieldOwnerUserID)
 		}
 		if _q.withBackupProxy != nil {
 			_spec.Node.AddColumnOnce(proxy.FieldBackupProxyID)

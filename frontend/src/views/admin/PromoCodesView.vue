@@ -80,6 +80,12 @@
             </span>
           </template>
 
+          <template #cell-discount_percent="{ value, row }">
+            <span v-if="value > 0" class="text-sm font-medium text-emerald-600 dark:text-emerald-400">-{{ value }}%</span>
+            <span v-else-if="row.applies_to_subscriptions" class="text-xs text-amber-600">订阅可用</span>
+            <span v-else class="text-sm text-gray-400">-</span>
+          </template>
+
           <template #cell-usage="{ row }">
             <span class="text-sm text-gray-600 dark:text-gray-300">
               {{ row.used_count }} / {{ row.max_uses === 0 ? '∞' : row.max_uses }}
@@ -177,6 +183,12 @@
           />
         </div>
         <div>
+          <label class="input-label">订阅折扣（%）</label>
+          <input v-model.number="createForm.discount_percent" type="number" min="0" max="100" step="0.01" class="input" />
+        </div>
+        <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300"><input v-model="createForm.applies_to_subscriptions" type="checkbox" class="rounded" /> 可用于订阅套餐</label>
+        <div><label class="input-label">生效时间（可选）</label><input v-model="createForm.starts_at_str" type="datetime-local" class="input" /></div>
+        <div>
           <label class="input-label">{{ t('admin.promo.bonusAmount') }}</label>
           <input
             v-model.number="createForm.bonus_amount"
@@ -262,6 +274,12 @@
             class="input"
           />
         </div>
+        <div>
+          <label class="input-label">订阅折扣（%）</label>
+          <input v-model.number="editForm.discount_percent" type="number" min="0" max="100" step="0.01" class="input" />
+        </div>
+        <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300"><input v-model="editForm.applies_to_subscriptions" type="checkbox" class="rounded" /> 可用于订阅套餐</label>
+        <div><label class="input-label">生效时间（可选）</label><input v-model="editForm.starts_at_str" type="datetime-local" class="input" /></div>
         <div>
           <label class="input-label">
             {{ t('admin.promo.maxUses') }}
@@ -453,7 +471,10 @@ const createForm = reactive({
   bonus_amount: 1,
   max_uses: 0,
   expires_at_str: '',
-  notes: ''
+  notes: '',
+  discount_percent: 0,
+  applies_to_subscriptions: false,
+  starts_at_str: ''
 })
 
 const editForm = reactive({
@@ -462,7 +483,10 @@ const editForm = reactive({
   max_uses: 0,
   status: 'active' as 'active' | 'disabled',
   expires_at_str: '',
-  notes: ''
+  notes: '',
+  discount_percent: 0,
+  applies_to_subscriptions: false,
+  starts_at_str: ''
 })
 
 // Options
@@ -480,6 +504,7 @@ const statusOptions = computed(() => [
 const columns = computed<Column[]>(() => [
   { key: 'code', label: t('admin.promo.columns.code') },
   { key: 'bonus_amount', label: t('admin.promo.columns.bonusAmount'), sortable: true },
+  { key: 'discount_percent', label: '订阅折扣' },
   { key: 'usage', label: t('admin.promo.columns.usage') },
   { key: 'status', label: t('admin.promo.columns.status'), sortable: true },
   { key: 'expires_at', label: t('admin.promo.columns.expiresAt'), sortable: true },
@@ -600,7 +625,10 @@ const handleCreate = async () => {
       bonus_amount: createForm.bonus_amount,
       max_uses: createForm.max_uses,
       expires_at: createForm.expires_at_str ? Math.floor(new Date(createForm.expires_at_str).getTime() / 1000) : undefined,
-      notes: createForm.notes || undefined
+      notes: createForm.notes || undefined,
+      discount_percent: createForm.discount_percent,
+      applies_to_subscriptions: createForm.applies_to_subscriptions,
+      starts_at: createForm.starts_at_str ? Math.floor(new Date(createForm.starts_at_str).getTime() / 1000) : undefined
     })
     appStore.showSuccess(t('admin.promo.codeCreated'))
     showCreateDialog.value = false
@@ -619,6 +647,9 @@ const resetCreateForm = () => {
   createForm.max_uses = 0
   createForm.expires_at_str = ''
   createForm.notes = ''
+  createForm.discount_percent = 0
+  createForm.applies_to_subscriptions = false
+  createForm.starts_at_str = ''
 }
 
 // Edit
@@ -632,6 +663,9 @@ const handleEdit = (code: PromoCode) => {
     ? formatDateTimeLocalInput(Math.floor(new Date(code.expires_at).getTime() / 1000))
     : ''
   editForm.notes = code.notes || ''
+  editForm.discount_percent = code.discount_percent || 0
+  editForm.applies_to_subscriptions = !!code.applies_to_subscriptions
+  editForm.starts_at_str = code.starts_at ? formatDateTimeLocalInput(Math.floor(new Date(code.starts_at).getTime() / 1000)) : ''
   showEditDialog.value = true
 }
 
@@ -651,7 +685,10 @@ const handleUpdate = async () => {
       max_uses: editForm.max_uses,
       status: editForm.status,
       expires_at: editForm.expires_at_str ? Math.floor(new Date(editForm.expires_at_str).getTime() / 1000) : 0,
-      notes: editForm.notes
+      notes: editForm.notes,
+      discount_percent: editForm.discount_percent,
+      applies_to_subscriptions: editForm.applies_to_subscriptions,
+      starts_at: editForm.starts_at_str ? Math.floor(new Date(editForm.starts_at_str).getTime() / 1000) : 0
     })
     appStore.showSuccess(t('admin.promo.codeUpdated'))
     closeEditDialog()

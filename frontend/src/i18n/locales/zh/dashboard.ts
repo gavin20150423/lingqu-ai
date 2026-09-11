@@ -516,6 +516,8 @@ export default {
     dialogLatency: '对话延迟',
     endpointPing: '端点 PING',
     history60pts: '近 {n} 次记录',
+    recentProbeResults: '最近 {n} 次探测',
+    noProbeResults: '等待首次探测结果',
     nextUpdateIn: '{n}s 后刷新',
     past: 'PAST',
     now: 'NOW',

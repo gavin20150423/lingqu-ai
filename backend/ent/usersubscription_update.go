@@ -304,6 +304,12 @@ func (_u *UserSubscriptionUpdate) ClearNotes() *UserSubscriptionUpdate {
 	return _u
 }
 
+// SetEntitlements sets the "entitlements" field.
+func (_u *UserSubscriptionUpdate) SetEntitlements(v map[string]interface{}) *UserSubscriptionUpdate {
+	_u.mutation.SetEntitlements(v)
+	return _u
+}
+
 // SetUser sets the "user" edge to the User entity.
 func (_u *UserSubscriptionUpdate) SetUser(v *User) *UserSubscriptionUpdate {
 	return _u.SetUserID(v.ID)
@@ -524,6 +530,9 @@ func (_u *UserSubscriptionUpdate) sqlSave(ctx context.Context) (_node int, err e
 	}
 	if _u.mutation.NotesCleared() {
 		_spec.ClearField(usersubscription.FieldNotes, field.TypeString)
+	}
+	if value, ok := _u.mutation.Entitlements(); ok {
+		_spec.SetField(usersubscription.FieldEntitlements, field.TypeJSON, value)
 	}
 	if _u.mutation.UserCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -950,6 +959,12 @@ func (_u *UserSubscriptionUpdateOne) ClearNotes() *UserSubscriptionUpdateOne {
 	return _u
 }
 
+// SetEntitlements sets the "entitlements" field.
+func (_u *UserSubscriptionUpdateOne) SetEntitlements(v map[string]interface{}) *UserSubscriptionUpdateOne {
+	_u.mutation.SetEntitlements(v)
+	return _u
+}
+
 // SetUser sets the "user" edge to the User entity.
 func (_u *UserSubscriptionUpdateOne) SetUser(v *User) *UserSubscriptionUpdateOne {
 	return _u.SetUserID(v.ID)
@@ -1200,6 +1215,9 @@ func (_u *UserSubscriptionUpdateOne) sqlSave(ctx context.Context) (_node *UserSu
 	}
 	if _u.mutation.NotesCleared() {
 		_spec.ClearField(usersubscription.FieldNotes, field.TypeString)
+	}
+	if value, ok := _u.mutation.Entitlements(); ok {
+		_spec.SetField(usersubscription.FieldEntitlements, field.TypeJSON, value)
 	}
 	if _u.mutation.UserCleared() {
 		edge := &sqlgraph.EdgeSpec{

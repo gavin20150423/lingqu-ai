@@ -553,10 +553,99 @@ func (s *PaymentService) doSub(ctx context.Context, o *dbent.PaymentOrder, lease
 	if err := s.ensurePaymentSubscriptionAssigned(ctx, o, gid, days); err != nil {
 		return err
 	}
+	if err := s.consumeSubscriptionPromoCode(ctx, o); err != nil {
+		return err
+	}
 	if err := s.applyAffiliateRebateForOrder(ctx, o); err != nil {
 		return err
 	}
 	return s.markCompleted(ctx, o, lease, "SUBSCRIPTION_SUCCESS")
+}
+
+func (s *PaymentService) consumeSubscriptionPromoCode(ctx context.Context, o *dbent.PaymentOrder) error {
+	if o == nil || o.PromoCode == nil || strings.TrimSpace(*o.PromoCode) == "" {
+		return nil
+	}
+	tx, err := s.entClient.Tx(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	txCtx := dbent.NewTxContext(ctx, tx)
+	claimed, err := tx.Client().PaymentAuditLog.Query().Where(paymentauditlog.OrderIDEQ(strconv.FormatInt(o.ID, 10)), paymentauditlog.ActionEQ("SUBSCRIPTION_PROMO_APPLIED")).Exist(txCtx)
+	if err != nil {
+		return err
+	}
+	if claimed {
+		return tx.Commit()
+	}
+	reserved, err := tx.Client().PaymentAuditLog.Query().Where(
+		paymentauditlog.OrderIDEQ(strconv.FormatInt(o.ID, 10)),
+		paymentauditlog.ActionEQ(subscriptionPromoReserved),
+	).Exist(txCtx)
+	if err != nil {
+		return err
+	}
+	if reserved {
+		if _, err = tx.Client().PaymentAuditLog.Create().
+			SetOrderID(strconv.FormatInt(o.ID, 10)).
+			SetAction(subscriptionPromoApplied).
+			SetDetail(*o.PromoCode).
+			SetOperator("system").
+			Save(txCtx); err != nil {
+			return err
+		}
+		return tx.Commit()
+	}
+	promo, err := subscriptionPromoCodeQuery(tx.Client(), *o.PromoCode).Only(txCtx)
+	if err != nil {
+		return err
+	}
+	if promo.MaxUses > 0 && promo.UsedCount >= promo.MaxUses {
+		// Legacy paid orders created before reservation was introduced must not
+		// fail after their subscription has already been assigned. Record this
+		// exceptional path explicitly instead of silently skipping the promo.
+		detail, _ := json.Marshal(map[string]any{
+			"code":              *o.PromoCode,
+			"legacyReservation": true,
+			"overLimit":         true,
+		})
+		if _, err = tx.Client().PaymentAuditLog.Create().
+			SetOrderID(strconv.FormatInt(o.ID, 10)).
+			SetAction(subscriptionPromoApplied).
+			SetDetail(string(detail)).
+			SetOperator("system").
+			Save(txCtx); err != nil {
+			return err
+		}
+		return tx.Commit()
+	}
+	claimed, err = claimSubscriptionPromoUse(txCtx, tx, promo.ID)
+	if err != nil {
+		return err
+	}
+	if !claimed {
+		// Another legacy fulfillment may have consumed the last slot after the
+		// read above. Keep the paid order fulfillable and leave an explicit audit.
+		detail, _ := json.Marshal(map[string]any{
+			"code":              *o.PromoCode,
+			"legacyReservation": true,
+			"overLimit":         true,
+		})
+		if _, err = tx.Client().PaymentAuditLog.Create().
+			SetOrderID(strconv.FormatInt(o.ID, 10)).
+			SetAction("SUBSCRIPTION_PROMO_APPLIED").
+			SetDetail(string(detail)).
+			SetOperator("system").
+			Save(txCtx); err != nil {
+			return err
+		}
+		return tx.Commit()
+	}
+	if _, err = tx.Client().PaymentAuditLog.Create().SetOrderID(strconv.FormatInt(o.ID, 10)).SetAction("SUBSCRIPTION_PROMO_APPLIED").SetDetail(*o.PromoCode).SetOperator("system").Save(txCtx); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func (s *PaymentService) ensurePaymentSubscriptionAssigned(ctx context.Context, o *dbent.PaymentOrder, groupID int64, days int) error {
@@ -572,6 +661,12 @@ func (s *PaymentService) ensurePaymentSubscriptionAssigned(ctx context.Context, 
 
 	txCtx := dbent.NewTxContext(ctx, tx)
 	txClient := tx.Client()
+	planEntitlements := map[string]any{}
+	if o.PlanID != nil && *o.PlanID > 0 {
+		if plan, planErr := txClient.SubscriptionPlan.Get(txCtx, *o.PlanID); planErr == nil && plan.Entitlements != nil {
+			planEntitlements = plan.Entitlements
+		}
+	}
 	alreadyAssigned, err := hasPaymentSubscriptionAssignmentAudit(txCtx, txClient, o.ID)
 	if err != nil {
 		return fmt.Errorf("check subscription assignment audit: %w", err)
@@ -593,6 +688,7 @@ func (s *PaymentService) ensurePaymentSubscriptionAssigned(ctx context.Context, 
 				ValidityDays: days,
 				AssignedBy:   0,
 				Notes:        orderNote,
+				Entitlements: planEntitlements,
 			}, true); err != nil {
 				return fmt.Errorf("assign subscription: %w", err)
 			}

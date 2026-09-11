@@ -90,6 +90,7 @@ func (PaymentOrder) Fields() []ent.Field {
 		field.Int64("shop_order_id").
 			Optional().
 			Nillable(),
+		field.String("promo_code").MaxLen(32).Optional().Nillable(),
 		field.String("provider_instance_id").
 			Optional().
 			Nillable().

@@ -3,6 +3,7 @@
 package ent
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -53,6 +54,8 @@ type UserSubscription struct {
 	AssignedAt time.Time `json:"assigned_at,omitempty"`
 	// Notes holds the value of the "notes" field.
 	Notes *string `json:"notes,omitempty"`
+	// Entitlements holds the value of the "entitlements" field.
+	Entitlements map[string]interface{} `json:"entitlements,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the UserSubscriptionQuery when eager-loading is set.
 	Edges        UserSubscriptionEdges `json:"edges"`
@@ -121,6 +124,8 @@ func (*UserSubscription) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
+		case usersubscription.FieldEntitlements:
+			values[i] = new([]byte)
 		case usersubscription.FieldDailyUsageUsd, usersubscription.FieldWeeklyUsageUsd, usersubscription.FieldMonthlyUsageUsd:
 			values[i] = new(sql.NullFloat64)
 		case usersubscription.FieldID, usersubscription.FieldUserID, usersubscription.FieldGroupID, usersubscription.FieldAssignedBy:
@@ -258,6 +263,14 @@ func (_m *UserSubscription) assignValues(columns []string, values []any) error {
 				_m.Notes = new(string)
 				*_m.Notes = value.String
 			}
+		case usersubscription.FieldEntitlements:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field entitlements", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.Entitlements); err != nil {
+					return fmt.Errorf("unmarshal field entitlements: %w", err)
+				}
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -376,6 +389,9 @@ func (_m *UserSubscription) String() string {
 		builder.WriteString("notes=")
 		builder.WriteString(*v)
 	}
+	builder.WriteString(", ")
+	builder.WriteString("entitlements=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Entitlements))
 	builder.WriteByte(')')
 	return builder.String()
 }

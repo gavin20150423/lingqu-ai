@@ -71,6 +71,48 @@ func (_c *PromoCodeCreate) SetNillableUsedCount(v *int) *PromoCodeCreate {
 	return _c
 }
 
+// SetDiscountPercent sets the "discount_percent" field.
+func (_c *PromoCodeCreate) SetDiscountPercent(v float64) *PromoCodeCreate {
+	_c.mutation.SetDiscountPercent(v)
+	return _c
+}
+
+// SetNillableDiscountPercent sets the "discount_percent" field if the given value is not nil.
+func (_c *PromoCodeCreate) SetNillableDiscountPercent(v *float64) *PromoCodeCreate {
+	if v != nil {
+		_c.SetDiscountPercent(*v)
+	}
+	return _c
+}
+
+// SetAppliesToSubscriptions sets the "applies_to_subscriptions" field.
+func (_c *PromoCodeCreate) SetAppliesToSubscriptions(v bool) *PromoCodeCreate {
+	_c.mutation.SetAppliesToSubscriptions(v)
+	return _c
+}
+
+// SetNillableAppliesToSubscriptions sets the "applies_to_subscriptions" field if the given value is not nil.
+func (_c *PromoCodeCreate) SetNillableAppliesToSubscriptions(v *bool) *PromoCodeCreate {
+	if v != nil {
+		_c.SetAppliesToSubscriptions(*v)
+	}
+	return _c
+}
+
+// SetStartsAt sets the "starts_at" field.
+func (_c *PromoCodeCreate) SetStartsAt(v time.Time) *PromoCodeCreate {
+	_c.mutation.SetStartsAt(v)
+	return _c
+}
+
+// SetNillableStartsAt sets the "starts_at" field if the given value is not nil.
+func (_c *PromoCodeCreate) SetNillableStartsAt(v *time.Time) *PromoCodeCreate {
+	if v != nil {
+		_c.SetStartsAt(*v)
+	}
+	return _c
+}
+
 // SetStatus sets the "status" field.
 func (_c *PromoCodeCreate) SetStatus(v string) *PromoCodeCreate {
 	_c.mutation.SetStatus(v)
@@ -203,6 +245,14 @@ func (_c *PromoCodeCreate) defaults() {
 		v := promocode.DefaultUsedCount
 		_c.mutation.SetUsedCount(v)
 	}
+	if _, ok := _c.mutation.DiscountPercent(); !ok {
+		v := promocode.DefaultDiscountPercent
+		_c.mutation.SetDiscountPercent(v)
+	}
+	if _, ok := _c.mutation.AppliesToSubscriptions(); !ok {
+		v := promocode.DefaultAppliesToSubscriptions
+		_c.mutation.SetAppliesToSubscriptions(v)
+	}
 	if _, ok := _c.mutation.Status(); !ok {
 		v := promocode.DefaultStatus
 		_c.mutation.SetStatus(v)
@@ -235,6 +285,12 @@ func (_c *PromoCodeCreate) check() error {
 	}
 	if _, ok := _c.mutation.UsedCount(); !ok {
 		return &ValidationError{Name: "used_count", err: errors.New(`ent: missing required field "PromoCode.used_count"`)}
+	}
+	if _, ok := _c.mutation.DiscountPercent(); !ok {
+		return &ValidationError{Name: "discount_percent", err: errors.New(`ent: missing required field "PromoCode.discount_percent"`)}
+	}
+	if _, ok := _c.mutation.AppliesToSubscriptions(); !ok {
+		return &ValidationError{Name: "applies_to_subscriptions", err: errors.New(`ent: missing required field "PromoCode.applies_to_subscriptions"`)}
 	}
 	if _, ok := _c.mutation.Status(); !ok {
 		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "PromoCode.status"`)}
@@ -292,6 +348,18 @@ func (_c *PromoCodeCreate) createSpec() (*PromoCode, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.UsedCount(); ok {
 		_spec.SetField(promocode.FieldUsedCount, field.TypeInt, value)
 		_node.UsedCount = value
+	}
+	if value, ok := _c.mutation.DiscountPercent(); ok {
+		_spec.SetField(promocode.FieldDiscountPercent, field.TypeFloat64, value)
+		_node.DiscountPercent = value
+	}
+	if value, ok := _c.mutation.AppliesToSubscriptions(); ok {
+		_spec.SetField(promocode.FieldAppliesToSubscriptions, field.TypeBool, value)
+		_node.AppliesToSubscriptions = value
+	}
+	if value, ok := _c.mutation.StartsAt(); ok {
+		_spec.SetField(promocode.FieldStartsAt, field.TypeTime, value)
+		_node.StartsAt = &value
 	}
 	if value, ok := _c.mutation.Status(); ok {
 		_spec.SetField(promocode.FieldStatus, field.TypeString, value)
@@ -444,6 +512,54 @@ func (u *PromoCodeUpsert) UpdateUsedCount() *PromoCodeUpsert {
 // AddUsedCount adds v to the "used_count" field.
 func (u *PromoCodeUpsert) AddUsedCount(v int) *PromoCodeUpsert {
 	u.Add(promocode.FieldUsedCount, v)
+	return u
+}
+
+// SetDiscountPercent sets the "discount_percent" field.
+func (u *PromoCodeUpsert) SetDiscountPercent(v float64) *PromoCodeUpsert {
+	u.Set(promocode.FieldDiscountPercent, v)
+	return u
+}
+
+// UpdateDiscountPercent sets the "discount_percent" field to the value that was provided on create.
+func (u *PromoCodeUpsert) UpdateDiscountPercent() *PromoCodeUpsert {
+	u.SetExcluded(promocode.FieldDiscountPercent)
+	return u
+}
+
+// AddDiscountPercent adds v to the "discount_percent" field.
+func (u *PromoCodeUpsert) AddDiscountPercent(v float64) *PromoCodeUpsert {
+	u.Add(promocode.FieldDiscountPercent, v)
+	return u
+}
+
+// SetAppliesToSubscriptions sets the "applies_to_subscriptions" field.
+func (u *PromoCodeUpsert) SetAppliesToSubscriptions(v bool) *PromoCodeUpsert {
+	u.Set(promocode.FieldAppliesToSubscriptions, v)
+	return u
+}
+
+// UpdateAppliesToSubscriptions sets the "applies_to_subscriptions" field to the value that was provided on create.
+func (u *PromoCodeUpsert) UpdateAppliesToSubscriptions() *PromoCodeUpsert {
+	u.SetExcluded(promocode.FieldAppliesToSubscriptions)
+	return u
+}
+
+// SetStartsAt sets the "starts_at" field.
+func (u *PromoCodeUpsert) SetStartsAt(v time.Time) *PromoCodeUpsert {
+	u.Set(promocode.FieldStartsAt, v)
+	return u
+}
+
+// UpdateStartsAt sets the "starts_at" field to the value that was provided on create.
+func (u *PromoCodeUpsert) UpdateStartsAt() *PromoCodeUpsert {
+	u.SetExcluded(promocode.FieldStartsAt)
+	return u
+}
+
+// ClearStartsAt clears the value of the "starts_at" field.
+func (u *PromoCodeUpsert) ClearStartsAt() *PromoCodeUpsert {
+	u.SetNull(promocode.FieldStartsAt)
 	return u
 }
 
@@ -626,6 +742,62 @@ func (u *PromoCodeUpsertOne) AddUsedCount(v int) *PromoCodeUpsertOne {
 func (u *PromoCodeUpsertOne) UpdateUsedCount() *PromoCodeUpsertOne {
 	return u.Update(func(s *PromoCodeUpsert) {
 		s.UpdateUsedCount()
+	})
+}
+
+// SetDiscountPercent sets the "discount_percent" field.
+func (u *PromoCodeUpsertOne) SetDiscountPercent(v float64) *PromoCodeUpsertOne {
+	return u.Update(func(s *PromoCodeUpsert) {
+		s.SetDiscountPercent(v)
+	})
+}
+
+// AddDiscountPercent adds v to the "discount_percent" field.
+func (u *PromoCodeUpsertOne) AddDiscountPercent(v float64) *PromoCodeUpsertOne {
+	return u.Update(func(s *PromoCodeUpsert) {
+		s.AddDiscountPercent(v)
+	})
+}
+
+// UpdateDiscountPercent sets the "discount_percent" field to the value that was provided on create.
+func (u *PromoCodeUpsertOne) UpdateDiscountPercent() *PromoCodeUpsertOne {
+	return u.Update(func(s *PromoCodeUpsert) {
+		s.UpdateDiscountPercent()
+	})
+}
+
+// SetAppliesToSubscriptions sets the "applies_to_subscriptions" field.
+func (u *PromoCodeUpsertOne) SetAppliesToSubscriptions(v bool) *PromoCodeUpsertOne {
+	return u.Update(func(s *PromoCodeUpsert) {
+		s.SetAppliesToSubscriptions(v)
+	})
+}
+
+// UpdateAppliesToSubscriptions sets the "applies_to_subscriptions" field to the value that was provided on create.
+func (u *PromoCodeUpsertOne) UpdateAppliesToSubscriptions() *PromoCodeUpsertOne {
+	return u.Update(func(s *PromoCodeUpsert) {
+		s.UpdateAppliesToSubscriptions()
+	})
+}
+
+// SetStartsAt sets the "starts_at" field.
+func (u *PromoCodeUpsertOne) SetStartsAt(v time.Time) *PromoCodeUpsertOne {
+	return u.Update(func(s *PromoCodeUpsert) {
+		s.SetStartsAt(v)
+	})
+}
+
+// UpdateStartsAt sets the "starts_at" field to the value that was provided on create.
+func (u *PromoCodeUpsertOne) UpdateStartsAt() *PromoCodeUpsertOne {
+	return u.Update(func(s *PromoCodeUpsert) {
+		s.UpdateStartsAt()
+	})
+}
+
+// ClearStartsAt clears the value of the "starts_at" field.
+func (u *PromoCodeUpsertOne) ClearStartsAt() *PromoCodeUpsertOne {
+	return u.Update(func(s *PromoCodeUpsert) {
+		s.ClearStartsAt()
 	})
 }
 
@@ -984,6 +1156,62 @@ func (u *PromoCodeUpsertBulk) AddUsedCount(v int) *PromoCodeUpsertBulk {
 func (u *PromoCodeUpsertBulk) UpdateUsedCount() *PromoCodeUpsertBulk {
 	return u.Update(func(s *PromoCodeUpsert) {
 		s.UpdateUsedCount()
+	})
+}
+
+// SetDiscountPercent sets the "discount_percent" field.
+func (u *PromoCodeUpsertBulk) SetDiscountPercent(v float64) *PromoCodeUpsertBulk {
+	return u.Update(func(s *PromoCodeUpsert) {
+		s.SetDiscountPercent(v)
+	})
+}
+
+// AddDiscountPercent adds v to the "discount_percent" field.
+func (u *PromoCodeUpsertBulk) AddDiscountPercent(v float64) *PromoCodeUpsertBulk {
+	return u.Update(func(s *PromoCodeUpsert) {
+		s.AddDiscountPercent(v)
+	})
+}
+
+// UpdateDiscountPercent sets the "discount_percent" field to the value that was provided on create.
+func (u *PromoCodeUpsertBulk) UpdateDiscountPercent() *PromoCodeUpsertBulk {
+	return u.Update(func(s *PromoCodeUpsert) {
+		s.UpdateDiscountPercent()
+	})
+}
+
+// SetAppliesToSubscriptions sets the "applies_to_subscriptions" field.
+func (u *PromoCodeUpsertBulk) SetAppliesToSubscriptions(v bool) *PromoCodeUpsertBulk {
+	return u.Update(func(s *PromoCodeUpsert) {
+		s.SetAppliesToSubscriptions(v)
+	})
+}
+
+// UpdateAppliesToSubscriptions sets the "applies_to_subscriptions" field to the value that was provided on create.
+func (u *PromoCodeUpsertBulk) UpdateAppliesToSubscriptions() *PromoCodeUpsertBulk {
+	return u.Update(func(s *PromoCodeUpsert) {
+		s.UpdateAppliesToSubscriptions()
+	})
+}
+
+// SetStartsAt sets the "starts_at" field.
+func (u *PromoCodeUpsertBulk) SetStartsAt(v time.Time) *PromoCodeUpsertBulk {
+	return u.Update(func(s *PromoCodeUpsert) {
+		s.SetStartsAt(v)
+	})
+}
+
+// UpdateStartsAt sets the "starts_at" field to the value that was provided on create.
+func (u *PromoCodeUpsertBulk) UpdateStartsAt() *PromoCodeUpsertBulk {
+	return u.Update(func(s *PromoCodeUpsert) {
+		s.UpdateStartsAt()
+	})
+}
+
+// ClearStartsAt clears the value of the "starts_at" field.
+func (u *PromoCodeUpsertBulk) ClearStartsAt() *PromoCodeUpsertBulk {
+	return u.Update(func(s *PromoCodeUpsert) {
+		s.ClearStartsAt()
 	})
 }
 

@@ -1918,9 +1918,7 @@ func (_q *UserQuery) loadOwnedProxies(ctx context.Context, query *ProxyQuery, no
 			init(nodes[i])
 		}
 	}
-	if len(query.ctx.Fields) > 0 {
-		query.ctx.AppendFieldOnce(proxy.FieldOwnerUserID)
-	}
+	query.withFKs = true
 	query.Where(predicate.Proxy(func(s *sql.Selector) {
 		s.Where(sql.InValues(s.C(user.OwnedProxiesColumn), fks...))
 	}))
@@ -1929,13 +1927,13 @@ func (_q *UserQuery) loadOwnedProxies(ctx context.Context, query *ProxyQuery, no
 		return err
 	}
 	for _, n := range neighbors {
-		fk := n.OwnerUserID
+		fk := n.user_owned_proxies
 		if fk == nil {
-			return fmt.Errorf(`foreign-key "owner_user_id" is nil for node %v`, n.ID)
+			return fmt.Errorf(`foreign-key "user_owned_proxies" is nil for node %v`, n.ID)
 		}
 		node, ok := nodeids[*fk]
 		if !ok {
-			return fmt.Errorf(`unexpected referenced foreign-key "owner_user_id" returned %v for node %v`, *fk, n.ID)
+			return fmt.Errorf(`unexpected referenced foreign-key "user_owned_proxies" returned %v for node %v`, *fk, n.ID)
 		}
 		assign(node, n)
 	}

@@ -64,6 +64,11 @@
         <textarea v-model="planFeaturesText" rows="3" class="input" :placeholder="t('payment.admin.featuresPlaceholder')"></textarea>
         <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t('payment.admin.featuresHint') }}</p>
       </div>
+      <div>
+        <label class="input-label">赠送模型额度（USD）</label>
+        <textarea v-model="planEntitlementsText" rows="3" class="input font-mono" placeholder="ccmax=30&#10;kiro=100&#10;gpt=50"></textarea>
+        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">每行一个“模型或平台=额度”，支付成功后发放；各权益余额独立扣减，不会互相通用。</p>
+      </div>
       <div class="flex items-center gap-3">
         <label class="text-sm text-gray-700 dark:text-gray-300">{{ t('payment.admin.forSale') }}</label>
         <button
@@ -124,6 +129,7 @@ const appStore = useAppStore()
 const saving = ref(false)
 const planForm = reactive({ name: '', group_id: null as number | null, description: '', price: 0, original_price: 0, currency: '', validity_days: 30, validity_unit: 'days', sort_order: 0, for_sale: true })
 const planFeaturesText = ref('')
+const planEntitlementsText = ref('')
 
 const validityUnitOptions = computed(() => [
   { value: 'days', label: t('payment.admin.days') },
@@ -177,15 +183,24 @@ watch(() => props.show, (visible) => {
   if (props.plan) {
     Object.assign(planForm, { name: props.plan.name, group_id: props.plan.group_id, description: props.plan.description, price: props.plan.price, original_price: props.plan.original_price || 0, currency: props.plan.currency || '', validity_days: props.plan.validity_days, validity_unit: props.plan.validity_unit || 'days', sort_order: props.plan.sort_order || 0, for_sale: props.plan.for_sale })
     planFeaturesText.value = (props.plan.features || []).join('\n')
+    planEntitlementsText.value = Object.entries(props.plan.entitlements || {}).map(([key, value]) => `${key}=${value}`).join('\n')
   } else {
     Object.assign(planForm, { name: '', group_id: null, description: '', price: 0, original_price: 0, currency: '', validity_days: 30, validity_unit: 'days', sort_order: 0, for_sale: true })
     planFeaturesText.value = ''
+    planEntitlementsText.value = ''
   }
 })
 
 /** Build request payload with snake_case keys matching backend JSON tags */
 function buildPlanPayload() {
   const features = planFeaturesText.value.split('\n').map(f => f.trim()).filter(Boolean).join('\n')
+  const entitlements: Record<string, number> = {}
+  for (const line of planEntitlementsText.value.split('\n')) {
+    const [rawKey, rawValue] = line.split('=')
+    const key = rawKey?.trim()
+    const value = Number(rawValue?.trim())
+    if (key && Number.isFinite(value) && value >= 0) entitlements[key] = value
+  }
   return {
     name: planForm.name,
     group_id: planForm.group_id,
@@ -198,6 +213,7 @@ function buildPlanPayload() {
     sort_order: planForm.sort_order,
     for_sale: planForm.for_sale,
     features,
+    entitlements,
   }
 }
 

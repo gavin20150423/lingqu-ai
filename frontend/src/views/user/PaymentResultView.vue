@@ -88,7 +88,7 @@
         </div>
         <!-- Actions -->
         <div class="flex gap-3">
-          <button class="btn btn-secondary flex-1" @click="router.push('/purchase')">{{ t('payment.result.backToRecharge') }}</button>
+          <button class="btn btn-secondary flex-1" @click="router.push(backToPurchasePath)">{{ t('payment.result.backToRecharge') }}</button>
           <button class="btn btn-primary flex-1" @click="router.push('/orders')">{{ t('payment.result.viewOrders') }}</button>
         </div>
       </template>
@@ -252,6 +252,13 @@ function readRouteQueryString(key: string): string {
   }
   return typeof value === 'string' ? value : ''
 }
+
+const backToPurchasePath = computed(() => {
+  const orderType = order.value && 'order_type' in order.value
+    ? order.value.order_type
+    : readRouteQueryString('order_type')
+  return orderType === 'subscription' ? '/subscription-plans' : '/purchase'
+})
 
 function restoreRecoverySnapshot(context: {
   resumeToken: string

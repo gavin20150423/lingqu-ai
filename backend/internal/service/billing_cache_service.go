@@ -748,6 +748,9 @@ func (s *BillingCacheService) CheckBillingEligibility(ctx context.Context, user 
 		if err := s.checkSubscriptionEligibility(ctx, user.ID, group, subscription); err != nil {
 			return err
 		}
+		if err := s.checkSubscriptionEntitlementEligibility(ctx, group, subscription, platform); err != nil {
+			return err
+		}
 	} else {
 		if err := s.checkBalanceEligibility(ctx, user.ID); err != nil {
 			return err
@@ -773,6 +776,39 @@ func (s *BillingCacheService) CheckBillingEligibility(ctx context.Context, user 
 		return err
 	}
 
+	return nil
+}
+
+// checkSubscriptionEntitlementEligibility enforces model/platform gift pools
+// independently from the subscription's daily/weekly/monthly group quota.
+// The repository reader refreshes the JSON balance on every request so an
+// authentication-cache snapshot cannot keep a depleted gift alive.
+func (s *BillingCacheService) checkSubscriptionEntitlementEligibility(ctx context.Context, group *Group, subscription *UserSubscription, platform string) error {
+	if s == nil || subscription == nil {
+		return nil
+	}
+	current := subscription
+	if reader, ok := s.subRepo.(SubscriptionEntitlementReader); ok && subscription.ID > 0 {
+		entitlements, err := reader.GetSubscriptionEntitlements(ctx, subscription.ID)
+		if err != nil {
+			logger.LegacyPrintf("service.billing_cache", "ALERT: subscription entitlement lookup failed for subscription %d: %v", subscription.ID, err)
+			return ErrBillingServiceUnavailable.WithCause(err)
+		}
+		copy := *subscription
+		copy.Entitlements = entitlements
+		// GetActiveSubscription returns a request-local shallow copy, so keeping
+		// the caller's copy in sync ensures the post-forward billing command
+		// deducts the same pool that preflight just checked. Without this, a
+		// newly-added gift could pass preflight but remain absent from the later
+		// deduction command until the L1 subscription cache expired.
+		subscription.Entitlements = entitlements
+		current = &copy
+	}
+
+	_, balance, applies := SubscriptionEntitlementBalance(current, group, platform)
+	if applies && balance <= 0 {
+		return ErrSubscriptionEntitlementExhausted
+	}
 	return nil
 }
 

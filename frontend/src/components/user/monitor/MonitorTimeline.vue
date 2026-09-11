@@ -1,8 +1,11 @@
 <template>
   <div class="monitor-timeline">
     <div class="monitor-timeline__meta">
-      <span>近 1 小时</span>
-      <span class="monitor-timeline__idle-key"><i></i>灰色为空闲</span>
+      <span>{{ t('monitorCommon.recentProbeResults', { n: displayBars.length }) }}</span>
+      <span v-if="latestCheckedAt">
+        {{ t('monitorCommon.updatedAt', { time: formatRelativeTime(latestCheckedAt) }) }}
+      </span>
+      <span v-else>{{ t('monitorCommon.nextUpdateIn', { n: Math.max(0, countdownSeconds) }) }}</span>
     </div>
 
     <div
@@ -11,17 +14,24 @@
     >
       {{ t('monitorCommon.maintenancePaused') }}
     </div>
-    <div v-else class="monitor-timeline__bars">
+    <div
+      v-else-if="displayBars.length > 0"
+      class="monitor-timeline__bars"
+      :style="barsStyle"
+    >
       <div
         v-for="(bar, idx) in displayBars"
         :key="idx"
         class="monitor-timeline__bar"
         :class="bar.colorClass"
-        :style="{ height: bar.heightPct + '%' }"
+        :style="barStyle(bar, idx)"
         :title="bar.title"
         @mouseenter="showTooltip(bar, idx)"
         @mouseleave="hideTooltip"
       ></div>
+    </div>
+    <div v-else class="monitor-timeline__empty">
+      {{ t('monitorCommon.noProbeResults') }}
     </div>
 
     <div
@@ -56,21 +66,21 @@ const { t } = useI18n()
 const { statusLabel, formatLatency, formatRelativeTime } = useChannelMonitorFormat()
 const hoveredBar = ref<Bar | null>(null)
 const hoveredIndex = ref(0)
-const TIMELINE_WINDOW_MS = 60 * 60 * 1000
 
 interface Bar {
   colorClass: string
   heightPct: number
   title: string
+  checkedAt: string
 }
 
-// Height and colour encode health. Missing traffic slots are rendered as idle.
+// Each bar is one real probe result. Height and colour encode its health.
 const STATUS_HEIGHT: Record<string, number> = {
   operational: 100,
   degraded: 65,
   failed: 35,
   error: 35,
-  empty: 30,
+  unknown: 30,
 }
 
 const STATUS_COLOR: Record<string, string> = {
@@ -78,58 +88,50 @@ const STATUS_COLOR: Record<string, string> = {
   degraded: 'monitor-timeline__bar--warn',
   failed: 'monitor-timeline__bar--bad',
   error: 'monitor-timeline__bar--bad',
-  empty: 'bg-gray-300 dark:bg-dark-600',
+  unknown: 'monitor-timeline__bar--unknown',
 }
 
 const displayBars = computed<Bar[]>(() => {
-  const windowEnd = Date.now()
-  const windowStart = windowEnd - TIMELINE_WINDOW_MS
-  const real = [...(props.buckets ?? [])]
-    .map(point => ({ point, checkedAt: Date.parse(point.checked_at) }))
-    .filter(({ checkedAt }) => !Number.isNaN(checkedAt) && checkedAt >= windowStart && checkedAt <= windowEnd)
-    .sort((a, b) => a.checkedAt - b.checkedAt)
-
   const bucketCount = Math.max(1, props.length)
-  const bucketWidth = TIMELINE_WINDOW_MS / bucketCount
-  const bars: Bar[] = []
-  let pointIndex = 0
-  let latestPoint: MonitorTimelinePoint | null = null
-
-  for (let i = 0; i < bucketCount; i += 1) {
-    const bucketEnd = windowStart + (i + 1) * bucketWidth
-    while (pointIndex < real.length && real[pointIndex].checkedAt <= bucketEnd) {
-      latestPoint = real[pointIndex].point
-      pointIndex += 1
-    }
-
-    if (!latestPoint) {
-      bars.push({
-        colorClass: STATUS_COLOR.empty,
-        heightPct: STATUS_HEIGHT.empty,
-        title: '空闲',
-      })
-      continue
-    }
-
-    const status = latestPoint.status as keyof typeof STATUS_HEIGHT
-    const colorClass = STATUS_COLOR[status] ?? STATUS_COLOR.empty
-    const heightPct = STATUS_HEIGHT[status] ?? STATUS_HEIGHT.empty
-    const latency = formatLatency(latestPoint.latency_ms)
-    const relative = formatRelativeTime(latestPoint.checked_at)
-    const label = statusLabel(latestPoint.status)
-    bars.push({
-      colorClass,
-      heightPct,
-      title: `${relative} · ${label} · ${latency}ms`,
+  return [...(props.buckets ?? [])]
+    .map(point => ({ point, checkedAt: Date.parse(point.checked_at) }))
+    .filter(({ checkedAt }) => !Number.isNaN(checkedAt))
+    .sort((a, b) => a.checkedAt - b.checkedAt)
+    .slice(-bucketCount)
+    .map(({ point }) => {
+      const status = point.status as keyof typeof STATUS_HEIGHT
+      const colorClass = STATUS_COLOR[status] ?? STATUS_COLOR.unknown
+      const heightPct = STATUS_HEIGHT[status] ?? STATUS_HEIGHT.unknown
+      const latency = formatLatency(point.latency_ms)
+      const relative = formatRelativeTime(point.checked_at)
+      const label = statusLabel(point.status)
+      return {
+        colorClass,
+        heightPct,
+        title: `${relative} · ${label} · ${latency}ms`,
+        checkedAt: point.checked_at,
+      }
     })
-  }
-
-  return bars
 })
 
+const latestCheckedAt = computed(() => displayBars.value.at(-1)?.checkedAt ?? '')
+const barsStyle = computed(() => ({
+  gridTemplateColumns: `repeat(${Math.max(1, props.length)}, minmax(2px, 1fr))`,
+}))
+
+function barStyle(bar: Bar, index: number) {
+  const bucketCount = Math.max(1, props.length)
+  const firstColumn = Math.max(1, bucketCount - displayBars.value.length + 1)
+  return {
+    height: `${bar.heightPct}%`,
+    gridColumnStart: index === 0 ? String(firstColumn) : undefined,
+  }
+}
+
 const tooltipLeft = computed(() => {
-  const total = displayBars.value.length || 1
-  const percent = ((hoveredIndex.value + 0.5) / total) * 100
+  const bucketCount = Math.max(1, props.length)
+  const firstColumn = Math.max(0, bucketCount - displayBars.value.length)
+  const percent = ((firstColumn + hoveredIndex.value + 0.5) / bucketCount) * 100
   return `${Math.min(88, Math.max(12, percent))}%`
 })
 
@@ -160,18 +162,6 @@ function hideTooltip() {
   letter-spacing: 0;
 }
 
-.monitor-timeline__idle-key {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.24rem;
-}
-
-.monitor-timeline__idle-key i {
-  width: 0.42rem;
-  height: 0.42rem;
-  background: #d8d3ca;
-}
-
 .monitor-timeline__maintenance {
   display: flex;
   width: 100%;
@@ -187,11 +177,23 @@ function hideTooltip() {
 }
 
 .monitor-timeline__bars {
-  display: flex;
+  display: grid;
   width: 100%;
   height: 1rem;
   align-items: flex-end;
   gap: 2px;
+}
+
+.monitor-timeline__empty {
+  display: flex;
+  width: 100%;
+  height: 1rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed #d8d3ca;
+  border-radius: 4px;
+  color: #8d877f;
+  font-size: 0.58rem;
 }
 
 .monitor-timeline__bar {
@@ -218,6 +220,10 @@ function hideTooltip() {
 
 .monitor-timeline__bar--bad {
   background: #ef6b64;
+}
+
+.monitor-timeline__bar--unknown {
+  background: #aaa49b;
 }
 
 .monitor-timeline__tooltip {
@@ -255,7 +261,8 @@ function hideTooltip() {
 }
 
 :global(.dark) .monitor-timeline__meta,
-:global(.dark) .monitor-timeline__maintenance {
+:global(.dark) .monitor-timeline__maintenance,
+:global(.dark) .monitor-timeline__empty {
   color: rgb(156 163 175 / 0.72);
 }
 </style>

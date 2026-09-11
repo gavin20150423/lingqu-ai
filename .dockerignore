@@ -41,6 +41,10 @@ node_modules/
 backend/vendor/
 backend/*.exe
 backend/sub2api
+backend/sub2api-*
+backend/tmp-release/
+backend/.codex-*/
+.codex-*/
 
 # Test files
 *_test.go

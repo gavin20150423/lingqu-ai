@@ -191,13 +191,16 @@ func (s *PromoService) Create(ctx context.Context, input *CreatePromoCodeInput) 
 	}
 
 	promoCode := &PromoCode{
-		Code:        strings.ToUpper(code),
-		BonusAmount: input.BonusAmount,
-		MaxUses:     input.MaxUses,
-		UsedCount:   0,
-		Status:      PromoCodeStatusActive,
-		ExpiresAt:   input.ExpiresAt,
-		Notes:       input.Notes,
+		Code:                   strings.ToUpper(code),
+		BonusAmount:            input.BonusAmount,
+		DiscountPercent:        input.DiscountPercent,
+		AppliesToSubscriptions: input.AppliesToSubscriptions,
+		MaxUses:                input.MaxUses,
+		UsedCount:              0,
+		Status:                 PromoCodeStatusActive,
+		ExpiresAt:              input.ExpiresAt,
+		StartsAt:               input.StartsAt,
+		Notes:                  input.Notes,
 	}
 
 	if err := s.promoRepo.Create(ctx, promoCode); err != nil {
@@ -229,6 +232,12 @@ func (s *PromoService) Update(ctx context.Context, id int64, input *UpdatePromoC
 	if input.BonusAmount != nil {
 		promoCode.BonusAmount = *input.BonusAmount
 	}
+	if input.DiscountPercent != nil {
+		promoCode.DiscountPercent = *input.DiscountPercent
+	}
+	if input.AppliesToSubscriptions != nil {
+		promoCode.AppliesToSubscriptions = *input.AppliesToSubscriptions
+	}
 	if input.MaxUses != nil {
 		promoCode.MaxUses = *input.MaxUses
 	}
@@ -240,6 +249,12 @@ func (s *PromoService) Update(ctx context.Context, id int64, input *UpdatePromoC
 			input.ExpiresAt = nil
 		}
 		promoCode.ExpiresAt = input.ExpiresAt
+	}
+	if input.StartsAt != nil {
+		if input.StartsAt.IsZero() {
+			input.StartsAt = nil
+		}
+		promoCode.StartsAt = input.StartsAt
 	}
 	if input.Notes != nil {
 		promoCode.Notes = *input.Notes

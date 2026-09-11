@@ -22,6 +22,12 @@ const (
 	FieldMaxUses = "max_uses"
 	// FieldUsedCount holds the string denoting the used_count field in the database.
 	FieldUsedCount = "used_count"
+	// FieldDiscountPercent holds the string denoting the discount_percent field in the database.
+	FieldDiscountPercent = "discount_percent"
+	// FieldAppliesToSubscriptions holds the string denoting the applies_to_subscriptions field in the database.
+	FieldAppliesToSubscriptions = "applies_to_subscriptions"
+	// FieldStartsAt holds the string denoting the starts_at field in the database.
+	FieldStartsAt = "starts_at"
 	// FieldStatus holds the string denoting the status field in the database.
 	FieldStatus = "status"
 	// FieldExpiresAt holds the string denoting the expires_at field in the database.
@@ -52,6 +58,9 @@ var Columns = []string{
 	FieldBonusAmount,
 	FieldMaxUses,
 	FieldUsedCount,
+	FieldDiscountPercent,
+	FieldAppliesToSubscriptions,
+	FieldStartsAt,
 	FieldStatus,
 	FieldExpiresAt,
 	FieldNotes,
@@ -78,6 +87,10 @@ var (
 	DefaultMaxUses int
 	// DefaultUsedCount holds the default value on creation for the "used_count" field.
 	DefaultUsedCount int
+	// DefaultDiscountPercent holds the default value on creation for the "discount_percent" field.
+	DefaultDiscountPercent float64
+	// DefaultAppliesToSubscriptions holds the default value on creation for the "applies_to_subscriptions" field.
+	DefaultAppliesToSubscriptions bool
 	// DefaultStatus holds the default value on creation for the "status" field.
 	DefaultStatus string
 	// StatusValidator is a validator for the "status" field. It is called by the builders before save.
@@ -116,6 +129,21 @@ func ByMaxUses(opts ...sql.OrderTermOption) OrderOption {
 // ByUsedCount orders the results by the used_count field.
 func ByUsedCount(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldUsedCount, opts...).ToFunc()
+}
+
+// ByDiscountPercent orders the results by the discount_percent field.
+func ByDiscountPercent(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldDiscountPercent, opts...).ToFunc()
+}
+
+// ByAppliesToSubscriptions orders the results by the applies_to_subscriptions field.
+func ByAppliesToSubscriptions(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAppliesToSubscriptions, opts...).ToFunc()
+}
+
+// ByStartsAt orders the results by the starts_at field.
+func ByStartsAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldStartsAt, opts...).ToFunc()
 }
 
 // ByStatus orders the results by the status field.

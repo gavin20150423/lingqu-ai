@@ -72,6 +72,19 @@ export function ModelSelectModal({ open, channel, selectedNames, onConfirm, onCl
             setActiveTab("new");
             message.success(t("config.modelSelect.fetched", { count: models.length }));
         } catch (error) {
+            // A gateway may temporarily reject model discovery while the selected
+            // image model remains usable. Keep the existing selection visible and
+            // expose the newly supported GPT Image 2.5 choices as a manual fallback.
+            const isOpenAIImageChannel = channel.apiFormat === "openai" && existing.some((name) => name.toLowerCase().startsWith("gpt-image-"));
+            const fallback = isOpenAIImageChannel
+                ? Array.from(new Set([...existing, "gpt-image-2.5-flare", "gpt-image-2.5-sunburst"]))
+                : existing;
+            if (fallback.length) {
+                setFetched(fallback);
+                setActiveTab("new");
+                message.warning(t("config.modelSelect.fetchFailedUsingExisting", { message: error instanceof Error ? error.message : t("config.modelSelect.fetchFailed") }));
+                return;
+            }
             message.error(error instanceof Error ? error.message : t("config.modelSelect.fetchFailed"));
         } finally {
             setLoading(false);

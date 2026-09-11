@@ -294,6 +294,59 @@ func defaultModelsListCandidateIDs(platform string) []string {
 		return ids
 	case PlatformGrok:
 		return xai.DefaultModelIDs()
+	case PlatformKimi:
+		return []string{
+			"kimi-k3",
+			"kimi-k2.6",
+			"kimi-k2.5",
+			"kimi-k2-thinking",
+			"kimi-k2",
+			"kimi-for-coding",
+		}
+	case PlatformZhipu:
+		return []string{
+			"glm-5.3",
+			"glm-5.3-flash",
+			"glm-5.2",
+			"glm-5.1",
+			"glm-5",
+			"glm-5-turbo",
+			"glm-4.7",
+			"glm-4.7-flash",
+			"glm-4.6",
+			"glm-4.5",
+			"glm-4.5-flash",
+		}
+	case PlatformDeepseek:
+		return []string{
+			"deepseek-v4-pro",
+			"deepseek-v4-flash",
+			"deepseek-v4-flash-vision-exp",
+			"deepseek-chat",
+			"deepseek-reasoner",
+			"deepseek-coder",
+			"deepseek-v3",
+			"deepseek-v3-0324",
+			"deepseek-r1",
+			"deepseek-r1-0528",
+		}
+	case PlatformMiniMax:
+		return []string{
+			"MiniMax-M3",
+			"MiniMax-M2.7",
+			"MiniMax-M2.7-highspeed",
+			"MiniMax-M2.5",
+			"MiniMax-M2.5-highspeed",
+			"MiniMax-M2.1",
+			"MiniMax-M2.1-highspeed",
+			"MiniMax-M2",
+			"abab6.5-chat",
+			"abab6.5s-chat",
+			"abab6.5s-chat-pro",
+			"abab6-chat",
+			"abab5.5-chat",
+			"abab5.5s-chat",
+		}
 	case PlatformXiaoAPI:
 		return nil
 	case PlatformComposite:

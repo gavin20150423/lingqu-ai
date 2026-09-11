@@ -23,21 +23,24 @@ type UsageBillingCommand struct {
 	RequestFingerprint string
 	RequestPayloadHash string
 
-	UserID              int64
-	AccountID           int64
-	GroupID             *int64
-	SubscriptionID      *int64
-	AccountType         string
-	Model               string
-	ServiceTier         string
-	ReasoningEffort     string
-	BillingType         int8
-	InputTokens         int
-	OutputTokens        int
-	CacheCreationTokens int
-	CacheReadTokens     int
-	ImageCount          int
-	MediaType           string
+	UserID         int64
+	AccountID      int64
+	GroupID        *int64
+	SubscriptionID *int64
+	// SubscriptionEntitlementKey identifies an independent model/platform gift
+	// pool. It is consumed in the same transaction as subscription usage.
+	SubscriptionEntitlementKey string
+	AccountType                string
+	Model                      string
+	ServiceTier                string
+	ReasoningEffort            string
+	BillingType                int8
+	InputTokens                int
+	OutputTokens               int
+	CacheCreationTokens        int
+	CacheReadTokens            int
+	ImageCount                 int
+	MediaType                  string
 
 	BalanceCost         float64
 	SubscriptionCost    float64
@@ -55,6 +58,7 @@ func (c *UsageBillingCommand) Normalize() {
 		return
 	}
 	c.RequestID = strings.TrimSpace(c.RequestID)
+	c.SubscriptionEntitlementKey = strings.TrimSpace(c.SubscriptionEntitlementKey)
 	if strings.TrimSpace(c.RequestFingerprint) == "" {
 		c.RequestFingerprint = buildUsageBillingFingerprint(c)
 	}
@@ -113,7 +117,7 @@ func buildUsageBillingFingerprint(c *UsageBillingCommand) string {
 		return ""
 	}
 	raw := fmt.Sprintf(
-		"%d|%d|%d|%s|%s|%s|%s|%d|%d|%d|%d|%d|%d|%s|%d|%0.10f|%0.10f|%0.10f|%0.10f|%0.10f",
+		"%d|%d|%d|%s|%s|%s|%s|%d|%d|%d|%d|%d|%d|%s|%d|%s|%0.10f|%0.10f|%0.10f|%0.10f|%0.10f",
 		c.UserID,
 		c.AccountID,
 		c.APIKeyID,
@@ -129,6 +133,7 @@ func buildUsageBillingFingerprint(c *UsageBillingCommand) string {
 		c.ImageCount,
 		strings.TrimSpace(c.MediaType),
 		valueOrZero(c.SubscriptionID),
+		strings.TrimSpace(c.SubscriptionEntitlementKey),
 		c.BalanceCost,
 		c.SubscriptionCost,
 		c.APIKeyQuotaCost,

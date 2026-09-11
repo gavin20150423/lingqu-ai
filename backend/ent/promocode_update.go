@@ -106,6 +106,61 @@ func (_u *PromoCodeUpdate) AddUsedCount(v int) *PromoCodeUpdate {
 	return _u
 }
 
+// SetDiscountPercent sets the "discount_percent" field.
+func (_u *PromoCodeUpdate) SetDiscountPercent(v float64) *PromoCodeUpdate {
+	_u.mutation.ResetDiscountPercent()
+	_u.mutation.SetDiscountPercent(v)
+	return _u
+}
+
+// SetNillableDiscountPercent sets the "discount_percent" field if the given value is not nil.
+func (_u *PromoCodeUpdate) SetNillableDiscountPercent(v *float64) *PromoCodeUpdate {
+	if v != nil {
+		_u.SetDiscountPercent(*v)
+	}
+	return _u
+}
+
+// AddDiscountPercent adds value to the "discount_percent" field.
+func (_u *PromoCodeUpdate) AddDiscountPercent(v float64) *PromoCodeUpdate {
+	_u.mutation.AddDiscountPercent(v)
+	return _u
+}
+
+// SetAppliesToSubscriptions sets the "applies_to_subscriptions" field.
+func (_u *PromoCodeUpdate) SetAppliesToSubscriptions(v bool) *PromoCodeUpdate {
+	_u.mutation.SetAppliesToSubscriptions(v)
+	return _u
+}
+
+// SetNillableAppliesToSubscriptions sets the "applies_to_subscriptions" field if the given value is not nil.
+func (_u *PromoCodeUpdate) SetNillableAppliesToSubscriptions(v *bool) *PromoCodeUpdate {
+	if v != nil {
+		_u.SetAppliesToSubscriptions(*v)
+	}
+	return _u
+}
+
+// SetStartsAt sets the "starts_at" field.
+func (_u *PromoCodeUpdate) SetStartsAt(v time.Time) *PromoCodeUpdate {
+	_u.mutation.SetStartsAt(v)
+	return _u
+}
+
+// SetNillableStartsAt sets the "starts_at" field if the given value is not nil.
+func (_u *PromoCodeUpdate) SetNillableStartsAt(v *time.Time) *PromoCodeUpdate {
+	if v != nil {
+		_u.SetStartsAt(*v)
+	}
+	return _u
+}
+
+// ClearStartsAt clears the value of the "starts_at" field.
+func (_u *PromoCodeUpdate) ClearStartsAt() *PromoCodeUpdate {
+	_u.mutation.ClearStartsAt()
+	return _u
+}
+
 // SetStatus sets the "status" field.
 func (_u *PromoCodeUpdate) SetStatus(v string) *PromoCodeUpdate {
 	_u.mutation.SetStatus(v)
@@ -291,6 +346,21 @@ func (_u *PromoCodeUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.AddedUsedCount(); ok {
 		_spec.AddField(promocode.FieldUsedCount, field.TypeInt, value)
 	}
+	if value, ok := _u.mutation.DiscountPercent(); ok {
+		_spec.SetField(promocode.FieldDiscountPercent, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedDiscountPercent(); ok {
+		_spec.AddField(promocode.FieldDiscountPercent, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AppliesToSubscriptions(); ok {
+		_spec.SetField(promocode.FieldAppliesToSubscriptions, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.StartsAt(); ok {
+		_spec.SetField(promocode.FieldStartsAt, field.TypeTime, value)
+	}
+	if _u.mutation.StartsAtCleared() {
+		_spec.ClearField(promocode.FieldStartsAt, field.TypeTime)
+	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(promocode.FieldStatus, field.TypeString, value)
 	}
@@ -448,6 +518,61 @@ func (_u *PromoCodeUpdateOne) SetNillableUsedCount(v *int) *PromoCodeUpdateOne {
 // AddUsedCount adds value to the "used_count" field.
 func (_u *PromoCodeUpdateOne) AddUsedCount(v int) *PromoCodeUpdateOne {
 	_u.mutation.AddUsedCount(v)
+	return _u
+}
+
+// SetDiscountPercent sets the "discount_percent" field.
+func (_u *PromoCodeUpdateOne) SetDiscountPercent(v float64) *PromoCodeUpdateOne {
+	_u.mutation.ResetDiscountPercent()
+	_u.mutation.SetDiscountPercent(v)
+	return _u
+}
+
+// SetNillableDiscountPercent sets the "discount_percent" field if the given value is not nil.
+func (_u *PromoCodeUpdateOne) SetNillableDiscountPercent(v *float64) *PromoCodeUpdateOne {
+	if v != nil {
+		_u.SetDiscountPercent(*v)
+	}
+	return _u
+}
+
+// AddDiscountPercent adds value to the "discount_percent" field.
+func (_u *PromoCodeUpdateOne) AddDiscountPercent(v float64) *PromoCodeUpdateOne {
+	_u.mutation.AddDiscountPercent(v)
+	return _u
+}
+
+// SetAppliesToSubscriptions sets the "applies_to_subscriptions" field.
+func (_u *PromoCodeUpdateOne) SetAppliesToSubscriptions(v bool) *PromoCodeUpdateOne {
+	_u.mutation.SetAppliesToSubscriptions(v)
+	return _u
+}
+
+// SetNillableAppliesToSubscriptions sets the "applies_to_subscriptions" field if the given value is not nil.
+func (_u *PromoCodeUpdateOne) SetNillableAppliesToSubscriptions(v *bool) *PromoCodeUpdateOne {
+	if v != nil {
+		_u.SetAppliesToSubscriptions(*v)
+	}
+	return _u
+}
+
+// SetStartsAt sets the "starts_at" field.
+func (_u *PromoCodeUpdateOne) SetStartsAt(v time.Time) *PromoCodeUpdateOne {
+	_u.mutation.SetStartsAt(v)
+	return _u
+}
+
+// SetNillableStartsAt sets the "starts_at" field if the given value is not nil.
+func (_u *PromoCodeUpdateOne) SetNillableStartsAt(v *time.Time) *PromoCodeUpdateOne {
+	if v != nil {
+		_u.SetStartsAt(*v)
+	}
+	return _u
+}
+
+// ClearStartsAt clears the value of the "starts_at" field.
+func (_u *PromoCodeUpdateOne) ClearStartsAt() *PromoCodeUpdateOne {
+	_u.mutation.ClearStartsAt()
 	return _u
 }
 
@@ -665,6 +790,21 @@ func (_u *PromoCodeUpdateOne) sqlSave(ctx context.Context) (_node *PromoCode, er
 	}
 	if value, ok := _u.mutation.AddedUsedCount(); ok {
 		_spec.AddField(promocode.FieldUsedCount, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.DiscountPercent(); ok {
+		_spec.SetField(promocode.FieldDiscountPercent, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedDiscountPercent(); ok {
+		_spec.AddField(promocode.FieldDiscountPercent, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AppliesToSubscriptions(); ok {
+		_spec.SetField(promocode.FieldAppliesToSubscriptions, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.StartsAt(); ok {
+		_spec.SetField(promocode.FieldStartsAt, field.TypeTime, value)
+	}
+	if _u.mutation.StartsAtCleared() {
+		_spec.ClearField(promocode.FieldStartsAt, field.TypeTime)
 	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(promocode.FieldStatus, field.TypeString, value)

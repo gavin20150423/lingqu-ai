@@ -1250,6 +1250,7 @@ function generateRoutedCodexFiles(
     zhipu: 'Zhipu',
     deepseek: 'DeepSeek',
     minimax: 'MiniMax',
+    xiaoapi: 'XiaoAPI',
     composite: 'Composite'
   }
   const label = labels[platform]

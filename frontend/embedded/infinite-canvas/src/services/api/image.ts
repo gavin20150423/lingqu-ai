@@ -1097,25 +1097,51 @@ export async function requestImageQuestion(config: AiConfig, messages: AiTextMes
     }
 }
 
+type ModelListItem = string | { id?: unknown; name?: unknown; slug?: unknown; model?: unknown };
+
+function normalizeModelListId(value: unknown) {
+    if (typeof value !== "string") return "";
+    return value.trim().replace(/^models\//, "");
+}
+
+/** Accept standard OpenAI data, Codex models, Gemini models, and simple arrays. */
+function readModelList(payload: unknown) {
+    const source = Array.isArray(payload)
+        ? payload
+        : payload && typeof payload === "object"
+          ? ((payload as { data?: unknown; models?: unknown }).data ?? (payload as { models?: unknown }).models)
+          : undefined;
+    if (!Array.isArray(source)) return [];
+
+    const seen = new Set<string>();
+    const models: string[] = [];
+    for (const item of source as ModelListItem[]) {
+        const raw = typeof item === "string" ? item : item?.id ?? item?.name ?? item?.slug ?? item?.model;
+        const id = normalizeModelListId(raw);
+        if (!id || seen.has(id)) continue;
+        seen.add(id);
+        models.push(id);
+    }
+    return models.sort((a, b) => a.localeCompare(b));
+}
+
 export async function fetchImageModels(config: Pick<AiConfig, "baseUrl" | "apiKey" | "apiFormat">) {
     try {
         if (config.apiFormat === "gemini") {
             const response = await axios.get<GeminiPayload>(geminiApiUrl({ ...defaultGeminiConfig, ...config }), { headers: geminiHeaders({ ...defaultGeminiConfig, ...config }) });
             validateGeminiPayload(response.data);
-            return (response.data.models || [])
-                .map((model) => model.name?.replace(/^models\//, ""))
-                .filter((id): id is string => Boolean(id))
-                .sort((a, b) => a.localeCompare(b));
+            const models = readModelList(response.data.models || []);
+            if (!models.length) throw new Error(apiText("modelListEmpty"));
+            return models;
         }
-        const response = await axios.get<{ data?: Array<{ id?: string }>; error?: { message?: string } }>(buildApiUrl(config.baseUrl, "/models"), {
+        const response = await axios.get<{ data?: unknown; models?: unknown; error?: { message?: string } }>(buildApiUrl(config.baseUrl, "/models"), {
             headers: {
                 Authorization: `Bearer ${config.apiKey}`,
             },
         });
-        return (response.data.data || [])
-            .map((model) => model.id)
-            .filter((id): id is string => Boolean(id))
-            .sort((a, b) => a.localeCompare(b));
+        const models = readModelList(response.data);
+        if (!models.length) throw new Error(apiText("modelListEmpty"));
+        return models;
     } catch (error) {
         throw new Error(readAxiosError(error, apiText("modelReadFailed")));
     }

@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -148,7 +149,20 @@ func (s *PaymentConfigService) CreatePlan(ctx context.Context, req CreatePlanReq
 	if req.OriginalPrice != nil {
 		b.SetOriginalPrice(*req.OriginalPrice)
 	}
-	return b.Save(ctx)
+	plan, err := b.Save(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if req.Entitlements != nil {
+		plan.Entitlements = make(map[string]interface{}, len(req.Entitlements))
+		for key, value := range req.Entitlements {
+			plan.Entitlements[key] = value
+		}
+		if err := persistPlanEntitlements(ctx, s.entClient, plan.ID, plan.Entitlements); err != nil {
+			return nil, err
+		}
+	}
+	return plan, nil
 }
 
 // UpdatePlan updates a subscription plan by ID (patch semantics).
@@ -199,7 +213,36 @@ func (s *PaymentConfigService) UpdatePlan(ctx context.Context, id int64, req Upd
 	if req.SortOrder != nil {
 		u.SetSortOrder(*req.SortOrder)
 	}
-	return u.Save(ctx)
+	plan, err := u.Save(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if req.Entitlements != nil {
+		plan.Entitlements = make(map[string]interface{}, len(req.Entitlements))
+		for key, value := range req.Entitlements {
+			plan.Entitlements[key] = value
+		}
+		if err := persistPlanEntitlements(ctx, s.entClient, plan.ID, plan.Entitlements); err != nil {
+			return nil, err
+		}
+	}
+	return plan, nil
+}
+
+func persistPlanEntitlements(ctx context.Context, client *dbent.Client, planID int64, values map[string]interface{}) error {
+	if client == nil || planID <= 0 || values == nil {
+		return nil
+	}
+	raw, err := json.Marshal(values)
+	if err != nil {
+		return err
+	}
+	updateSQL := "UPDATE subscription_plans SET entitlements = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2"
+	if strings.EqualFold(client.Driver().Dialect(), "postgres") {
+		updateSQL = "UPDATE subscription_plans SET entitlements = $1::jsonb, updated_at = NOW() WHERE id = $2"
+	}
+	_, err = client.ExecContext(ctx, updateSQL, raw, planID)
+	return err
 }
 
 func (s *PaymentConfigService) DeletePlan(ctx context.Context, id int64) error {

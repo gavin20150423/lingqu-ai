@@ -12,11 +12,16 @@ import (
 )
 
 type usageBillingRepository struct {
-	db *sql.DB
+	db      *sql.DB
+	dialect string
 }
 
-func NewUsageBillingRepository(_ *dbent.Client, sqlDB *sql.DB) service.UsageBillingRepository {
-	return &usageBillingRepository{db: sqlDB}
+func NewUsageBillingRepository(client *dbent.Client, sqlDB *sql.DB) service.UsageBillingRepository {
+	dialect := ""
+	if client != nil && client.Driver() != nil {
+		dialect = client.Driver().Dialect()
+	}
+	return &usageBillingRepository{db: sqlDB, dialect: dialect}
 }
 
 func (r *usageBillingRepository) Apply(ctx context.Context, cmd *service.UsageBillingCommand) (_ *service.UsageBillingApplyResult, err error) {
@@ -176,6 +181,11 @@ func (r *usageBillingRepository) applyUsageBillingEffects(ctx context.Context, t
 		if err := incrementUsageBillingSubscription(ctx, tx, *cmd.SubscriptionID, cmd.SubscriptionCost); err != nil {
 			return err
 		}
+		if cmd.SubscriptionEntitlementKey != "" {
+			if err := deductUsageBillingSubscriptionEntitlement(ctx, tx, r.dialect, *cmd.SubscriptionID, cmd.SubscriptionEntitlementKey, cmd.SubscriptionCost); err != nil {
+				return err
+			}
+		}
 	}
 
 	if cmd.BalanceCost > 0 {
@@ -213,6 +223,55 @@ func (r *usageBillingRepository) applyUsageBillingEffects(ctx context.Context, t
 		return err
 	}
 
+	return nil
+}
+
+func deductUsageBillingSubscriptionEntitlement(ctx context.Context, tx *sql.Tx, dialect string, subscriptionID int64, entitlementKey string, amountUSD float64) error {
+	if tx == nil || subscriptionID <= 0 || strings.TrimSpace(entitlementKey) == "" || amountUSD <= 0 {
+		return nil
+	}
+	// A request may finish with a cost larger than the remaining included pool
+	// (especially for streaming responses). Keep the request's usage accounting
+	// atomic and exhaust the pool at zero instead of rolling the whole billing
+	// transaction back and leaving a successful upstream request unrecorded.
+	const postgresUpdateSQL = `
+		UPDATE user_subscriptions
+		SET entitlements = jsonb_set(
+			COALESCE(entitlements, '{}'::jsonb),
+			ARRAY[$2],
+			to_jsonb(GREATEST(
+				0::numeric,
+				COALESCE(NULLIF(entitlements ->> $2, '')::numeric, 0::numeric) - $3::numeric
+			))),
+			updated_at = NOW()
+		WHERE id = $1
+			AND deleted_at IS NULL
+	`
+	updateSQL := postgresUpdateSQL
+	if strings.EqualFold(dialect, "sqlite3") || strings.EqualFold(dialect, "sqlite") {
+		updateSQL = `
+			UPDATE user_subscriptions
+			SET entitlements = json_set(
+				COALESCE(entitlements, '{}'),
+				'$.' || $2,
+				MAX(0.0, COALESCE(CAST(json_extract(entitlements, '$.' || $2) AS REAL), 0.0) - CAST($3 AS REAL))
+			),
+			updated_at = CURRENT_TIMESTAMP
+			WHERE id = $1
+			AND deleted_at IS NULL
+		`
+	}
+	result, err := tx.ExecContext(ctx, updateSQL, subscriptionID, strings.TrimSpace(entitlementKey), amountUSD)
+	if err != nil {
+		return err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return service.ErrSubscriptionEntitlementExhausted
+	}
 	return nil
 }
 

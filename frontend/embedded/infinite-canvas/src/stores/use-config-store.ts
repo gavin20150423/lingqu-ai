@@ -139,6 +139,8 @@ export const defaultConfig: AiConfig = {
             apiFormat: "openai",
             models: [
                 { name: "gpt-image-2", capability: "image" },
+                { name: "gpt-image-2.5-flare", capability: "image" },
+                { name: "gpt-image-2.5-sunburst", capability: "image" },
                 { name: "grok-imagine-video", capability: "video" },
                 { name: "gpt-5.5", capability: "text" },
                 { name: "gpt-4o-mini-tts", capability: "audio" },

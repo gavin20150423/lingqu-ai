@@ -13,7 +13,7 @@
       </p>
       <div v-if="expired" class="text-center">
         <p class="text-lg font-medium text-red-500">{{ t('payment.qr.expired') }}</p>
-        <button class="btn btn-primary mt-4" @click="router.push('/purchase')">{{ t('payment.result.backToRecharge') }}</button>
+        <button class="btn btn-primary mt-4" @click="router.push(paymentBackPath)">{{ t('payment.result.backToRecharge') }}</button>
       </div>
       <div v-else class="text-center">
         <p class="text-sm text-gray-500 dark:text-gray-400">{{ qrUrl ? t('payment.qr.expiresIn') : t('payment.qr.payInNewWindowHint') }}</p>
@@ -72,6 +72,7 @@ const countdownDisplay = computed(() => {
 
 const isAlipay = computed(() => isBuiltInAlipayMethod(paymentType.value))
 const isWxpay = computed(() => isBuiltInWxpayMethod(paymentType.value))
+const paymentBackPath = computed(() => String(route.query.order_type || '') === 'subscription' ? '/subscription-plans' : '/purchase')
 
 const scanTitle = computed(() => {
   if (isAlipay.value) return t('payment.qr.scanAlipay')
@@ -145,7 +146,14 @@ async function pollStatus() {
     if (!pollTimer) return
     if (order.status === 'COMPLETED' || order.status === 'PAID') {
       cleanup()
-      router.push({ path: '/payment/result', query: { order_id: String(orderId.value), status: 'success' } })
+      router.push({
+        path: '/payment/result',
+        query: {
+          order_id: String(orderId.value),
+          status: 'success',
+          order_type: paymentBackPath.value === '/subscription-plans' ? 'subscription' : 'balance',
+        },
+      })
     } else if (order.status === 'EXPIRED' || order.status === 'CANCELLED' || order.status === 'FAILED') {
       cleanup()
       expired.value = true
@@ -176,7 +184,7 @@ async function handleCancel() {
   try {
     await paymentAPI.cancelOrder(orderId.value)
     cleanup()
-    router.push('/purchase')
+    router.push(paymentBackPath.value)
   } catch (err: unknown) {
     appStore.showError(extractI18nErrorMessage(err, t, 'payment.errors', t('common.error')))
   } finally {

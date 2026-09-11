@@ -734,7 +734,7 @@ func (s *OpenAIGatewayService) forwardOpenAIImagesAPIKey(
 			ImageOutputSizes: imageOutputSizes,
 		}, nil
 	} else {
-		nonStreamUsage, nonStreamCount, nonStreamSizes, err := s.handleOpenAIImagesNonStreamingResponse(upstreamCtx, resp, c, account, parsed)
+		nonStreamUsage, nonStreamCount, nonStreamSizes, upstreamDuration, err := s.handleOpenAIImagesNonStreamingResponse(upstreamCtx, resp, c, account, parsed, upstreamStart)
 		if err != nil {
 			return nil, err
 		}
@@ -912,12 +912,17 @@ func (s *OpenAIGatewayService) handleOpenAIImagesNonStreamingResponse(
 	c *gin.Context,
 	account *Account,
 	parsed *OpenAIImagesRequest,
-) (OpenAIUsage, int, []string, error) {
-	body, err := ReadUpstreamResponseBody(resp.Body, s.cfg, c, openAITooLargeError)
+	startTime time.Time,
+) (OpenAIUsage, int, []string, time.Duration, error) {
+	body, err := s.readOpenAIImagesNonStreamingResponseBody(resp, c)
 	if err != nil {
 		return OpenAIUsage{}, 0, nil, 0, err
 	}
+	upstreamDuration := time.Since(startTime)
 	body = s.backfillOpenAIImagesB64JSON(ctx, account, parsed, body)
+	usage, _ := extractOpenAIUsageFromJSONBytes(body)
+	imageCount := extractOpenAIImageCountFromJSONBytes(body)
+	imageOutputSizes := collectOpenAIResponseImageOutputSizesFromJSONBytes(body)
 	responseheaders.WriteFilteredHeaders(c.Writer.Header(), resp.Header, s.responseHeaderFilter)
 	contentType := "application/json"
 	if s.cfg != nil && !s.cfg.Security.ResponseHeaders.Enabled {

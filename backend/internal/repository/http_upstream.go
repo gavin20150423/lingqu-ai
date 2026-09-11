@@ -100,6 +100,7 @@ const (
 	upstreamProtocolModeOpenAIH1         = "openai_h1"
 	upstreamProtocolModeOpenAIH2         = "openai_h2"
 	upstreamProtocolModeOpenAIH1Fallback = "openai_h1_fallback"
+	upstreamProtocolModeGrok             = "grok"
 )
 
 var errUpstreamClientLimitReached = errors.New("upstream client cache limit reached")

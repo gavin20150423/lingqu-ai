@@ -52,6 +52,8 @@ const (
 	FieldSubscriptionDays = "subscription_days"
 	// FieldShopOrderID holds the string denoting the shop_order_id field in the database.
 	FieldShopOrderID = "shop_order_id"
+	// FieldPromoCode holds the string denoting the promo_code field in the database.
+	FieldPromoCode = "promo_code"
 	// FieldProviderInstanceID holds the string denoting the provider_instance_id field in the database.
 	FieldProviderInstanceID = "provider_instance_id"
 	// FieldProviderKey holds the string denoting the provider_key field in the database.
@@ -129,6 +131,7 @@ var Columns = []string{
 	FieldSubscriptionGroupID,
 	FieldSubscriptionDays,
 	FieldShopOrderID,
+	FieldPromoCode,
 	FieldProviderInstanceID,
 	FieldProviderKey,
 	FieldProviderSnapshot,
@@ -183,6 +186,8 @@ var (
 	DefaultOrderType string
 	// OrderTypeValidator is a validator for the "order_type" field. It is called by the builders before save.
 	OrderTypeValidator func(string) error
+	// PromoCodeValidator is a validator for the "promo_code" field. It is called by the builders before save.
+	PromoCodeValidator func(string) error
 	// ProviderInstanceIDValidator is a validator for the "provider_instance_id" field. It is called by the builders before save.
 	ProviderInstanceIDValidator func(string) error
 	// ProviderKeyValidator is a validator for the "provider_key" field. It is called by the builders before save.
@@ -310,6 +315,11 @@ func BySubscriptionDays(opts ...sql.OrderTermOption) OrderOption {
 // ByShopOrderID orders the results by the shop_order_id field.
 func ByShopOrderID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldShopOrderID, opts...).ToFunc()
+}
+
+// ByPromoCode orders the results by the promo_code field.
+func ByPromoCode(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPromoCode, opts...).ToFunc()
 }
 
 // ByProviderInstanceID orders the results by the provider_instance_id field.

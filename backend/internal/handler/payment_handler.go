@@ -51,26 +51,27 @@ func (h *PaymentHandler) GetPlans(c *gin.Context) {
 	}
 	// Enrich plans with group platform for frontend color coding
 	type planWithPlatform struct {
-		ID                 int64    `json:"id"`
-		GroupID            int64    `json:"group_id"`
-		GroupPlatform      string   `json:"group_platform"`
-		GroupName          string   `json:"group_name"`
-		RateMultiplier     float64  `json:"rate_multiplier"`
-		PeakRateEnabled    bool     `json:"peak_rate_enabled"`
-		PeakStart          string   `json:"peak_start"`
-		PeakEnd            string   `json:"peak_end"`
-		PeakRateMultiplier float64  `json:"peak_rate_multiplier"`
-		Name               string   `json:"name"`
-		Description        string   `json:"description"`
-		Price              float64  `json:"price"`
-		OriginalPrice      *float64 `json:"original_price,omitempty"`
-		Currency           string   `json:"currency,omitempty"`
-		ValidityDays       int      `json:"validity_days"`
-		ValidityUnit       string   `json:"validity_unit"`
-		Features           string   `json:"features"`
-		ProductName        string   `json:"product_name"`
-		ForSale            bool     `json:"for_sale"`
-		SortOrder          int      `json:"sort_order"`
+		ID                 int64                  `json:"id"`
+		GroupID            int64                  `json:"group_id"`
+		GroupPlatform      string                 `json:"group_platform"`
+		GroupName          string                 `json:"group_name"`
+		RateMultiplier     float64                `json:"rate_multiplier"`
+		PeakRateEnabled    bool                   `json:"peak_rate_enabled"`
+		PeakStart          string                 `json:"peak_start"`
+		PeakEnd            string                 `json:"peak_end"`
+		PeakRateMultiplier float64                `json:"peak_rate_multiplier"`
+		Name               string                 `json:"name"`
+		Description        string                 `json:"description"`
+		Price              float64                `json:"price"`
+		OriginalPrice      *float64               `json:"original_price,omitempty"`
+		Currency           string                 `json:"currency,omitempty"`
+		ValidityDays       int                    `json:"validity_days"`
+		ValidityUnit       string                 `json:"validity_unit"`
+		Features           string                 `json:"features"`
+		Entitlements       map[string]interface{} `json:"entitlements,omitempty"`
+		ProductName        string                 `json:"product_name"`
+		ForSale            bool                   `json:"for_sale"`
+		SortOrder          int                    `json:"sort_order"`
 	}
 	groupInfo := h.configService.GetGroupInfoMap(c.Request.Context(), plans)
 	result := make([]planWithPlatform, 0, len(plans))
@@ -84,7 +85,8 @@ func (h *PaymentHandler) GetPlans(c *gin.Context) {
 			Name: p.Name, Description: p.Description, Price: p.Price, OriginalPrice: p.OriginalPrice,
 			Currency:     p.Currency,
 			ValidityDays: p.ValidityDays, ValidityUnit: p.ValidityUnit, Features: p.Features,
-			ProductName: p.ProductName, ForSale: p.ForSale, SortOrder: p.SortOrder,
+			Entitlements: p.Entitlements,
+			ProductName:  p.ProductName, ForSale: p.ForSale, SortOrder: p.SortOrder,
 		})
 	}
 	response.Success(c, result)
@@ -136,7 +138,8 @@ func (h *PaymentHandler) GetCheckoutInfo(c *gin.Context) {
 			Name:        p.Name, Description: p.Description, Price: p.Price, OriginalPrice: p.OriginalPrice,
 			Currency:     p.Currency,
 			ValidityDays: p.ValidityDays, ValidityUnit: p.ValidityUnit, Features: parseFeatures(p.Features),
-			ProductName: p.ProductName,
+			Entitlements: p.Entitlements,
+			ProductName:  p.ProductName,
 		})
 	}
 
@@ -174,28 +177,29 @@ type checkoutInfoResponse struct {
 }
 
 type checkoutPlan struct {
-	ID                 int64    `json:"id"`
-	GroupID            int64    `json:"group_id"`
-	GroupPlatform      string   `json:"group_platform"`
-	GroupName          string   `json:"group_name"`
-	RateMultiplier     float64  `json:"rate_multiplier"`
-	PeakRateEnabled    bool     `json:"peak_rate_enabled"`
-	PeakStart          string   `json:"peak_start"`
-	PeakEnd            string   `json:"peak_end"`
-	PeakRateMultiplier float64  `json:"peak_rate_multiplier"`
-	DailyLimitUSD      *float64 `json:"daily_limit_usd"`
-	WeeklyLimitUSD     *float64 `json:"weekly_limit_usd"`
-	MonthlyLimitUSD    *float64 `json:"monthly_limit_usd"`
-	ModelScopes        []string `json:"supported_model_scopes"`
-	Name               string   `json:"name"`
-	Description        string   `json:"description"`
-	Price              float64  `json:"price"`
-	OriginalPrice      *float64 `json:"original_price,omitempty"`
-	Currency           string   `json:"currency,omitempty"`
-	ValidityDays       int      `json:"validity_days"`
-	ValidityUnit       string   `json:"validity_unit"`
-	Features           []string `json:"features"`
-	ProductName        string   `json:"product_name"`
+	ID                 int64                  `json:"id"`
+	GroupID            int64                  `json:"group_id"`
+	GroupPlatform      string                 `json:"group_platform"`
+	GroupName          string                 `json:"group_name"`
+	RateMultiplier     float64                `json:"rate_multiplier"`
+	PeakRateEnabled    bool                   `json:"peak_rate_enabled"`
+	PeakStart          string                 `json:"peak_start"`
+	PeakEnd            string                 `json:"peak_end"`
+	PeakRateMultiplier float64                `json:"peak_rate_multiplier"`
+	DailyLimitUSD      *float64               `json:"daily_limit_usd"`
+	WeeklyLimitUSD     *float64               `json:"weekly_limit_usd"`
+	MonthlyLimitUSD    *float64               `json:"monthly_limit_usd"`
+	ModelScopes        []string               `json:"supported_model_scopes"`
+	Name               string                 `json:"name"`
+	Description        string                 `json:"description"`
+	Price              float64                `json:"price"`
+	OriginalPrice      *float64               `json:"original_price,omitempty"`
+	Currency           string                 `json:"currency,omitempty"`
+	ValidityDays       int                    `json:"validity_days"`
+	ValidityUnit       string                 `json:"validity_unit"`
+	Features           []string               `json:"features"`
+	Entitlements       map[string]interface{} `json:"entitlements,omitempty"`
+	ProductName        string                 `json:"product_name"`
 }
 
 // parseFeatures splits a newline-separated features string into a string slice.
@@ -236,6 +240,7 @@ type CreateOrderRequest struct {
 	PaymentSource     string  `json:"payment_source"`
 	OrderType         string  `json:"order_type"`
 	PlanID            int64   `json:"plan_id"`
+	PromoCode         string  `json:"promo_code"`
 	// IsMobile lets the frontend declare its mobile status directly. When
 	// nil we fall back to User-Agent heuristics (which miss iPadOS / some
 	// embedded browsers that strip the "Mobile" keyword).
@@ -285,6 +290,7 @@ func (h *PaymentHandler) CreateOrder(c *gin.Context) {
 		PaymentSource:   req.PaymentSource,
 		OrderType:       req.OrderType,
 		PlanID:          req.PlanID,
+		PromoCode:       req.PromoCode,
 		Locale:          c.GetHeader("Accept-Language"),
 	})
 	if err != nil {
@@ -496,6 +502,7 @@ type PublicOrderResult struct {
 	RefundRequestedBy   *string    `json:"refund_requested_by,omitempty"`
 	RefundRequestReason *string    `json:"refund_request_reason,omitempty"`
 	PlanID              *int64     `json:"plan_id,omitempty"`
+	PromoCode           *string    `json:"promo_code,omitempty"`
 }
 
 // PublicOrderVerifyResult is returned by the legacy anonymous out_trade_no
@@ -531,6 +538,7 @@ func buildPublicOrderResult(order *dbent.PaymentOrder) PublicOrderResult {
 		RefundRequestedBy:   order.RefundRequestedBy,
 		RefundRequestReason: order.RefundRequestReason,
 		PlanID:              order.PlanID,
+		PromoCode:           order.PromoCode,
 	}
 }
 
@@ -640,6 +648,7 @@ type PaymentOrderResult struct {
 	RefundRequestedBy   *string    `json:"refund_requested_by,omitempty"`
 	RefundRequestReason *string    `json:"refund_request_reason,omitempty"`
 	PlanID              *int64     `json:"plan_id,omitempty"`
+	PromoCode           *string    `json:"promo_code,omitempty"`
 	ProviderInstanceID  *string    `json:"provider_instance_id,omitempty"`
 }
 
@@ -678,6 +687,7 @@ func sanitizePaymentOrderForResponse(order *dbent.PaymentOrder) *PaymentOrderRes
 		RefundRequestedBy:   order.RefundRequestedBy,
 		RefundRequestReason: order.RefundRequestReason,
 		PlanID:              order.PlanID,
+		PromoCode:           order.PromoCode,
 		ProviderInstanceID:  order.ProviderInstanceID,
 	}
 }

@@ -254,7 +254,7 @@ const (
 	// It exists in this package in order to avoid circular dependency with the "proxy" package.
 	OwnedProxiesInverseTable = "proxies"
 	// OwnedProxiesColumn is the table column denoting the owned_proxies relation/edge.
-	OwnedProxiesColumn = "owner_user_id"
+	OwnedProxiesColumn = "user_owned_proxies"
 	// UserAllowedGroupsTable is the table that holds the user_allowed_groups relation/edge.
 	UserAllowedGroupsTable = "user_allowed_groups"
 	// UserAllowedGroupsInverseTable is the table name for the UserAllowedGroup entity.

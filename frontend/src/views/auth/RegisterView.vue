@@ -1,12 +1,15 @@
 <template>
   <AuthLayout>
-    <div class="space-y-6">
+    <div class="auth-form auth-form--register">
       <!-- Title -->
-      <div class="text-center">
-        <h2 class="text-2xl font-bold text-gray-900 dark:text-white">
+      <div class="auth-form__heading">
+        <div class="auth-form__eyebrow">
+          {{ t('auth.signUpEyebrow') }}
+        </div>
+        <h2 class="auth-form__title">
           {{ t('auth.createAccount') }}
         </h2>
-        <p class="mt-2 text-sm text-gray-500 dark:text-dark-400">
+        <p class="auth-form__description">
           {{ t('auth.signUpToStart', { siteName }) }}
         </p>
       </div>
@@ -27,15 +30,15 @@
       </div>
 
       <!-- Registration Form -->
-      <form v-else @submit.prevent="handleRegister" class="space-y-5">
+      <form v-else @submit.prevent="handleRegister" class="auth-form__fields">
         <!-- Email Input -->
-        <div>
+        <div class="auth-field">
           <label for="email" class="input-label">
             {{ t('auth.emailLabel') }}
           </label>
           <div class="relative">
             <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
-              <Icon name="mail" size="md" class="text-gray-400 dark:text-dark-500" />
+              <Icon name="mail" size="md" class="auth-field__icon" />
             </div>
             <input
               id="email"
@@ -53,13 +56,13 @@
         </div>
 
         <!-- Password Input -->
-        <div>
+        <div class="auth-field">
           <label for="password" class="input-label">
             {{ t('auth.passwordLabel') }}
           </label>
           <div class="relative">
             <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
-              <Icon name="lock" size="md" class="text-gray-400 dark:text-dark-500" />
+              <Icon name="lock" size="md" class="auth-field__icon" />
             </div>
             <input
               id="password"
@@ -76,7 +79,7 @@
               type="button"
               :disabled="registrationActionDisabled"
               @click="showPassword = !showPassword"
-              class="absolute inset-y-0 right-0 z-10 flex items-center pr-3.5 text-gray-400 transition-colors hover:text-gray-600 dark:hover:text-dark-300"
+              class="auth-field__action absolute inset-y-0 right-0 z-10 flex items-center pr-3.5 transition-colors"
             >
               <Icon v-if="showPassword" name="eyeOff" size="md" />
               <Icon v-else name="eye" size="md" />
@@ -88,13 +91,13 @@
         </div>
 
         <!-- Invitation Code Input (Required when enabled) -->
-        <div v-if="invitationCodeEnabled">
+        <div v-if="invitationCodeEnabled" class="auth-field">
           <label for="invitation_code" class="input-label">
             {{ t('auth.invitationCodeLabel') }}
           </label>
           <div class="relative">
             <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
-              <Icon name="key" size="md" :class="invitationValidation.valid ? 'text-green-500' : 'text-gray-400 dark:text-dark-500'" />
+              <Icon name="key" size="md" class="auth-field__icon" :class="{ 'text-green-500': invitationValidation.valid }" />
             </div>
             <input
               id="invitation_code"
@@ -135,14 +138,14 @@
         </div>
 
         <!-- Affiliate Invitation Code Input (Optional) -->
-        <div v-else-if="affiliateEnabled" data-testid="affiliate-invitation-field">
+        <div v-else-if="affiliateEnabled" class="auth-field" data-testid="affiliate-invitation-field">
           <label for="affiliate_code" class="input-label">
             {{ t('auth.invitationCodeLabel') }}
             <span class="ml-1 text-xs font-normal text-gray-400 dark:text-dark-500">({{ t('common.optional') }})</span>
           </label>
           <div class="relative">
             <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
-              <Icon name="key" size="md" class="text-gray-400 dark:text-dark-500" />
+              <Icon name="key" size="md" class="auth-field__icon" />
             </div>
             <input
               id="affiliate_code"
@@ -156,14 +159,14 @@
         </div>
 
         <!-- Promo Code Input (Optional) -->
-        <div v-if="promoCodeEnabled">
+        <div v-if="promoCodeEnabled" class="auth-field">
           <label for="promo_code" class="input-label">
             {{ t('auth.promoCodeLabel') }}
             <span class="ml-1 text-xs font-normal text-gray-400 dark:text-dark-500">({{ t('common.optional') }})</span>
           </label>
           <div class="relative">
             <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
-              <Icon name="gift" size="md" :class="promoValidation.valid ? 'text-green-500' : 'text-gray-400 dark:text-dark-500'" />
+              <Icon name="gift" size="md" class="auth-field__icon" :class="{ 'text-green-500': promoValidation.valid }" />
             </div>
             <input
               id="promo_code"
@@ -272,13 +275,13 @@
 
       </form>
 
-      <div v-if="showOAuthLogin" class="space-y-3 pt-1">
+      <div v-if="showOAuthLogin" class="auth-form__alternatives">
         <div class="flex items-center gap-3">
-          <div class="h-px flex-1 bg-gray-200 dark:bg-dark-700"></div>
-          <span class="text-xs text-gray-500 dark:text-dark-400">
+          <div class="auth-form__rule h-px flex-1"></div>
+          <span class="auth-form__or text-xs">
             {{ t('auth.oauthOrContinue') }}
           </span>
-          <div class="h-px flex-1 bg-gray-200 dark:bg-dark-700"></div>
+          <div class="auth-form__rule h-px flex-1"></div>
         </div>
 
         <EmailOAuthButtons
@@ -319,11 +322,11 @@
 
     <!-- Footer -->
     <template #footer>
-      <p class="text-gray-500 dark:text-dark-400">
+      <p>
         {{ t('auth.alreadyHaveAccount') }}
         <router-link
           to="/login"
-          class="font-medium text-primary-600 transition-colors hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
+          class="auth-link"
         >
           {{ t('auth.signIn') }}
         </router-link>
@@ -355,7 +358,7 @@ import {
   validateInvitationCode
 } from '@/api/auth'
 import { buildAuthErrorMessage } from '@/utils/authError'
-import { extractI18nErrorMessage } from '@/utils/apiError'
+import { extractApiErrorCode, extractI18nErrorMessage } from '@/utils/apiError'
 import {
   formatRegistrationEmailSuffixWhitelistForMessage,
   isRegistrationEmailAlias,
@@ -411,6 +414,8 @@ const githubOAuthEnabled = ref<boolean>(false)
 const googleOAuthEnabled = ref<boolean>(false)
 const registrationEmailAliasRestrictionEnabled = ref<boolean>(true)
 const registrationEmailSuffixWhitelist = ref<string[]>([])
+// 域名限量注册开启时交由后端按额度判定，前端不做白名单预检。
+const emailDomainQuotaEnabled = ref<boolean>(false)
 const loginAgreementEnabled = ref<boolean>(false)
 const loginAgreementMode = ref<'modal' | 'checkbox' | string>('modal')
 const loginAgreementUpdatedAt = ref<string>('')
@@ -548,6 +553,7 @@ onMounted(async () => {
     registrationEmailSuffixWhitelist.value = normalizeRegistrationEmailSuffixWhitelist(
       settings.registration_email_suffix_whitelist || []
     )
+    emailDomainQuotaEnabled.value = settings.registration_email_domain_quota_enabled === true
     applyLoginAgreementSettings(settings)
 
     // Read promo code from URL parameter only if promo code is enabled
@@ -882,6 +888,10 @@ function buildEmailSuffixNotAllowedMessage(): string {
   })
 }
 
+function shouldBypassRegistrationEmailPolicy(): boolean {
+  return emailDomainQuotaEnabled.value
+}
+
 function validateForm(): boolean {
   // Reset errors
   errors.email = ''
@@ -913,6 +923,7 @@ function validateForm(): boolean {
     errors.email = t('auth.emailAliasNotAllowed')
     isValid = false
   } else if (
+    !shouldBypassRegistrationEmailPolicy() &&
     !isRegistrationEmailSuffixAllowed(formData.email, registrationEmailSuffixWhitelist.value)
   ) {
     errors.email = buildEmailSuffixNotAllowedMessage()
@@ -1050,9 +1061,10 @@ async function handleRegister(): Promise<void> {
     await router.push('/dashboard')
   } catch (error: unknown) {
     // Handle registration error
-    errorMessage.value = buildAuthErrorMessage(error, {
-      fallback: t('auth.registrationFailed')
-    })
+    errorMessage.value =
+      extractApiErrorCode(error) === 'EMAIL_DOMAIN_REGISTRATION_LIMIT'
+        ? t('auth.emailDomainRegistrationLimit')
+        : buildAuthErrorMessage(error, { fallback: t('auth.registrationFailed') })
 
     // Also show error toast
     appStore.showError(errorMessage.value)

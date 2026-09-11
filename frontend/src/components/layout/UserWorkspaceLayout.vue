@@ -348,7 +348,12 @@ const parentNavigation = computed(() => {
     return { to: '/billing', label: '账单中心', group: '账单' }
   }
   if (path.startsWith('/payment/')) {
-    return { to: '/purchase', label: '充值/订阅', group: '支付' }
+    const isSubscriptionPayment = String(route.query.order_type || '') === 'subscription'
+    return {
+      to: isSubscriptionPayment ? '/subscription-plans' : '/purchase',
+      label: isSubscriptionPayment ? '订阅套餐' : '充值',
+      group: '支付',
+    }
   }
   if (path === '/available-channels') {
     return { to: '/monitor', label: '渠道状态', group: '状态' }
@@ -423,7 +428,19 @@ const currentSection = computed(() => {
       kicker: 'Support', title: '工单服务', description: '在固定会话中持续跟进问题。'
     },
     {
-      match: (path: string) => ['/billing', '/purchase', '/subscriptions', '/orders', '/redeem'].includes(path) || path.startsWith('/payment/'),
+      match: (path: string) => path === '/subscription-plans',
+      kicker: 'Subscription plans',
+      title: '订阅套餐',
+      description: '选择模型系列和额度档位，独立管理每项订阅权益。'
+    },
+    {
+      match: (path: string) => path === '/purchase',
+      kicker: 'Balance',
+      title: '充值',
+      description: '补充账户余额，用于按量调用模型。'
+    },
+    {
+      match: (path: string) => ['/billing', '/purchase', '/subscription-plans', '/subscriptions', '/orders', '/redeem'].includes(path) || path.startsWith('/payment/'),
       kicker: 'Billing',
       title: '账单与订阅',
       description: '管理余额、订阅套餐、充值和订单。'
@@ -461,6 +478,7 @@ type WorkspaceNavItem = {
     | 'key'
     | 'chart'
     | 'dollar'
+    | 'badge'
     | 'calendar'
     | 'sparkles'
     | 'image'
@@ -476,7 +494,8 @@ const baseNavItems: WorkspaceNavItem[] = [
   { id: 'dashboard', path: '/dashboard', activePaths: ['/dashboard'], label: '首页', icon: 'home' },
   { id: 'keys', path: '/keys', activePaths: ['/keys'], label: 'Key', icon: 'key' },
   { id: 'usage', path: '/usage', activePaths: ['/usage'], label: '使用记录', icon: 'chart' },
-  { id: 'purchase', path: '/purchase', activePaths: ['/purchase', '/payment'], label: '充值与订阅', icon: 'dollar' },
+  { id: 'purchase', path: '/purchase', activePaths: ['/purchase'], label: '充值', icon: 'dollar' },
+  { id: 'subscription-plans', path: '/subscription-plans', activePaths: ['/subscription-plans'], label: '订阅套餐', icon: 'badge' },
   { id: 'subscriptions', path: '/subscriptions', activePaths: ['/subscriptions'], label: '我的订阅', icon: 'calendar' },
   { id: 'ai-creation', path: '/ai-creation', activePaths: ['/ai-creation', '/video-workbench'], label: 'AI 创作', icon: 'sparkles' },
   { id: 'images', path: '/images', activePaths: ['/images'], label: '图工坊', icon: 'image' },
@@ -496,9 +515,16 @@ function resolveConfiguredNav(items: WorkspaceNavItem[]): WorkspaceNavItem[] {
   if (!config?.order?.length) return visibleItems
 
   const orderIndex = new Map(config.order.map((id, index) => [id, index]))
+  const purchaseIndex = orderIndex.get('purchase')
+  const resolvedOrderIndex = (id: string) => {
+    // Existing installations have a saved menu order without this new item.
+    // Keep the subscription catalog directly beside recharge until it is saved.
+    if (id === 'subscription-plans' && purchaseIndex != null) return purchaseIndex + 0.5
+    return orderIndex.get(id) ?? Number.MAX_SAFE_INTEGER
+  }
   return [...visibleItems].sort((left, right) => {
-    const leftIndex = orderIndex.get(left.id) ?? Number.MAX_SAFE_INTEGER
-    const rightIndex = orderIndex.get(right.id) ?? Number.MAX_SAFE_INTEGER
+    const leftIndex = resolvedOrderIndex(left.id)
+    const rightIndex = resolvedOrderIndex(right.id)
     return leftIndex - rightIndex
   })
 }
@@ -519,6 +545,8 @@ const businessNavItems = computed(() => {
 
 const billingNavItems = [
   { path: '/billing', label: '账单概览' },
+  { path: '/purchase', label: '充值' },
+  { path: '/subscription-plans', label: '订阅套餐' },
   { path: '/orders', label: '订单记录' },
   { path: '/redeem', label: '兑换码' }
 ] as const

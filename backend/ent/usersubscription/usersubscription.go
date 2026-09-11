@@ -49,6 +49,8 @@ const (
 	FieldAssignedAt = "assigned_at"
 	// FieldNotes holds the string denoting the notes field in the database.
 	FieldNotes = "notes"
+	// FieldEntitlements holds the string denoting the entitlements field in the database.
+	FieldEntitlements = "entitlements"
 	// EdgeUser holds the string denoting the user edge name in mutations.
 	EdgeUser = "user"
 	// EdgeGroup holds the string denoting the group edge name in mutations.
@@ -109,6 +111,7 @@ var Columns = []string{
 	FieldAssignedBy,
 	FieldAssignedAt,
 	FieldNotes,
+	FieldEntitlements,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -147,6 +150,8 @@ var (
 	DefaultMonthlyUsageUsd float64
 	// DefaultAssignedAt holds the default value on creation for the "assigned_at" field.
 	DefaultAssignedAt func() time.Time
+	// DefaultEntitlements holds the default value on creation for the "entitlements" field.
+	DefaultEntitlements func() map[string]interface{}
 )
 
 // OrderOption defines the ordering options for the UserSubscription queries.

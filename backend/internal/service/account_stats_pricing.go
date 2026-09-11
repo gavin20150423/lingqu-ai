@@ -92,7 +92,6 @@ func tryModelFilePricing(billingService *BillingService, model string, tokens Us
 	if err != nil || breakdown == nil || breakdown.TotalCost <= 0 {
 		return nil
 	}
-	applyCostBreakdownMultiplier(breakdown, maxReasoningEffortBillingMultiplier(model, reasoningEffort, nil))
 	return &breakdown.TotalCost
 }
 

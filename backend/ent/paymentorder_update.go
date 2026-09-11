@@ -392,6 +392,26 @@ func (_u *PaymentOrderUpdate) ClearShopOrderID() *PaymentOrderUpdate {
 	return _u
 }
 
+// SetPromoCode sets the "promo_code" field.
+func (_u *PaymentOrderUpdate) SetPromoCode(v string) *PaymentOrderUpdate {
+	_u.mutation.SetPromoCode(v)
+	return _u
+}
+
+// SetNillablePromoCode sets the "promo_code" field if the given value is not nil.
+func (_u *PaymentOrderUpdate) SetNillablePromoCode(v *string) *PaymentOrderUpdate {
+	if v != nil {
+		_u.SetPromoCode(*v)
+	}
+	return _u
+}
+
+// ClearPromoCode clears the value of the "promo_code" field.
+func (_u *PaymentOrderUpdate) ClearPromoCode() *PaymentOrderUpdate {
+	_u.mutation.ClearPromoCode()
+	return _u
+}
+
 // SetProviderInstanceID sets the "provider_instance_id" field.
 func (_u *PaymentOrderUpdate) SetProviderInstanceID(v string) *PaymentOrderUpdate {
 	_u.mutation.SetProviderInstanceID(v)
@@ -830,6 +850,11 @@ func (_u *PaymentOrderUpdate) check() error {
 			return &ValidationError{Name: "order_type", err: fmt.Errorf(`ent: validator failed for field "PaymentOrder.order_type": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.PromoCode(); ok {
+		if err := paymentorder.PromoCodeValidator(v); err != nil {
+			return &ValidationError{Name: "promo_code", err: fmt.Errorf(`ent: validator failed for field "PaymentOrder.promo_code": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.ProviderInstanceID(); ok {
 		if err := paymentorder.ProviderInstanceIDValidator(v); err != nil {
 			return &ValidationError{Name: "provider_instance_id", err: fmt.Errorf(`ent: validator failed for field "PaymentOrder.provider_instance_id": %w`, err)}
@@ -976,6 +1001,12 @@ func (_u *PaymentOrderUpdate) sqlSave(ctx context.Context) (_node int, err error
 	}
 	if _u.mutation.ShopOrderIDCleared() {
 		_spec.ClearField(paymentorder.FieldShopOrderID, field.TypeInt64)
+	}
+	if value, ok := _u.mutation.PromoCode(); ok {
+		_spec.SetField(paymentorder.FieldPromoCode, field.TypeString, value)
+	}
+	if _u.mutation.PromoCodeCleared() {
+		_spec.ClearField(paymentorder.FieldPromoCode, field.TypeString)
 	}
 	if value, ok := _u.mutation.ProviderInstanceID(); ok {
 		_spec.SetField(paymentorder.FieldProviderInstanceID, field.TypeString, value)
@@ -1491,6 +1522,26 @@ func (_u *PaymentOrderUpdateOne) ClearShopOrderID() *PaymentOrderUpdateOne {
 	return _u
 }
 
+// SetPromoCode sets the "promo_code" field.
+func (_u *PaymentOrderUpdateOne) SetPromoCode(v string) *PaymentOrderUpdateOne {
+	_u.mutation.SetPromoCode(v)
+	return _u
+}
+
+// SetNillablePromoCode sets the "promo_code" field if the given value is not nil.
+func (_u *PaymentOrderUpdateOne) SetNillablePromoCode(v *string) *PaymentOrderUpdateOne {
+	if v != nil {
+		_u.SetPromoCode(*v)
+	}
+	return _u
+}
+
+// ClearPromoCode clears the value of the "promo_code" field.
+func (_u *PaymentOrderUpdateOne) ClearPromoCode() *PaymentOrderUpdateOne {
+	_u.mutation.ClearPromoCode()
+	return _u
+}
+
 // SetProviderInstanceID sets the "provider_instance_id" field.
 func (_u *PaymentOrderUpdateOne) SetProviderInstanceID(v string) *PaymentOrderUpdateOne {
 	_u.mutation.SetProviderInstanceID(v)
@@ -1942,6 +1993,11 @@ func (_u *PaymentOrderUpdateOne) check() error {
 			return &ValidationError{Name: "order_type", err: fmt.Errorf(`ent: validator failed for field "PaymentOrder.order_type": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.PromoCode(); ok {
+		if err := paymentorder.PromoCodeValidator(v); err != nil {
+			return &ValidationError{Name: "promo_code", err: fmt.Errorf(`ent: validator failed for field "PaymentOrder.promo_code": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.ProviderInstanceID(); ok {
 		if err := paymentorder.ProviderInstanceIDValidator(v); err != nil {
 			return &ValidationError{Name: "provider_instance_id", err: fmt.Errorf(`ent: validator failed for field "PaymentOrder.provider_instance_id": %w`, err)}
@@ -2105,6 +2161,12 @@ func (_u *PaymentOrderUpdateOne) sqlSave(ctx context.Context) (_node *PaymentOrd
 	}
 	if _u.mutation.ShopOrderIDCleared() {
 		_spec.ClearField(paymentorder.FieldShopOrderID, field.TypeInt64)
+	}
+	if value, ok := _u.mutation.PromoCode(); ok {
+		_spec.SetField(paymentorder.FieldPromoCode, field.TypeString, value)
+	}
+	if _u.mutation.PromoCodeCleared() {
+		_spec.ClearField(paymentorder.FieldPromoCode, field.TypeString)
 	}
 	if value, ok := _u.mutation.ProviderInstanceID(); ok {
 		_spec.SetField(paymentorder.FieldProviderInstanceID, field.TypeString, value)

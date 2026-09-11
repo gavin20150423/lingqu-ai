@@ -1,35 +1,26 @@
 <template>
   <AuthLayout>
-    <div class="space-y-6">
-      <!-- Title -->
-      <div class="text-center">
-        <div class="mb-3 inline-flex rounded-full border-2 border-comic-ink bg-[#fff7d0] px-3 py-1 text-xs font-black uppercase tracking-[0.18em] text-comic-ink shadow-[3px_3px_0_rgba(33,31,28,0.82)] dark:bg-dark-800 dark:text-white">
-          Lingqu AI Login
+    <div class="auth-form">
+      <div class="auth-form__heading">
+        <div class="auth-form__eyebrow">
+          {{ t('auth.loginEyebrow') }}
         </div>
-        <h2 class="comic-display text-3xl font-black leading-tight text-comic-ink dark:text-white">
-          登录灵渠AI
+        <h2 class="auth-form__title">
+          {{ t('auth.loginHeading', { siteName }) }}
         </h2>
-        <p class="mx-auto mt-2 max-w-sm text-sm font-semibold leading-relaxed text-comic-ink/65 dark:text-white/55">
-          进去后拿到一个 Key，就能开始接入多个顶尖模型。
+        <p class="auth-form__description">
+          {{ t('auth.loginDescription') }}
         </p>
       </div>
-      <!-- Login Form -->
-      <form @submit.prevent="handleLogin" class="space-y-5">
-        <!-- Email Input -->
-        <div class="space-y-2">
+      <form @submit.prevent="handleLogin" class="auth-form__fields">
+        <div class="auth-field">
           <label for="email" class="input-label">
             {{ t('auth.emailLabel') }}
           </label>
-          <div
-            class="typing-input-frame relative"
-            :class="{ 'typing-input-frame--active': focusedField === 'email' }"
-          >
-            <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
-              <Icon name="mail" size="md" class="text-comic-ink/[0.45] dark:text-dark-500" />
+          <div class="relative">
+            <div class="auth-field__icon pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
+              <Icon name="mail" size="md" />
             </div>
-            <span v-if="!formData.email" class="typing-placeholder" aria-hidden="true">
-              <span class="typing-placeholder__text typing-placeholder__text--email">pilot@lingqu.ai</span>
-            </span>
             <input
               id="email"
               v-model="formData.email"
@@ -38,30 +29,21 @@
               autofocus
               autocomplete="email"
               :disabled="authActionDisabled"
-              class="input typing-input pl-11"
+              class="input pl-11"
               :class="{ 'input-error': errors.email }"
-              placeholder=""
-              @focus="focusedField = 'email'"
-              @blur="focusedField = null"
+              :placeholder="t('auth.emailPlaceholder')"
             />
           </div>
         </div>
 
-        <!-- Password Input -->
-        <div class="space-y-2">
+        <div class="auth-field">
           <label for="password" class="input-label">
             {{ t('auth.passwordLabel') }}
           </label>
-          <div
-            class="typing-input-frame relative"
-            :class="{ 'typing-input-frame--active': focusedField === 'password' }"
-          >
-            <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
-              <Icon name="lock" size="md" class="text-comic-ink/[0.45] dark:text-dark-500" />
+          <div class="relative">
+            <div class="auth-field__icon pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
+              <Icon name="lock" size="md" />
             </div>
-            <span v-if="!formData.password" class="typing-placeholder typing-placeholder--password" aria-hidden="true">
-              <span class="typing-placeholder__text typing-placeholder__text--password">输入密码</span>
-            </span>
             <input
               id="password"
               v-model="formData.password"
@@ -69,17 +51,15 @@
               required
               autocomplete="current-password"
               :disabled="authActionDisabled"
-              class="input typing-input pl-11 pr-11"
+              class="input pl-11 pr-11"
               :class="{ 'input-error': errors.password }"
-              placeholder=""
-              @focus="focusedField = 'password'"
-              @blur="focusedField = null"
+              :placeholder="t('auth.passwordPlaceholder')"
             />
             <button
               type="button"
               @click="showPassword = !showPassword"
               :disabled="authActionDisabled"
-              class="absolute inset-y-0 right-0 z-10 flex items-center pr-3.5 text-comic-ink/[0.45] transition-colors hover:text-comic-ink dark:hover:text-dark-300"
+              class="auth-field__action absolute inset-y-0 right-0 z-10 flex items-center pr-3.5 transition-colors"
             >
               <Icon v-if="showPassword" name="eyeOff" size="md" />
               <Icon v-else name="eye" size="md" />
@@ -97,7 +77,6 @@
           </div>
         </div>
 
-        <!-- Turnstile Widget -->
         <div v-if="captchaEnabled">
           <TurnstileWidget
             ref="turnstileRef"
@@ -116,11 +95,10 @@
           />
         </div>
 
-        <!-- Submit Button -->
         <button
           type="submit"
           :disabled="authActionDisabled || (turnstileEnabled && !turnstileToken)"
-          class="btn btn-primary w-full bg-gradient-to-r from-[#ff4f7b] to-[#ffb938] text-base font-black"
+          class="btn btn-primary w-full"
         >
           <svg
             v-if="isLoading"
@@ -143,7 +121,7 @@
             ></path>
           </svg>
           <Icon v-else name="login" size="md" class="mr-2" />
-          {{ isLoading ? t('auth.signingIn') : '登录' }}
+          {{ isLoading ? t('auth.signingIn') : t('auth.signIn') }}
         </button>
 
         <LoginAgreementPrompt
@@ -158,13 +136,13 @@
           @open="showAgreementModal = true"
         />
 
-        <div v-if="showPasskeyLogin || showOAuthLogin" class="space-y-3 pt-1">
+        <div v-if="showPasskeyLogin || showOAuthLogin" class="auth-form__alternatives">
           <div class="flex items-center gap-3">
-            <div class="h-px flex-1 bg-gray-200 dark:bg-dark-700"></div>
-            <span class="text-xs text-comic-ink/60 dark:text-dark-400">
+            <div class="auth-form__rule h-px flex-1"></div>
+            <span class="auth-form__or text-xs">
               {{ t('auth.oauthOrContinue') }}
             </span>
-            <div class="h-px flex-1 bg-gray-200 dark:bg-dark-700"></div>
+            <div class="auth-form__rule h-px flex-1"></div>
           </div>
 
           <button
@@ -221,7 +199,7 @@
         {{ t('auth.dontHaveAccount') }}
         <router-link
           to="/register"
-          class="font-medium text-primary-700 transition-colors hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
+          class="auth-link"
         >
           {{ t('auth.signUp') }}
         </router-link>
@@ -255,6 +233,7 @@ import TotpLoginModal from '@/components/auth/TotpLoginModal.vue'
 import Icon from '@/components/icons/Icon.vue'
 import TurnstileWidget from '@/components/CaptchaChallenge.vue'
 import { useAuthStore, useAppStore } from '@/stores'
+import { resolveBrandName } from '@/constants/brand'
 import {
   buildOAuthLoginStartURL,
   getPublicSettings,
@@ -280,6 +259,8 @@ const router = useRouter()
 const authStore = useAuthStore()
 const appStore = useAppStore()
 
+const siteName = ref<string>(resolveBrandName())
+
 // ==================== State ====================
 
 const isLoading = ref<boolean>(false)
@@ -287,7 +268,6 @@ const passkeyLoading = ref<boolean>(false)
 const errorMessage = ref<string>('')
 const showPassword = ref<boolean>(false)
 const publicSettingsLoaded = ref<boolean>(false)
-const focusedField = ref<'email' | 'password' | null>(null)
 
 // Public settings
 const registrationEnabled = ref<boolean>(false)
@@ -403,6 +383,7 @@ onMounted(async () => {
   try {
     const settings = await getPublicSettings()
     registrationEnabled.value = settings.registration_enabled === true
+    siteName.value = resolveBrandName(settings.site_name)
     turnstileEnabled.value = settings.turnstile_enabled
     turnstileSiteKey.value = settings.turnstile_site_key || ''
     tencentCaptchaEnabled.value = settings.tencent_captcha_enabled === true
@@ -760,97 +741,6 @@ function handle2FACancel(): void {
 </script>
 
 <style scoped>
-.typing-input-frame {
-  border-radius: 0.875rem;
-  transition:
-    transform 180ms ease,
-    filter 180ms ease;
-}
-
-.typing-input-frame--active {
-  transform: translateY(-2px);
-  filter: drop-shadow(0 8px 0 rgba(255, 185, 56, 0.18));
-}
-
-.typing-input {
-  position: relative;
-  z-index: 2;
-  background-color: rgba(255, 255, 255, 0.74);
-}
-
-.typing-placeholder {
-  pointer-events: none;
-  position: absolute;
-  left: 2.75rem;
-  right: 1rem;
-  top: 50%;
-  z-index: 3;
-  display: flex;
-  max-width: calc(100% - 4.25rem);
-  transform: translateY(-50%);
-  overflow: hidden;
-  color: rgba(33, 31, 28, 0.42);
-  font-size: 0.875rem;
-  font-weight: 800;
-  white-space: nowrap;
-}
-
-.typing-placeholder--password {
-  right: 2.8rem;
-  max-width: calc(100% - 5.75rem);
-}
-
-.typing-placeholder__text {
-  display: inline-block;
-  overflow: hidden;
-  max-width: 0;
-  white-space: nowrap;
-}
-
-.typing-placeholder__text--email {
-  animation: loginTypewriter 4.8s steps(16, end) infinite;
-}
-
-.typing-placeholder__text--password {
-  animation: loginTypewriter 5.4s steps(12, end) infinite;
-}
-
-.typing-placeholder__text::after {
-  content: '';
-  display: inline-block;
-  width: 2px;
-  height: 1em;
-  margin-left: 0.16rem;
-  background: #ff4f7b;
-  vertical-align: -0.12em;
-  animation: loginCaret 0.8s steps(2, end) infinite;
-}
-
-@keyframes loginTypewriter {
-  0%,
-  12% {
-    max-width: 0;
-  }
-  52%,
-  78% {
-    max-width: 18ch;
-  }
-  100% {
-    max-width: 0;
-  }
-}
-
-@keyframes loginCaret {
-  0%,
-  45% {
-    opacity: 1;
-  }
-  46%,
-  100% {
-    opacity: 0;
-  }
-}
-
 .fade-enter-active,
 .fade-leave-active {
   transition: all 0.3s ease;

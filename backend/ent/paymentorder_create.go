@@ -225,6 +225,20 @@ func (_c *PaymentOrderCreate) SetNillableShopOrderID(v *int64) *PaymentOrderCrea
 	return _c
 }
 
+// SetPromoCode sets the "promo_code" field.
+func (_c *PaymentOrderCreate) SetPromoCode(v string) *PaymentOrderCreate {
+	_c.mutation.SetPromoCode(v)
+	return _c
+}
+
+// SetNillablePromoCode sets the "promo_code" field if the given value is not nil.
+func (_c *PaymentOrderCreate) SetNillablePromoCode(v *string) *PaymentOrderCreate {
+	if v != nil {
+		_c.SetPromoCode(*v)
+	}
+	return _c
+}
+
 // SetProviderInstanceID sets the "provider_instance_id" field.
 func (_c *PaymentOrderCreate) SetProviderInstanceID(v string) *PaymentOrderCreate {
 	_c.mutation.SetProviderInstanceID(v)
@@ -631,6 +645,11 @@ func (_c *PaymentOrderCreate) check() error {
 			return &ValidationError{Name: "order_type", err: fmt.Errorf(`ent: validator failed for field "PaymentOrder.order_type": %w`, err)}
 		}
 	}
+	if v, ok := _c.mutation.PromoCode(); ok {
+		if err := paymentorder.PromoCodeValidator(v); err != nil {
+			return &ValidationError{Name: "promo_code", err: fmt.Errorf(`ent: validator failed for field "PaymentOrder.promo_code": %w`, err)}
+		}
+	}
 	if v, ok := _c.mutation.ProviderInstanceID(); ok {
 		if err := paymentorder.ProviderInstanceIDValidator(v); err != nil {
 			return &ValidationError{Name: "provider_instance_id", err: fmt.Errorf(`ent: validator failed for field "PaymentOrder.provider_instance_id": %w`, err)}
@@ -786,6 +805,10 @@ func (_c *PaymentOrderCreate) createSpec() (*PaymentOrder, *sqlgraph.CreateSpec)
 	if value, ok := _c.mutation.ShopOrderID(); ok {
 		_spec.SetField(paymentorder.FieldShopOrderID, field.TypeInt64, value)
 		_node.ShopOrderID = &value
+	}
+	if value, ok := _c.mutation.PromoCode(); ok {
+		_spec.SetField(paymentorder.FieldPromoCode, field.TypeString, value)
+		_node.PromoCode = &value
 	}
 	if value, ok := _c.mutation.ProviderInstanceID(); ok {
 		_spec.SetField(paymentorder.FieldProviderInstanceID, field.TypeString, value)
@@ -1255,6 +1278,24 @@ func (u *PaymentOrderUpsert) AddShopOrderID(v int64) *PaymentOrderUpsert {
 // ClearShopOrderID clears the value of the "shop_order_id" field.
 func (u *PaymentOrderUpsert) ClearShopOrderID() *PaymentOrderUpsert {
 	u.SetNull(paymentorder.FieldShopOrderID)
+	return u
+}
+
+// SetPromoCode sets the "promo_code" field.
+func (u *PaymentOrderUpsert) SetPromoCode(v string) *PaymentOrderUpsert {
+	u.Set(paymentorder.FieldPromoCode, v)
+	return u
+}
+
+// UpdatePromoCode sets the "promo_code" field to the value that was provided on create.
+func (u *PaymentOrderUpsert) UpdatePromoCode() *PaymentOrderUpsert {
+	u.SetExcluded(paymentorder.FieldPromoCode)
+	return u
+}
+
+// ClearPromoCode clears the value of the "promo_code" field.
+func (u *PaymentOrderUpsert) ClearPromoCode() *PaymentOrderUpsert {
+	u.SetNull(paymentorder.FieldPromoCode)
 	return u
 }
 
@@ -1995,6 +2036,27 @@ func (u *PaymentOrderUpsertOne) UpdateShopOrderID() *PaymentOrderUpsertOne {
 func (u *PaymentOrderUpsertOne) ClearShopOrderID() *PaymentOrderUpsertOne {
 	return u.Update(func(s *PaymentOrderUpsert) {
 		s.ClearShopOrderID()
+	})
+}
+
+// SetPromoCode sets the "promo_code" field.
+func (u *PaymentOrderUpsertOne) SetPromoCode(v string) *PaymentOrderUpsertOne {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.SetPromoCode(v)
+	})
+}
+
+// UpdatePromoCode sets the "promo_code" field to the value that was provided on create.
+func (u *PaymentOrderUpsertOne) UpdatePromoCode() *PaymentOrderUpsertOne {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.UpdatePromoCode()
+	})
+}
+
+// ClearPromoCode clears the value of the "promo_code" field.
+func (u *PaymentOrderUpsertOne) ClearPromoCode() *PaymentOrderUpsertOne {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.ClearPromoCode()
 	})
 }
 
@@ -2955,6 +3017,27 @@ func (u *PaymentOrderUpsertBulk) UpdateShopOrderID() *PaymentOrderUpsertBulk {
 func (u *PaymentOrderUpsertBulk) ClearShopOrderID() *PaymentOrderUpsertBulk {
 	return u.Update(func(s *PaymentOrderUpsert) {
 		s.ClearShopOrderID()
+	})
+}
+
+// SetPromoCode sets the "promo_code" field.
+func (u *PaymentOrderUpsertBulk) SetPromoCode(v string) *PaymentOrderUpsertBulk {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.SetPromoCode(v)
+	})
+}
+
+// UpdatePromoCode sets the "promo_code" field to the value that was provided on create.
+func (u *PaymentOrderUpsertBulk) UpdatePromoCode() *PaymentOrderUpsertBulk {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.UpdatePromoCode()
+	})
+}
+
+// ClearPromoCode clears the value of the "promo_code" field.
+func (u *PaymentOrderUpsertBulk) ClearPromoCode() *PaymentOrderUpsertBulk {
+	return u.Update(func(s *PaymentOrderUpsert) {
+		s.ClearPromoCode()
 	})
 }
 

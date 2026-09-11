@@ -124,7 +124,7 @@ func (h *OpenAIGatewayHandler) CodexModels(c *gin.Context) {
 			if c.Request.Context().Err() != nil {
 				return
 			}
-			writeCodexModelsManifestResponse(c, pinnedManifest)
+			writeOpenAIModelsResponse(c, pinnedManifest)
 			return
 		}
 	}

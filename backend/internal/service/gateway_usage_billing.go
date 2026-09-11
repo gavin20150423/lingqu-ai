@@ -147,6 +147,8 @@ func postUsageBilling(ctx context.Context, p *postUsageBillingParams, deps *bill
 		if cost.ActualCost > 0 {
 			if err := deps.userSubRepo.IncrementUsage(billingCtx, p.Subscription.ID, cost.ActualCost); err != nil {
 				slog.Error("increment subscription usage failed", "subscription_id", p.Subscription.ID, "error", err)
+			} else {
+				deductSubscriptionEntitlementLegacy(billingCtx, p, deps)
 			}
 		}
 	} else {
@@ -204,6 +206,30 @@ func postUsageBilling(ctx context.Context, p *postUsageBillingParams, deps *bill
 	// cache updates. The legacy path does DB writes directly; the finalize path
 	// does cache queue + notifications. Notifications are dispatched separately
 	// by the caller after recording the usage log.
+}
+
+func deductSubscriptionEntitlementLegacy(ctx context.Context, p *postUsageBillingParams, deps *billingDeps) {
+	if p == nil || p.Subscription == nil || p.Cost == nil || deps == nil || p.Cost.ActualCost <= 0 {
+		return
+	}
+	var group *Group
+	if p.APIKey != nil {
+		group = p.APIKey.Group
+	}
+	key, _, applies := SubscriptionEntitlementBalance(p.Subscription, group, p.Platform)
+	if !applies || key == "" {
+		return
+	}
+	debiter, ok := deps.userSubRepo.(SubscriptionEntitlementDebiter)
+	if !ok {
+		// Optional adapter: production's PostgreSQL repository implements it;
+		// test/dev adapters without JSONB support continue using base quotas.
+		return
+	}
+	if _, err := debiter.DeductSubscriptionEntitlement(ctx, p.Subscription.ID, key, p.Cost.ActualCost); err != nil {
+		slog.Error("deduct subscription entitlement failed", "subscription_id", p.Subscription.ID, "entitlement_key", key, "cost", p.Cost.ActualCost, "error", err)
+	}
+	invalidateSubscriptionEntitlementCache(ctx, p, deps)
 }
 
 func resolveUsageBillingRequestID(ctx context.Context, upstreamRequestID string) string {
@@ -322,6 +348,7 @@ func buildUsageBillingCommand(requestID string, usageLog *UsageLog, p *postUsage
 	if p.IsSubscriptionBill && p.Subscription != nil && p.Cost.TotalCost > 0 {
 		cmd.SubscriptionID = &p.Subscription.ID
 		cmd.SubscriptionCost = p.Cost.ActualCost
+		cmd.SubscriptionEntitlementKey, _, _ = SubscriptionEntitlementBalance(p.Subscription, p.APIKey.Group, p.Platform)
 	} else if p.Cost.ActualCost > 0 {
 		cmd.BalanceCost = p.Cost.ActualCost
 	}
@@ -383,6 +410,9 @@ func finalizePostUsageBilling(ctx context.Context, p *postUsageBillingParams, de
 		if p.Cost.ActualCost > 0 && p.User != nil && p.APIKey != nil && p.APIKey.GroupID != nil {
 			deps.billingCacheService.QueueUpdateSubscriptionUsage(p.User.ID, *p.APIKey.GroupID, p.Cost.ActualCost)
 		}
+		if p.Cost.ActualCost > 0 {
+			invalidateSubscriptionEntitlementCache(ctx, p, deps)
+		}
 	} else if p.Cost.ActualCost > 0 && p.User != nil {
 		syncBalanceCacheAfterDeduction(ctx, p, deps, result)
 	}
@@ -438,6 +468,25 @@ func finalizePostUsageBilling(ctx context.Context, p *postUsageBillingParams, de
 	// no dependency on the request context or upstream connection.
 	go notifyBalanceLow(p, deps, result)
 	go notifyAccountQuota(p, deps, result)
+}
+
+func invalidateSubscriptionEntitlementCache(ctx context.Context, p *postUsageBillingParams, deps *billingDeps) {
+	if p == nil || p.Subscription == nil || deps == nil || deps.billingCacheService == nil {
+		return
+	}
+	var group *Group
+	if p.APIKey != nil {
+		group = p.APIKey.Group
+	}
+	if _, _, applies := SubscriptionEntitlementBalance(p.Subscription, group, p.Platform); !applies {
+		return
+	}
+	if err := deps.billingCacheService.InvalidateSubscription(ctx, p.Subscription.UserID, p.Subscription.GroupID); err != nil {
+		slog.Warn("invalidate subscription entitlement cache failed", "subscription_id", p.Subscription.ID, "error", err)
+	}
+	if err := deps.billingCacheService.PublishSubscriptionCacheInvalidation(ctx, subCacheKey(p.Subscription.UserID, p.Subscription.GroupID)); err != nil {
+		slog.Warn("publish subscription entitlement cache invalidation failed", "subscription_id", p.Subscription.ID, "error", err)
+	}
 }
 
 func syncBalanceCacheAfterDeduction(ctx context.Context, p *postUsageBillingParams, deps *billingDeps, result *UsageBillingApplyResult) {

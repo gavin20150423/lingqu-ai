@@ -11,7 +11,7 @@
         </div>
         <h3 class="text-lg font-semibold text-gray-900 dark:text-white">{{ t('payment.airwallexLoadFailed') }}</h3>
         <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">{{ errorMessage }}</p>
-        <button class="btn btn-primary mt-6" @click="router.push('/purchase')">{{ t('payment.result.backToRecharge') }}</button>
+        <button class="btn btn-primary mt-6" @click="router.push(paymentBackPath)">{{ t('payment.result.backToRecharge') }}</button>
       </div>
 
       <div v-else class="card p-6">
@@ -25,7 +25,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import UserWorkspaceLayout from '@/components/layout/UserWorkspaceLayout.vue'
@@ -42,6 +42,11 @@ const router = useRouter()
 
 const loading = ref(true)
 const errorMessage = ref('')
+const snapshotOrderType = ref('')
+const paymentBackPath = computed(() => {
+  const orderType = String(route.query.order_type || '') || snapshotOrderType.value
+  return orderType === 'subscription' ? '/subscription-plans' : '/purchase'
+})
 
 function queryString(key: string): string {
   const value = route.query[key]
@@ -58,6 +63,7 @@ function buildSuccessUrl(snapshot: PaymentRecoverySnapshot): string {
   if (orderId || snapshot.orderId > 0) url.searchParams.set('order_id', orderId || String(snapshot.orderId))
   if (outTradeNo || snapshot.outTradeNo) url.searchParams.set('out_trade_no', outTradeNo || snapshot.outTradeNo)
   if (resumeToken || snapshot.resumeToken) url.searchParams.set('resume_token', resumeToken || snapshot.resumeToken)
+  if (snapshot.orderType) url.searchParams.set('order_type', snapshot.orderType)
   return url.toString()
 }
 
@@ -98,6 +104,7 @@ onMounted(async () => {
     errorMessage.value = t('payment.airwallexMissingParams')
     return
   }
+  snapshotOrderType.value = snapshot.orderType
 
   try {
     const airwallex = await import('@airwallex/components-sdk')

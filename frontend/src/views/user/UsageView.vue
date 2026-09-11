@@ -1232,54 +1232,6 @@ const loadSavedErrColumns = () => {
   }
 }
 
-// 列设置下拉按当前 tab 分发
-const currentToggleableColumns = computed(() =>
-  activeTab.value === 'errors' ? errToggleableColumns.value : toggleableColumns.value
-)
-const isCurrentColumnVisible = (key: string) =>
-  activeTab.value === 'errors' ? isErrColumnVisible(key) : isColumnVisible(key)
-const toggleCurrentColumn = (key: string) => {
-  if (activeTab.value === 'errors') toggleErrColumn(key)
-  else toggleColumn(key)
-}
-
-const showColumnDropdown = ref(false)
-const columnDropdownRef = ref<HTMLElement | null>(null)
-const handleColumnClickOutside = (event: MouseEvent) => {
-  if (columnDropdownRef.value && !columnDropdownRef.value.contains(event.target as HTMLElement)) {
-    showColumnDropdown.value = false
-  }
-}
-
-const loadApiKeys = async () => {
-  const firstPage = await keysAPI.list(1, 100)
-  const keys = [...firstPage.items]
-  for (let page = 2; page <= firstPage.pages && keys.length > 0; page++) {
-    const response = await keysAPI.list(page, 100)
-    if (response.items.length === 0) break
-    keys.push(...response.items)
-  }
-  return keys
-}
-
-const loadFilterOptions = async () => {
-  try {
-    const [keys, availableGroups] = await Promise.all([
-      loadApiKeys(),
-      userGroupsAPI.getAvailable(),
-    ])
-    apiKeys.value = keys
-    groups.value = availableGroups
-  } catch (error) {
-    console.error('Failed to load usage filter options:', error)
-  }
-}
-
-const resetErrorRows = () => {
-  errorPage.value = 1
-  void loadErrors()
-}
-
 const loadErrors = async () => {
   errorLoading.value = true
   try {
@@ -1320,6 +1272,11 @@ const handleIpGeoBatchFailed = () => {
 const switchToErrors = () => {
   activeTab.value = 'errors'
   if (errorRows.value.length === 0) loadErrors()
+}
+
+const applyErrorFilters = () => {
+  errorPage.value = 1
+  void loadErrors()
 }
 
 onMounted(() => {

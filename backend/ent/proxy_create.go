@@ -13,7 +13,6 @@ import (
 	"entgo.io/ent/schema/field"
 	"github.com/Wei-Shaw/sub2api/ent/account"
 	"github.com/Wei-Shaw/sub2api/ent/proxy"
-	"github.com/Wei-Shaw/sub2api/ent/user"
 )
 
 // ProxyCreate is the builder for creating a Proxy entity.
@@ -456,6 +455,10 @@ func (_c *ProxyCreate) createSpec() (*Proxy, *sqlgraph.CreateSpec) {
 		_spec.SetField(proxy.FieldPassword, field.TypeString, value)
 		_node.Password = &value
 	}
+	if value, ok := _c.mutation.OwnerUserID(); ok {
+		_spec.SetField(proxy.FieldOwnerUserID, field.TypeInt64, value)
+		_node.OwnerUserID = &value
+	}
 	if value, ok := _c.mutation.Status(); ok {
 		_spec.SetField(proxy.FieldStatus, field.TypeString, value)
 		_node.Status = value
@@ -706,6 +709,12 @@ func (u *ProxyUpsert) SetOwnerUserID(v int64) *ProxyUpsert {
 // UpdateOwnerUserID sets the "owner_user_id" field to the value that was provided on create.
 func (u *ProxyUpsert) UpdateOwnerUserID() *ProxyUpsert {
 	u.SetExcluded(proxy.FieldOwnerUserID)
+	return u
+}
+
+// AddOwnerUserID adds v to the "owner_user_id" field.
+func (u *ProxyUpsert) AddOwnerUserID(v int64) *ProxyUpsert {
+	u.Add(proxy.FieldOwnerUserID, v)
 	return u
 }
 
@@ -1000,6 +1009,13 @@ func (u *ProxyUpsertOne) ClearPassword() *ProxyUpsertOne {
 func (u *ProxyUpsertOne) SetOwnerUserID(v int64) *ProxyUpsertOne {
 	return u.Update(func(s *ProxyUpsert) {
 		s.SetOwnerUserID(v)
+	})
+}
+
+// AddOwnerUserID adds v to the "owner_user_id" field.
+func (u *ProxyUpsertOne) AddOwnerUserID(v int64) *ProxyUpsertOne {
+	return u.Update(func(s *ProxyUpsert) {
+		s.AddOwnerUserID(v)
 	})
 }
 
@@ -1484,6 +1500,13 @@ func (u *ProxyUpsertBulk) ClearPassword() *ProxyUpsertBulk {
 func (u *ProxyUpsertBulk) SetOwnerUserID(v int64) *ProxyUpsertBulk {
 	return u.Update(func(s *ProxyUpsert) {
 		s.SetOwnerUserID(v)
+	})
+}
+
+// AddOwnerUserID adds v to the "owner_user_id" field.
+func (u *ProxyUpsertBulk) AddOwnerUserID(v int64) *ProxyUpsertBulk {
+	return u.Update(func(s *ProxyUpsert) {
+		s.AddOwnerUserID(v)
 	})
 }
 

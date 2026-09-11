@@ -4,12 +4,12 @@
       <section class="lingqu-console-hero">
         <div>
           <span class="lingqu-console-eyebrow">补给站</span>
-          <h1>充值/订阅</h1>
-          <p>充值余额，或选择订阅套餐。</p>
+          <h1>{{ activeTab === 'subscription' ? '订阅套餐' : '充值' }}</h1>
+          <p>{{ activeTab === 'subscription' ? '选择模型系列和额度档位，独立管理每项订阅权益。' : '补充账户余额，用于按量调用模型。' }}</p>
         </div>
         <div class="lingqu-console-actions">
           <button
-            v-if="paymentEnabled && !checkout.balance_disabled"
+            v-if="paymentEnabled && !checkout.balance_disabled && !subscriptionOnly"
             type="button"
             class="lingqu-console-button"
             :class="{ 'lingqu-console-button--primary': activeTab === 'recharge' }"
@@ -18,20 +18,26 @@
             <Icon name="dollar" size="sm" />
             {{ t('payment.tabTopUp') }}
           </button>
-          <button
-            v-if="paymentEnabled"
-            type="button"
+          <router-link
+            v-if="paymentEnabled && !subscriptionOnly"
+            to="/subscription-plans"
             class="lingqu-console-button"
-            :class="{ 'lingqu-console-button--primary': activeTab === 'subscription' }"
-            @click="activeTab = 'subscription'; selectedPlan = null"
           >
             <Icon name="badge" size="sm" />
-            {{ t('payment.tabSubscribe') }}
-          </button>
+            订阅套餐
+          </router-link>
+          <router-link
+            v-if="paymentEnabled && subscriptionOnly"
+            to="/purchase"
+            class="lingqu-console-button"
+          >
+            <Icon name="dollar" size="sm" />
+            去充值
+          </router-link>
         </div>
       </section>
 
-      <section class="lingqu-console-stats">
+      <section v-if="activeTab === 'recharge' && !subscriptionOnly" class="lingqu-console-stats">
         <article class="lingqu-console-stat payment-stat">
           <span class="payment-stat__icon payment-stat__icon--balance">
             <Icon name="dollar" size="md" />
@@ -39,24 +45,6 @@
           <div>
             <small>{{ t('payment.currentBalance') }}</small>
             <strong>${{ user?.balance?.toFixed(2) || '0.00' }}</strong>
-          </div>
-        </article>
-        <article class="lingqu-console-stat payment-stat">
-          <span class="payment-stat__icon payment-stat__icon--plans">
-            <Icon name="cube" size="md" />
-          </span>
-          <div>
-            <small>可选套餐</small>
-            <strong>{{ checkout.plans.length }}</strong>
-          </div>
-        </article>
-        <article class="lingqu-console-stat payment-stat">
-          <span class="payment-stat__icon payment-stat__icon--subscription">
-            <Icon name="badge" size="md" />
-          </span>
-          <div>
-            <small>当前订阅</small>
-            <strong>{{ activeSubscriptions.length }}</strong>
           </div>
         </article>
         <article class="lingqu-console-stat payment-stat">
@@ -80,9 +68,9 @@
           </div>
           <div class="payment-closed__copy">
             <span class="lingqu-console-eyebrow">Coming Soon</span>
-            <h2>充值/订阅暂未开放</h2>
+            <h2>{{ subscriptionOnly ? '订阅套餐暂未开放' : '充值暂未开放' }}</h2>
             <p>
-              当前站点还没有开启自助支付。你可以先创建 Key 直接接入模型，余额和订阅开通后会在这里统一管理。
+              当前站点还没有开启自助支付。你可以先创建 Key 直接接入模型，支付开通后会在这里统一管理。
             </p>
           </div>
           <div class="payment-closed__actions">
@@ -266,6 +254,11 @@
                   @select="selectedMethod = $event"
                 />
               </div>
+              <div class="card p-4">
+                <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">优惠码（限时折扣）</label>
+                <input v-model="subscriptionPromoCode" type="text" maxlength="32" class="input font-mono uppercase" placeholder="例如 SUMMER20" />
+                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">仅对管理员配置为“订阅可用”的优惠码生效。</p>
+              </div>
               <div v-if="feeRate > 0 && selectedPlan.price > 0" class="card p-6">
                 <div class="space-y-2 text-sm">
                   <div class="flex justify-between">
@@ -297,9 +290,55 @@
                 <Icon name="gift" size="xl" class="mx-auto mb-3 text-gray-300 dark:text-dark-600" />
                 <p class="text-gray-500 dark:text-gray-400">{{ t('payment.noPlans') }}</p>
               </div>
-              <div v-else :class="planGridClass">
-                <SubscriptionPlanCard v-for="plan in checkout.plans" :key="plan.id" :plan="plan" :active-subscriptions="activeSubscriptions" @select="selectPlan" />
-              </div>
+              <section v-else class="subscription-catalog">
+                <div class="subscription-catalog__intro">
+                  <div>
+                    <span class="subscription-catalog__eyebrow">MODEL PLANS</span>
+                    <h2>选择模型套餐</h2>
+                    <p>先选择模型系列，再选择适合你调用量的额度档位。</p>
+                  </div>
+                  <div class="subscription-catalog__count">
+                    <strong>{{ checkout.plans.length }}</strong>
+                    <span>个可选档位</span>
+                  </div>
+                </div>
+                <div class="subscription-catalog__tabs" role="tablist" aria-label="模型系列">
+                  <button
+                    v-for="group in subscriptionGroups"
+                    :key="group.id"
+                    type="button"
+                    role="tab"
+                    :aria-selected="selectedSubscriptionGroupId === group.id"
+                    :class="{ 'subscription-catalog__tab--active': selectedSubscriptionGroupId === group.id }"
+                    @click="selectedSubscriptionGroupId = group.id"
+                  >
+                    <span class="subscription-catalog__tab-dot" :class="`subscription-catalog__tab-dot--${group.tone}`" />
+                    <span>{{ group.label }}</span>
+                    <small>{{ group.plans.length }}</small>
+                  </button>
+                </div>
+                <div v-if="selectedSubscriptionGroup" class="subscription-catalog__group-head">
+                  <div>
+                    <div class="subscription-catalog__group-title">
+                      <span class="subscription-catalog__group-dot" :class="`subscription-catalog__group-dot--${selectedSubscriptionGroup.tone}`" />
+                      <h3>{{ selectedSubscriptionGroup.label }}</h3>
+                      <span>{{ selectedSubscriptionGroup.plans.length }} 档套餐</span>
+                    </div>
+                    <p>{{ selectedSubscriptionGroup.description }}</p>
+                  </div>
+                  <span class="subscription-catalog__group-note">独立额度，按套餐分别扣减</span>
+                </div>
+                <div v-if="selectedSubscriptionGroup" :class="planGridClass">
+                  <SubscriptionPlanCard
+                    v-for="(plan, index) in selectedSubscriptionGroup.plans"
+                    :key="plan.id"
+                    :plan="plan"
+                    :featured="index === Math.min(2, selectedSubscriptionGroup.plans.length - 1)"
+                    :active-subscriptions="activeSubscriptions"
+                    @select="selectPlan"
+                  />
+                </div>
+              </section>
               <!-- Active subscriptions (compact, below plan list) -->
               <div v-if="activeSubscriptions.length > 0">
                 <p class="mb-2 text-xs font-medium text-gray-400 dark:text-gray-500">{{ t('payment.activeSubscription') }}</p>
@@ -319,6 +358,10 @@
                         <span v-if="sub.expires_at">{{ t('userSubscriptions.daysRemaining', { days: getDaysRemaining(sub.expires_at) }) }}</span>
                         <span v-else>{{ t('userSubscriptions.noExpiration') }}</span>
                       </div>
+                      <div v-if="sub.entitlements && Object.keys(sub.entitlements).length" class="mt-1 flex flex-wrap items-center gap-1">
+                        <span class="mr-0.5 text-[10px] text-gray-400 dark:text-gray-500">权益余额</span>
+                        <span v-for="(quota, quotaKey) in sub.entitlements" :key="quotaKey" class="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300">{{ quotaKey }}: ${{ Number(quota).toFixed(2) }}</span>
+                      </div>
                     </div>
                     <span class="badge badge-success shrink-0 text-[10px]">{{ t('userSubscriptions.status.active') }}</span>
                   </div>
@@ -335,26 +378,9 @@
               @click="previewImage = checkout.help_image_url" />
             <div v-if="checkout.help_text" class="markdown-body w-full overflow-x-auto break-words" v-html="renderedHelpText"></div>
           </div>
-        </template>
+        </div>
       </template>
     </div>
-    <!-- Renewal Plan Selection Modal -->
-    <Teleport to="body">
-      <Transition name="modal">
-        <div v-if="showRenewalModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" @click.self="closeRenewalModal">
-          <div class="relative w-full max-w-lg rounded-2xl border border-gray-200 bg-white p-6 shadow-2xl dark:border-dark-700 dark:bg-dark-900">
-            <!-- Close button -->
-            <button class="absolute right-4 top-4 rounded-lg p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-dark-700 dark:hover:text-gray-200" @click="closeRenewalModal">
-              <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-            </button>
-            <h3 class="mb-4 text-lg font-semibold text-gray-900 dark:text-white">{{ t('payment.selectPlan') }}</h3>
-            <div class="space-y-4">
-              <SubscriptionPlanCard v-for="plan in renewalPlans" :key="plan.id" :plan="plan" :active-subscriptions="activeSubscriptions" @select="selectPlanFromModal" />
-            </div>
-          </div>
-        </div>
-      </Transition>
-    </Teleport>
     <!-- Image Preview Overlay -->
     <Teleport to="body">
       <Transition name="modal">
@@ -441,9 +467,27 @@ const activeTab = ref<'recharge' | 'subscription'>('recharge')
 const amount = ref<number | null>(null)
 const selectedMethod = ref('')
 const selectedPlan = ref<SubscriptionPlan | null>(null)
+const subscriptionPromoCode = ref('')
 const previewImage = ref('')
 
+function isSubscriptionPlansPath(path: string): boolean {
+  return path.replace(/\/+$/, '') === '/subscription-plans'
+}
+
+const subscriptionOnly = computed(() => isSubscriptionPlansPath(route.path))
+
 const paymentPhase = ref<'select' | 'paying'>('select')
+
+function syncPaymentTabFromRoute() {
+  // Recharge has its own route. Ignore the legacy query switch so the two
+  // customer-facing purchase flows cannot be mixed on one page.
+  const isSubscriptionRoute = isSubscriptionPlansPath(route.path)
+  activeTab.value = isSubscriptionRoute ? 'subscription' : 'recharge'
+  selectedPlan.value = null
+  paymentPhase.value = 'select'
+  errorMessage.value = ''
+  errorHintMessage.value = ''
+}
 
 interface CreateOrderOptions {
   openid?: string
@@ -548,6 +592,9 @@ async function redirectToPaymentResult(state: PaymentRecoverySnapshot): Promise<
   if (state.resumeToken) {
     query.resume_token = state.resumeToken
   }
+  if (state.orderType) {
+    query.order_type = state.orderType
+  }
   await router.push({
     path: '/payment/result',
     query,
@@ -565,8 +612,17 @@ function buildWechatOAuthAuthorizeUrl(
 
   try {
     const targetUrl = new URL(normalizedUrl, window.location.origin)
-    const redirectPath = targetUrl.searchParams.get('redirect') || '/purchase'
+    const defaultRedirectPath = context.orderType === 'subscription' ? '/subscription-plans' : '/purchase'
+    const redirectPath = targetUrl.searchParams.get('redirect') || defaultRedirectPath
     const redirectUrl = new URL(redirectPath, window.location.origin)
+    // Older payment providers return /purchase (or /payment) for every order.
+    // Keep subscription callbacks on the subscription page so the two flows stay isolated.
+    if (context.orderType === 'subscription' && (redirectUrl.pathname === '/purchase' || redirectUrl.pathname === '/payment')) {
+      redirectUrl.pathname = '/subscription-plans'
+    }
+    if (context.orderType === 'balance' && (redirectUrl.pathname === '/subscription-plans' || redirectUrl.pathname === '/payment')) {
+      redirectUrl.pathname = '/purchase'
+    }
     const paymentType = normalizeVisibleMethod(context.paymentType) || context.paymentType.trim() || 'wxpay'
 
     redirectUrl.searchParams.set('payment_type', paymentType)
@@ -645,11 +701,77 @@ const subscriptionUsdToCnyRate = computed(() => {
 })
 const creditedAmount = computed(() => Math.round((validAmount.value * balanceRechargeMultiplier.value) * 100) / 100)
 
-// Adaptive grid: center single card, 2-col for 2 plans, 3-col for 3+
+interface SubscriptionPlanGroup {
+  id: number
+  label: string
+  platform: string
+  tone: string
+  description: string
+  plans: SubscriptionPlan[]
+}
+
+const selectedSubscriptionGroupId = ref<number | null>(null)
+
+function subscriptionProductTone(plan: SubscriptionPlan): string {
+  const name = `${plan.group_name || ''} ${plan.name || ''}`.toLowerCase()
+  if (name.includes('kiro')) return 'kiro'
+  return plan.group_platform || 'default'
+}
+
+const subscriptionGroups = computed<SubscriptionPlanGroup[]>(() => {
+  const grouped = new Map<number, SubscriptionPlanGroup>()
+  for (const plan of checkout.value.plans) {
+    const existing = grouped.get(plan.group_id)
+    if (existing) {
+      existing.plans.push(plan)
+      continue
+    }
+    const label = (plan.group_name || platformLabel(plan.group_platform || '')).replace(/^【[^】]+】\s*/, '')
+    grouped.set(plan.group_id, {
+      id: plan.group_id,
+      label,
+      platform: plan.group_platform || '',
+      tone: subscriptionProductTone(plan),
+      description: plan.description || `面向 ${label} 的模型调用套餐`,
+      plans: [plan],
+    })
+  }
+  return [...grouped.values()].map(group => ({
+    ...group,
+    plans: [...group.plans].sort((a, b) => a.sort_order - b.sort_order || a.price - b.price),
+  }))
+})
+
+const selectedSubscriptionGroup = computed(() => {
+  if (subscriptionGroups.value.length === 0) return null
+  return subscriptionGroups.value.find(group => group.id === selectedSubscriptionGroupId.value)
+    || subscriptionGroups.value[0]
+})
+
+watch(subscriptionGroups, (groups) => {
+  if (groups.length > 0 && !groups.some(group => group.id === selectedSubscriptionGroupId.value)) {
+    selectedSubscriptionGroupId.value = groups[0].id
+  }
+}, { immediate: true })
+
+watch(
+  () => [route.path, route.query.tab, route.query.group] as const,
+  () => {
+    syncPaymentTabFromRoute()
+    const groupId = Number(route.query.group)
+    if (activeTab.value === 'subscription' && Number.isFinite(groupId) && groupId > 0) {
+      selectedSubscriptionGroupId.value = groupId
+    }
+  },
+  { immediate: true },
+)
+
+// Five-tier catalog: keep cards readable on wide screens and stack on mobile.
 const planGridClass = computed(() => {
-  const n = checkout.value.plans.length
-  if (n <= 2) return 'grid grid-cols-1 gap-5 sm:grid-cols-2'
-  return 'grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3'
+  const n = selectedSubscriptionGroup.value?.plans.length || 0
+  if (n <= 1) return 'subscription-plan-grid subscription-plan-grid--single'
+  if (n === 2) return 'subscription-plan-grid subscription-plan-grid--two'
+  return 'subscription-plan-grid'
 })
 
 // Check if an amount fits a method's [min, max]. 0 = no limit.
@@ -836,13 +958,6 @@ const planBadgeClass = computed(() => platformBadgeClass(selectedPlan.value?.gro
 const planTextClass = computed(() => platformTextClass(selectedPlan.value?.group_platform || ''))
 
 // Renewal modal state
-const showRenewalModal = ref(false)
-const renewGroupId = ref<number | null>(null)
-const renewalPlans = computed(() => {
-  if (renewGroupId.value == null) return []
-  return checkout.value.plans.filter(p => p.group_id === renewGroupId.value)
-})
-
 const planValiditySuffix = computed(() => {
   if (!selectedPlan.value) return ''
   return validitySuffixOf(selectedPlan.value, t)
@@ -859,18 +974,6 @@ function planPeakRateLabel(plan: SubscriptionPlan): string {
 function selectPlan(plan: SubscriptionPlan) {
   selectedPlan.value = plan
   errorMessage.value = ''
-}
-
-function selectPlanFromModal(plan: SubscriptionPlan) {
-  showRenewalModal.value = false
-  renewGroupId.value = null
-  selectedPlan.value = plan
-  errorMessage.value = ''
-}
-
-function closeRenewalModal() {
-  showRenewalModal.value = false
-  renewGroupId.value = null
 }
 
 async function handleSubmitRecharge() {
@@ -899,6 +1002,7 @@ async function createOrder(orderAmount: number, orderType: OrderType, planId?: n
       isWechatBrowser: typeof window !== 'undefined' && /MicroMessenger/i.test(window.navigator.userAgent),
       forceQRCode: !!(checkout.value.alipay_force_qrcode && normalizeVisibleMethod(requestType) === 'alipay'),
       mobilePrecreateDeepLink: checkout.value.alipay_mobile_precreate_deep_link === true,
+      promoCode: orderType === 'subscription' ? subscriptionPromoCode.value : undefined,
     })
     if (options.openid) {
       payload.openid = options.openid
@@ -928,6 +1032,7 @@ async function createOrder(orderAmount: number, orderType: OrderType, planId?: n
           client_secret: result.client_secret,
           method: stripeMethod || undefined,
           resume_token: result.resume_token || undefined,
+          order_type: orderType,
         },
       }).href
       : ''
@@ -938,6 +1043,7 @@ async function createOrder(orderAmount: number, orderType: OrderType, planId?: n
           order_id: String(result.order_id),
           out_trade_no: result.out_trade_no || undefined,
           resume_token: result.resume_token || undefined,
+          order_type: orderType,
         },
       }).href
       : ''
@@ -1125,6 +1231,7 @@ async function attemptMobileQrFallback(err: unknown, context: MobileQrFallbackCo
       origin: typeof window !== 'undefined' ? window.location.origin : '',
       isMobile: false,
       isWechatBrowser: false,
+      promoCode: context.orderType === 'subscription' ? subscriptionPromoCode.value : undefined,
     })
     const result = await paymentStore.createOrder(payload) as CreateOrderResult & { resume_token?: string }
     const stripeMethod = visibleMethod === 'wxpay' ? 'wechat_pay' : 'alipay'
@@ -1136,6 +1243,7 @@ async function attemptMobileQrFallback(err: unknown, context: MobileQrFallbackCo
           client_secret: result.client_secret,
           method: stripeMethod,
           resume_token: result.resume_token || undefined,
+          order_type: context.orderType,
         },
       }).href
       : ''
@@ -1187,6 +1295,8 @@ async function resumeWechatPaymentFromQuery() {
     return
   }
 
+  const targetPath = resume.orderType === 'subscription' ? '/subscription-plans' : '/purchase'
+  activeTab.value = resume.orderType === 'subscription' ? 'subscription' : 'recharge'
   selectedMethod.value = resume.paymentType
   if (resume.orderType === 'balance' && resume.orderAmount > 0) {
     amount.value = resume.orderAmount
@@ -1195,7 +1305,7 @@ async function resumeWechatPaymentFromQuery() {
     selectedPlan.value = checkout.value.plans.find(plan => plan.id === resume.planId) ?? null
   }
 
-  await router.replace({ path: route.path, query: stripWechatResumeQuery(route.query) })
+  await router.replace({ path: targetPath, query: stripWechatResumeQuery(route.query) })
 
   if (resume.wechatResumeToken) {
     await createOrder(0, resume.orderType, resume.planId, {
@@ -1254,20 +1364,17 @@ onMounted(async () => {
       }
     }
     await resumeWechatPaymentFromQuery()
-    if (checkout.value.balance_disabled) {
-      activeTab.value = 'subscription'
-    }
-    // Handle renewal navigation: ?tab=subscription&group=123
-    if (route.query.tab === 'subscription') {
+    // Handle renewal navigation: /subscription-plans?group=123
+    if (isSubscriptionPlansPath(route.path)) {
       activeTab.value = 'subscription'
       if (route.query.group) {
         const groupId = Number(route.query.group)
         const groupPlans = checkout.value.plans.filter(p => p.group_id === groupId)
         if (groupPlans.length === 1) {
+          selectedSubscriptionGroupId.value = groupId
           selectedPlan.value = groupPlans[0]
         } else if (groupPlans.length > 1) {
-          renewGroupId.value = groupId
-          showRenewalModal.value = true
+          selectedSubscriptionGroupId.value = groupId
         }
       }
     }
@@ -1329,6 +1436,193 @@ onMounted(async () => {
 
 .payment-stat:first-child strong {
   color: #27845c;
+}
+
+.subscription-catalog {
+  border: 1px solid #ebe7e1;
+  border-radius: 14px;
+  background: #faf9f7;
+  padding: clamp(1rem, 2.2vw, 1.6rem);
+}
+
+.subscription-catalog__intro {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.subscription-catalog__eyebrow {
+  color: #0f9f9a;
+  font-size: 0.68rem;
+  font-weight: 850;
+  letter-spacing: 0.14em;
+}
+
+.subscription-catalog__intro h2 {
+  margin-top: 0.34rem;
+  color: #292622;
+  font-size: clamp(1.35rem, 2.5vw, 1.8rem);
+  font-weight: 900;
+  line-height: 1.1;
+}
+
+.subscription-catalog__intro p {
+  margin-top: 0.42rem;
+  color: #827a72;
+  font-size: 0.78rem;
+}
+
+.subscription-catalog__count {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  color: #847d75;
+  font-size: 0.68rem;
+}
+
+.subscription-catalog__count strong {
+  color: #292622;
+  font-size: 1.35rem;
+  line-height: 1;
+}
+
+.subscription-catalog__tabs {
+  display: flex;
+  gap: 0.35rem;
+  width: fit-content;
+  max-width: 100%;
+  margin: 1.25rem auto 1.45rem;
+  overflow-x: auto;
+  border: 1px solid #dfe6f2;
+  border-radius: 11px;
+  background: #eff4fb;
+  padding: 0.24rem;
+}
+
+.subscription-catalog__tabs button {
+  display: inline-flex;
+  min-height: 2.25rem;
+  align-items: center;
+  gap: 0.42rem;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #65748a;
+  cursor: pointer;
+  font-size: 0.76rem;
+  font-weight: 750;
+  padding: 0.5rem 0.85rem;
+  white-space: nowrap;
+}
+
+.subscription-catalog__tabs button:hover,
+.subscription-catalog__tab--active {
+  background: #fff;
+  box-shadow: 0 2px 7px rgba(56, 71, 95, 0.1);
+  color: #303d50 !important;
+}
+
+.subscription-catalog__tabs button:focus-visible {
+  outline: 2px solid #5075b7;
+  outline-offset: 2px;
+}
+
+.subscription-catalog__tabs small {
+  border-radius: 999px;
+  background: #d9e6ff;
+  color: #4771b4;
+  font-size: 0.62rem;
+  line-height: 1;
+  padding: 0.22rem 0.38rem;
+}
+
+.subscription-catalog__tab-dot,
+.subscription-catalog__group-dot {
+  width: 0.46rem;
+  height: 0.46rem;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #0f9f9a;
+}
+
+.subscription-catalog__tab-dot--anthropic,
+.subscription-catalog__group-dot--anthropic { background: #f97316; }
+.subscription-catalog__tab-dot--kiro,
+.subscription-catalog__group-dot--kiro { background: #6366f1; }
+.subscription-catalog__tab-dot--openai,
+.subscription-catalog__group-dot--openai { background: #22a866; }
+.subscription-catalog__tab-dot--antigravity,
+.subscription-catalog__group-dot--antigravity { background: #8b5cf6; }
+.subscription-catalog__tab-dot--gemini,
+.subscription-catalog__group-dot--gemini { background: #3b82f6; }
+
+.subscription-catalog__group-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.9rem;
+}
+
+.subscription-catalog__group-title {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.subscription-catalog__group-title h3 {
+  color: #2f2a25;
+  font-size: 1.08rem;
+  font-weight: 850;
+}
+
+.subscription-catalog__group-title span:last-child {
+  border-radius: 999px;
+  background: #ece9e4;
+  color: #817970;
+  font-size: 0.64rem;
+  padding: 0.22rem 0.45rem;
+}
+
+.subscription-catalog__group-head p {
+  margin-top: 0.3rem;
+  color: #887f76;
+  font-size: 0.75rem;
+}
+
+.subscription-catalog__group-note {
+  color: #8b827a;
+  font-size: 0.7rem;
+  white-space: nowrap;
+}
+
+.subscription-plan-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  align-items: stretch;
+  gap: 0.8rem;
+}
+
+.subscription-plan-grid--two { grid-template-columns: repeat(2, minmax(0, 20rem)); justify-content: center; }
+.subscription-plan-grid--single { grid-template-columns: minmax(0, 20rem); justify-content: center; }
+
+@media (max-width: 1320px) {
+  .subscription-plan-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (max-width: 860px) {
+  .subscription-plan-grid,
+  .subscription-plan-grid--two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .subscription-catalog__group-head { align-items: flex-start; flex-direction: column; }
+}
+
+@media (max-width: 560px) {
+  .subscription-catalog__intro { align-items: flex-start; flex-direction: column; }
+  .subscription-catalog__count { align-items: flex-start; }
+  .subscription-plan-grid,
+  .subscription-plan-grid--two,
+  .subscription-plan-grid--single { grid-template-columns: minmax(0, 1fr); }
 }
 
 .payment-unavailable {

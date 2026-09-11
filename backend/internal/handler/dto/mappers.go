@@ -896,6 +896,7 @@ func userSubscriptionFromServiceBase(sub *service.UserSubscription) UserSubscrip
 		DailyUsageUSD:      sub.DailyUsageUSD,
 		WeeklyUsageUSD:     sub.WeeklyUsageUSD,
 		MonthlyUsageUSD:    sub.MonthlyUsageUSD,
+		Entitlements:       sub.Entitlements,
 		CreatedAt:          sub.CreatedAt,
 		UpdatedAt:          sub.UpdatedAt,
 		RevokedAt:          sub.DeletedAt,
@@ -932,16 +933,19 @@ func PromoCodeFromService(pc *service.PromoCode) *PromoCode {
 		return nil
 	}
 	return &PromoCode{
-		ID:          pc.ID,
-		Code:        pc.Code,
-		BonusAmount: pc.BonusAmount,
-		MaxUses:     pc.MaxUses,
-		UsedCount:   pc.UsedCount,
-		Status:      pc.Status,
-		ExpiresAt:   pc.ExpiresAt,
-		Notes:       pc.Notes,
-		CreatedAt:   pc.CreatedAt,
-		UpdatedAt:   pc.UpdatedAt,
+		ID:                     pc.ID,
+		Code:                   pc.Code,
+		BonusAmount:            pc.BonusAmount,
+		DiscountPercent:        pc.DiscountPercent,
+		AppliesToSubscriptions: pc.AppliesToSubscriptions,
+		MaxUses:                pc.MaxUses,
+		UsedCount:              pc.UsedCount,
+		Status:                 pc.Status,
+		ExpiresAt:              pc.ExpiresAt,
+		StartsAt:               pc.StartsAt,
+		Notes:                  pc.Notes,
+		CreatedAt:              pc.CreatedAt,
+		UpdatedAt:              pc.UpdatedAt,
 	}
 }
 

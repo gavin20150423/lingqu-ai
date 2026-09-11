@@ -75,6 +75,21 @@ func UsedCount(v int) predicate.PromoCode {
 	return predicate.PromoCode(sql.FieldEQ(FieldUsedCount, v))
 }
 
+// DiscountPercent applies equality check predicate on the "discount_percent" field. It's identical to DiscountPercentEQ.
+func DiscountPercent(v float64) predicate.PromoCode {
+	return predicate.PromoCode(sql.FieldEQ(FieldDiscountPercent, v))
+}
+
+// AppliesToSubscriptions applies equality check predicate on the "applies_to_subscriptions" field. It's identical to AppliesToSubscriptionsEQ.
+func AppliesToSubscriptions(v bool) predicate.PromoCode {
+	return predicate.PromoCode(sql.FieldEQ(FieldAppliesToSubscriptions, v))
+}
+
+// StartsAt applies equality check predicate on the "starts_at" field. It's identical to StartsAtEQ.
+func StartsAt(v time.Time) predicate.PromoCode {
+	return predicate.PromoCode(sql.FieldEQ(FieldStartsAt, v))
+}
+
 // Status applies equality check predicate on the "status" field. It's identical to StatusEQ.
 func Status(v string) predicate.PromoCode {
 	return predicate.PromoCode(sql.FieldEQ(FieldStatus, v))
@@ -283,6 +298,106 @@ func UsedCountLT(v int) predicate.PromoCode {
 // UsedCountLTE applies the LTE predicate on the "used_count" field.
 func UsedCountLTE(v int) predicate.PromoCode {
 	return predicate.PromoCode(sql.FieldLTE(FieldUsedCount, v))
+}
+
+// DiscountPercentEQ applies the EQ predicate on the "discount_percent" field.
+func DiscountPercentEQ(v float64) predicate.PromoCode {
+	return predicate.PromoCode(sql.FieldEQ(FieldDiscountPercent, v))
+}
+
+// DiscountPercentNEQ applies the NEQ predicate on the "discount_percent" field.
+func DiscountPercentNEQ(v float64) predicate.PromoCode {
+	return predicate.PromoCode(sql.FieldNEQ(FieldDiscountPercent, v))
+}
+
+// DiscountPercentIn applies the In predicate on the "discount_percent" field.
+func DiscountPercentIn(vs ...float64) predicate.PromoCode {
+	return predicate.PromoCode(sql.FieldIn(FieldDiscountPercent, vs...))
+}
+
+// DiscountPercentNotIn applies the NotIn predicate on the "discount_percent" field.
+func DiscountPercentNotIn(vs ...float64) predicate.PromoCode {
+	return predicate.PromoCode(sql.FieldNotIn(FieldDiscountPercent, vs...))
+}
+
+// DiscountPercentGT applies the GT predicate on the "discount_percent" field.
+func DiscountPercentGT(v float64) predicate.PromoCode {
+	return predicate.PromoCode(sql.FieldGT(FieldDiscountPercent, v))
+}
+
+// DiscountPercentGTE applies the GTE predicate on the "discount_percent" field.
+func DiscountPercentGTE(v float64) predicate.PromoCode {
+	return predicate.PromoCode(sql.FieldGTE(FieldDiscountPercent, v))
+}
+
+// DiscountPercentLT applies the LT predicate on the "discount_percent" field.
+func DiscountPercentLT(v float64) predicate.PromoCode {
+	return predicate.PromoCode(sql.FieldLT(FieldDiscountPercent, v))
+}
+
+// DiscountPercentLTE applies the LTE predicate on the "discount_percent" field.
+func DiscountPercentLTE(v float64) predicate.PromoCode {
+	return predicate.PromoCode(sql.FieldLTE(FieldDiscountPercent, v))
+}
+
+// AppliesToSubscriptionsEQ applies the EQ predicate on the "applies_to_subscriptions" field.
+func AppliesToSubscriptionsEQ(v bool) predicate.PromoCode {
+	return predicate.PromoCode(sql.FieldEQ(FieldAppliesToSubscriptions, v))
+}
+
+// AppliesToSubscriptionsNEQ applies the NEQ predicate on the "applies_to_subscriptions" field.
+func AppliesToSubscriptionsNEQ(v bool) predicate.PromoCode {
+	return predicate.PromoCode(sql.FieldNEQ(FieldAppliesToSubscriptions, v))
+}
+
+// StartsAtEQ applies the EQ predicate on the "starts_at" field.
+func StartsAtEQ(v time.Time) predicate.PromoCode {
+	return predicate.PromoCode(sql.FieldEQ(FieldStartsAt, v))
+}
+
+// StartsAtNEQ applies the NEQ predicate on the "starts_at" field.
+func StartsAtNEQ(v time.Time) predicate.PromoCode {
+	return predicate.PromoCode(sql.FieldNEQ(FieldStartsAt, v))
+}
+
+// StartsAtIn applies the In predicate on the "starts_at" field.
+func StartsAtIn(vs ...time.Time) predicate.PromoCode {
+	return predicate.PromoCode(sql.FieldIn(FieldStartsAt, vs...))
+}
+
+// StartsAtNotIn applies the NotIn predicate on the "starts_at" field.
+func StartsAtNotIn(vs ...time.Time) predicate.PromoCode {
+	return predicate.PromoCode(sql.FieldNotIn(FieldStartsAt, vs...))
+}
+
+// StartsAtGT applies the GT predicate on the "starts_at" field.
+func StartsAtGT(v time.Time) predicate.PromoCode {
+	return predicate.PromoCode(sql.FieldGT(FieldStartsAt, v))
+}
+
+// StartsAtGTE applies the GTE predicate on the "starts_at" field.
+func StartsAtGTE(v time.Time) predicate.PromoCode {
+	return predicate.PromoCode(sql.FieldGTE(FieldStartsAt, v))
+}
+
+// StartsAtLT applies the LT predicate on the "starts_at" field.
+func StartsAtLT(v time.Time) predicate.PromoCode {
+	return predicate.PromoCode(sql.FieldLT(FieldStartsAt, v))
+}
+
+// StartsAtLTE applies the LTE predicate on the "starts_at" field.
+func StartsAtLTE(v time.Time) predicate.PromoCode {
+	return predicate.PromoCode(sql.FieldLTE(FieldStartsAt, v))
+}
+
+// StartsAtIsNil applies the IsNil predicate on the "starts_at" field.
+func StartsAtIsNil() predicate.PromoCode {
+	return predicate.PromoCode(sql.FieldIsNull(FieldStartsAt))
+}
+
+// StartsAtNotNil applies the NotNil predicate on the "starts_at" field.
+func StartsAtNotNil() predicate.PromoCode {
+	return predicate.PromoCode(sql.FieldNotNull(FieldStartsAt))
 }
 
 // StatusEQ applies the EQ predicate on the "status" field.

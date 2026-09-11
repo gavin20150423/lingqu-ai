@@ -670,6 +670,26 @@ func OwnerUserIDNotIn(vs ...int64) predicate.Proxy {
 	return predicate.Proxy(sql.FieldNotIn(FieldOwnerUserID, vs...))
 }
 
+// OwnerUserIDGT applies the GT predicate on the "owner_user_id" field.
+func OwnerUserIDGT(v int64) predicate.Proxy {
+	return predicate.Proxy(sql.FieldGT(FieldOwnerUserID, v))
+}
+
+// OwnerUserIDGTE applies the GTE predicate on the "owner_user_id" field.
+func OwnerUserIDGTE(v int64) predicate.Proxy {
+	return predicate.Proxy(sql.FieldGTE(FieldOwnerUserID, v))
+}
+
+// OwnerUserIDLT applies the LT predicate on the "owner_user_id" field.
+func OwnerUserIDLT(v int64) predicate.Proxy {
+	return predicate.Proxy(sql.FieldLT(FieldOwnerUserID, v))
+}
+
+// OwnerUserIDLTE applies the LTE predicate on the "owner_user_id" field.
+func OwnerUserIDLTE(v int64) predicate.Proxy {
+	return predicate.Proxy(sql.FieldLTE(FieldOwnerUserID, v))
+}
+
 // OwnerUserIDIsNil applies the IsNil predicate on the "owner_user_id" field.
 func OwnerUserIDIsNil() predicate.Proxy {
 	return predicate.Proxy(sql.FieldIsNull(FieldOwnerUserID))

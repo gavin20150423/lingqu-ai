@@ -84,6 +84,7 @@ type Account struct {
 	modelMappingCacheRawPtr         uintptr
 	modelMappingCacheRawLen         int
 	modelMappingCacheRawSig         uint64
+	modelMappingCacheRuntimeVersion uint64
 
 	// header_overrides 热路径缓存（非持久化字段，同 model_mapping 缓存先例）
 	headerOverrideCache               map[string]string
@@ -119,10 +120,10 @@ const (
 const openAIEndpointCapabilitiesCredentialKey = "openai_capabilities"
 
 const (
-	XiaoVideoPricingCredentialKey  = "video_pricing"
+	XiaoVideoPricingCredentialKey          = "video_pricing"
 	XiaoVideoMarkupMultiplierCredentialKey = "video_markup_multiplier"
-	XiaoVideoProtocolCredentialKey = "video_protocol"
-	XiaoVideoAdapterCredentialKey  = "video_adapter"
+	XiaoVideoProtocolCredentialKey         = "video_protocol"
+	XiaoVideoAdapterCredentialKey          = "video_adapter"
 	// XiaoVideoReferenceVideoMultiplierCredentialKey optionally overrides the
 	// provider-specific reference-video surcharge for an account. AIStartLab
 	// accounts use 1.5 automatically when this value is omitted.
@@ -875,13 +876,15 @@ func (a *Account) GetModelMapping() map[string]string {
 	rawMapping, _ := a.Credentials["model_mapping"].(map[string]any)
 	rawPtr := mapPtr(rawMapping)
 	rawLen := len(rawMapping)
+	runtimeVersion := xai.RuntimeModelMappingVersion()
 	rawSig := uint64(0)
 	rawSigReady := false
 
 	if a.modelMappingCacheReady &&
 		a.modelMappingCacheCredentialsPtr == credentialsPtr &&
 		a.modelMappingCacheRawPtr == rawPtr &&
-		a.modelMappingCacheRawLen == rawLen {
+		a.modelMappingCacheRawLen == rawLen &&
+		a.modelMappingCacheRuntimeVersion == runtimeVersion {
 		rawSig = modelMappingSignature(rawMapping)
 		rawSigReady = true
 		if a.modelMappingCacheRawSig == rawSig {
@@ -900,6 +903,7 @@ func (a *Account) GetModelMapping() map[string]string {
 	a.modelMappingCacheRawPtr = rawPtr
 	a.modelMappingCacheRawLen = rawLen
 	a.modelMappingCacheRawSig = rawSig
+	a.modelMappingCacheRuntimeVersion = runtimeVersion
 	return mapping
 }
 

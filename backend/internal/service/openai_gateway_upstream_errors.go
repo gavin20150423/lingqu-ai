@@ -311,14 +311,19 @@ func (s *OpenAIGatewayService) shouldFailoverOpenAIUpstreamResponse(account *Acc
 	// preserve the deterministic upstream 400 instead of returning an unwritten
 	// retry signal. Managed gateway instances always have an account repository;
 	// their handler can exclude this account and actually select another one.
-	if s != nil && s.accountRepo != nil && account != nil && account.IsOpenAICompatible() && statusCode == http.StatusBadRequest &&
-		isOpenAICompatibleModelNotFound400(upstreamBody) {
-		return true
+	if isOpenAICompatibleModelNotFound400(upstreamBody) {
+		return s != nil && s.accountRepo != nil && account != nil && account.IsOpenAICompatible() && statusCode == http.StatusBadRequest
 	}
 	if s.shouldFailoverUpstreamError(statusCode) {
 		return true
 	}
-	return isOpenAITransientProcessingError(statusCode, upstreamMsg, upstreamBody) ||
+	if isOpenAITransientProcessingError(statusCode, upstreamMsg, upstreamBody) {
+		return true
+	}
+	// Account-specific 400s are meaningful only for accounts selected by the
+	// OpenAI-compatible gateway. Do not classify Anthropic requests or direct
+	// helper calls without an account as an account failure.
+	return account != nil && account.IsOpenAICompatible() &&
 		isOpenAIAccountSpecificBadRequest(statusCode, upstreamMsg, upstreamBody)
 }
 

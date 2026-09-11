@@ -2,6 +2,8 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
+	"strings"
 	"time"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
@@ -57,6 +59,13 @@ func (r *userSubscriptionRepository) Create(ctx context.Context, sub *service.Us
 	created, err := builder.Save(ctx)
 	if err == nil {
 		applyUserSubscriptionEntityToService(sub, created)
+		if sub.Entitlements != nil {
+			if raw, marshalErr := json.Marshal(sub.Entitlements); marshalErr != nil {
+				return marshalErr
+			} else if _, execErr := client.ExecContext(ctx, userSubscriptionEntitlementsUpdateSQL(client.Driver().Dialect()), raw, created.ID); execErr != nil {
+				return execErr
+			}
+		}
 	}
 	return translatePersistenceError(err, nil, service.ErrSubscriptionAlreadyExists)
 }
@@ -156,6 +165,15 @@ func (r *userSubscriptionRepository) Update(ctx context.Context, sub *service.Us
 	updated, err := builder.Save(ctx)
 	if err == nil {
 		applyUserSubscriptionEntityToService(sub, updated)
+		if sub.Entitlements != nil {
+			raw, marshalErr := json.Marshal(sub.Entitlements)
+			if marshalErr != nil {
+				return marshalErr
+			}
+			if _, execErr := client.ExecContext(ctx, userSubscriptionEntitlementsUpdateSQL(client.Driver().Dialect()), raw, sub.ID); execErr != nil {
+				return execErr
+			}
+		}
 		return nil
 	}
 	return translatePersistenceError(err, service.ErrSubscriptionNotFound, service.ErrSubscriptionAlreadyExists)
@@ -502,6 +520,82 @@ func (r *userSubscriptionRepository) IncrementUsage(ctx context.Context, id int6
 	return service.ErrSubscriptionNotFound
 }
 
+func userSubscriptionEntitlementsUpdateSQL(dialect string) string {
+	if strings.EqualFold(dialect, "postgres") {
+		return "UPDATE user_subscriptions SET entitlements = $1::jsonb WHERE id = $2"
+	}
+	return "UPDATE user_subscriptions SET entitlements = $1 WHERE id = $2"
+}
+
+// DeductSubscriptionEntitlement atomically consumes a model/platform gift
+// balance. The pool is clamped at zero when a request crosses the remaining
+// balance; the request's full usage is recorded by the caller in the same
+// billing flow. This prevents a successful upstream request from becoming an
+// unrecorded billing failure when its final cost exceeds the remaining pool.
+// The update intentionally lives outside UserSubscriptionRepository's required
+// port so older lightweight adapters remain source-compatible.
+func (r *userSubscriptionRepository) DeductSubscriptionEntitlement(ctx context.Context, subscriptionID int64, entitlementKey string, amountUSD float64) (bool, error) {
+	if r == nil || r.client == nil || subscriptionID <= 0 || strings.TrimSpace(entitlementKey) == "" || amountUSD <= 0 {
+		return false, nil
+	}
+
+	client := clientFromContext(ctx, r.client)
+	const postgresUpdateSQL = `
+		UPDATE user_subscriptions
+		SET entitlements = jsonb_set(
+			COALESCE(entitlements, '{}'::jsonb),
+			ARRAY[$2],
+			to_jsonb(GREATEST(
+				0::numeric,
+				COALESCE(NULLIF(entitlements ->> $2, '')::numeric, 0::numeric) - $3::numeric
+			))),
+			updated_at = NOW()
+		WHERE id = $1
+			AND deleted_at IS NULL
+	`
+	updateSQL := postgresUpdateSQL
+	if strings.EqualFold(client.Driver().Dialect(), "sqlite3") || strings.EqualFold(client.Driver().Dialect(), "sqlite") {
+		updateSQL = `
+			UPDATE user_subscriptions
+			SET entitlements = json_set(
+				COALESCE(entitlements, '{}'),
+				'$.' || $2,
+				MAX(0.0, COALESCE(CAST(json_extract(entitlements, '$.' || $2) AS REAL), 0.0) - CAST($3 AS REAL))
+			),
+			updated_at = CURRENT_TIMESTAMP
+			WHERE id = $1
+			AND deleted_at IS NULL
+		`
+	}
+
+	result, err := client.ExecContext(ctx, updateSQL, subscriptionID, strings.TrimSpace(entitlementKey), amountUSD)
+	if err != nil {
+		return false, err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	return affected > 0, nil
+}
+
+// GetSubscriptionEntitlements returns the latest independent gift balances.
+// It is an optional service adapter used by billing preflight to avoid stale
+// entitlement snapshots held by the authentication cache.
+func (r *userSubscriptionRepository) GetSubscriptionEntitlements(ctx context.Context, subscriptionID int64) (map[string]any, error) {
+	if r == nil || r.client == nil || subscriptionID <= 0 {
+		return nil, service.ErrSubscriptionNotFound
+	}
+	sub, err := r.GetByID(ctx, subscriptionID)
+	if err != nil {
+		return nil, err
+	}
+	if sub.Entitlements == nil {
+		return map[string]any{}, nil
+	}
+	return sub.Entitlements, nil
+}
+
 func (r *userSubscriptionRepository) BatchUpdateExpiredStatus(ctx context.Context) (int64, error) {
 	client := clientFromContext(ctx, r.client)
 	n, err := client.UserSubscription.Update().
@@ -653,6 +747,7 @@ func userSubscriptionEntityToServiceWithStatusMapping(m *dbent.UserSubscription,
 		DailyUsageUSD:      m.DailyUsageUsd,
 		WeeklyUsageUSD:     m.WeeklyUsageUsd,
 		MonthlyUsageUSD:    m.MonthlyUsageUsd,
+		Entitlements:       m.Entitlements,
 		AssignedBy:         m.AssignedBy,
 		AssignedAt:         m.AssignedAt,
 		Notes:              derefString(m.Notes),

@@ -162,6 +162,19 @@ func filterUpstreamGeminiModelsBody(body []byte, allowlist service.GroupModelAll
 	return merged, true, true
 }
 
+// customGeminiModelsList exposes the group model allowlist as a stable model
+// catalog when the group is configured to publish an explicit catalog.
+func customGeminiModelsList(group *service.Group) (gemini.ModelsListResponse, bool) {
+	if group == nil || !group.ModelAllowlistEnabled() || len(group.ModelAllowlist.Models) == 0 {
+		return gemini.ModelsListResponse{}, false
+	}
+	models := make([]gemini.Model, 0, len(group.ModelAllowlist.Models))
+	for _, modelID := range group.ModelAllowlist.Models {
+		models = append(models, gemini.FallbackModel(modelID))
+	}
+	return gemini.ModelsListResponse{Models: models}, true
+}
+
 // GeminiV1BetaGetModel proxies:
 // GET /v1beta/models/{model}
 func (h *GatewayHandler) GeminiV1BetaGetModel(c *gin.Context) {

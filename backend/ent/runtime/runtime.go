@@ -1174,69 +1174,69 @@ func init() {
 	// group.DefaultAllowLive holds the default value on creation for the allow_live field.
 	group.DefaultAllowLive = groupDescAllowLive.Default.(bool)
 	// groupDescForceOpenaiFast is the schema descriptor for force_openai_fast field.
-	groupDescForceOpenaiFast := groupFields[48].Descriptor()
+	groupDescForceOpenaiFast := groupFields[50].Descriptor()
 	// group.DefaultForceOpenaiFast holds the default value on creation for the force_openai_fast field.
 	group.DefaultForceOpenaiFast = groupDescForceOpenaiFast.Default.(bool)
 	// groupDescFreeOpenaiFast is the schema descriptor for free_openai_fast field.
-	groupDescFreeOpenaiFast := groupFields[49].Descriptor()
+	groupDescFreeOpenaiFast := groupFields[51].Descriptor()
 	// group.DefaultFreeOpenaiFast holds the default value on creation for the free_openai_fast field.
 	group.DefaultFreeOpenaiFast = groupDescFreeOpenaiFast.Default.(bool)
 	// groupDescRequireOauthOnly is the schema descriptor for require_oauth_only field.
-	groupDescRequireOauthOnly := groupFields[50].Descriptor()
+	groupDescRequireOauthOnly := groupFields[52].Descriptor()
 	// group.DefaultRequireOauthOnly holds the default value on creation for the require_oauth_only field.
 	group.DefaultRequireOauthOnly = groupDescRequireOauthOnly.Default.(bool)
 	// groupDescRequirePrivacySet is the schema descriptor for require_privacy_set field.
-	groupDescRequirePrivacySet := groupFields[51].Descriptor()
+	groupDescRequirePrivacySet := groupFields[53].Descriptor()
 	// group.DefaultRequirePrivacySet holds the default value on creation for the require_privacy_set field.
 	group.DefaultRequirePrivacySet = groupDescRequirePrivacySet.Default.(bool)
 	// groupDescDefaultMappedModel is the schema descriptor for default_mapped_model field.
-	groupDescDefaultMappedModel := groupFields[52].Descriptor()
+	groupDescDefaultMappedModel := groupFields[54].Descriptor()
 	// group.DefaultDefaultMappedModel holds the default value on creation for the default_mapped_model field.
 	group.DefaultDefaultMappedModel = groupDescDefaultMappedModel.Default.(string)
 	// group.DefaultMappedModelValidator is a validator for the "default_mapped_model" field. It is called by the builders before save.
 	group.DefaultMappedModelValidator = groupDescDefaultMappedModel.Validators[0].(func(string) error)
 	// groupDescMessagesDispatchModelConfig is the schema descriptor for messages_dispatch_model_config field.
-	groupDescMessagesDispatchModelConfig := groupFields[53].Descriptor()
+	groupDescMessagesDispatchModelConfig := groupFields[55].Descriptor()
 	// group.DefaultMessagesDispatchModelConfig holds the default value on creation for the messages_dispatch_model_config field.
 	group.DefaultMessagesDispatchModelConfig = groupDescMessagesDispatchModelConfig.Default.(domain.OpenAIMessagesDispatchModelConfig)
 	// groupDescModelAllowlist is the schema descriptor for model_allowlist field.
-	groupDescModelAllowlist := groupFields[54].Descriptor()
+	groupDescModelAllowlist := groupFields[56].Descriptor()
 	// group.DefaultModelAllowlist holds the default value on creation for the model_allowlist field.
 	group.DefaultModelAllowlist = groupDescModelAllowlist.Default.(domain.GroupModelAllowlist)
 	// groupDescCodexModelsManifestConfig is the schema descriptor for codex_models_manifest_config field.
-	groupDescCodexModelsManifestConfig := groupFields[55].Descriptor()
+	groupDescCodexModelsManifestConfig := groupFields[57].Descriptor()
 	// group.DefaultCodexModelsManifestConfig holds the default value on creation for the codex_models_manifest_config field.
 	group.DefaultCodexModelsManifestConfig = groupDescCodexModelsManifestConfig.Default.(domain.GroupCodexModelsManifestConfig)
 	// groupDescRpmLimit is the schema descriptor for rpm_limit field.
-	groupDescRpmLimit := groupFields[56].Descriptor()
+	groupDescRpmLimit := groupFields[58].Descriptor()
 	// group.DefaultRpmLimit holds the default value on creation for the rpm_limit field.
 	group.DefaultRpmLimit = groupDescRpmLimit.Default.(int)
 	// groupDescMaxReasoningEffort is the schema descriptor for max_reasoning_effort field.
-	groupDescMaxReasoningEffort := groupFields[57].Descriptor()
+	groupDescMaxReasoningEffort := groupFields[59].Descriptor()
 	// group.DefaultMaxReasoningEffort holds the default value on creation for the max_reasoning_effort field.
 	group.DefaultMaxReasoningEffort = groupDescMaxReasoningEffort.Default.(string)
 	// group.MaxReasoningEffortValidator is a validator for the "max_reasoning_effort" field. It is called by the builders before save.
 	group.MaxReasoningEffortValidator = groupDescMaxReasoningEffort.Validators[0].(func(string) error)
 	// groupDescMaxReasoningEffortOverLimit is the schema descriptor for max_reasoning_effort_over_limit field.
-	groupDescMaxReasoningEffortOverLimit := groupFields[58].Descriptor()
+	groupDescMaxReasoningEffortOverLimit := groupFields[60].Descriptor()
 	// group.DefaultMaxReasoningEffortOverLimit holds the default value on creation for the max_reasoning_effort_over_limit field.
 	group.DefaultMaxReasoningEffortOverLimit = groupDescMaxReasoningEffortOverLimit.Default.(string)
 	// group.MaxReasoningEffortOverLimitValidator is a validator for the "max_reasoning_effort_over_limit" field. It is called by the builders before save.
 	group.MaxReasoningEffortOverLimitValidator = groupDescMaxReasoningEffortOverLimit.Validators[0].(func(string) error)
 	// groupDescReasoningEffortMappings is the schema descriptor for reasoning_effort_mappings field.
-	groupDescReasoningEffortMappings := groupFields[59].Descriptor()
+	groupDescReasoningEffortMappings := groupFields[61].Descriptor()
 	// group.DefaultReasoningEffortMappings holds the default value on creation for the reasoning_effort_mappings field.
 	group.DefaultReasoningEffortMappings = groupDescReasoningEffortMappings.Default.([]domain.ReasoningEffortMapping)
 	// groupDescProfitControlEnabled is the schema descriptor for profit_control_enabled field.
-	groupDescProfitControlEnabled := groupFields[60].Descriptor()
+	groupDescProfitControlEnabled := groupFields[62].Descriptor()
 	// group.DefaultProfitControlEnabled holds the default value on creation for the profit_control_enabled field.
 	group.DefaultProfitControlEnabled = groupDescProfitControlEnabled.Default.(bool)
 	// groupDescProfitMinMargin is the schema descriptor for profit_min_margin field.
-	groupDescProfitMinMargin := groupFields[61].Descriptor()
+	groupDescProfitMinMargin := groupFields[63].Descriptor()
 	// group.DefaultProfitMinMargin holds the default value on creation for the profit_min_margin field.
 	group.DefaultProfitMinMargin = groupDescProfitMinMargin.Default.(float64)
 	// groupDescProfitSafetyBuffer is the schema descriptor for profit_safety_buffer field.
-	groupDescProfitSafetyBuffer := groupFields[62].Descriptor()
+	groupDescProfitSafetyBuffer := groupFields[64].Descriptor()
 	// group.DefaultProfitSafetyBuffer holds the default value on creation for the profit_safety_buffer field.
 	group.DefaultProfitSafetyBuffer = groupDescProfitSafetyBuffer.Default.(float64)
 	idempotencyrecordMixin := schema.IdempotencyRecord{}.Mixin()
@@ -1363,46 +1363,50 @@ func init() {
 	paymentorder.DefaultOrderType = paymentorderDescOrderType.Default.(string)
 	// paymentorder.OrderTypeValidator is a validator for the "order_type" field. It is called by the builders before save.
 	paymentorder.OrderTypeValidator = paymentorderDescOrderType.Validators[0].(func(string) error)
+	// paymentorderDescPromoCode is the schema descriptor for promo_code field.
+	paymentorderDescPromoCode := paymentorderFields[19].Descriptor()
+	// paymentorder.PromoCodeValidator is a validator for the "promo_code" field. It is called by the builders before save.
+	paymentorder.PromoCodeValidator = paymentorderDescPromoCode.Validators[0].(func(string) error)
 	// paymentorderDescProviderInstanceID is the schema descriptor for provider_instance_id field.
-	paymentorderDescProviderInstanceID := paymentorderFields[19].Descriptor()
+	paymentorderDescProviderInstanceID := paymentorderFields[20].Descriptor()
 	// paymentorder.ProviderInstanceIDValidator is a validator for the "provider_instance_id" field. It is called by the builders before save.
 	paymentorder.ProviderInstanceIDValidator = paymentorderDescProviderInstanceID.Validators[0].(func(string) error)
 	// paymentorderDescProviderKey is the schema descriptor for provider_key field.
-	paymentorderDescProviderKey := paymentorderFields[20].Descriptor()
+	paymentorderDescProviderKey := paymentorderFields[21].Descriptor()
 	// paymentorder.ProviderKeyValidator is a validator for the "provider_key" field. It is called by the builders before save.
 	paymentorder.ProviderKeyValidator = paymentorderDescProviderKey.Validators[0].(func(string) error)
 	// paymentorderDescStatus is the schema descriptor for status field.
-	paymentorderDescStatus := paymentorderFields[22].Descriptor()
+	paymentorderDescStatus := paymentorderFields[23].Descriptor()
 	// paymentorder.DefaultStatus holds the default value on creation for the status field.
 	paymentorder.DefaultStatus = paymentorderDescStatus.Default.(string)
 	// paymentorder.StatusValidator is a validator for the "status" field. It is called by the builders before save.
 	paymentorder.StatusValidator = paymentorderDescStatus.Validators[0].(func(string) error)
 	// paymentorderDescRefundAmount is the schema descriptor for refund_amount field.
-	paymentorderDescRefundAmount := paymentorderFields[23].Descriptor()
+	paymentorderDescRefundAmount := paymentorderFields[24].Descriptor()
 	// paymentorder.DefaultRefundAmount holds the default value on creation for the refund_amount field.
 	paymentorder.DefaultRefundAmount = paymentorderDescRefundAmount.Default.(float64)
 	// paymentorderDescForceRefund is the schema descriptor for force_refund field.
-	paymentorderDescForceRefund := paymentorderFields[26].Descriptor()
+	paymentorderDescForceRefund := paymentorderFields[27].Descriptor()
 	// paymentorder.DefaultForceRefund holds the default value on creation for the force_refund field.
 	paymentorder.DefaultForceRefund = paymentorderDescForceRefund.Default.(bool)
 	// paymentorderDescRefundRequestedBy is the schema descriptor for refund_requested_by field.
-	paymentorderDescRefundRequestedBy := paymentorderFields[29].Descriptor()
+	paymentorderDescRefundRequestedBy := paymentorderFields[30].Descriptor()
 	// paymentorder.RefundRequestedByValidator is a validator for the "refund_requested_by" field. It is called by the builders before save.
 	paymentorder.RefundRequestedByValidator = paymentorderDescRefundRequestedBy.Validators[0].(func(string) error)
 	// paymentorderDescClientIP is the schema descriptor for client_ip field.
-	paymentorderDescClientIP := paymentorderFields[35].Descriptor()
+	paymentorderDescClientIP := paymentorderFields[36].Descriptor()
 	// paymentorder.ClientIPValidator is a validator for the "client_ip" field. It is called by the builders before save.
 	paymentorder.ClientIPValidator = paymentorderDescClientIP.Validators[0].(func(string) error)
 	// paymentorderDescSrcHost is the schema descriptor for src_host field.
-	paymentorderDescSrcHost := paymentorderFields[36].Descriptor()
+	paymentorderDescSrcHost := paymentorderFields[37].Descriptor()
 	// paymentorder.SrcHostValidator is a validator for the "src_host" field. It is called by the builders before save.
 	paymentorder.SrcHostValidator = paymentorderDescSrcHost.Validators[0].(func(string) error)
 	// paymentorderDescCreatedAt is the schema descriptor for created_at field.
-	paymentorderDescCreatedAt := paymentorderFields[38].Descriptor()
+	paymentorderDescCreatedAt := paymentorderFields[39].Descriptor()
 	// paymentorder.DefaultCreatedAt holds the default value on creation for the created_at field.
 	paymentorder.DefaultCreatedAt = paymentorderDescCreatedAt.Default.(func() time.Time)
 	// paymentorderDescUpdatedAt is the schema descriptor for updated_at field.
-	paymentorderDescUpdatedAt := paymentorderFields[39].Descriptor()
+	paymentorderDescUpdatedAt := paymentorderFields[40].Descriptor()
 	// paymentorder.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	paymentorder.DefaultUpdatedAt = paymentorderDescUpdatedAt.Default.(func() time.Time)
 	// paymentorder.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
@@ -1614,18 +1618,26 @@ func init() {
 	promocodeDescUsedCount := promocodeFields[3].Descriptor()
 	// promocode.DefaultUsedCount holds the default value on creation for the used_count field.
 	promocode.DefaultUsedCount = promocodeDescUsedCount.Default.(int)
+	// promocodeDescDiscountPercent is the schema descriptor for discount_percent field.
+	promocodeDescDiscountPercent := promocodeFields[4].Descriptor()
+	// promocode.DefaultDiscountPercent holds the default value on creation for the discount_percent field.
+	promocode.DefaultDiscountPercent = promocodeDescDiscountPercent.Default.(float64)
+	// promocodeDescAppliesToSubscriptions is the schema descriptor for applies_to_subscriptions field.
+	promocodeDescAppliesToSubscriptions := promocodeFields[5].Descriptor()
+	// promocode.DefaultAppliesToSubscriptions holds the default value on creation for the applies_to_subscriptions field.
+	promocode.DefaultAppliesToSubscriptions = promocodeDescAppliesToSubscriptions.Default.(bool)
 	// promocodeDescStatus is the schema descriptor for status field.
-	promocodeDescStatus := promocodeFields[4].Descriptor()
+	promocodeDescStatus := promocodeFields[7].Descriptor()
 	// promocode.DefaultStatus holds the default value on creation for the status field.
 	promocode.DefaultStatus = promocodeDescStatus.Default.(string)
 	// promocode.StatusValidator is a validator for the "status" field. It is called by the builders before save.
 	promocode.StatusValidator = promocodeDescStatus.Validators[0].(func(string) error)
 	// promocodeDescCreatedAt is the schema descriptor for created_at field.
-	promocodeDescCreatedAt := promocodeFields[7].Descriptor()
+	promocodeDescCreatedAt := promocodeFields[10].Descriptor()
 	// promocode.DefaultCreatedAt holds the default value on creation for the created_at field.
 	promocode.DefaultCreatedAt = promocodeDescCreatedAt.Default.(func() time.Time)
 	// promocodeDescUpdatedAt is the schema descriptor for updated_at field.
-	promocodeDescUpdatedAt := promocodeFields[8].Descriptor()
+	promocodeDescUpdatedAt := promocodeFields[11].Descriptor()
 	// promocode.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	promocode.DefaultUpdatedAt = promocodeDescUpdatedAt.Default.(func() time.Time)
 	// promocode.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
@@ -2192,26 +2204,30 @@ func init() {
 	subscriptionplanDescFeatures := subscriptionplanFields[8].Descriptor()
 	// subscriptionplan.DefaultFeatures holds the default value on creation for the features field.
 	subscriptionplan.DefaultFeatures = subscriptionplanDescFeatures.Default.(string)
+	// subscriptionplanDescEntitlements is the schema descriptor for entitlements field.
+	subscriptionplanDescEntitlements := subscriptionplanFields[9].Descriptor()
+	// subscriptionplan.DefaultEntitlements holds the default value on creation for the entitlements field.
+	subscriptionplan.DefaultEntitlements = subscriptionplanDescEntitlements.Default.(func() map[string]interface{})
 	// subscriptionplanDescProductName is the schema descriptor for product_name field.
-	subscriptionplanDescProductName := subscriptionplanFields[9].Descriptor()
+	subscriptionplanDescProductName := subscriptionplanFields[10].Descriptor()
 	// subscriptionplan.DefaultProductName holds the default value on creation for the product_name field.
 	subscriptionplan.DefaultProductName = subscriptionplanDescProductName.Default.(string)
 	// subscriptionplan.ProductNameValidator is a validator for the "product_name" field. It is called by the builders before save.
 	subscriptionplan.ProductNameValidator = subscriptionplanDescProductName.Validators[0].(func(string) error)
 	// subscriptionplanDescForSale is the schema descriptor for for_sale field.
-	subscriptionplanDescForSale := subscriptionplanFields[10].Descriptor()
+	subscriptionplanDescForSale := subscriptionplanFields[11].Descriptor()
 	// subscriptionplan.DefaultForSale holds the default value on creation for the for_sale field.
 	subscriptionplan.DefaultForSale = subscriptionplanDescForSale.Default.(bool)
 	// subscriptionplanDescSortOrder is the schema descriptor for sort_order field.
-	subscriptionplanDescSortOrder := subscriptionplanFields[11].Descriptor()
+	subscriptionplanDescSortOrder := subscriptionplanFields[12].Descriptor()
 	// subscriptionplan.DefaultSortOrder holds the default value on creation for the sort_order field.
 	subscriptionplan.DefaultSortOrder = subscriptionplanDescSortOrder.Default.(int)
 	// subscriptionplanDescCreatedAt is the schema descriptor for created_at field.
-	subscriptionplanDescCreatedAt := subscriptionplanFields[12].Descriptor()
+	subscriptionplanDescCreatedAt := subscriptionplanFields[13].Descriptor()
 	// subscriptionplan.DefaultCreatedAt holds the default value on creation for the created_at field.
 	subscriptionplan.DefaultCreatedAt = subscriptionplanDescCreatedAt.Default.(func() time.Time)
 	// subscriptionplanDescUpdatedAt is the schema descriptor for updated_at field.
-	subscriptionplanDescUpdatedAt := subscriptionplanFields[13].Descriptor()
+	subscriptionplanDescUpdatedAt := subscriptionplanFields[14].Descriptor()
 	// subscriptionplan.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	subscriptionplan.DefaultUpdatedAt = subscriptionplanDescUpdatedAt.Default.(func() time.Time)
 	// subscriptionplan.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
@@ -2917,6 +2933,10 @@ func init() {
 	usersubscriptionDescAssignedAt := usersubscriptionFields[12].Descriptor()
 	// usersubscription.DefaultAssignedAt holds the default value on creation for the assigned_at field.
 	usersubscription.DefaultAssignedAt = usersubscriptionDescAssignedAt.Default.(func() time.Time)
+	// usersubscriptionDescEntitlements is the schema descriptor for entitlements field.
+	usersubscriptionDescEntitlements := usersubscriptionFields[14].Descriptor()
+	// usersubscription.DefaultEntitlements holds the default value on creation for the entitlements field.
+	usersubscription.DefaultEntitlements = usersubscriptionDescEntitlements.Default.(func() map[string]interface{})
 }
 
 const (

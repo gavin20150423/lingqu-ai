@@ -460,6 +460,8 @@ func (r *channelMonitorRepository) ListLatestForMonitorIDs(ctx context.Context, 
 // primaryModels[monitorID] 指定该监控要过滤的模型名；monitor 不在 primaryModels 中的记录不返回。
 // 通过 CTE + unnest(两个 int8/text 数组) 构造 (monitor_id, model) 白名单，
 // 再用 ROW_NUMBER() OVER (PARTITION BY monitor_id) 取各自前 N 条。
+// 不按自然时间窗口裁剪：用户端时间线表达的是最近 N 次真实探测，而不是请求流量。
+// 即使某个监控暂时停止调度，最后一次探测结果也应持续可见，直到新结果覆盖它。
 //
 // 返回值：map[monitorID] -> []*ChannelMonitorHistoryEntry（不含 message，减少网络开销）。
 // 空 ids / 空 primaryModels 返回空 map，不报错。
@@ -478,7 +480,6 @@ const listRecentHistoryForMonitorsQuery = `
 	    FROM channel_monitor_histories h
 	    JOIN targets t
 	      ON t.monitor_id = h.monitor_id AND t.model = h.model
-	    WHERE h.checked_at >= NOW() - INTERVAL '1 hour'
 	)
 	SELECT monitor_id, status, latency_ms, ping_latency_ms, checked_at
 	FROM ranked

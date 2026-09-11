@@ -47,6 +47,7 @@ const (
 	PlatformKimi      = domain.PlatformKimi
 	PlatformZhipu     = domain.PlatformZhipu
 	PlatformDeepseek  = domain.PlatformDeepseek
+	PlatformXiaoAPI   = domain.PlatformXiaoAPI
 	PlatformMiniMax   = domain.PlatformMiniMax
 	PlatformComposite = domain.PlatformComposite
 	// PlatformKiro is retained for unsupported-platform threshold tests and legacy
@@ -64,18 +65,6 @@ const (
 	APIProtocolAdaptive        = domain.APIProtocolAdaptive
 )
 
-// 国产 OpenAI 兼容供应商各模式的默认 base_url。
-// 与前端 credentialsBuilder.ts 中的预设保持一致。
-const (
-	DefaultKimiPayGBaseURL    = "https://api.moonshot.cn/v1"
-	DefaultKimiCodingBaseURL  = "https://api.kimi.com/coding/v1"
-	DefaultZhipuPayGBaseURL   = "https://open.bigmodel.cn/api/paas/v4"
-	DefaultZhipuCodingBaseURL = "https://open.bigmodel.cn/api/coding/paas/v4"
-	DefaultDeepseekBaseURL    = "https://api.deepseek.com"
-	// MiniMax 按量付费与 Coding/Token Plan 共用推理域名，靠 API Key 区分套餐。
-	DefaultMiniMaxBaseURL = "https://api.minimaxi.com/v1"
-)
-
 // 国产供应商 Anthropic 协议端点的默认 base_url（上游路径为 {base}/v1/messages）。
 // 与前端 credentialsBuilder.ts 中的预设保持一致。
 const (
@@ -84,6 +73,8 @@ const (
 	DefaultZhipuPayGBaseURL           = "https://open.bigmodel.cn/api/paas/v4"
 	DefaultZhipuCodingBaseURL         = "https://open.bigmodel.cn/api/coding/paas/v4"
 	DefaultDeepseekBaseURL            = "https://api.deepseek.com"
+	// MiniMax 按量付费与 Coding/Token Plan 共用推理域名，靠 API Key 区分套餐。
+	DefaultMiniMaxBaseURL             = "https://api.minimaxi.com/v1"
 	DefaultKimiPayGAnthropicBaseURL   = "https://api.moonshot.cn/anthropic"
 	DefaultKimiCodingAnthropicBaseURL = "https://api.kimi.com/coding"
 	DefaultZhipuAnthropicBaseURL      = "https://open.bigmodel.cn/api/anthropic"
@@ -118,6 +109,7 @@ var AllowedQuotaPlatforms = []string{
 	PlatformKimi,
 	PlatformZhipu,
 	PlatformDeepseek,
+	PlatformXiaoAPI,
 	PlatformMiniMax,
 }
 
@@ -495,12 +487,6 @@ const (
 	// Default false (show rates). Admin endpoints always keep full metrics.
 	SettingKeyChannelMonitorHideThroughput = "channel_monitor_hide_throughput"
 
-	// SettingKeyChannelMonitorShowQuota controls whether quota/balance snapshots
-	// attached to channel monitors (check_mode=quota/quota_probe) are exposed on
-	// the user-facing monitor APIs and UI. Default false (hidden); parsed
-	// fail-closed (only the literal "true" enables it). Admin endpoints always
-	// keep the full snapshots regardless of this flag.
-	SettingKeyChannelMonitorShowQuota = "channel_monitor_show_quota"
 	// SettingKeyChannelMonitorHideUserRanking hides the user ranking tab and
 	// /users payload from non-admin channel-monitor v2 viewers.
 	// Default false (keep the current ranking tab). Admin endpoints always keep it.

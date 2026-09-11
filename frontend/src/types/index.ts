@@ -601,7 +601,7 @@ export interface PaginationConfig {
 
 // ==================== API Key & Group Types ====================
 
-export type GroupPlatform = 'anthropic' | 'openai' | 'gemini' | 'antigravity' | 'grok' | 'kimi' | 'zhipu' | 'deepseek' | 'minimax' | 'composite'
+export type GroupPlatform = 'anthropic' | 'openai' | 'gemini' | 'antigravity' | 'grok' | 'kimi' | 'zhipu' | 'deepseek' | 'minimax' | 'xiaoapi' | 'composite'
 
 export type VideoModelPrices = Record<string, Record<string, number>>
 
@@ -987,7 +987,7 @@ export interface UpdateGroupRequest {
 
 // ==================== Account & Proxy Types ====================
 
-export type AccountPlatform = 'anthropic' | 'openai' | 'gemini' | 'antigravity' | 'grok' | 'kimi' | 'zhipu' | 'deepseek' | 'minimax'
+export type AccountPlatform = 'anthropic' | 'openai' | 'gemini' | 'antigravity' | 'grok' | 'kimi' | 'zhipu' | 'deepseek' | 'minimax' | 'xiaoapi'
 export type AccountType = 'oauth' | 'setup-token' | 'apikey' | 'upstream' | 'bedrock' | 'service_account'
 export type AccountLevel = 'unknown' | (string & {})
 export type AccountShareMode = 'private' | 'public'
@@ -2253,6 +2253,7 @@ export interface UserSubscription {
   updated_at: string
   revoked_at?: string | null
   expires_at: string | null
+  entitlements?: Record<string, number>
   user?: User
   group?: Group
 }
@@ -2495,6 +2496,9 @@ export interface PromoCode {
   bonus_amount: number
   max_uses: number
   used_count: number
+  discount_percent: number
+  applies_to_subscriptions: boolean
+  starts_at: string | null
   status: 'active' | 'disabled'
   expires_at: string | null
   notes: string | null
@@ -2517,6 +2521,9 @@ export interface CreatePromoCodeRequest {
   max_uses?: number
   expires_at?: number | null
   notes?: string
+  discount_percent?: number
+  applies_to_subscriptions?: boolean
+  starts_at?: number | null
 }
 
 export interface UpdatePromoCodeRequest {
@@ -2526,6 +2533,9 @@ export interface UpdatePromoCodeRequest {
   status?: 'active' | 'disabled'
   expires_at?: number | null
   notes?: string
+  discount_percent?: number
+  applies_to_subscriptions?: boolean
+  starts_at?: number | null
 }
 
 // ==================== TOTP (2FA) Types ====================

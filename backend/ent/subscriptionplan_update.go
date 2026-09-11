@@ -188,6 +188,12 @@ func (_u *SubscriptionPlanUpdate) SetNillableFeatures(v *string) *SubscriptionPl
 	return _u
 }
 
+// SetEntitlements sets the "entitlements" field.
+func (_u *SubscriptionPlanUpdate) SetEntitlements(v map[string]interface{}) *SubscriptionPlanUpdate {
+	_u.mutation.SetEntitlements(v)
+	return _u
+}
+
 // SetProductName sets the "product_name" field.
 func (_u *SubscriptionPlanUpdate) SetProductName(v string) *SubscriptionPlanUpdate {
 	_u.mutation.SetProductName(v)
@@ -362,6 +368,9 @@ func (_u *SubscriptionPlanUpdate) sqlSave(ctx context.Context) (_node int, err e
 	}
 	if value, ok := _u.mutation.Features(); ok {
 		_spec.SetField(subscriptionplan.FieldFeatures, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Entitlements(); ok {
+		_spec.SetField(subscriptionplan.FieldEntitlements, field.TypeJSON, value)
 	}
 	if value, ok := _u.mutation.ProductName(); ok {
 		_spec.SetField(subscriptionplan.FieldProductName, field.TypeString, value)
@@ -555,6 +564,12 @@ func (_u *SubscriptionPlanUpdateOne) SetNillableFeatures(v *string) *Subscriptio
 	if v != nil {
 		_u.SetFeatures(*v)
 	}
+	return _u
+}
+
+// SetEntitlements sets the "entitlements" field.
+func (_u *SubscriptionPlanUpdateOne) SetEntitlements(v map[string]interface{}) *SubscriptionPlanUpdateOne {
+	_u.mutation.SetEntitlements(v)
 	return _u
 }
 
@@ -762,6 +777,9 @@ func (_u *SubscriptionPlanUpdateOne) sqlSave(ctx context.Context) (_node *Subscr
 	}
 	if value, ok := _u.mutation.Features(); ok {
 		_spec.SetField(subscriptionplan.FieldFeatures, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Entitlements(); ok {
+		_spec.SetField(subscriptionplan.FieldEntitlements, field.TypeJSON, value)
 	}
 	if value, ok := _u.mutation.ProductName(); ok {
 		_spec.SetField(subscriptionplan.FieldProductName, field.TypeString, value)
