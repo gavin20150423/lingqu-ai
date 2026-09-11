@@ -368,6 +368,8 @@ const adminNavItems = computed((): NavItem[] => {
     { path: '/admin/dashboard', label: t('nav.dashboard'), icon: 'grid' },
     { path: '/admin/ops', label: t('nav.ops'), icon: 'chart', featureFlag: flagOpsMonitoring },
     { path: '/admin/users', label: t('nav.users'), icon: 'users', hideInSimpleMode: true },
+    { path: '/admin/accounts', label: t('nav.accounts'), icon: 'server', hideInSimpleMode: true },
+    { path: '/admin/xiao-video', label: t('nav.xiaoVideo'), icon: 'play', hideInSimpleMode: true },
     { path: '/admin/groups', label: t('nav.groups'), icon: 'grid' },
     {
       path: '/admin/channels',
