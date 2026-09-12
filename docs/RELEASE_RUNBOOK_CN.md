@@ -30,6 +30,16 @@
 - **配置文件挂载必须核对**：如果 Caddy 使用单文件 bind mount，必须比较宿主机文件和容器内 `/etc/caddy/Caddyfile` 的摘要，并确认容器重启后仍能读取新文件。文件 inode 未同步时，只能使用已确认的运行时 reload；不得把“宿主机文件已修改”当作当前运行配置已切换。
 - **单文件 bind mount 不一致时禁止从挂载路径 reload**：宿主机与容器内 `/etc/caddy/Caddyfile` 的 inode、大小或摘要不一致时，必须停止当前切换动作；只能将已备份并通过 `caddy validate` 的候选配置复制到 Caddy 容器内临时路径，再通过 `127.0.0.1:2019` reload，并重新核对 `/config/`。第一次 reload 出现公网 `5xx` 后，必须按失败发布处理并记录事故。
 
+### 强制执行脚本
+
+上述门禁必须通过 `deploy/safe-blue-green-cutover.sh` 执行，禁止再用临时命令直接切换或停止旧容器。脚本会使用 `flock` 防止并发发布，把候选配置复制到 Caddy 容器内临时路径，显式执行 `caddy validate`/`reload`，核对 Caddy `/config/` 运行态 upstream，连续检查 API/CDN 公网健康，并且只有全部通过后才停止旧容器；任一步失败会先恢复旧容器和旧 upstream，再确认公网恢复。
+
+生产执行前仍必须完成候选容器内部 `/health`、关键 API 冒烟和日志检查；该脚本负责最后的蓝绿切流门禁，不替代发布前测试。静态检查：
+
+```bash
+sh deploy/tests/safe-blue-green-cutover-test.sh
+```
+
 本地发布镜像必须采用以下命名：
 
 ```text
