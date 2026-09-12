@@ -141,6 +141,13 @@ func (s *FrontendServer) resolveStaticPath(cleanPath string) (string, bool) {
 		return "", false
 	}
 
+	// The independently built workbenches are installed under data/public at
+	// runtime. They are not part of the embedded dist FS, so check overrides
+	// before falling back to the host SPA entry document.
+	if overridePath, ok := resolveOverrideStaticPath(s.overrideDir, normalized); ok {
+		return overridePath, true
+	}
+
 	info, ok := s.fileInfo(normalized)
 	if ok && !info.IsDir() {
 		return normalized, true
@@ -149,6 +156,32 @@ func (s *FrontendServer) resolveStaticPath(cleanPath string) (string, bool) {
 	if ok && info.IsDir() {
 		indexPath := path.Join(normalized, "index.html")
 		if indexInfo, indexOk := s.fileInfo(indexPath); indexOk && !indexInfo.IsDir() {
+			return indexPath, true
+		}
+	}
+
+	return "", false
+}
+
+func resolveOverrideStaticPath(overrideDir, cleanPath string) (string, bool) {
+	if overrideDir == "" {
+		return "", false
+	}
+
+	normalized := strings.TrimPrefix(path.Clean("/"+cleanPath), "/")
+	if normalized == "." || normalized == "" || normalized == "index.html" {
+		return "", false
+	}
+
+	filePath := filepath.Join(overrideDir, filepath.FromSlash(normalized))
+	info, err := os.Stat(filePath)
+	if err == nil && !info.IsDir() {
+		return normalized, true
+	}
+	if err == nil && info.IsDir() {
+		indexPath := path.Join(normalized, "index.html")
+		indexInfo, indexErr := os.Stat(filepath.Join(overrideDir, filepath.FromSlash(indexPath)))
+		if indexErr == nil && !indexInfo.IsDir() {
 			return indexPath, true
 		}
 	}
@@ -392,6 +425,12 @@ func ServeEmbeddedFrontend() gin.HandlerFunc {
 		if cleanPath == "ai-creation" {
 			serveIndexHTML(c, distFS)
 			return
+		}
+
+		if overridePath, ok := resolveOverrideStaticPath(overrideDir, cleanPath); ok {
+			if tryServeOverrideFile(c, overrideDir, overridePath) {
+				return
+			}
 		}
 
 		if staticPath, ok := resolveStaticPath(distFS, cleanPath); ok {
