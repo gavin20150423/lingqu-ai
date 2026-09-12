@@ -37,6 +37,11 @@ func (UserSubscription) Fields() []ent.Field {
 	return []ent.Field{
 		field.Int64("user_id"),
 		field.Int64("group_id"),
+		// Keep the purchased plan identity and quota snapshot on the subscription.
+		// The plan may be edited or removed later, so fulfillment must not depend on it.
+		field.Int64("plan_id").
+			Optional().
+			Nillable(),
 
 		field.Time("starts_at").
 			SchemaType(map[string]string{dialect.Postgres: "timestamptz"}),
@@ -58,6 +63,19 @@ func (UserSubscription) Fields() []ent.Field {
 			Optional().
 			Nillable().
 			SchemaType(map[string]string{dialect.Postgres: "timestamptz"}),
+
+		field.Float("daily_limit_usd").
+			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}).
+			Optional().
+			Nillable(),
+		field.Float("weekly_limit_usd").
+			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}).
+			Optional().
+			Nillable(),
+		field.Float("monthly_limit_usd").
+			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}).
+			Optional().
+			Nillable(),
 
 		field.Float("daily_usage_usd").
 			SchemaType(map[string]string{dialect.Postgres: "decimal(20,10)"}).

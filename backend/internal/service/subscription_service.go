@@ -192,12 +192,47 @@ func (s *SubscriptionService) invalidateSubscriptionCaches(userID, groupID int64
 
 // AssignSubscriptionInput 分配订阅输入
 type AssignSubscriptionInput struct {
-	UserID       int64
-	GroupID      int64
-	ValidityDays int
-	AssignedBy   int64
-	Notes        string
-	Entitlements map[string]any
+	UserID  int64
+	GroupID int64
+	// PlanID identifies the purchased tier. It is optional for legacy/admin
+	// assignments that intentionally use the group's quota defaults.
+	PlanID          *int64
+	DailyLimitUSD   *float64
+	WeeklyLimitUSD  *float64
+	MonthlyLimitUSD *float64
+	ValidityDays    int
+	AssignedBy      int64
+	Notes           string
+	Entitlements    map[string]any
+}
+
+func cloneSubscriptionInt64(value *int64) *int64 {
+	if value == nil {
+		return nil
+	}
+	cloned := *value
+	return &cloned
+}
+
+func cloneSubscriptionFloat64(value *float64) *float64 {
+	if value == nil {
+		return nil
+	}
+	cloned := *value
+	return &cloned
+}
+
+// applySubscriptionPlanSnapshot copies the tier selected at checkout onto the
+// user subscription. A non-nil PlanID is the signal that nil quota values are
+// intentional (unlimited), rather than "not supplied" by a legacy caller.
+func applySubscriptionPlanSnapshot(sub *UserSubscription, input *AssignSubscriptionInput) {
+	if sub == nil || input == nil || input.PlanID == nil {
+		return
+	}
+	sub.PlanID = cloneSubscriptionInt64(input.PlanID)
+	sub.DailyLimitUSD = cloneSubscriptionFloat64(input.DailyLimitUSD)
+	sub.WeeklyLimitUSD = cloneSubscriptionFloat64(input.WeeklyLimitUSD)
+	sub.MonthlyLimitUSD = cloneSubscriptionFloat64(input.MonthlyLimitUSD)
 }
 
 // AssignSubscription 分配订阅给用户（不允许重复分配）
@@ -249,11 +284,12 @@ func (s *SubscriptionService) assignOrExtendSubscription(ctx context.Context, in
 		if err := s.updateExistingSubscriptionTerm(ctx, existingSub.ID, validityDays, input.Notes, false); err != nil {
 			return nil, false, err
 		}
-		if input.Entitlements != nil {
+		if input.PlanID != nil || input.Entitlements != nil {
 			updated, getErr := s.userSubRepo.GetByID(ctx, existingSub.ID)
 			if getErr != nil {
 				return nil, false, getErr
 			}
+			applySubscriptionPlanSnapshot(updated, input)
 			updated.Entitlements = mergeEntitlements(updated.Entitlements, input.Entitlements)
 			if updateErr := s.withSubscriptionUpdateTx(ctx, func(txCtx context.Context) error {
 				return s.userSubRepo.Update(txCtx, updated)
@@ -478,6 +514,7 @@ func (s *SubscriptionService) createSubscription(ctx context.Context, input *Ass
 		CreatedAt:    now,
 		UpdatedAt:    now,
 	}
+	applySubscriptionPlanSnapshot(sub, input)
 	// 只有当 AssignedBy > 0 时才设置（0 表示系统分配，如兑换码）
 	if input.AssignedBy > 0 {
 		sub.AssignedBy = &input.AssignedBy
@@ -574,6 +611,18 @@ func (s *SubscriptionService) assignSubscriptionWithReuse(ctx context.Context, i
 			if err := s.updateExistingSubscriptionTerm(ctx, sub.ID, validityDays, input.Notes, true); err != nil {
 				return nil, false, err
 			}
+			if input.PlanID != nil {
+				updated, getErr := s.userSubRepo.GetByID(ctx, sub.ID)
+				if getErr != nil {
+					return nil, false, getErr
+				}
+				applySubscriptionPlanSnapshot(updated, input)
+				if updateErr := s.withSubscriptionUpdateTx(ctx, func(txCtx context.Context) error {
+					return s.userSubRepo.Update(txCtx, updated)
+				}); updateErr != nil {
+					return nil, false, updateErr
+				}
+			}
 			s.maybeInvalidateAssignmentCaches(input.UserID, input.GroupID, false)
 			renewed, getErr := s.userSubRepo.GetByID(ctx, sub.ID)
 			return renewed, true, getErr
@@ -625,6 +674,9 @@ func detectAssignSemanticConflict(existing *UserSubscription, input *AssignSubsc
 	inputNotes := strings.TrimSpace(input.Notes)
 	if existingNotes != inputNotes {
 		return "notes_mismatch", true
+	}
+	if input.PlanID != nil && (existing.PlanID == nil || *existing.PlanID != *input.PlanID) {
+		return "plan_mismatch", true
 	}
 
 	return "", false
@@ -1171,17 +1223,16 @@ func (s *SubscriptionService) calculateProgress(sub *UserSubscription, group *Gr
 	}
 
 	// 日进度
-	if group.HasDailyLimit() && sub.DailyWindowStart != nil {
-		limit := *group.DailyLimitUSD
+	if limit := sub.EffectiveDailyLimitUSD(group); limit != nil && *limit > 0 && sub.DailyWindowStart != nil {
 		resetsAt := sub.DailyWindowStart.Add(24 * time.Hour)
 		if dailyResetTime := sub.DailyResetTime(); dailyResetTime != nil {
 			resetsAt = *dailyResetTime
 		}
 		progress.Daily = &UsageWindowProgress{
-			LimitUSD:        limit,
+			LimitUSD:        *limit,
 			UsedUSD:         sub.DailyUsageUSD,
-			RemainingUSD:    limit - sub.DailyUsageUSD,
-			Percentage:      (sub.DailyUsageUSD / limit) * 100,
+			RemainingUSD:    *limit - sub.DailyUsageUSD,
+			Percentage:      (sub.DailyUsageUSD / *limit) * 100,
 			WindowStart:     *sub.DailyWindowStart,
 			ResetsAt:        resetsAt,
 			ResetsInSeconds: int64(time.Until(resetsAt).Seconds()),
@@ -1198,17 +1249,16 @@ func (s *SubscriptionService) calculateProgress(sub *UserSubscription, group *Gr
 	}
 
 	// 周进度
-	if group.HasWeeklyLimit() && sub.WeeklyWindowStart != nil {
-		limit := *group.WeeklyLimitUSD
+	if limit := sub.EffectiveWeeklyLimitUSD(group); limit != nil && *limit > 0 && sub.WeeklyWindowStart != nil {
 		resetsAt := sub.WeeklyWindowStart.Add(7 * 24 * time.Hour)
 		if weeklyResetTime := sub.WeeklyResetTime(); weeklyResetTime != nil {
 			resetsAt = *weeklyResetTime
 		}
 		progress.Weekly = &UsageWindowProgress{
-			LimitUSD:        limit,
+			LimitUSD:        *limit,
 			UsedUSD:         sub.WeeklyUsageUSD,
-			RemainingUSD:    limit - sub.WeeklyUsageUSD,
-			Percentage:      (sub.WeeklyUsageUSD / limit) * 100,
+			RemainingUSD:    *limit - sub.WeeklyUsageUSD,
+			Percentage:      (sub.WeeklyUsageUSD / *limit) * 100,
 			WindowStart:     *sub.WeeklyWindowStart,
 			ResetsAt:        resetsAt,
 			ResetsInSeconds: int64(time.Until(resetsAt).Seconds()),
@@ -1225,17 +1275,16 @@ func (s *SubscriptionService) calculateProgress(sub *UserSubscription, group *Gr
 	}
 
 	// 月进度
-	if group.HasMonthlyLimit() && sub.MonthlyWindowStart != nil {
-		limit := *group.MonthlyLimitUSD
+	if limit := sub.EffectiveMonthlyLimitUSD(group); limit != nil && *limit > 0 && sub.MonthlyWindowStart != nil {
 		resetsAt := sub.MonthlyWindowStart.Add(30 * 24 * time.Hour)
 		if monthlyResetTime := sub.MonthlyResetTime(); monthlyResetTime != nil {
 			resetsAt = *monthlyResetTime
 		}
 		progress.Monthly = &UsageWindowProgress{
-			LimitUSD:        limit,
+			LimitUSD:        *limit,
 			UsedUSD:         sub.MonthlyUsageUSD,
-			RemainingUSD:    limit - sub.MonthlyUsageUSD,
-			Percentage:      (sub.MonthlyUsageUSD / limit) * 100,
+			RemainingUSD:    *limit - sub.MonthlyUsageUSD,
+			Percentage:      (sub.MonthlyUsageUSD / *limit) * 100,
 			WindowStart:     *sub.MonthlyWindowStart,
 			ResetsAt:        resetsAt,
 			ResetsInSeconds: int64(time.Until(resetsAt).Seconds()),

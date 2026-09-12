@@ -60,6 +60,9 @@ func (h *PaymentHandler) GetPlans(c *gin.Context) {
 		PeakStart          string                 `json:"peak_start"`
 		PeakEnd            string                 `json:"peak_end"`
 		PeakRateMultiplier float64                `json:"peak_rate_multiplier"`
+		DailyLimitUSD      *float64               `json:"daily_limit_usd"`
+		WeeklyLimitUSD     *float64               `json:"weekly_limit_usd"`
+		MonthlyLimitUSD    *float64               `json:"monthly_limit_usd"`
 		Name               string                 `json:"name"`
 		Description        string                 `json:"description"`
 		Price              float64                `json:"price"`
@@ -82,6 +85,9 @@ func (h *PaymentHandler) GetPlans(c *gin.Context) {
 			GroupPlatform: gi.Platform, GroupName: gi.Name,
 			RateMultiplier: gi.RateMultiplier, PeakRateEnabled: gi.PeakRateEnabled,
 			PeakStart: gi.PeakStart, PeakEnd: gi.PeakEnd, PeakRateMultiplier: gi.PeakRateMultiplier,
+			DailyLimitUSD:  service.EffectivePlanLimit(p.DailyLimitUsd, gi.DailyLimitUSD),
+			WeeklyLimitUSD: service.EffectivePlanLimit(p.WeeklyLimitUsd, gi.WeeklyLimitUSD),
+			MonthlyLimitUSD: service.EffectivePlanLimit(p.MonthlyLimitUsd, gi.MonthlyLimitUSD),
 			Name: p.Name, Description: p.Description, Price: p.Price, OriginalPrice: p.OriginalPrice,
 			Currency:     p.Currency,
 			ValidityDays: p.ValidityDays, ValidityUnit: p.ValidityUnit, Features: p.Features,
@@ -132,8 +138,8 @@ func (h *PaymentHandler) GetCheckoutInfo(c *gin.Context) {
 			RateMultiplier:  gi.RateMultiplier,
 			PeakRateEnabled: gi.PeakRateEnabled, PeakStart: gi.PeakStart,
 			PeakEnd: gi.PeakEnd, PeakRateMultiplier: gi.PeakRateMultiplier,
-			DailyLimitUSD:  gi.DailyLimitUSD,
-			WeeklyLimitUSD: gi.WeeklyLimitUSD, MonthlyLimitUSD: gi.MonthlyLimitUSD,
+			DailyLimitUSD:  service.EffectivePlanLimit(p.DailyLimitUsd, gi.DailyLimitUSD),
+			WeeklyLimitUSD: service.EffectivePlanLimit(p.WeeklyLimitUsd, gi.WeeklyLimitUSD), MonthlyLimitUSD: service.EffectivePlanLimit(p.MonthlyLimitUsd, gi.MonthlyLimitUSD),
 			ModelScopes: gi.ModelScopes,
 			Name:        p.Name, Description: p.Description, Price: p.Price, OriginalPrice: p.OriginalPrice,
 			Currency:     p.Currency,

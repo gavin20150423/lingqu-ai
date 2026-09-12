@@ -32,12 +32,19 @@
 
     <div class="subscription-plan-card__metrics">
       <div>
-        <span>独立额度</span>
+        <span>月可用额度</span>
         <strong>{{ quotaTotal > 0 ? `$${quotaTotal.toFixed(2)}` : '按量使用' }}</strong>
       </div>
       <div>
         <span>有效期</span>
         <strong>{{ validitySuffix }}</strong>
+      </div>
+    </div>
+
+    <div class="subscription-plan-card__limits" aria-label="额度限制">
+      <div v-for="limit in quotaLimits" :key="limit.label">
+        <span>{{ limit.label }}</span>
+        <strong>{{ limit.value }}</strong>
       </div>
     </div>
 
@@ -122,9 +129,28 @@ const validitySuffix = computed(() => planValiditySuffix(props.plan, t))
 const isRenewal = computed(() => props.activeSubscriptions.some(s => s.group_id === props.plan.group_id && s.status === 'active'))
 
 const quotaEntries = computed(() => Object.entries(props.plan.entitlements || {}).filter(([, value]) => Number(value) > 0))
-const quotaTotal = computed(() => quotaEntries.value.reduce((sum, [, value]) => sum + Number(value), 0))
+// New plans use the plan-level rolling limits. Legacy plans may still expose
+// gifted entitlements instead, so retain that display as a fallback.
+const quotaTotal = computed(() => {
+  const entitlementTotal = quotaEntries.value.reduce((sum, [, value]) => sum + Number(value), 0)
+  if (entitlementTotal > 0) return entitlementTotal
+  const monthlyLimit = Number(props.plan.monthly_limit_usd ?? 0)
+  return Number.isFinite(monthlyLimit) && monthlyLimit > 0 ? monthlyLimit : 0
+})
+const hasPlanQuota = computed(() => [
+  props.plan.daily_limit_usd,
+  props.plan.weekly_limit_usd,
+  props.plan.monthly_limit_usd,
+].some(value => value != null && Number(value) > 0))
+const quotaLimits = computed(() => [
+  { label: '日限额', value: formatQuota(props.plan.daily_limit_usd) },
+  { label: '周限额', value: formatQuota(props.plan.weekly_limit_usd) },
+  { label: '月限额', value: formatQuota(props.plan.monthly_limit_usd) },
+])
 const entitlementSummary = computed(() => {
-  if (quotaEntries.value.length === 0) return '按分组倍率计费'
+  if (quotaEntries.value.length === 0) {
+    return hasPlanQuota.value ? '日 / 周 / 月独立限额，按套餐额度扣减' : '按分组倍率计费'
+  }
   return quotaEntries.value.map(([key, value]) => `${key} $${Number(value).toFixed(2)}`).join(' · ')
 })
 
@@ -144,7 +170,9 @@ const modelScopeLabels = computed(() => {
 const featureItems = computed(() => {
   const generated = [
     `支持 ${pLabel.value} 模型`,
-    `调用倍率 ×${Number(props.plan.rate_multiplier ?? 1).toPrecision(4).replace(/\.0+$/, '')}`,
+    hasPlanQuota.value
+      ? '套餐额度独立扣减'
+      : `调用倍率 ×${Number(props.plan.rate_multiplier ?? 1).toPrecision(4).replace(/\.0+$/, '')}`,
     `有效期 ${validitySuffix.value}`,
   ]
   const supplied = (props.plan.features || [])
@@ -161,6 +189,10 @@ const discountText = computed(() => {
 
 function formatNumber(value: number): string {
   return Number(value).toFixed(2)
+}
+
+function formatQuota(value: number | null | undefined): string {
+  return value != null && Number(value) > 0 ? `$${formatNumber(value)}` : '不限'
 }
 </script>
 
@@ -236,6 +268,10 @@ function formatNumber(value: number): string {
 .subscription-plan-card__metrics > div { border: 1px solid color-mix(in srgb, var(--plan-accent, #0f9f9a) 22%, #fff); border-radius: 8px; background: var(--plan-soft, #e7f8f6); padding: 0.58rem 0.65rem; }
 .subscription-plan-card__metrics span { display: block; color: #7c756d; font-size: 0.66rem; }
 .subscription-plan-card__metrics strong { display: block; margin-top: 0.2rem; color: var(--plan-text, #08736e); font-size: 0.9rem; font-weight: 850; }
+.subscription-plan-card__limits { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.35rem; margin: 0.55rem 1.25rem 0; }
+.subscription-plan-card__limits > div { min-width: 0; border-bottom: 1px solid #eee9e2; padding: 0.35rem 0.2rem 0.45rem; text-align: center; }
+.subscription-plan-card__limits span { display: block; color: #8a8279; font-size: 0.62rem; }
+.subscription-plan-card__limits strong { display: block; margin-top: 0.18rem; overflow: hidden; color: #443d36; font-size: 0.7rem; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
 .subscription-plan-card__entitlement { margin: 0.85rem 1.25rem 0; border: 1px solid color-mix(in srgb, var(--plan-accent, #0f9f9a) 28%, #fff); border-radius: 8px; background: #fffdfa; padding: 0.65rem 0.75rem; }
 .subscription-plan-card__entitlement-title { display: flex; align-items: center; gap: 0.38rem; color: #675f57; font-size: 0.71rem; font-weight: 800; }
 .subscription-plan-card__entitlement-title :deep(svg) { color: var(--plan-accent, #0f9f9a); }

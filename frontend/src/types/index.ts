@@ -2241,6 +2241,7 @@ export interface UserSubscription {
   id: number
   user_id: number
   group_id: number
+  plan_id?: number | null
   status: 'active' | 'expired' | 'revoked' | 'suspended'
   starts_at: string
   daily_usage_usd: number
@@ -2249,6 +2250,9 @@ export interface UserSubscription {
   daily_window_start: string | null
   weekly_window_start: string | null
   monthly_window_start: string | null
+  daily_limit_usd?: number | null
+  weekly_limit_usd?: number | null
+  monthly_limit_usd?: number | null
   created_at: string
   updated_at: string
   revoked_at?: string | null

@@ -662,9 +662,18 @@ func (s *PaymentService) ensurePaymentSubscriptionAssigned(ctx context.Context, 
 	txCtx := dbent.NewTxContext(ctx, tx)
 	txClient := tx.Client()
 	planEntitlements := map[string]any{}
+	var planID *int64
+	var dailyLimitUSD, weeklyLimitUSD, monthlyLimitUSD *float64
 	if o.PlanID != nil && *o.PlanID > 0 {
-		if plan, planErr := txClient.SubscriptionPlan.Get(txCtx, *o.PlanID); planErr == nil && plan.Entitlements != nil {
-			planEntitlements = plan.Entitlements
+		if plan, planErr := txClient.SubscriptionPlan.Get(txCtx, *o.PlanID); planErr == nil {
+			id := plan.ID
+			planID = &id
+			dailyLimitUSD = plan.DailyLimitUsd
+			weeklyLimitUSD = plan.WeeklyLimitUsd
+			monthlyLimitUSD = plan.MonthlyLimitUsd
+			if plan.Entitlements != nil {
+				planEntitlements = plan.Entitlements
+			}
 		}
 	}
 	alreadyAssigned, err := hasPaymentSubscriptionAssignmentAudit(txCtx, txClient, o.ID)
@@ -683,12 +692,16 @@ func (s *PaymentService) ensurePaymentSubscriptionAssigned(ctx context.Context, 
 			return fmt.Errorf("check existing subscription assignment: %w", lookupErr)
 		default:
 			if _, _, err := s.subscriptionSvc.assignOrExtendSubscription(txCtx, &AssignSubscriptionInput{
-				UserID:       o.UserID,
-				GroupID:      groupID,
-				ValidityDays: days,
-				AssignedBy:   0,
-				Notes:        orderNote,
-				Entitlements: planEntitlements,
+				UserID:          o.UserID,
+				GroupID:         groupID,
+				PlanID:          planID,
+				DailyLimitUSD:   dailyLimitUSD,
+				WeeklyLimitUSD:  weeklyLimitUSD,
+				MonthlyLimitUSD: monthlyLimitUSD,
+				ValidityDays:    days,
+				AssignedBy:      0,
+				Notes:           orderNote,
+				Entitlements:    planEntitlements,
 			}, true); err != nil {
 				return fmt.Errorf("assign subscription: %w", err)
 			}

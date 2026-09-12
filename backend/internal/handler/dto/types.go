@@ -748,9 +748,10 @@ type Setting struct {
 }
 
 type UserSubscription struct {
-	ID      int64 `json:"id"`
-	UserID  int64 `json:"user_id"`
-	GroupID int64 `json:"group_id"`
+	ID      int64  `json:"id"`
+	UserID  int64  `json:"user_id"`
+	GroupID int64  `json:"group_id"`
+	PlanID  *int64 `json:"plan_id,omitempty"`
 
 	StartsAt  time.Time `json:"starts_at"`
 	ExpiresAt time.Time `json:"expires_at"`
@@ -763,6 +764,9 @@ type UserSubscription struct {
 	DailyUsageUSD   float64                `json:"daily_usage_usd"`
 	WeeklyUsageUSD  float64                `json:"weekly_usage_usd"`
 	MonthlyUsageUSD float64                `json:"monthly_usage_usd"`
+	DailyLimitUSD   *float64               `json:"daily_limit_usd,omitempty"`
+	WeeklyLimitUSD  *float64               `json:"weekly_limit_usd,omitempty"`
+	MonthlyLimitUSD *float64               `json:"monthly_limit_usd,omitempty"`
 	Entitlements    map[string]interface{} `json:"entitlements,omitempty"`
 
 	CreatedAt time.Time  `json:"created_at"`

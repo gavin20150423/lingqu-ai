@@ -126,4 +126,17 @@ describe("SubscriptionPlanCard", () => {
     expect(wrapper.find(".subscription-plan-card__identity").text()).toContain("OpenAI");
     expect(wrapper.find(".subscription-plan-card__price").text()).toContain("$10.00");
   });
+
+  it("shows plan-level monthly quota when entitlements are empty", () => {
+    const wrapper = mountPlanCard("openai", {
+      entitlements: {},
+      daily_limit_usd: 54,
+      weekly_limit_usd: 115.2,
+      monthly_limit_usd: 270,
+    });
+
+    expect(wrapper.find(".subscription-plan-card__metrics").text()).toContain("$270.00");
+    expect(wrapper.find(".subscription-plan-card__entitlement-value").text()).toContain("日 / 周 / 月独立限额");
+    expect(wrapper.find(".subscription-plan-card__entitlement-value").text()).not.toContain("按分组倍率计费");
+  });
 });

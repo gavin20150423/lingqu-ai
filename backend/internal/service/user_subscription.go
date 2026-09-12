@@ -12,6 +12,7 @@ type UserSubscription struct {
 	ID      int64
 	UserID  int64
 	GroupID int64
+	PlanID  *int64
 
 	StartsAt  time.Time
 	ExpiresAt time.Time
@@ -24,6 +25,11 @@ type UserSubscription struct {
 	DailyUsageUSD   float64
 	WeeklyUsageUSD  float64
 	MonthlyUsageUSD float64
+	// Quotas are snapshotted from the purchased plan. A nil value falls back
+	// to the legacy group quota for subscriptions created before plan quotas.
+	DailyLimitUSD   *float64
+	WeeklyLimitUSD  *float64
+	MonthlyLimitUSD *float64
 	Entitlements    map[string]any
 
 	AssignedBy *int64
@@ -205,25 +211,73 @@ func (s *UserSubscription) MonthlyResetTime() *time.Time {
 	return &t
 }
 
+func (s *UserSubscription) EffectiveDailyLimitUSD(group *Group) *float64 {
+	if s != nil && s.PlanID != nil {
+		// A plan snapshot is authoritative, including a nil value which means
+		// this purchased tier intentionally has no limit for the window.
+		return s.DailyLimitUSD
+	}
+	if s != nil && s.DailyLimitUSD != nil {
+		return s.DailyLimitUSD
+	}
+	if group != nil {
+		return group.DailyLimitUSD
+	}
+	return nil
+}
+
+func (s *UserSubscription) EffectiveWeeklyLimitUSD(group *Group) *float64 {
+	if s != nil && s.PlanID != nil {
+		return s.WeeklyLimitUSD
+	}
+	if s != nil && s.WeeklyLimitUSD != nil {
+		return s.WeeklyLimitUSD
+	}
+	if group != nil {
+		return group.WeeklyLimitUSD
+	}
+	return nil
+}
+
+func (s *UserSubscription) EffectiveMonthlyLimitUSD(group *Group) *float64 {
+	if s != nil && s.PlanID != nil {
+		return s.MonthlyLimitUSD
+	}
+	if s != nil && s.MonthlyLimitUSD != nil {
+		return s.MonthlyLimitUSD
+	}
+	if group != nil {
+		return group.MonthlyLimitUSD
+	}
+	return nil
+}
+
+func hasPositiveLimit(limit *float64) bool {
+	return limit != nil && *limit > 0
+}
+
 func (s *UserSubscription) CheckDailyLimit(group *Group, additionalCost float64) bool {
-	if !group.HasDailyLimit() {
+	limit := s.EffectiveDailyLimitUSD(group)
+	if !hasPositiveLimit(limit) {
 		return true
 	}
-	return s.DailyUsageUSD+additionalCost <= *group.DailyLimitUSD
+	return s.DailyUsageUSD+additionalCost <= *limit
 }
 
 func (s *UserSubscription) CheckWeeklyLimit(group *Group, additionalCost float64) bool {
-	if !group.HasWeeklyLimit() {
+	limit := s.EffectiveWeeklyLimitUSD(group)
+	if !hasPositiveLimit(limit) {
 		return true
 	}
-	return s.WeeklyUsageUSD+additionalCost <= *group.WeeklyLimitUSD
+	return s.WeeklyUsageUSD+additionalCost <= *limit
 }
 
 func (s *UserSubscription) CheckMonthlyLimit(group *Group, additionalCost float64) bool {
-	if !group.HasMonthlyLimit() {
+	limit := s.EffectiveMonthlyLimitUSD(group)
+	if !hasPositiveLimit(limit) {
 		return true
 	}
-	return s.MonthlyUsageUSD+additionalCost <= *group.MonthlyLimitUSD
+	return s.MonthlyUsageUSD+additionalCost <= *limit
 }
 
 func (s *UserSubscription) CheckAllLimits(group *Group, additionalCost float64) (daily, weekly, monthly bool) {

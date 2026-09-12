@@ -215,13 +215,17 @@
                 <p v-if="selectedPlan.description" class="mt-2 text-sm leading-relaxed text-gray-500 dark:text-gray-400">
                   {{ selectedPlan.description }}
                 </p>
-                <!-- Rate + Limits grid -->
+                <!-- Subscription quota + limits grid -->
                 <div class="mt-3 grid grid-cols-2 gap-3">
-                  <div>
+                  <div v-if="!selectedPlanHasPlanQuota">
                     <span class="text-xs text-gray-400 dark:text-gray-500">{{ t('payment.planCard.rate') }}</span>
                     <div class="flex items-baseline">
                       <span :class="['text-lg font-bold', planTextClass]">×{{ selectedPlan.rate_multiplier ?? 1 }}</span>
                     </div>
+                  </div>
+                  <div v-else>
+                    <span class="text-xs text-gray-400 dark:text-gray-500">计费方式</span>
+                    <div :class="['text-lg font-bold', planTextClass]">套餐独立额度</div>
                   </div>
                   <div v-if="planHasPeakRate(selectedPlan)">
                     <span class="text-xs text-gray-400 dark:text-gray-500">{{ t('payment.planCard.peakRate') }}</span>
@@ -354,7 +358,7 @@
                       <div class="flex flex-wrap gap-x-3 text-[11px] text-gray-400 dark:text-gray-500">
                         <span>{{ t('payment.planCard.rate') }}: ×{{ sub.group?.rate_multiplier ?? 1 }}</span>
                         <span v-if="subscriptionHasPeakRate(sub)">{{ t('payment.planCard.peakRate') }}: {{ subscriptionPeakRateLabel(sub) }}</span>
-                        <span v-if="sub.group?.daily_limit_usd == null && sub.group?.weekly_limit_usd == null && sub.group?.monthly_limit_usd == null">{{ t('payment.planCard.quota') }}: {{ t('payment.planCard.unlimited') }}</span>
+                        <span v-if="subscriptionIsUnlimited(sub)">{{ t('payment.planCard.quota') }}: {{ t('payment.planCard.unlimited') }}</span>
                         <span v-if="sub.expires_at">{{ t('userSubscriptions.daysRemaining', { days: getDaysRemaining(sub.expires_at) }) }}</span>
                         <span v-else>{{ t('userSubscriptions.noExpiration') }}</span>
                       </div>
@@ -379,7 +383,7 @@
             <div v-if="checkout.help_text" class="markdown-body w-full overflow-x-auto break-words" v-html="renderedHelpText"></div>
           </div>
         </div>
-      </template>
+        </template>
     </div>
     <!-- Image Preview Overlay -->
     <Teleport to="body">
@@ -408,6 +412,7 @@ import { extractApiErrorMessage, extractI18nErrorMessage } from '@/utils/apiErro
 import { isMobileDevice } from '@/utils/device'
 import { hasPeakRate, formatPeakRateWindow, serverTimezoneLabel, type PeakRateFields } from '@/utils/peak-rate'
 import type { SubscriptionPlan, CheckoutInfoResponse, CreateOrderResult, OrderType } from '@/types/payment'
+import type { UserSubscription } from '@/types'
 import UserWorkspaceLayout from '@/components/layout/UserWorkspaceLayout.vue'
 import AmountInput from '@/components/payment/AmountInput.vue'
 import PaymentMethodSelector from '@/components/payment/PaymentMethodSelector.vue'
@@ -956,6 +961,22 @@ const paymentButtonClass = computed(() => {
 // Subscription confirm: platform accent colors (clean card, no gradient)
 const planBadgeClass = computed(() => platformBadgeClass(selectedPlan.value?.group_platform || ''))
 const planTextClass = computed(() => platformTextClass(selectedPlan.value?.group_platform || ''))
+const selectedPlanHasPlanQuota = computed(() => {
+  if (!selectedPlan.value) return false
+  return [selectedPlan.value.daily_limit_usd, selectedPlan.value.weekly_limit_usd, selectedPlan.value.monthly_limit_usd]
+    .some(value => value != null && Number(value) > 0)
+})
+
+function subscriptionLimit(sub: UserSubscription, window: 'daily' | 'weekly' | 'monthly'): number | null | undefined {
+  const planLimit = window === 'daily' ? sub.daily_limit_usd : window === 'weekly' ? sub.weekly_limit_usd : sub.monthly_limit_usd
+  if (sub.plan_id != null) return planLimit
+  if (planLimit != null) return planLimit
+  return window === 'daily' ? sub.group?.daily_limit_usd : window === 'weekly' ? sub.group?.weekly_limit_usd : sub.group?.monthly_limit_usd
+}
+
+function subscriptionIsUnlimited(sub: UserSubscription): boolean {
+  return !subscriptionLimit(sub, 'daily') && !subscriptionLimit(sub, 'weekly') && !subscriptionLimit(sub, 'monthly')
+}
 
 // Renewal modal state
 const planValiditySuffix = computed(() => {

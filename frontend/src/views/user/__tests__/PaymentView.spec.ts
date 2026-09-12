@@ -303,6 +303,7 @@ describe('PaymentView help text', () => {
       global: {
         stubs: {
           AppLayout: { template: '<div><slot /></div>' },
+          UserWorkspaceLayout: { template: '<div><slot /></div>' },
           Teleport: true,
           Transition: false,
         },

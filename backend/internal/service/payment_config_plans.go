@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"strings"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
@@ -49,6 +50,15 @@ func validatePlanRequired(name string, groupID int64, price float64, validityDay
 	return nil
 }
 
+func validatePlanQuotas(limits ...*float64) error {
+	for _, limit := range limits {
+		if limit != nil && (*limit < 0 || math.IsNaN(*limit) || math.IsInf(*limit, 0)) {
+			return infraerrors.BadRequest("PLAN_QUOTA_INVALID", "plan quota must be a finite value >= 0")
+		}
+	}
+	return nil
+}
+
 // validatePlanPatch validates only the non-nil fields in a patch update.
 func validatePlanPatch(req UpdatePlanRequest) error {
 	if req.Name != nil && strings.TrimSpace(*req.Name) == "" {
@@ -69,7 +79,7 @@ func validatePlanPatch(req UpdatePlanRequest) error {
 	if req.OriginalPrice != nil && *req.OriginalPrice < 0 {
 		return infraerrors.BadRequest("PLAN_ORIGINAL_PRICE_INVALID", "original price must be >= 0")
 	}
-	return nil
+	return validatePlanQuotas(req.DailyLimitUSD, req.WeeklyLimitUSD, req.MonthlyLimitUSD)
 }
 
 // --- Plan CRUD ---
@@ -87,6 +97,15 @@ type PlanGroupInfo struct {
 	WeeklyLimitUSD     *float64 `json:"weekly_limit_usd"`
 	MonthlyLimitUSD    *float64 `json:"monthly_limit_usd"`
 	ModelScopes        []string `json:"supported_model_scopes"`
+}
+
+// EffectivePlanLimit returns the tier-specific limit when present and keeps
+// legacy plans working by falling back to the shared group's limit.
+func EffectivePlanLimit(planLimit, groupLimit *float64) *float64 {
+	if planLimit != nil {
+		return planLimit
+	}
+	return groupLimit
 }
 
 // GetGroupInfoMap returns a map of group_id → PlanGroupInfo for the given plans.
@@ -137,12 +156,18 @@ func (s *PaymentConfigService) CreatePlan(ctx context.Context, req CreatePlanReq
 	if err := validatePlanRequired(req.Name, req.GroupID, req.Price, req.ValidityDays, req.ValidityUnit, req.OriginalPrice); err != nil {
 		return nil, err
 	}
+	if err := validatePlanQuotas(req.DailyLimitUSD, req.WeeklyLimitUSD, req.MonthlyLimitUSD); err != nil {
+		return nil, err
+	}
 	currency, err := normalizePlanCurrency(req.Currency)
 	if err != nil {
 		return nil, err
 	}
 	b := s.entClient.SubscriptionPlan.Create().
 		SetGroupID(req.GroupID).SetName(req.Name).SetDescription(req.Description).
+		SetNillableDailyLimitUsd(req.DailyLimitUSD).
+		SetNillableWeeklyLimitUsd(req.WeeklyLimitUSD).
+		SetNillableMonthlyLimitUsd(req.MonthlyLimitUSD).
 		SetPrice(req.Price).SetCurrency(currency).SetValidityDays(req.ValidityDays).SetValidityUnit(req.ValidityUnit).
 		SetFeatures(req.Features).SetProductName(req.ProductName).
 		SetForSale(req.ForSale).SetSortOrder(req.SortOrder)
@@ -187,6 +212,15 @@ func (s *PaymentConfigService) UpdatePlan(ctx context.Context, id int64, req Upd
 	}
 	if req.OriginalPrice != nil {
 		u.SetOriginalPrice(*req.OriginalPrice)
+	}
+	if req.DailyLimitUSD != nil {
+		u.SetDailyLimitUsd(*req.DailyLimitUSD)
+	}
+	if req.WeeklyLimitUSD != nil {
+		u.SetWeeklyLimitUsd(*req.WeeklyLimitUSD)
+	}
+	if req.MonthlyLimitUSD != nil {
+		u.SetMonthlyLimitUsd(*req.MonthlyLimitUSD)
 	}
 	if req.Currency != nil {
 		currency, err := normalizePlanCurrency(*req.Currency)

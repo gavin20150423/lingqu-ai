@@ -37,6 +37,13 @@
         <template #cell-validity_days="{ value, row }">
           <span class="text-sm">{{ value }} {{ t('payment.admin.' + (row.validity_unit || 'days')) }}</span>
         </template>
+        <template #cell-quota="{ row }">
+          <div class="whitespace-nowrap text-xs leading-5 text-gray-600 dark:text-gray-400">
+            <div>日 {{ formatQuota(row.daily_limit_usd) }}</div>
+            <div>周 {{ formatQuota(row.weekly_limit_usd) }}</div>
+            <div>月 {{ formatQuota(row.monthly_limit_usd) }}</div>
+          </div>
+        </template>
         <template #cell-for_sale="{ value, row }">
           <button
             type="button"
@@ -132,6 +139,11 @@ function getPlanNameClass(groupId: number): string {
   return group ? platformTextClass(group.platform) : 'text-gray-900 dark:text-white'
 }
 
+function formatQuota(value: number | null | undefined): string {
+  const numeric = Number(value)
+  return Number.isFinite(numeric) && numeric > 0 ? `$${numeric.toFixed(2)}` : '不限'
+}
+
 
 // ==================== Plans ====================
 
@@ -148,6 +160,7 @@ const planColumns = computed((): Column[] => [
   { key: 'group_id', label: t('payment.admin.group') },
   { key: 'price', label: t('payment.admin.price') },
   { key: 'validity_days', label: t('payment.admin.validity') },
+  { key: 'quota', label: '套餐额度' },
   { key: 'for_sale', label: t('payment.admin.forSale') },
   { key: 'sort_order', label: t('payment.admin.sortOrder') },
   { key: 'actions', label: t('common.actions') },

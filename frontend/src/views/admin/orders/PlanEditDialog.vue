@@ -21,16 +21,12 @@
         </div>
       </div>
 
-      <!-- Group Info Preview -->
+      <!-- Resource group preview. Quotas below belong to this plan. -->
       <div v-if="selectedGroupInfo" class="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-dark-600 dark:bg-dark-800">
         <div class="mb-2 flex items-center gap-2">
           <GroupBadge :name="selectedGroupInfo.name" :platform="selectedGroupInfo.platform" :rate-multiplier="selectedGroupInfo.rate_multiplier" />
         </div>
-        <div class="grid grid-cols-2 gap-2 text-xs">
-          <div><span class="text-gray-500">{{ t('payment.admin.dailyLimit') }}:</span> <span class="ml-1 font-medium text-gray-700 dark:text-gray-300">{{ selectedGroupInfo.daily_limit_usd != null ? '$' + selectedGroupInfo.daily_limit_usd : t('payment.admin.unlimited') }}</span></div>
-          <div><span class="text-gray-500">{{ t('payment.admin.weeklyLimit') }}:</span> <span class="ml-1 font-medium text-gray-700 dark:text-gray-300">{{ selectedGroupInfo.weekly_limit_usd != null ? '$' + selectedGroupInfo.weekly_limit_usd : t('payment.admin.unlimited') }}</span></div>
-          <div><span class="text-gray-500">{{ t('payment.admin.monthlyLimit') }}:</span> <span class="ml-1 font-medium text-gray-700 dark:text-gray-300">{{ selectedGroupInfo.monthly_limit_usd != null ? '$' + selectedGroupInfo.monthly_limit_usd : t('payment.admin.unlimited') }}</span></div>
-        </div>
+        <p class="text-xs text-gray-500 dark:text-gray-400">资源分组只决定上游账号与计费倍率；本套餐的日、周、月额度在下方单独设置。</p>
       </div>
 
       <div><label class="input-label">{{ t('payment.admin.planDescription') }} <span class="text-red-500">*</span></label><textarea v-model="planForm.description" rows="2" class="input" required></textarea></div>
@@ -50,6 +46,29 @@
       <div class="grid grid-cols-2 gap-4">
         <div><label class="input-label">{{ t('payment.admin.validity') }} <span class="text-red-500">*</span></label><input v-model.number="planForm.validity_days" type="number" min="1" class="input" required /></div>
         <div><label class="input-label">{{ t('payment.admin.validityUnit') }} <span class="text-red-500">*</span></label><Select v-model="planForm.validity_unit" :options="validityUnitOptions" /></div>
+      </div>
+      <div class="rounded-lg border border-primary-100 bg-primary-50/50 p-3 dark:border-primary-900/40 dark:bg-primary-950/20">
+        <div class="mb-2 flex items-center justify-between gap-2">
+          <div>
+            <label class="input-label mb-0">套餐额度（USD）</label>
+            <p class="text-xs text-gray-500 dark:text-gray-400">每个套餐独立计算；留空或填 0 表示该维度不限额。</p>
+          </div>
+          <span class="text-xs font-medium text-primary-600 dark:text-primary-400">日 / 周 / 月</span>
+        </div>
+        <div class="grid grid-cols-3 gap-3">
+          <div>
+            <label class="mb-1 block text-xs text-gray-600 dark:text-gray-400">日限额</label>
+            <input v-model.number="planForm.daily_limit_usd" type="number" step="0.01" min="0" class="input" placeholder="不限额" />
+          </div>
+          <div>
+            <label class="mb-1 block text-xs text-gray-600 dark:text-gray-400">周限额</label>
+            <input v-model.number="planForm.weekly_limit_usd" type="number" step="0.01" min="0" class="input" placeholder="不限额" />
+          </div>
+          <div>
+            <label class="mb-1 block text-xs text-gray-600 dark:text-gray-400">月限额</label>
+            <input v-model.number="planForm.monthly_limit_usd" type="number" step="0.01" min="0" class="input" placeholder="不限额" />
+          </div>
+        </div>
       </div>
       <div class="grid grid-cols-2 gap-4">
         <div><label class="input-label">{{ t('payment.admin.sortOrder') }}</label><input v-model.number="planForm.sort_order" type="number" min="0" class="input" /></div>
@@ -127,7 +146,7 @@ const { t } = useI18n()
 const appStore = useAppStore()
 
 const saving = ref(false)
-const planForm = reactive({ name: '', group_id: null as number | null, description: '', price: 0, original_price: 0, currency: '', validity_days: 30, validity_unit: 'days', sort_order: 0, for_sale: true })
+const planForm = reactive({ name: '', group_id: null as number | null, description: '', price: 0, original_price: 0, daily_limit_usd: null as number | null, weekly_limit_usd: null as number | null, monthly_limit_usd: null as number | null, currency: '', validity_days: 30, validity_unit: 'days', sort_order: 0, for_sale: true })
 const planFeaturesText = ref('')
 const planEntitlementsText = ref('')
 
@@ -181,11 +200,11 @@ const subscriptionCnyPreview = computed(() => {
 watch(() => props.show, (visible) => {
   if (!visible) return
   if (props.plan) {
-    Object.assign(planForm, { name: props.plan.name, group_id: props.plan.group_id, description: props.plan.description, price: props.plan.price, original_price: props.plan.original_price || 0, currency: props.plan.currency || '', validity_days: props.plan.validity_days, validity_unit: props.plan.validity_unit || 'days', sort_order: props.plan.sort_order || 0, for_sale: props.plan.for_sale })
+    Object.assign(planForm, { name: props.plan.name, group_id: props.plan.group_id, description: props.plan.description, price: props.plan.price, original_price: props.plan.original_price || 0, daily_limit_usd: props.plan.daily_limit_usd ?? null, weekly_limit_usd: props.plan.weekly_limit_usd ?? null, monthly_limit_usd: props.plan.monthly_limit_usd ?? null, currency: props.plan.currency || '', validity_days: props.plan.validity_days, validity_unit: props.plan.validity_unit || 'days', sort_order: props.plan.sort_order || 0, for_sale: props.plan.for_sale })
     planFeaturesText.value = (props.plan.features || []).join('\n')
     planEntitlementsText.value = Object.entries(props.plan.entitlements || {}).map(([key, value]) => `${key}=${value}`).join('\n')
   } else {
-    Object.assign(planForm, { name: '', group_id: null, description: '', price: 0, original_price: 0, currency: '', validity_days: 30, validity_unit: 'days', sort_order: 0, for_sale: true })
+    Object.assign(planForm, { name: '', group_id: null, description: '', price: 0, original_price: 0, daily_limit_usd: null, weekly_limit_usd: null, monthly_limit_usd: null, currency: '', validity_days: 30, validity_unit: 'days', sort_order: 0, for_sale: true })
     planFeaturesText.value = ''
     planEntitlementsText.value = ''
   }
@@ -207,6 +226,9 @@ function buildPlanPayload() {
     description: planForm.description,
     price: planForm.price,
     original_price: planForm.original_price || 0,
+    daily_limit_usd: planForm.daily_limit_usd == null || planForm.daily_limit_usd <= 0 ? 0 : planForm.daily_limit_usd,
+    weekly_limit_usd: planForm.weekly_limit_usd == null || planForm.weekly_limit_usd <= 0 ? 0 : planForm.weekly_limit_usd,
+    monthly_limit_usd: planForm.monthly_limit_usd == null || planForm.monthly_limit_usd <= 0 ? 0 : planForm.monthly_limit_usd,
     currency: planForm.currency.trim().toUpperCase(),
     validity_days: planForm.validity_days,
     validity_unit: planForm.validity_unit,
