@@ -719,7 +719,7 @@ func calculateCreateOrderPayAmountForOrderType(limitAmount, feeRate float64, cur
 // calculateCreateOrderPayAmountForPlan calculates the gateway amount from the
 // plan's stored price currency. Subscription prices are not display-only:
 // plan.Currency is the currency of plan.Price. Legacy plans with an empty
-// currency are treated as USD for backward compatibility.
+// currency default to CNY, matching the current subscription catalog.
 func calculateCreateOrderPayAmountForPlan(limitAmount, feeRate float64, currency, orderType, planCurrency string, usdToCnyRate float64) (string, float64, error) {
 	paymentAmount := limitAmount
 	if orderType == payment.OrderTypeSubscription {
@@ -729,14 +729,14 @@ func calculateCreateOrderPayAmountForPlan(limitAmount, feeRate float64, currency
 }
 
 // subscriptionPlanCurrency returns the currency in which a subscription plan
-// price is stored. Empty/invalid legacy values remain USD-compatible.
+// price is stored. Empty/invalid legacy values default to CNY.
 func subscriptionPlanCurrency(raw string) string {
 	if strings.TrimSpace(raw) == "" {
-		return "USD"
+		return payment.DefaultPaymentCurrency
 	}
 	currency, err := payment.NormalizePaymentCurrency(raw)
 	if err != nil {
-		return "USD"
+		return payment.DefaultPaymentCurrency
 	}
 	if currency == "RMB" {
 		return payment.DefaultPaymentCurrency

@@ -15,10 +15,10 @@ import (
 )
 
 // normalizePlanCurrency validates and normalizes the currency of a plan price.
-// Empty remains valid for legacy plans; payment calculation treats it as USD.
+// Subscription sale prices default to CNY when an older record omits currency.
 func normalizePlanCurrency(raw string) (string, error) {
 	if strings.TrimSpace(raw) == "" {
-		return "", nil
+		return payment.DefaultPaymentCurrency, nil
 	}
 	currency, err := payment.NormalizePaymentCurrency(raw)
 	if err != nil {

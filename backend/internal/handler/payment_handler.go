@@ -85,10 +85,10 @@ func (h *PaymentHandler) GetPlans(c *gin.Context) {
 			GroupPlatform: gi.Platform, GroupName: gi.Name,
 			RateMultiplier: gi.RateMultiplier, PeakRateEnabled: gi.PeakRateEnabled,
 			PeakStart: gi.PeakStart, PeakEnd: gi.PeakEnd, PeakRateMultiplier: gi.PeakRateMultiplier,
-			DailyLimitUSD:  service.EffectivePlanLimit(p.DailyLimitUsd, gi.DailyLimitUSD),
-			WeeklyLimitUSD: service.EffectivePlanLimit(p.WeeklyLimitUsd, gi.WeeklyLimitUSD),
+			DailyLimitUSD:   service.EffectivePlanLimit(p.DailyLimitUsd, gi.DailyLimitUSD),
+			WeeklyLimitUSD:  service.EffectivePlanLimit(p.WeeklyLimitUsd, gi.WeeklyLimitUSD),
 			MonthlyLimitUSD: service.EffectivePlanLimit(p.MonthlyLimitUsd, gi.MonthlyLimitUSD),
-			Name: p.Name, Description: p.Description, Price: p.Price, OriginalPrice: p.OriginalPrice,
+			Name:            p.Name, Description: p.Description, Price: p.Price, OriginalPrice: p.OriginalPrice,
 			Currency:     p.Currency,
 			ValidityDays: p.ValidityDays, ValidityUnit: p.ValidityUnit, Features: p.Features,
 			Entitlements: p.Entitlements,
@@ -145,7 +145,7 @@ func (h *PaymentHandler) GetCheckoutInfo(c *gin.Context) {
 			Currency:     p.Currency,
 			ValidityDays: p.ValidityDays, ValidityUnit: p.ValidityUnit, Features: parseFeatures(p.Features),
 			Entitlements: p.Entitlements,
-			ProductName:  p.ProductName,
+			ProductName:  p.ProductName, ForSale: p.ForSale,
 		})
 	}
 
@@ -206,6 +206,7 @@ type checkoutPlan struct {
 	Features           []string               `json:"features"`
 	Entitlements       map[string]interface{} `json:"entitlements,omitempty"`
 	ProductName        string                 `json:"product_name"`
+	ForSale            bool                   `json:"for_sale"`
 }
 
 // parseFeatures splits a newline-separated features string into a string slice.

@@ -841,12 +841,12 @@ function ceilPaymentAmount(value: number, currency: string): number {
 
 function subscriptionPlanCurrency(plan?: Pick<SubscriptionPlan, 'currency'> | null): string {
   const raw = String(plan?.currency || '').trim()
-  if (!raw) return 'USD'
+  if (!raw) return DEFAULT_PAYMENT_CURRENCY
   const normalized = normalizePaymentCurrency(raw)
   return normalized === 'RMB' ? DEFAULT_PAYMENT_CURRENCY : normalized
 }
 
-function subscriptionPaymentAmountForCurrency(value: number, currency: string, planCurrency = 'USD'): number {
+function subscriptionPaymentAmountForCurrency(value: number, currency: string, planCurrency = DEFAULT_PAYMENT_CURRENCY): number {
   const targetCurrency = normalizePaymentCurrency(currency)
   const sourceCurrency = subscriptionPlanCurrency({ currency: planCurrency })
   if (sourceCurrency === targetCurrency) return roundPaymentAmount(value, targetCurrency)

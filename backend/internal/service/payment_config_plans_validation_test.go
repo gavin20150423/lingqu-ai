@@ -5,6 +5,7 @@ package service
 import (
 	"testing"
 
+	"github.com/Wei-Shaw/sub2api/internal/payment"
 	"github.com/stretchr/testify/require"
 )
 
@@ -193,19 +194,18 @@ func TestValidatePlanPatch_AllNil(t *testing.T) {
 }
 
 // --- normalizePlanCurrency tests ---
-// Empty must stay empty (not coerced to the default payment currency),
-// so existing plans keep rendering without any currency label.
+// Empty legacy values use the default CNY sale-price currency.
 
-func TestNormalizePlanCurrency_EmptyKeepsEmpty(t *testing.T) {
+func TestNormalizePlanCurrency_EmptyDefaultsToCNY(t *testing.T) {
 	currency, err := normalizePlanCurrency("")
 	require.NoError(t, err)
-	require.Equal(t, "", currency)
+	require.Equal(t, payment.DefaultPaymentCurrency, currency)
 }
 
-func TestNormalizePlanCurrency_WhitespaceKeepsEmpty(t *testing.T) {
+func TestNormalizePlanCurrency_WhitespaceDefaultsToCNY(t *testing.T) {
 	currency, err := normalizePlanCurrency("   ")
 	require.NoError(t, err)
-	require.Equal(t, "", currency)
+	require.Equal(t, payment.DefaultPaymentCurrency, currency)
 }
 
 func TestNormalizePlanCurrency_LowercaseNormalized(t *testing.T) {

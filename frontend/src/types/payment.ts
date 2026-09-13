@@ -127,7 +127,7 @@ export interface SubscriptionPlan {
   description: string
   price: number
   original_price?: number
-  /** ISO 4217 currency of the stored sale price (e.g. "CNY"); empty is legacy USD */
+  /** ISO 4217 currency of the stored sale price (e.g. "CNY"); empty legacy values default to CNY */
   currency?: string
   validity_days: number
   validity_unit: string

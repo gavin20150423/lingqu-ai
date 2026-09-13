@@ -78,13 +78,27 @@ describe("SubscriptionPlanCard", () => {
     expect(mountPlanCard("openai", { validity_days: 30, validity_unit: "day" }).text()).toContain("/ 30payment.days");
   });
 
-  it("uses the configured currency symbol while preserving USD for legacy plans", () => {
+  it("uses the configured currency symbol and defaults legacy sale prices to CNY", () => {
     const cnyPlan = mountPlanCard("openai", { currency: "CNY", original_price: 20 }).text();
 
     expect(cnyPlan).toContain("¥10.00");
     expect(cnyPlan).toContain("原价 ¥20.00");
     expect(mountPlanCard("openai", { currency: "USD" }).text()).toContain("$10.00");
-    expect(mountPlanCard("openai", { currency: "" }).text()).toContain("$10.00");
+    expect(mountPlanCard("openai", { currency: "" }).text()).toContain("¥10.00");
+  });
+
+  it("keeps legacy checkout plans purchasable when for_sale is omitted", () => {
+    const wrapper = mountPlanCard("openai", { for_sale: undefined });
+
+    expect(wrapper.find(".subscription-plan-card__availability").text()).toContain("可购买");
+    expect(wrapper.find(".subscription-plan-card__footer button").attributes("disabled")).toBeUndefined();
+  });
+
+  it("keeps explicitly hidden plans unavailable", () => {
+    const wrapper = mountPlanCard("openai", { for_sale: false });
+
+    expect(wrapper.find(".subscription-plan-card__availability").text()).toContain("暂不可用");
+    expect(wrapper.find(".subscription-plan-card__footer button").attributes("disabled")).toBeDefined();
   });
 
   it.each([
@@ -124,7 +138,7 @@ describe("SubscriptionPlanCard", () => {
     expect(title.text()).toBe("Pro");
     expect(title.attributes("title")).toBe("Pro");
     expect(wrapper.find(".subscription-plan-card__identity").text()).toContain("OpenAI");
-    expect(wrapper.find(".subscription-plan-card__price").text()).toContain("$10.00");
+    expect(wrapper.find(".subscription-plan-card__price").text()).toContain("¥10.00");
   });
 
   it("shows plan-level monthly quota when entitlements are empty", () => {
@@ -147,5 +161,29 @@ describe("SubscriptionPlanCard", () => {
     expect(basic.find(".subscription-plan-card__entitlement-value").text()).toBe("GPT / Codex 入门，覆盖常见工作任务");
     expect(ultra.find(".subscription-plan-card__entitlement-value").text()).toBe("团队自动化工作流，支撑高峰期调用");
     expect(basic.findAll(".subscription-plan-card__features li").map((item) => item.text()).join(" ")).not.toContain("套餐权益");
+  });
+
+  it.each([
+    ["GPT Image 2.5", "Basic", "$0.08 额度"],
+    ["GPT Image 2.5", "Plus", "$0.08 额度"],
+    ["GPT Image 2.5", "Standard", "$0.08 额度"],
+    ["GPT Image 2.5", "Pro", "$0.06 额度"],
+    ["GPT Image 2.5", "Ultra", "$0.05 额度"],
+    ["香蕉生图", "Basic", "$0.15 额度"],
+    ["香蕉生图", "Plus", "$0.15 额度"],
+    ["香蕉生图", "Standard", "$0.13 额度"],
+    ["香蕉生图", "Pro", "$0.12 额度"],
+    ["香蕉生图", "Ultra", "$0.10 额度"],
+  ])("shows the image quota consumed per generated image for %s %s", (groupName, name, unitPrice) => {
+    const wrapper = mountPlanCard("openai", { group_name: groupName, name });
+
+    expect(wrapper.find(".subscription-plan-card__entitlement-value").text()).toContain(unitPrice);
+  });
+
+  it("keeps image unit pricing after the product series is renamed", () => {
+    expect(mountPlanCard("openai", { group_name: "GPT Image订阅", name: "Pro" })
+      .find(".subscription-plan-card__entitlement-value").text()).toContain("$0.06 额度");
+    expect(mountPlanCard("openai", { group_name: "nano banana订阅", name: "Ultra" })
+      .find(".subscription-plan-card__entitlement-value").text()).toContain("$0.10 额度");
   });
 });

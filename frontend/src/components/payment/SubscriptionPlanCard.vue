@@ -74,13 +74,13 @@
 
     <div class="subscription-plan-card__footer">
       <div class="subscription-plan-card__availability">
-        <span>{{ plan.for_sale ? '可购买' : '暂停售卖' }}</span>
-        <strong>{{ plan.for_sale ? '立即开通' : '暂不可用' }}</strong>
+        <span>{{ isAvailable ? '可购买' : '暂停售卖' }}</span>
+        <strong>{{ isAvailable ? '立即开通' : '暂不可用' }}</strong>
       </div>
       <div class="subscription-plan-card__progress" aria-hidden="true">
-        <span :class="{ 'subscription-plan-card__progress--off': !plan.for_sale }" />
+        <span :class="{ 'subscription-plan-card__progress--off': !isAvailable }" />
       </div>
-      <button type="button" :disabled="!plan.for_sale" @click="emit('select', plan)">
+      <button type="button" :disabled="!isAvailable" @click="emit('select', plan)">
         <Icon name="arrowRight" size="sm" />
         {{ isRenewal ? t('payment.renewNow') : '立即订阅' }}
       </button>
@@ -123,7 +123,10 @@ const pLabel = computed(() => {
 })
 // The plan currency is the currency of the stored sale price. Quota values
 // below remain USD-denominated and intentionally keep their own "$" symbol.
-const planCurrencySymbol = computed(() => currencySymbol(props.plan.currency || 'USD'))
+const planCurrencySymbol = computed(() => currencySymbol(props.plan.currency))
+// The checkout endpoint only returns plans eligible for sale. Treat an
+// omitted legacy field as available while preserving an explicit false value.
+const isAvailable = computed(() => props.plan.for_sale !== false)
 const formattedPrice = computed(() => formatNumber(props.plan.price))
 const validitySuffix = computed(() => planValiditySuffix(props.plan, t))
 const isRenewal = computed(() => props.activeSubscriptions.some(s => s.group_id === props.plan.group_id && s.status === 'active'))
@@ -154,6 +157,8 @@ const productKey = computed(() => {
     .replace(/\s*订阅\s*$/, '')
     .trim()
     .toLowerCase()
+  if (groupName.includes('gpt image')) return 'gpt image 2.5'
+  if (groupName.includes('nano banana') || groupName === '香蕉生图' || groupName === 'banana') return '香蕉生图'
   if (groupName) return groupName
 
   // A few legacy API fixtures omit group_name. Keep their tier summary
@@ -209,18 +214,18 @@ const ENTITLEMENT_SUMMARIES: Record<string, Record<string, string>> = {
     ultra: '团队研究空间，支撑批量内容工作',
   },
   'gpt image 2.5': {
-    basic: '快速试做视觉方向，适合轻量创作',
-    plus: '稳定补充视觉素材，适合规律产出',
-    standard: '日常批量生图，覆盖内容生产需求',
-    pro: '专业视觉生产，适合连续批次制作',
-    ultra: '商业级生图空间，支撑团队规模化产出',
+    basic: 'GPT Image 双模型，轻量试作；每张 $0.08 额度',
+    plus: 'GPT Image 双模型，日常创作；每张 $0.08 额度',
+    standard: 'GPT Image 双模型，批量生产；每张 $0.08 额度',
+    pro: 'GPT Image 双模型，专业生产；每张 $0.06 额度',
+    ultra: 'GPT Image 双模型，商业批量；每张 $0.05 额度',
   },
   香蕉生图: {
-    basic: '轻量灵感创作，快速验证视觉想法',
-    plus: '稳定多模态产出，适合日常内容配图',
-    standard: '运营内容主力，覆盖持续批量制作',
-    pro: '品牌视觉生产，适合系列化创作',
-    ultra: '团队规模化生图，支撑商业项目高峰',
+    basic: 'Nano Banana，轻量试作；每张 $0.15 额度',
+    plus: 'Nano Banana，日常配图；每张 $0.15 额度',
+    standard: 'Nano Banana，批量生产；每张 $0.13 额度',
+    pro: 'Nano Banana，专业视觉；每张 $0.12 额度',
+    ultra: 'Nano Banana，商业批量；每张 $0.10 额度',
   },
 }
 

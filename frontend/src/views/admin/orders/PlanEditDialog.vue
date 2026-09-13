@@ -185,7 +185,7 @@ const subscriptionCnyPreview = computed(() => {
   if (price <= 0) return null
 
   const rawCurrency = planForm.currency.trim()
-  const planCurrency = rawCurrency ? normalizePaymentCurrency(rawCurrency) : 'USD'
+  const planCurrency = rawCurrency ? normalizePaymentCurrency(rawCurrency) : DEFAULT_PAYMENT_CURRENCY
   if (planCurrency !== DEFAULT_PAYMENT_CURRENCY && (planCurrency !== 'USD' || rate <= 0)) return null
 
   const amount = planCurrency === DEFAULT_PAYMENT_CURRENCY ? roundCnyAmount(price) : roundCnyAmount(price * rate)
@@ -204,7 +204,7 @@ const subscriptionCnyPreview = computed(() => {
 watch(() => props.show, (visible) => {
   if (!visible) return
   if (props.plan) {
-    Object.assign(planForm, { name: props.plan.name, group_id: props.plan.group_id, description: props.plan.description, price: props.plan.price, original_price: props.plan.original_price || 0, daily_limit_usd: props.plan.daily_limit_usd ?? null, weekly_limit_usd: props.plan.weekly_limit_usd ?? null, monthly_limit_usd: props.plan.monthly_limit_usd ?? null, currency: props.plan.currency || '', validity_days: props.plan.validity_days, validity_unit: props.plan.validity_unit || 'days', sort_order: props.plan.sort_order || 0, for_sale: props.plan.for_sale })
+    Object.assign(planForm, { name: props.plan.name, group_id: props.plan.group_id, description: props.plan.description, price: props.plan.price, original_price: props.plan.original_price || 0, daily_limit_usd: props.plan.daily_limit_usd ?? null, weekly_limit_usd: props.plan.weekly_limit_usd ?? null, monthly_limit_usd: props.plan.monthly_limit_usd ?? null, currency: props.plan.currency || DEFAULT_PAYMENT_CURRENCY, validity_days: props.plan.validity_days, validity_unit: props.plan.validity_unit || 'days', sort_order: props.plan.sort_order || 0, for_sale: props.plan.for_sale })
     planFeaturesText.value = (props.plan.features || []).join('\n')
     planEntitlementsText.value = Object.entries(props.plan.entitlements || {}).map(([key, value]) => `${key}=${value}`).join('\n')
   } else {
@@ -233,7 +233,7 @@ function buildPlanPayload() {
     daily_limit_usd: planForm.daily_limit_usd == null || planForm.daily_limit_usd <= 0 ? 0 : planForm.daily_limit_usd,
     weekly_limit_usd: planForm.weekly_limit_usd == null || planForm.weekly_limit_usd <= 0 ? 0 : planForm.weekly_limit_usd,
     monthly_limit_usd: planForm.monthly_limit_usd == null || planForm.monthly_limit_usd <= 0 ? 0 : planForm.monthly_limit_usd,
-    currency: planForm.currency.trim().toUpperCase(),
+    currency: planForm.currency.trim().toUpperCase() || DEFAULT_PAYMENT_CURRENCY,
     validity_days: planForm.validity_days,
     validity_unit: planForm.validity_unit,
     sort_order: planForm.sort_order,

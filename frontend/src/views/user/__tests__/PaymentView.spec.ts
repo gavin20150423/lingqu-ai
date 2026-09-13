@@ -471,6 +471,7 @@ describe('PaymentView subscription confirmation amounts', () => {
       plan: {
         price: 9.99,
         original_price: 12.99,
+        currency: 'USD',
       },
     })
 
@@ -515,6 +516,7 @@ describe('PaymentView subscription confirmation amounts', () => {
       plan: {
         price: 7.99,
         original_price: 9.99,
+        currency: 'USD',
       },
     })
 
@@ -533,6 +535,7 @@ describe('PaymentView subscription confirmation amounts', () => {
       },
       plan: {
         price: 9.99,
+        currency: 'USD',
       },
     })
 
