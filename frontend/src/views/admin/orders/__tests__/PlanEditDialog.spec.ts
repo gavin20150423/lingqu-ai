@@ -147,6 +147,8 @@ describe('PlanEditDialog', () => {
       },
     })
 
+    const currency = wrapper.findAll('input').find(input => input.attributes('maxlength') === '3')
+    await currency?.setValue('USD')
     await wrapper.find('input[type="number"]').setValue('9.99')
 
     expect(wrapper.text()).toContain('preview')
@@ -163,10 +165,29 @@ describe('PlanEditDialog', () => {
       },
     })
 
+    const currency = wrapper.findAll('input').find(input => input.attributes('maxlength') === '3')
+    await currency?.setValue('USD')
     await wrapper.find('input[type="number"]').setValue('9.99')
 
     expect(wrapper.text()).not.toContain('preview')
     expect(wrapper.text()).not.toContain('¥71.43')
+  })
+
+  it('treats a CNY plan price as the direct sale amount', async () => {
+    const wrapper = mountDialog({
+      paymentConfig: {
+        subscription_usd_to_cny_rate: 7.15,
+        recharge_fee_rate: 2.5,
+      },
+    })
+
+    const currency = wrapper.findAll('input').find(input => input.attributes('maxlength') === '3')
+    await currency?.setValue('CNY')
+    await wrapper.find('input[type="number"]').setValue('270')
+
+    expect(wrapper.text()).toContain('preview ¥270.00')
+    expect(wrapper.text()).toContain('fee 2.5 ¥276.75')
+    expect(wrapper.text()).not.toContain('¥1930.50')
   })
 
   it('allows composite subscription groups for payment plans', () => {

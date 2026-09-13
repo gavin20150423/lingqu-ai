@@ -265,6 +265,30 @@ func TestCalculateCreateOrderPayAmountForSubscriptionKeepsDirectPriceWhenRateDis
 	}
 }
 
+func TestCalculateCreateOrderPayAmountForPlanKeepsCNYSalePriceOnCNYGateway(t *testing.T) {
+	t.Parallel()
+
+	amountStr, amount, err := calculateCreateOrderPayAmountForPlan(270, 0, "CNY", payment.OrderTypeSubscription, "CNY", 7.15)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if amountStr != "270.00" || amount != 270 {
+		t.Fatalf("CNY plan on CNY gateway = (%q, %v), want (270.00, 270)", amountStr, amount)
+	}
+}
+
+func TestCalculateCreateOrderPayAmountForPlanConvertsCNYSalePriceToUSDGateway(t *testing.T) {
+	t.Parallel()
+
+	amountStr, amount, err := calculateCreateOrderPayAmountForPlan(270, 0, "USD", payment.OrderTypeSubscription, "CNY", 7.15)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if amountStr != "37.76" || amount != 37.76 {
+		t.Fatalf("CNY plan on USD gateway = (%q, %v), want (37.76, 37.76)", amountStr, amount)
+	}
+}
+
 // 汇率只作用于订阅订单，余额充值订单不受影响。
 func TestCalculateCreateOrderPayAmountForBalanceIgnoresSubscriptionRate(t *testing.T) {
 	t.Parallel()

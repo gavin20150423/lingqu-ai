@@ -546,6 +546,27 @@ describe('PaymentView subscription confirmation amounts', () => {
     expect(text).toContain(total)
     expect(wrapper.findAll('button').some(button => button.text().includes(total))).toBe(true)
   })
+
+  it('keeps a CNY plan sale price in CNY when the global USD/CNY rate is configured', async () => {
+    const wrapper = await mountSubscriptionConfirm({
+      checkout: {
+        subscription_usd_to_cny_rate: 7.15,
+      },
+      method: {
+        currency: 'CNY',
+      },
+      plan: {
+        price: 270,
+        original_price: 300,
+        currency: 'CNY',
+      },
+    })
+
+    const text = wrapper.text()
+    expect(text).toContain(formatPaymentAmount(270, 'CNY'))
+    expect(text).toContain(formatPaymentAmount(300, 'CNY'))
+    expect(text).not.toContain(formatPaymentAmount(1930.5, 'CNY'))
+  })
 })
 
 describe('PaymentView payment recovery', () => {

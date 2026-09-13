@@ -563,7 +563,7 @@ export default {
       price: 'Price',
       currency: 'Currency Label',
       currencyPlaceholder: 'e.g. USD / NZD / CNY',
-      currencyHint: 'Display-only 3-letter ISO currency code shown next to the price; leave empty to hide, does not affect billing',
+      currencyHint: 'ISO 3-letter currency of the plan sale price; empty legacy plans remain USD-compatible, while quotas stay in USD',
       subscriptionCnyPayPreview: 'CNY channel charge preview: {amount}',
       subscriptionCnyPayPreviewWithFee: '({feeRate}% fee included: {total})',
       validity: 'Validity',

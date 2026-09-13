@@ -14,8 +14,8 @@ import (
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 )
 
-// normalizePlanCurrency validates and normalizes the display-only currency label.
-// Empty means "no label" and is kept as-is so existing plans stay unchanged.
+// normalizePlanCurrency validates and normalizes the currency of a plan price.
+// Empty remains valid for legacy plans; payment calculation treats it as USD.
 func normalizePlanCurrency(raw string) (string, error) {
 	if strings.TrimSpace(raw) == "" {
 		return "", nil

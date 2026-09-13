@@ -121,8 +121,8 @@ const pLabel = computed(() => {
   const groupName = props.plan.group_name?.replace(/^【[^】]+】\s*/, '').replace(/\s*订阅\s*$/, '').trim()
   return groupName || platformLabel(platform.value)
 })
-// Subscription prices are stored as USD. The checkout page converts them only
-// when the selected gateway uses CNY and the admin has enabled that rate.
+// The plan currency is the currency of the stored sale price. Quota values
+// below remain USD-denominated and intentionally keep their own "$" symbol.
 const planCurrencySymbol = computed(() => currencySymbol(props.plan.currency || 'USD'))
 const formattedPrice = computed(() => formatNumber(props.plan.price))
 const validitySuffix = computed(() => planValiditySuffix(props.plan, t))
@@ -147,11 +147,95 @@ const quotaLimits = computed(() => [
   { label: '周限额', value: formatQuota(props.plan.weekly_limit_usd) },
   { label: '月限额', value: formatQuota(props.plan.monthly_limit_usd) },
 ])
+
+const productKey = computed(() => {
+  const groupName = String(props.plan.group_name || '')
+    .replace(/^【[^】]+】\s*/, '')
+    .replace(/\s*订阅\s*$/, '')
+    .trim()
+    .toLowerCase()
+  if (groupName) return groupName
+
+  // A few legacy API fixtures omit group_name. Keep their tier summary
+  // useful by falling back to the platform that identifies the series.
+  if (platform.value === 'openai') return 'gpt'
+  if (platform.value === 'gemini') return 'gemini'
+  if (platform.value === 'grok') return 'grok'
+  if (platform.value === 'anthropic') return 'ccmax claude'
+  return ''
+})
+
+const ENTITLEMENT_SUMMARIES: Record<string, Record<string, string>> = {
+  'ccmax claude': {
+    basic: 'Claude Code 轻量接入，适合随用随开',
+    plus: '日常开发更顺手，适合稳定高频使用',
+    standard: '个人主力方案，覆盖完整开发流程',
+    pro: '复杂工程协作，适合长时间连续工作',
+    ultra: '团队级使用空间，支撑并行项目推进',
+  },
+  'kiro claude': {
+    basic: '轻量 IDE 辅助，快速获得代码建议',
+    plus: '持续编码协作，让开发节奏更连贯',
+    standard: '跨文件协作，覆盖个人开发主流程',
+    pro: '大型仓库支持，适合复杂重构任务',
+    ultra: '团队研发协作，支撑密集 Agent 工作流',
+  },
+  gpt: {
+    basic: 'GPT / Codex 入门，覆盖常见工作任务',
+    plus: '日常编码推理，适合持续技术对话',
+    standard: '个人主力配置，覆盖项目完整迭代',
+    pro: '深度推理协作，适合复杂工程任务',
+    ultra: '团队自动化工作流，支撑高峰期调用',
+  },
+  gemini: {
+    basic: '文本与视觉入门，轻松开启多模态体验',
+    plus: '文档图片协作，适合日常内容处理',
+    standard: '稳定多模态生产，覆盖个人创作流程',
+    pro: '长上下文与批处理，适合高频研究工作',
+    ultra: '团队级内容生产，支撑并行多模态任务',
+  },
+  国模: {
+    basic: '主流国模一站接入，灵活应对中文任务',
+    plus: '中文工作流协同，模型切换更高效',
+    standard: '个人主力国模，兼顾创作与开发',
+    pro: '深度推理与 Agent，适合复杂批量任务',
+    ultra: '团队级多模型空间，支撑规模化调用',
+  },
+  grok: {
+    basic: '轻量对话探索，快速获取观点灵感',
+    plus: '连续对话协作，适合资料与内容工作',
+    standard: '个人主力分析，覆盖多轮任务协作',
+    pro: '高频推理生产，适合长对话与 Agent',
+    ultra: '团队研究空间，支撑批量内容工作',
+  },
+  'gpt image 2.5': {
+    basic: '快速试做视觉方向，适合轻量创作',
+    plus: '稳定补充视觉素材，适合规律产出',
+    standard: '日常批量生图，覆盖内容生产需求',
+    pro: '专业视觉生产，适合连续批次制作',
+    ultra: '商业级生图空间，支撑团队规模化产出',
+  },
+  香蕉生图: {
+    basic: '轻量灵感创作，快速验证视觉想法',
+    plus: '稳定多模态产出，适合日常内容配图',
+    standard: '运营内容主力，覆盖持续批量制作',
+    pro: '品牌视觉生产，适合系列化创作',
+    ultra: '团队规模化生图，支撑商业项目高峰',
+  },
+}
+
 const entitlementSummary = computed(() => {
-  if (quotaEntries.value.length === 0) {
-    return hasPlanQuota.value ? '日 / 周 / 月独立限额，按套餐额度扣减' : '按分组倍率计费'
-  }
-  return quotaEntries.value.map(([key, value]) => `${key} $${Number(value).toFixed(2)}`).join(' · ')
+  const tier = String(props.plan.name || '').trim().toLowerCase()
+  const mapped = ENTITLEMENT_SUMMARIES[productKey.value]?.[tier]
+  if (mapped) return mapped
+
+  const serviceHighlight = (props.plan.features || [])
+    .flatMap(feature => String(feature).split(/\\n|\n/))
+    .map(feature => feature.trim())
+    .find(feature => /^服务亮点[:：]/.test(feature))
+  if (serviceHighlight) return serviceHighlight.replace(/^服务亮点[:：]\s*/, '')
+
+  return hasPlanQuota.value ? '独立额度 · 按套餐权益使用' : '灵活调用 · 按实际使用'
 })
 
 const MODEL_SCOPE_LABELS: Record<string, string> = {
@@ -168,18 +252,24 @@ const modelScopeLabels = computed(() => {
 })
 
 const featureItems = computed(() => {
-  const generated = [
-    `支持 ${pLabel.value} 模型`,
-    hasPlanQuota.value
-      ? '套餐额度独立扣减'
-      : `调用倍率 ×${Number(props.plan.rate_multiplier ?? 1).toPrecision(4).replace(/\.0+$/, '')}`,
-    `有效期 ${validitySuffix.value}`,
-  ]
   const supplied = (props.plan.features || [])
     .flatMap(feature => String(feature).split(/\\n|\n/))
     .map(feature => feature.trim())
     .filter(Boolean)
-  return [...generated, ...supplied].filter((item, index, all) => all.indexOf(item) === index).slice(0, 6)
+  const hasSuppliedModel = supplied.some(feature => /^支持模型[:：]/.test(feature))
+  const generated = [
+    hasSuppliedModel ? '' : `支持 ${pLabel.value} 模型`,
+    hasPlanQuota.value
+      ? '套餐额度独立扣减'
+      : `调用倍率 ×${Number(props.plan.rate_multiplier ?? 1).toPrecision(4).replace(/\.0+$/, '')}`,
+    `有效期 ${validitySuffix.value}`,
+  ].filter(Boolean)
+  // The standalone entitlement panel already carries the tier-level value;
+  // showing another generic “套餐权益” row below only repeats information.
+  const withoutRepeatedEntitlement = supplied.filter(feature => !/^(套餐权益|权益内容|额度权益)[:：]/.test(feature))
+  return [...generated, ...withoutRepeatedEntitlement]
+    .filter((item, index, all) => all.indexOf(item) === index)
+    .slice(0, 6)
 })
 
 const discountText = computed(() => {
@@ -275,7 +365,7 @@ function formatQuota(value: number | null | undefined): string {
 .subscription-plan-card__entitlement { margin: 0.85rem 1.25rem 0; border: 1px solid color-mix(in srgb, var(--plan-accent, #0f9f9a) 28%, #fff); border-radius: 8px; background: #fffdfa; padding: 0.65rem 0.75rem; }
 .subscription-plan-card__entitlement-title { display: flex; align-items: center; gap: 0.38rem; color: #675f57; font-size: 0.71rem; font-weight: 800; }
 .subscription-plan-card__entitlement-title :deep(svg) { color: var(--plan-accent, #0f9f9a); }
-.subscription-plan-card__entitlement-value { margin-top: 0.34rem; overflow: hidden; color: #332e29; font-size: 0.7rem; font-weight: 720; text-overflow: ellipsis; white-space: nowrap; }
+.subscription-plan-card__entitlement-value { display: -webkit-box; min-height: 2.1em; margin-top: 0.34rem; overflow: hidden; color: #332e29; font-size: 0.7rem; font-weight: 720; line-height: 1.5; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .subscription-plan-card__scopes { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.6rem; margin: 0.65rem 1.25rem 0; color: #817a72; font-size: 0.68rem; }
 .subscription-plan-card__scopes > div { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 0.3rem; }
 .subscription-plan-card__scopes > div span { border-radius: 999px; background: var(--plan-soft, #e7f8f6); color: var(--plan-text, #08736e); font-size: 0.63rem; font-weight: 750; padding: 0.2rem 0.4rem; }

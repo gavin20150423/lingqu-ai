@@ -121,7 +121,7 @@ import { useAppStore } from '@/stores/app'
 import { adminPaymentAPI } from '@/api/admin/payment'
 import type { AdminPaymentConfig } from '@/api/admin/payment'
 import { extractApiErrorMessage } from '@/utils/apiError'
-import { formatPaymentAmount } from '@/components/payment/currency'
+import { DEFAULT_PAYMENT_CURRENCY, formatPaymentAmount, normalizePaymentCurrency } from '@/components/payment/currency'
 import type { SubscriptionPlan } from '@/types/payment'
 import type { AdminGroup } from '@/types'
 import BaseDialog from '@/components/common/BaseDialog.vue'
@@ -146,7 +146,7 @@ const { t } = useI18n()
 const appStore = useAppStore()
 
 const saving = ref(false)
-const planForm = reactive({ name: '', group_id: null as number | null, description: '', price: 0, original_price: 0, daily_limit_usd: null as number | null, weekly_limit_usd: null as number | null, monthly_limit_usd: null as number | null, currency: '', validity_days: 30, validity_unit: 'days', sort_order: 0, for_sale: true })
+const planForm = reactive({ name: '', group_id: null as number | null, description: '', price: 0, original_price: 0, daily_limit_usd: null as number | null, weekly_limit_usd: null as number | null, monthly_limit_usd: null as number | null, currency: 'CNY', validity_days: 30, validity_unit: 'days', sort_order: 0, for_sale: true })
 const planFeaturesText = ref('')
 const planEntitlementsText = ref('')
 
@@ -182,9 +182,13 @@ function ceilCnyAmount(value: number): number {
 const subscriptionCnyPreview = computed(() => {
   const price = Number(planForm.price) || 0
   const rate = Number(props.paymentConfig?.subscription_usd_to_cny_rate) || 0
-  if (price <= 0 || rate <= 0) return null
+  if (price <= 0) return null
 
-  const amount = roundCnyAmount(price * rate)
+  const rawCurrency = planForm.currency.trim()
+  const planCurrency = rawCurrency ? normalizePaymentCurrency(rawCurrency) : 'USD'
+  if (planCurrency !== DEFAULT_PAYMENT_CURRENCY && (planCurrency !== 'USD' || rate <= 0)) return null
+
+  const amount = planCurrency === DEFAULT_PAYMENT_CURRENCY ? roundCnyAmount(price) : roundCnyAmount(price * rate)
   const feeRate = Number(props.paymentConfig?.recharge_fee_rate) || 0
   const fee = feeRate > 0 ? ceilCnyAmount((amount * feeRate) / 100) : 0
   const total = feeRate > 0 ? roundCnyAmount(amount + fee) : amount
@@ -204,7 +208,7 @@ watch(() => props.show, (visible) => {
     planFeaturesText.value = (props.plan.features || []).join('\n')
     planEntitlementsText.value = Object.entries(props.plan.entitlements || {}).map(([key, value]) => `${key}=${value}`).join('\n')
   } else {
-    Object.assign(planForm, { name: '', group_id: null, description: '', price: 0, original_price: 0, daily_limit_usd: null, weekly_limit_usd: null, monthly_limit_usd: null, currency: '', validity_days: 30, validity_unit: 'days', sort_order: 0, for_sale: true })
+    Object.assign(planForm, { name: '', group_id: null, description: '', price: 0, original_price: 0, daily_limit_usd: null, weekly_limit_usd: null, monthly_limit_usd: null, currency: 'CNY', validity_days: 30, validity_unit: 'days', sort_order: 0, for_sale: true })
     planFeaturesText.value = ''
     planEntitlementsText.value = ''
   }

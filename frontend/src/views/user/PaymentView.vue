@@ -699,7 +699,8 @@ const balanceRechargeMultiplier = computed(() => {
   const multiplier = checkout.value.balance_recharge_multiplier
   return Number.isFinite(multiplier) && multiplier > 0 ? multiplier : 1
 })
-// 订阅 CNY 换算汇率（1 USD = X CNY）。0 = 未配置，订阅保持 price 直付（与后端 opt-in 条件严格镜像）。
+// 订阅 CNY 换算汇率（1 USD = X CNY）。套餐价格以 plan.currency 为准；
+// 汇率只用于套餐币种与支付网关币种不同时的 USD↔CNY 换算。
 const subscriptionUsdToCnyRate = computed(() => {
   const rate = checkout.value.subscription_usd_to_cny_rate
   return Number.isFinite(rate) && rate > 0 ? rate : 0
@@ -838,10 +839,27 @@ function ceilPaymentAmount(value: number, currency: string): number {
   return Math.ceil(value * factor) / factor
 }
 
-function subscriptionPaymentAmountForCurrency(value: number, currency: string): number {
+function subscriptionPlanCurrency(plan?: Pick<SubscriptionPlan, 'currency'> | null): string {
+  const raw = String(plan?.currency || '').trim()
+  if (!raw) return 'USD'
+  const normalized = normalizePaymentCurrency(raw)
+  return normalized === 'RMB' ? DEFAULT_PAYMENT_CURRENCY : normalized
+}
+
+function subscriptionPaymentAmountForCurrency(value: number, currency: string, planCurrency = 'USD'): number {
+  const targetCurrency = normalizePaymentCurrency(currency)
+  const sourceCurrency = subscriptionPlanCurrency({ currency: planCurrency })
+  if (sourceCurrency === targetCurrency) return roundPaymentAmount(value, targetCurrency)
+
   const rate = subscriptionUsdToCnyRate.value
-  if (rate <= 0 || currency !== DEFAULT_PAYMENT_CURRENCY) return roundPaymentAmount(value, currency)
-  return roundPaymentAmount(value * rate, currency)
+  if (rate <= 0) return roundPaymentAmount(value, targetCurrency)
+  if (sourceCurrency === 'USD' && targetCurrency === DEFAULT_PAYMENT_CURRENCY) {
+    return roundPaymentAmount(value * rate, targetCurrency)
+  }
+  if (sourceCurrency === DEFAULT_PAYMENT_CURRENCY && targetCurrency === 'USD') {
+    return roundPaymentAmount(value / rate, targetCurrency)
+  }
+  return roundPaymentAmount(value, targetCurrency)
 }
 
 function formatSelectedPaymentAmount(value: number): string {
@@ -849,7 +867,7 @@ function formatSelectedPaymentAmount(value: number): string {
 }
 
 function formatSelectedSubscriptionPaymentAmount(value: number): string {
-  return formatSelectedPaymentAmount(subscriptionPaymentAmountForCurrency(value, selectedCurrency.value))
+  return formatSelectedPaymentAmount(subscriptionPaymentAmountForCurrency(value, selectedCurrency.value, subscriptionPlanCurrency(selectedPlan.value)))
 }
 
 const methodOptions = computed<PaymentMethodOption[]>(() =>
@@ -899,7 +917,7 @@ const canSubmit = computed(() =>
 
 const subPaymentAmount = computed(() => {
   const price = selectedPlan.value?.price ?? 0
-  return subscriptionPaymentAmountForCurrency(price, selectedCurrency.value)
+  return subscriptionPaymentAmountForCurrency(price, selectedCurrency.value, subscriptionPlanCurrency(selectedPlan.value))
 })
 
 const subFeeAmount = computed(() => {
@@ -912,8 +930,8 @@ const subTotalAmount = computed(() => {
   return roundPaymentAmount(subPaymentAmount.value + subFeeAmount.value, selectedCurrency.value)
 })
 
-function subscriptionTotalAmountForCurrency(value: number, currency: string): number {
-  const paymentAmount = subscriptionPaymentAmountForCurrency(value, currency)
+function subscriptionTotalAmountForCurrency(value: number, currency: string, planCurrency = 'USD'): number {
+  const paymentAmount = subscriptionPaymentAmountForCurrency(value, currency, planCurrency)
   if (feeRate.value <= 0 || paymentAmount <= 0) return paymentAmount
   const fee = ceilPaymentAmount((paymentAmount * feeRate.value) / 100, currency)
   return roundPaymentAmount(paymentAmount + fee, currency)
@@ -922,6 +940,7 @@ function subscriptionTotalAmountForCurrency(value: number, currency: string): nu
 // Subscription-specific: method options based on gateway pay amount
 const subMethodOptions = computed<PaymentMethodOption[]>(() => {
   const price = selectedPlan.value?.price ?? 0
+  const planCurrency = subscriptionPlanCurrency(selectedPlan.value)
   return enabledMethods.value.map((type) => {
     const ml = visibleMethods.value[type]
     const currency = normalizePaymentCurrency(ml?.currency)
@@ -929,7 +948,7 @@ const subMethodOptions = computed<PaymentMethodOption[]>(() => {
       type,
       display_name: ml?.display_name,
       fee_rate: ml?.fee_rate ?? 0,
-      available: ml?.available !== false && amountFitsMethod(subscriptionTotalAmountForCurrency(price, currency), type),
+      available: ml?.available !== false && amountFitsMethod(subscriptionTotalAmountForCurrency(price, currency, planCurrency), type),
     }
   })
 })

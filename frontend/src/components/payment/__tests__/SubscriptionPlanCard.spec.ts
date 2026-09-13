@@ -136,7 +136,16 @@ describe("SubscriptionPlanCard", () => {
     });
 
     expect(wrapper.find(".subscription-plan-card__metrics").text()).toContain("$270.00");
-    expect(wrapper.find(".subscription-plan-card__entitlement-value").text()).toContain("日 / 周 / 月独立限额");
-    expect(wrapper.find(".subscription-plan-card__entitlement-value").text()).not.toContain("按分组倍率计费");
+    expect(wrapper.find(".subscription-plan-card__entitlement-value").text()).toBe("深度推理协作，适合复杂工程任务");
+    expect(wrapper.find(".subscription-plan-card__entitlement-value").text()).not.toContain("计费");
+  });
+
+  it("keeps the standalone entitlement summary distinct by tier", () => {
+    const basic = mountPlanCard("openai", { name: "Basic" });
+    const ultra = mountPlanCard("openai", { name: "Ultra" });
+
+    expect(basic.find(".subscription-plan-card__entitlement-value").text()).toBe("GPT / Codex 入门，覆盖常见工作任务");
+    expect(ultra.find(".subscription-plan-card__entitlement-value").text()).toBe("团队自动化工作流，支撑高峰期调用");
+    expect(basic.findAll(".subscription-plan-card__features li").map((item) => item.text()).join(" ")).not.toContain("套餐权益");
   });
 });
