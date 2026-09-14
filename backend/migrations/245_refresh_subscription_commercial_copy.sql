@@ -277,10 +277,22 @@ BEGIN
       FROM subscription_plans p
       JOIN _subscription_plan_commercial_copy d
         ON d.tier_name = p.name
-       AND d.group_name = p.product_name
+       AND replace(
+               replace(d.group_name, 'GPT Image 2.5 订阅', 'GPT Image订阅'),
+               '香蕉生图订阅', 'nano banana订阅'
+           ) = replace(
+               replace(p.product_name, 'GPT Image 2.5 订阅', 'GPT Image订阅'),
+               '香蕉生图订阅', 'nano banana订阅'
+           )
       JOIN groups g
         ON g.id = p.group_id
-       AND g.name = d.group_name
+       AND replace(
+               replace(g.name, 'GPT Image 2.5 订阅', 'GPT Image订阅'),
+               '香蕉生图订阅', 'nano banana订阅'
+           ) = replace(
+               replace(d.group_name, 'GPT Image 2.5 订阅', 'GPT Image订阅'),
+               '香蕉生图订阅', 'nano banana订阅'
+           )
        AND g.deleted_at IS NULL
      WHERE g.subscription_type = 'subscription';
 
@@ -299,12 +311,24 @@ BEGIN
            updated_at = NOW()
       FROM _subscription_plan_commercial_copy d
       JOIN groups g
-        ON g.name = d.group_name
+        ON replace(
+               replace(g.name, 'GPT Image 2.5 订阅', 'GPT Image订阅'),
+               '香蕉生图订阅', 'nano banana订阅'
+           ) = replace(
+               replace(d.group_name, 'GPT Image 2.5 订阅', 'GPT Image订阅'),
+               '香蕉生图订阅', 'nano banana订阅'
+           )
        AND g.deleted_at IS NULL
        AND g.subscription_type = 'subscription'
      WHERE p.group_id = g.id
        AND p.name = d.tier_name
-       AND p.product_name = d.group_name;
+       AND replace(
+               replace(p.product_name, 'GPT Image 2.5 订阅', 'GPT Image订阅'),
+               '香蕉生图订阅', 'nano banana订阅'
+           ) = replace(
+               replace(d.group_name, 'GPT Image 2.5 订阅', 'GPT Image订阅'),
+               '香蕉生图订阅', 'nano banana订阅'
+           );
 
     GET DIAGNOSTICS updated_count = ROW_COUNT;
 
@@ -313,10 +337,22 @@ BEGIN
       FROM subscription_plans p
       JOIN _subscription_plan_commercial_copy d
         ON d.tier_name = p.name
-       AND d.group_name = p.product_name
+       AND replace(
+               replace(d.group_name, 'GPT Image 2.5 订阅', 'GPT Image订阅'),
+               '香蕉生图订阅', 'nano banana订阅'
+           ) = replace(
+               replace(p.product_name, 'GPT Image 2.5 订阅', 'GPT Image订阅'),
+               '香蕉生图订阅', 'nano banana订阅'
+           )
       JOIN groups g
         ON g.id = p.group_id
-       AND g.name = d.group_name
+       AND replace(
+               replace(g.name, 'GPT Image 2.5 订阅', 'GPT Image订阅'),
+               '香蕉生图订阅', 'nano banana订阅'
+           ) = replace(
+               replace(d.group_name, 'GPT Image 2.5 订阅', 'GPT Image订阅'),
+               '香蕉生图订阅', 'nano banana订阅'
+           )
        AND g.deleted_at IS NULL
      WHERE g.subscription_type = 'subscription'
        AND p.description = d.description
@@ -407,7 +443,8 @@ BEGIN
          WHERE g.subscription_type = 'subscription'
            AND g.name IN (
                'CCMax Claude 订阅', 'Kiro Claude 订阅', 'GPT 订阅', 'Gemini 订阅',
-               '国模订阅', 'Grok 订阅', 'GPT Image 2.5 订阅', '香蕉生图订阅'
+               '国模订阅', 'Grok 订阅', 'GPT Image 2.5 订阅', 'GPT Image订阅',
+               '香蕉生图订阅', 'nano banana订阅'
            )
            AND (
                p.description ~ '(参考市场|上游成本|单价|计费|折|省[约 ]*[0-9]|[$¥￥][0-9])'

@@ -24,7 +24,9 @@ BEGIN
            '国模订阅',
            'Grok 订阅',
            'GPT Image 2.5 订阅',
-           '香蕉生图订阅'
+           'GPT Image订阅',
+           '香蕉生图订阅',
+           'nano banana订阅'
        );
 
     IF target_count = 0 THEN
@@ -49,7 +51,9 @@ BEGIN
            '国模订阅',
            'Grok 订阅',
            'GPT Image 2.5 订阅',
-           '香蕉生图订阅'
+           'GPT Image订阅',
+           '香蕉生图订阅',
+           'nano banana订阅'
        )
        AND p.currency IS DISTINCT FROM 'CNY';
 
@@ -66,7 +70,9 @@ BEGIN
            '国模订阅',
            'Grok 订阅',
            'GPT Image 2.5 订阅',
-           '香蕉生图订阅'
+           'GPT Image订阅',
+           '香蕉生图订阅',
+           'nano banana订阅'
        )
        AND p.currency = 'CNY';
 
