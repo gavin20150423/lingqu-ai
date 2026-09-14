@@ -26,20 +26,22 @@ var MaxExpiresAt = time.Date(2099, 12, 31, 23, 59, 59, 0, time.UTC)
 const MaxValidityDays = 36500
 
 var (
-	ErrSubscriptionNotFound        = infraerrors.NotFound("SUBSCRIPTION_NOT_FOUND", "subscription not found")
-	ErrSubscriptionExpired         = infraerrors.Forbidden("SUBSCRIPTION_EXPIRED", "subscription has expired")
-	ErrSubscriptionSuspended       = infraerrors.Forbidden("SUBSCRIPTION_SUSPENDED", "subscription is suspended")
-	ErrSubscriptionAlreadyExists   = infraerrors.Conflict("SUBSCRIPTION_ALREADY_EXISTS", "subscription already exists for this user and group")
-	ErrSubscriptionAssignConflict  = infraerrors.Conflict("SUBSCRIPTION_ASSIGN_CONFLICT", "subscription exists but request conflicts with existing assignment semantics")
-	ErrSubscriptionNotRevoked      = infraerrors.Conflict("SUBSCRIPTION_NOT_REVOKED", "subscription is not revoked")
-	ErrSubscriptionRestoreConflict = infraerrors.Conflict("SUBSCRIPTION_RESTORE_CONFLICT", "subscription already exists for this user and group")
-	ErrGroupNotSubscriptionType    = infraerrors.BadRequest("GROUP_NOT_SUBSCRIPTION_TYPE", "group is not a subscription type")
-	ErrInvalidInput                = infraerrors.BadRequest("INVALID_INPUT", "at least one of resetDaily, resetWeekly, or resetMonthly must be true")
-	ErrDailyLimitExceeded          = infraerrors.TooManyRequests("DAILY_LIMIT_EXCEEDED", "daily usage limit exceeded")
-	ErrWeeklyLimitExceeded         = infraerrors.TooManyRequests("WEEKLY_LIMIT_EXCEEDED", "weekly usage limit exceeded")
-	ErrMonthlyLimitExceeded        = infraerrors.TooManyRequests("MONTHLY_LIMIT_EXCEEDED", "monthly usage limit exceeded")
-	ErrSubscriptionNilInput        = infraerrors.BadRequest("SUBSCRIPTION_NIL_INPUT", "subscription input cannot be nil")
-	ErrAdjustWouldExpire           = infraerrors.BadRequest("ADJUST_WOULD_EXPIRE", "adjustment would result in expired subscription (remaining days must be > 0)")
+	ErrSubscriptionNotFound          = infraerrors.NotFound("SUBSCRIPTION_NOT_FOUND", "subscription not found")
+	ErrSubscriptionExpired           = infraerrors.Forbidden("SUBSCRIPTION_EXPIRED", "subscription has expired")
+	ErrSubscriptionSuspended         = infraerrors.Forbidden("SUBSCRIPTION_SUSPENDED", "subscription is suspended")
+	ErrSubscriptionAlreadyExists     = infraerrors.Conflict("SUBSCRIPTION_ALREADY_EXISTS", "subscription already exists for this user and group")
+	ErrSubscriptionAssignConflict    = infraerrors.Conflict("SUBSCRIPTION_ASSIGN_CONFLICT", "subscription exists but request conflicts with existing assignment semantics")
+	ErrSubscriptionNotRevoked        = infraerrors.Conflict("SUBSCRIPTION_NOT_REVOKED", "subscription is not revoked")
+	ErrSubscriptionRestoreConflict   = infraerrors.Conflict("SUBSCRIPTION_RESTORE_CONFLICT", "subscription already exists for this user and group")
+	ErrGroupNotSubscriptionType      = infraerrors.BadRequest("GROUP_NOT_SUBSCRIPTION_TYPE", "group is not a subscription type")
+	ErrInvalidInput                  = infraerrors.BadRequest("INVALID_INPUT", "at least one of resetDaily, resetWeekly, or resetMonthly must be true")
+	ErrDailyLimitExceeded            = infraerrors.TooManyRequests("DAILY_LIMIT_EXCEEDED", "daily usage limit exceeded")
+	ErrWeeklyLimitExceeded           = infraerrors.TooManyRequests("WEEKLY_LIMIT_EXCEEDED", "weekly usage limit exceeded")
+	ErrMonthlyLimitExceeded          = infraerrors.TooManyRequests("MONTHLY_LIMIT_EXCEEDED", "monthly usage limit exceeded")
+	ErrSubscriptionNilInput          = infraerrors.BadRequest("SUBSCRIPTION_NIL_INPUT", "subscription input cannot be nil")
+	ErrAdjustWouldExpire             = infraerrors.BadRequest("ADJUST_WOULD_EXPIRE", "adjustment would result in expired subscription (remaining days must be > 0)")
+	ErrSubscriptionPlanNotFound      = infraerrors.NotFound("SUBSCRIPTION_PLAN_NOT_FOUND", "subscription plan not found")
+	ErrSubscriptionPlanGroupMismatch = infraerrors.BadRequest("SUBSCRIPTION_PLAN_GROUP_MISMATCH", "subscription plan does not belong to the selected group")
 )
 
 // SubscriptionService 订阅服务
@@ -235,8 +237,90 @@ func applySubscriptionPlanSnapshot(sub *UserSubscription, input *AssignSubscript
 	sub.MonthlyLimitUSD = cloneSubscriptionFloat64(input.MonthlyLimitUSD)
 }
 
+// applySubscriptionPlanEntitlements replaces the entitlement balance when an
+// administrator explicitly changes an existing subscription to a plan. Payment
+// fulfillment uses its own merge semantics and does not call this helper.
+func applySubscriptionPlanEntitlements(sub *UserSubscription, input *AssignSubscriptionInput) {
+	if sub == nil || input == nil || input.PlanID == nil {
+		return
+	}
+	sub.Entitlements = cloneSubscriptionEntitlements(input.Entitlements)
+}
+
+// applySubscriptionPlan resolves the selected tier at assignment time. The
+// plan is authoritative for validity and quota values; callers cannot submit a
+// plan from another group or override its limits through the admin endpoint.
+func (s *SubscriptionService) applySubscriptionPlan(ctx context.Context, input *AssignSubscriptionInput) error {
+	if input == nil || input.PlanID == nil {
+		return nil
+	}
+	if *input.PlanID <= 0 || s.entClient == nil {
+		return ErrSubscriptionPlanNotFound
+	}
+	plan, err := s.entClient.SubscriptionPlan.Get(ctx, *input.PlanID)
+	if err != nil {
+		return ErrSubscriptionPlanNotFound
+	}
+	if plan.GroupID != input.GroupID {
+		return ErrSubscriptionPlanGroupMismatch
+	}
+
+	input.ValidityDays = subscriptionPlanValidityDays(plan.ValidityDays, plan.ValidityUnit)
+	// Legacy plans may leave one or more quota columns NULL. The admin plan
+	// endpoint exposes the same fallback to the resource group's quota, so
+	// assignment must snapshot that effective value as well.
+	dailyLimit, weeklyLimit, monthlyLimit := plan.DailyLimitUsd, plan.WeeklyLimitUsd, plan.MonthlyLimitUsd
+	if dailyLimit == nil || weeklyLimit == nil || monthlyLimit == nil {
+		if group, groupErr := s.entClient.Group.Get(ctx, input.GroupID); groupErr == nil {
+			dailyLimit = EffectivePlanLimit(dailyLimit, group.DailyLimitUsd)
+			weeklyLimit = EffectivePlanLimit(weeklyLimit, group.WeeklyLimitUsd)
+			monthlyLimit = EffectivePlanLimit(monthlyLimit, group.MonthlyLimitUsd)
+		}
+	}
+	input.DailyLimitUSD = cloneSubscriptionFloat64(dailyLimit)
+	input.WeeklyLimitUSD = cloneSubscriptionFloat64(weeklyLimit)
+	input.MonthlyLimitUSD = cloneSubscriptionFloat64(monthlyLimit)
+	input.Entitlements = cloneSubscriptionEntitlements(plan.Entitlements)
+	return nil
+}
+
+func cloneSubscriptionEntitlements(values map[string]interface{}) map[string]any {
+	if len(values) == 0 {
+		return map[string]any{}
+	}
+	cloned := make(map[string]any, len(values))
+	for key, value := range values {
+		cloned[key] = value
+	}
+	return cloned
+}
+
+func subscriptionPlanValidityDays(days int, unit string) int {
+	if days <= 0 {
+		return 30
+	}
+	multiplier := int64(1)
+	switch strings.ToLower(strings.TrimSpace(unit)) {
+	case "week", "weeks":
+		multiplier = 7
+	case "month", "months":
+		multiplier = 30
+	}
+	total := int64(days) * multiplier
+	if total > int64(MaxValidityDays) {
+		return MaxValidityDays
+	}
+	return int(total)
+}
+
 // AssignSubscription 分配订阅给用户（不允许重复分配）
 func (s *SubscriptionService) AssignSubscription(ctx context.Context, input *AssignSubscriptionInput) (*UserSubscription, error) {
+	if input == nil {
+		return nil, ErrSubscriptionNilInput
+	}
+	if err := s.applySubscriptionPlan(ctx, input); err != nil {
+		return nil, err
+	}
 	sub, _, err := s.assignSubscriptionWithReuse(ctx, input)
 	if err != nil {
 		return nil, err
@@ -255,6 +339,9 @@ func (s *SubscriptionService) AssignOrExtendSubscription(ctx context.Context, in
 }
 
 func (s *SubscriptionService) assignOrExtendSubscription(ctx context.Context, input *AssignSubscriptionInput, deferCacheInvalidation bool) (*UserSubscription, bool, error) {
+	if input == nil {
+		return nil, false, ErrSubscriptionNilInput
+	}
 	// 检查分组是否存在且为订阅类型
 	group, err := s.groupRepo.GetByID(ctx, input.GroupID)
 	if err != nil {
@@ -263,7 +350,6 @@ func (s *SubscriptionService) assignOrExtendSubscription(ctx context.Context, in
 	if !group.IsSubscriptionType() {
 		return nil, false, ErrGroupNotSubscriptionType
 	}
-
 	// 查询是否已有订阅
 	existingSub, err := s.userSubRepo.GetByUserIDAndGroupID(ctx, input.UserID, input.GroupID)
 	if err != nil {
@@ -532,6 +618,7 @@ func (s *SubscriptionService) createSubscription(ctx context.Context, input *Ass
 type BulkAssignSubscriptionInput struct {
 	UserIDs      []int64
 	GroupID      int64
+	PlanID       *int64
 	ValidityDays int
 	AssignedBy   int64
 	Notes        string
@@ -550,19 +637,35 @@ type BulkAssignResult struct {
 
 // BulkAssignSubscription 批量分配订阅
 func (s *SubscriptionService) BulkAssignSubscription(ctx context.Context, input *BulkAssignSubscriptionInput) (*BulkAssignResult, error) {
+	if input == nil {
+		return nil, ErrSubscriptionNilInput
+	}
 	result := &BulkAssignResult{
 		Subscriptions: make([]UserSubscription, 0),
 		Errors:        make([]string, 0),
 		Statuses:      make(map[int64]string),
 	}
+	template := &AssignSubscriptionInput{
+		GroupID:      input.GroupID,
+		PlanID:       cloneSubscriptionInt64(input.PlanID),
+		ValidityDays: input.ValidityDays,
+	}
+	if err := s.applySubscriptionPlan(ctx, template); err != nil {
+		return nil, err
+	}
 
 	for _, userID := range input.UserIDs {
 		sub, reused, err := s.assignSubscriptionWithReuse(ctx, &AssignSubscriptionInput{
-			UserID:       userID,
-			GroupID:      input.GroupID,
-			ValidityDays: input.ValidityDays,
-			AssignedBy:   input.AssignedBy,
-			Notes:        input.Notes,
+			UserID:          userID,
+			GroupID:         input.GroupID,
+			PlanID:          cloneSubscriptionInt64(template.PlanID),
+			DailyLimitUSD:   cloneSubscriptionFloat64(template.DailyLimitUSD),
+			WeeklyLimitUSD:  cloneSubscriptionFloat64(template.WeeklyLimitUSD),
+			MonthlyLimitUSD: cloneSubscriptionFloat64(template.MonthlyLimitUSD),
+			ValidityDays:    template.ValidityDays,
+			AssignedBy:      input.AssignedBy,
+			Notes:           input.Notes,
+			Entitlements:    cloneSubscriptionEntitlements(template.Entitlements),
 		})
 		if err != nil {
 			result.FailedCount++
@@ -585,6 +688,9 @@ func (s *SubscriptionService) BulkAssignSubscription(ctx context.Context, input 
 }
 
 func (s *SubscriptionService) assignSubscriptionWithReuse(ctx context.Context, input *AssignSubscriptionInput) (*UserSubscription, bool, error) {
+	if input == nil {
+		return nil, false, ErrSubscriptionNilInput
+	}
 	// 检查分组是否存在且为订阅类型
 	group, err := s.groupRepo.GetByID(ctx, input.GroupID)
 	if err != nil {
@@ -593,7 +699,6 @@ func (s *SubscriptionService) assignSubscriptionWithReuse(ctx context.Context, i
 	if !group.IsSubscriptionType() {
 		return nil, false, ErrGroupNotSubscriptionType
 	}
-
 	// 检查是否已存在订阅；若已存在，则按幂等成功返回现有订阅
 	exists, err := s.userSubRepo.ExistsByUserIDAndGroupID(ctx, input.UserID, input.GroupID)
 	if err != nil {
@@ -617,6 +722,7 @@ func (s *SubscriptionService) assignSubscriptionWithReuse(ctx context.Context, i
 					return nil, false, getErr
 				}
 				applySubscriptionPlanSnapshot(updated, input)
+				applySubscriptionPlanEntitlements(updated, input)
 				if updateErr := s.withSubscriptionUpdateTx(ctx, func(txCtx context.Context) error {
 					return s.userSubRepo.Update(txCtx, updated)
 				}); updateErr != nil {
@@ -626,6 +732,22 @@ func (s *SubscriptionService) assignSubscriptionWithReuse(ctx context.Context, i
 			s.maybeInvalidateAssignmentCaches(input.UserID, input.GroupID, false)
 			renewed, getErr := s.userSubRepo.GetByID(ctx, sub.ID)
 			return renewed, true, getErr
+		}
+		// An explicit plan in the admin assignment form is an intentional tier
+		// change. Migrate an existing legacy/unassigned subscription in place so
+		// the administrator does not need to delete the user's record first.
+		if input.PlanID != nil && (sub.PlanID == nil || *sub.PlanID != *input.PlanID) {
+			updated := *sub
+			applySubscriptionPlanSnapshot(&updated, input)
+			applySubscriptionPlanEntitlements(&updated, input)
+			if updateErr := s.withSubscriptionUpdateTx(ctx, func(txCtx context.Context) error {
+				return s.userSubRepo.Update(txCtx, &updated)
+			}); updateErr != nil {
+				return nil, false, updateErr
+			}
+			s.maybeInvalidateAssignmentCaches(input.UserID, input.GroupID, false)
+			migrated, getErr := s.userSubRepo.GetByID(ctx, sub.ID)
+			return migrated, true, getErr
 		}
 		if conflictReason, conflict := detectAssignSemanticConflict(sub, input); conflict {
 			return nil, false, ErrSubscriptionAssignConflict.WithMetadata(map[string]string{

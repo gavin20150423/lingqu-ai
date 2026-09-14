@@ -159,7 +159,7 @@
             >
               <Icon name="questionCircle" size="md" />
             </button>
-            <button @click="showAssignModal = true" class="btn btn-primary">
+            <button @click="openAssignModal" class="btn btn-primary">
               <Icon name="plus" size="md" class="mr-2" />
               {{ t('admin.subscriptions.assignSubscription') }}
             </button>
@@ -203,14 +203,18 @@
           </template>
 
           <template #cell-group="{ row }">
-            <GroupBadge
-              v-if="row.group"
-              :name="row.group.name"
-              :platform="row.group.platform"
-              :subscription-type="row.group.subscription_type"
-              :rate-multiplier="row.group.rate_multiplier"
-              :show-rate="false"
-            />
+            <div v-if="row.group" class="space-y-1">
+              <GroupBadge
+                :name="row.group.name"
+                :platform="row.group.platform"
+                :subscription-type="row.group.subscription_type"
+                :rate-multiplier="row.group.rate_multiplier"
+                :show-rate="false"
+              />
+              <div v-if="row.plan_id" class="pl-1 text-xs text-gray-500 dark:text-gray-400">
+                {{ getPlanName(row.plan_id) }}
+              </div>
+            </div>
             <span v-else class="text-sm text-gray-400 dark:text-dark-500">-</span>
           </template>
 
@@ -428,7 +432,7 @@
               :title="t('admin.subscriptions.noSubscriptionsYet')"
               :description="t('admin.subscriptions.assignFirstSubscription')"
               :action-text="t('admin.subscriptions.assignSubscription')"
-              @action="showAssignModal = true"
+              @action="openAssignModal"
             />
           </template>
         </DataTable>
@@ -539,6 +543,29 @@
           <p class="input-hint">{{ t('admin.subscriptions.groupHint') }}</p>
         </div>
         <div>
+          <label class="input-label">{{ t('admin.subscriptions.form.plan') }}</label>
+          <Select
+            v-model="assignForm.plan_id"
+            :options="subscriptionPlanOptions"
+            :placeholder="t('admin.subscriptions.selectPlan')"
+            :disabled="!assignForm.group_id || plansLoading || subscriptionPlanOptions.length === 0"
+          />
+          <p v-if="plansLoading" class="input-hint">{{ t('admin.subscriptions.plansLoading') }}</p>
+          <p v-else-if="assignForm.group_id && subscriptionPlanOptions.length === 0" class="input-hint">
+            {{ t('admin.subscriptions.noPlansForGroup') }}
+          </p>
+          <p v-else class="input-hint">{{ t('admin.subscriptions.planHint') }}</p>
+          <div
+            v-if="selectedAssignPlan"
+            class="mt-2 grid grid-cols-2 gap-2 rounded-lg border border-primary-100 bg-primary-50/60 px-3 py-2 text-xs text-gray-600 dark:border-primary-900/50 dark:bg-primary-900/20 dark:text-gray-300"
+          >
+            <span>{{ t('admin.subscriptions.planValidity') }}：{{ formatPlanValidity(selectedAssignPlan) }}</span>
+            <span>{{ t('admin.subscriptions.planDaily') }}：{{ formatPlanQuota(selectedAssignPlan.daily_limit_usd) }}</span>
+            <span>{{ t('admin.subscriptions.planWeekly') }}：{{ formatPlanQuota(selectedAssignPlan.weekly_limit_usd) }}</span>
+            <span>{{ t('admin.subscriptions.planMonthly') }}：{{ formatPlanQuota(selectedAssignPlan.monthly_limit_usd) }}</span>
+          </div>
+        </div>
+        <div v-if="!selectedAssignPlan">
           <label class="input-label">{{ t('admin.subscriptions.form.validityDays') }}</label>
           <input v-model.number="assignForm.validity_days" type="number" min="1" class="input" />
           <p class="input-hint">{{ t('admin.subscriptions.validityHint') }}</p>
@@ -765,11 +792,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { adminAPI } from '@/api/admin'
 import type { UserSubscription, Group, GroupPlatform, SubscriptionType } from '@/types'
+import type { SubscriptionPlan } from '@/types/payment'
 import type { SimpleUser } from '@/api/admin/usage'
 import type { Column } from '@/components/common/types'
 import { formatDateTimeToMinute } from '@/utils/format'
@@ -803,6 +831,12 @@ interface GroupOption {
   platform: GroupPlatform
   subscriptionType: SubscriptionType
   rate: number
+}
+
+interface AssignPlanOption {
+  [key: string]: unknown
+  value: number
+  label: string
 }
 
 // Guide modal state
@@ -931,6 +965,10 @@ const statusOptions = computed(() => [
 
 const subscriptions = ref<UserSubscription[]>([])
 const groups = ref<Group[]>([])
+const subscriptionPlans = ref<SubscriptionPlan[]>([])
+const plansLoading = ref(false)
+const plansLoaded = ref(false)
+const plansLoadError = ref(false)
 const loading = ref(false)
 let abortController: AbortController | null = null
 
@@ -985,6 +1023,7 @@ const restoringSubscription = ref<UserSubscription | null>(null)
 const assignForm = reactive({
   user_id: null as number | null,
   group_id: null as number | null,
+  plan_id: null as number | null,
   validity_days: 30
 })
 
@@ -1016,6 +1055,45 @@ const subscriptionGroupOptions = computed(() =>
       rate: g.rate_multiplier
     }))
 )
+
+const subscriptionPlanOptions = computed<AssignPlanOption[]>(() => {
+  if (!assignForm.group_id) return []
+  return subscriptionPlans.value
+    .filter((plan) => plan.group_id === assignForm.group_id)
+    .sort((a, b) => a.sort_order - b.sort_order || a.id - b.id)
+    .map((plan) => ({
+      value: plan.id,
+      label: `${plan.name} · ¥${formatPlanPrice(plan.price)} · ${formatPlanValidity(plan)}${plan.for_sale ? '' : ` · ${t('admin.subscriptions.planOffSale')}`}`
+    }))
+})
+
+const selectedAssignPlan = computed(() =>
+  subscriptionPlans.value.find((plan) => plan.id === assignForm.plan_id) || null
+)
+
+function formatPlanPrice(value: number | null | undefined): string {
+  const numeric = Number(value)
+  return Number.isFinite(numeric) ? numeric.toFixed(2) : '0.00'
+}
+
+function formatPlanValidity(plan: Pick<SubscriptionPlan, 'validity_days' | 'validity_unit'>): string {
+  const unit = String(plan.validity_unit || 'days').trim().toLowerCase()
+  const translated = t(`admin.subscriptions.validityUnits.${unit}`)
+  const unitText = translated === `admin.subscriptions.validityUnits.${unit}` ? unit : translated
+  return `${plan.validity_days}${unitText}`
+}
+
+function formatPlanQuota(value: number | null | undefined): string {
+  const numeric = Number(value)
+  return Number.isFinite(numeric) && numeric > 0
+    ? `$${numeric.toFixed(2)}`
+    : t('admin.subscriptions.unlimited')
+}
+
+function getPlanName(planID: number | null | undefined): string {
+  if (!planID) return ''
+  return subscriptionPlans.value.find((plan) => plan.id === planID)?.name || `#${planID}`
+}
 
 const applyFilters = () => {
   pagination.page = 1
@@ -1072,6 +1150,34 @@ const loadGroups = async () => {
     console.error('Error loading groups:', error)
   }
 }
+
+const loadPlans = async () => {
+  plansLoading.value = true
+  plansLoadError.value = false
+  try {
+    const response = await adminAPI.payment.getPlans()
+    subscriptionPlans.value = response.data || []
+    plansLoaded.value = true
+  } catch (error) {
+    plansLoadError.value = true
+    subscriptionPlans.value = []
+    console.error('Error loading subscription plans:', error)
+  } finally {
+    plansLoading.value = false
+  }
+}
+
+const openAssignModal = () => {
+  showAssignModal.value = true
+  if (!plansLoaded.value && !plansLoading.value) {
+    void loadPlans()
+  }
+}
+
+watch(() => assignForm.group_id, () => {
+  assignForm.plan_id = null
+  assignForm.validity_days = 30
+})
 
 // Toolbar user filter search with debounce
 const debounceSearchFilterUsers = () => {
@@ -1193,6 +1299,7 @@ const closeAssignModal = () => {
   showAssignModal.value = false
   assignForm.user_id = null
   assignForm.group_id = null
+  assignForm.plan_id = null
   assignForm.validity_days = 30
   // Clear user search state
   selectedUser.value = null
@@ -1210,7 +1317,19 @@ const handleAssignSubscription = async () => {
     appStore.showError(t('admin.subscriptions.pleaseSelectGroup'))
     return
   }
-  if (!assignForm.validity_days || assignForm.validity_days < 1) {
+  if (!plansLoaded.value || plansLoadError.value) {
+    appStore.showError(t('admin.subscriptions.failedToLoadPlans'))
+    return
+  }
+  if (subscriptionPlanOptions.value.length > 0 && !assignForm.plan_id) {
+    appStore.showError(t('admin.subscriptions.pleaseSelectPlan'))
+    return
+  }
+  if (assignForm.plan_id && !selectedAssignPlan.value) {
+    appStore.showError(t('admin.subscriptions.planUnavailable'))
+    return
+  }
+  if (!selectedAssignPlan.value && (!assignForm.validity_days || assignForm.validity_days < 1)) {
     appStore.showError(t('admin.subscriptions.validityDaysRequired'))
     return
   }
@@ -1220,6 +1339,7 @@ const handleAssignSubscription = async () => {
     await adminAPI.subscriptions.assign({
       user_id: assignForm.user_id,
       group_id: assignForm.group_id,
+      ...(assignForm.plan_id ? { plan_id: assignForm.plan_id } : {}),
       validity_days: assignForm.validity_days
     })
     appStore.showSuccess(t('admin.subscriptions.subscriptionAssigned'))
@@ -1475,6 +1595,7 @@ onMounted(() => {
   loadSavedColumns()
   loadSubscriptions()
   loadGroups()
+  loadPlans()
   document.addEventListener('click', handleClickOutside)
 })
 
