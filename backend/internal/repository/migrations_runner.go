@@ -98,6 +98,12 @@ var migrationChecksumCompatibilityRules = map[string]migrationChecksumCompatibil
 	"220_clear_non_grok_video_generation_config.sql": newMigrationChecksumCompatibilityRule("85e320b9ec64f2d3fcd8cf705b2b4e76a7b49f7a57140c14bff97f32691c818b", "3da48c8fdffe6390325f43d08b8e353e0a365df43d44a78dbbe655d0deb18402"),
 	"219_group_search_price_per_1k.sql":              newMigrationChecksumCompatibilityRule("e86786ebcc3b14206fd2d321380a4e50e80cdadbfcf4962c639255e6a14008db", "df6ffd71b97e30ec2c8fe7b95e15783042dea58c553e32701ee7c42a5619af80"),
 	"218_group_audio_voice_pricing.sql":              newMigrationChecksumCompatibilityRule("40ee9f3a2af0e0a5e99dabc878fd0fe98be1011f26bcfcefcac7197f7081f0e7", "c2a5e5b4ffd6968ad1c10593289fbc11192cdea19fec3ed9bce3a84eff9a8351"),
+	// Migration 238 was recorded in production by the release helper using the
+	// raw file bytes (including the final newline), while the long-standing
+	// application runner hashes the trimmed SQL content.  Keep this narrowly
+	// scoped compatibility rule so the immutable production record is not
+	// rewritten and all other migrations remain strictly checked.
+	"238_subscription_plan_quotas.sql": newMigrationChecksumCompatibilityRule("f23598fc60a04f9a0ad82ea2810360a87b0fde08b18d03377df29918ed607a11", "90258287f99ebec6db0f18724059bb71e1556aac260c905f793343f480d98b3b"),
 }
 
 // ApplyMigrations 将嵌入的 SQL 迁移文件应用到指定的数据库。
