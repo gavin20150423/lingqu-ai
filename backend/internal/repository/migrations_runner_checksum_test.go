@@ -25,6 +25,30 @@ func TestIsMigrationChecksumCompatible(t *testing.T) {
 		require.False(t, ok)
 	})
 
+	for _, tc := range []struct {
+		name     string
+		filename string
+		dbSum    string
+		fileSum  string
+	}{
+		{
+			name:     "239生产记录的原始文件checksum可兼容",
+			filename: "239_seed_subscription_catalog_v2.sql",
+			dbSum:    "3edc2145918dd8d0f98f41c018ca53dfd1c512ead8e2de438ad1f76d6b43a1cb",
+			fileSum:  "e17230eaafa903b05c2cc8c3b2a2e4caeaaa12929a8cbe0212071138c885c932",
+		},
+		{
+			name:     "240生产记录的原始文件checksum可兼容",
+			filename: "240_hide_misconfigured_subscription_test_groups.sql",
+			dbSum:    "42641df11bf05c99f2d05fd35276141dae3b9949345c1bec4587a48e419ce8a2",
+			fileSum:  "9847bee1327872d6247e9504b24909c59318bddfa5a12d1bd90fb29bd7af59a6",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			require.True(t, isMigrationChecksumCompatible(tc.filename, tc.dbSum, tc.fileSum))
+		})
+	}
+
 	t.Run("054历史checksum可兼容", func(t *testing.T) {
 		ok := isMigrationChecksumCompatible(
 			"054_drop_legacy_cache_columns.sql",
