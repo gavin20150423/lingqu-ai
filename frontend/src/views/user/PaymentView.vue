@@ -358,10 +358,6 @@
                         <span v-if="sub.expires_at">{{ t('userSubscriptions.daysRemaining', { days: getDaysRemaining(sub.expires_at) }) }}</span>
                         <span v-else>{{ t('userSubscriptions.noExpiration') }}</span>
                       </div>
-                      <div v-if="sub.entitlements && Object.keys(sub.entitlements).length" class="mt-1 flex flex-wrap items-center gap-1">
-                        <span class="mr-0.5 text-[10px] text-gray-400 dark:text-gray-500">权益余额</span>
-                        <span v-for="(quota, quotaKey) in sub.entitlements" :key="quotaKey" class="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300">{{ quotaKey }}: ${{ Number(quota).toFixed(2) }}</span>
-                      </div>
                     </div>
                     <span class="badge badge-success shrink-0 text-[10px]">{{ t('userSubscriptions.status.active') }}</span>
                   </div>
