@@ -159,7 +159,7 @@
             >
               <Icon name="questionCircle" size="md" />
             </button>
-            <button @click="showAssignModal = true" class="btn btn-primary">
+            <button @click="openAssignModal" class="btn btn-primary">
               <Icon name="plus" size="md" class="mr-2" />
               {{ t('admin.subscriptions.assignSubscription') }}
             </button>
@@ -234,36 +234,40 @@
           </template>
 
           <template #cell-group="{ row }">
-            <GroupBadge
-              v-if="row.group"
-              :name="row.group.name"
-              :platform="row.group.platform"
-              :subscription-type="row.group.subscription_type"
-              :rate-multiplier="row.group.rate_multiplier"
-              :show-rate="false"
-            />
+            <div v-if="row.group" class="space-y-1">
+              <GroupBadge
+                :name="row.group.name"
+                :platform="row.group.platform"
+                :subscription-type="row.group.subscription_type"
+                :rate-multiplier="row.group.rate_multiplier"
+                :show-rate="false"
+              />
+              <div v-if="row.plan_id" class="pl-1 text-xs text-gray-500 dark:text-gray-400">
+                {{ getPlanName(row.plan_id) }}
+              </div>
+            </div>
             <span v-else class="text-sm text-gray-400 dark:text-dark-500">-</span>
           </template>
 
           <template #cell-usage="{ row }">
             <div class="min-w-[280px] space-y-2">
               <!-- Daily Usage -->
-              <div v-if="row.group?.daily_limit_usd" class="usage-row">
+              <div v-if="getEffectiveLimit(row, 'daily')" class="usage-row">
                 <div class="flex items-center gap-2">
                   <span class="usage-label">{{ t('admin.subscriptions.daily') }}</span>
                   <div class="h-1.5 flex-1 rounded-full bg-gray-200 dark:bg-dark-600">
                     <div
                       class="h-1.5 rounded-full transition-all"
-                      :class="getProgressClass(row.daily_usage_usd, row.group?.daily_limit_usd)"
+                      :class="getProgressClass(row.daily_usage_usd, getEffectiveLimit(row, 'daily'))"
                       :style="{
-                        width: getProgressWidth(row.daily_usage_usd, row.group?.daily_limit_usd)
+                        width: getProgressWidth(row.daily_usage_usd, getEffectiveLimit(row, 'daily'))
                       }"
                     ></div>
                   </div>
                   <span class="usage-amount">
                     ${{ row.daily_usage_usd?.toFixed(2) || '0.00' }}
                     <span class="text-gray-400">/</span>
-                    ${{ row.group?.daily_limit_usd?.toFixed(2) }}
+                    ${{ getEffectiveLimit(row, 'daily')?.toFixed(2) }}
                   </span>
                 </div>
                 <div class="reset-info" v-if="row.daily_window_start">
@@ -285,22 +289,22 @@
               </div>
 
               <!-- Weekly Usage -->
-              <div v-if="row.group?.weekly_limit_usd" class="usage-row">
+              <div v-if="getEffectiveLimit(row, 'weekly')" class="usage-row">
                 <div class="flex items-center gap-2">
                   <span class="usage-label">{{ t('admin.subscriptions.weekly') }}</span>
                   <div class="h-1.5 flex-1 rounded-full bg-gray-200 dark:bg-dark-600">
                     <div
                       class="h-1.5 rounded-full transition-all"
-                      :class="getProgressClass(row.weekly_usage_usd, row.group?.weekly_limit_usd)"
+                      :class="getProgressClass(row.weekly_usage_usd, getEffectiveLimit(row, 'weekly'))"
                       :style="{
-                        width: getProgressWidth(row.weekly_usage_usd, row.group?.weekly_limit_usd)
+                        width: getProgressWidth(row.weekly_usage_usd, getEffectiveLimit(row, 'weekly'))
                       }"
                     ></div>
                   </div>
                   <span class="usage-amount">
                     ${{ row.weekly_usage_usd?.toFixed(2) || '0.00' }}
                     <span class="text-gray-400">/</span>
-                    ${{ row.group?.weekly_limit_usd?.toFixed(2) }}
+                    ${{ getEffectiveLimit(row, 'weekly')?.toFixed(2) }}
                   </span>
                 </div>
                 <div class="reset-info" v-if="row.weekly_window_start">
@@ -322,22 +326,22 @@
               </div>
 
               <!-- Monthly Usage -->
-              <div v-if="row.group?.monthly_limit_usd" class="usage-row">
+              <div v-if="getEffectiveLimit(row, 'monthly')" class="usage-row">
                 <div class="flex items-center gap-2">
                   <span class="usage-label">{{ t('admin.subscriptions.monthly') }}</span>
                   <div class="h-1.5 flex-1 rounded-full bg-gray-200 dark:bg-dark-600">
                     <div
                       class="h-1.5 rounded-full transition-all"
-                      :class="getProgressClass(row.monthly_usage_usd, row.group?.monthly_limit_usd)"
+                      :class="getProgressClass(row.monthly_usage_usd, getEffectiveLimit(row, 'monthly'))"
                       :style="{
-                        width: getProgressWidth(row.monthly_usage_usd, row.group?.monthly_limit_usd)
+                        width: getProgressWidth(row.monthly_usage_usd, getEffectiveLimit(row, 'monthly'))
                       }"
                     ></div>
                   </div>
                   <span class="usage-amount">
                     ${{ row.monthly_usage_usd?.toFixed(2) || '0.00' }}
                     <span class="text-gray-400">/</span>
-                    ${{ row.group?.monthly_limit_usd?.toFixed(2) }}
+                    ${{ getEffectiveLimit(row, 'monthly')?.toFixed(2) }}
                   </span>
                 </div>
                 <div class="reset-info" v-if="row.monthly_window_start">
@@ -361,9 +365,9 @@
               <!-- No Limits - Unlimited badge -->
               <div
                 v-if="
-                  !row.group?.daily_limit_usd &&
-                  !row.group?.weekly_limit_usd &&
-                  !row.group?.monthly_limit_usd
+                  !getEffectiveLimit(row, 'daily') &&
+                  !getEffectiveLimit(row, 'weekly') &&
+                  !getEffectiveLimit(row, 'monthly')
                 "
                 class="flex items-center gap-2 rounded-lg bg-gradient-to-r from-emerald-50 to-teal-50 px-3 py-2 dark:from-emerald-900/20 dark:to-teal-900/20"
               >
@@ -459,7 +463,7 @@
               :title="t('admin.subscriptions.noSubscriptionsYet')"
               :description="t('admin.subscriptions.assignFirstSubscription')"
               :action-text="t('admin.subscriptions.assignSubscription')"
-              @action="showAssignModal = true"
+              @action="openAssignModal"
             />
           </template>
         </DataTable>
@@ -607,6 +611,29 @@
           <p class="input-hint">{{ t('admin.subscriptions.groupHint') }}</p>
         </div>
         <div>
+          <label class="input-label">{{ t('admin.subscriptions.form.plan') }}</label>
+          <Select
+            v-model="assignForm.plan_id"
+            :options="subscriptionPlanOptions"
+            :placeholder="t('admin.subscriptions.selectPlan')"
+            :disabled="!assignForm.group_id || plansLoading || subscriptionPlanOptions.length === 0"
+          />
+          <p v-if="plansLoading" class="input-hint">{{ t('admin.subscriptions.plansLoading') }}</p>
+          <p v-else-if="assignForm.group_id && subscriptionPlanOptions.length === 0" class="input-hint">
+            {{ t('admin.subscriptions.noPlansForGroup') }}
+          </p>
+          <p v-else class="input-hint">{{ t('admin.subscriptions.planHint') }}</p>
+          <div
+            v-if="selectedAssignPlan"
+            class="mt-2 grid grid-cols-2 gap-2 rounded-lg border border-primary-100 bg-primary-50/60 px-3 py-2 text-xs text-gray-600 dark:border-primary-900/50 dark:bg-primary-900/20 dark:text-gray-300"
+          >
+            <span>{{ t('admin.subscriptions.planValidity') }}：{{ formatPlanValidity(selectedAssignPlan) }}</span>
+            <span>{{ t('admin.subscriptions.planDaily') }}：{{ formatPlanQuota(selectedAssignPlan.daily_limit_usd) }}</span>
+            <span>{{ t('admin.subscriptions.planWeekly') }}：{{ formatPlanQuota(selectedAssignPlan.weekly_limit_usd) }}</span>
+            <span>{{ t('admin.subscriptions.planMonthly') }}：{{ formatPlanQuota(selectedAssignPlan.monthly_limit_usd) }}</span>
+          </div>
+        </div>
+        <div v-if="!selectedAssignPlan">
           <label class="input-label">{{ t('admin.subscriptions.form.validityDays') }}</label>
           <input v-model.number="assignForm.validity_days" type="number" min="1" max="36500" step="1" :disabled="submitting" class="input" />
           <p class="input-hint">{{ t('admin.subscriptions.validityHint') }}</p>
@@ -692,6 +719,14 @@
               {{ getDaysRemaining(extendingSubscription.expires_at) ?? 0 }}
             </span>
           </p>
+          <div v-if="extendingSubscription.plan_id" class="mt-3 rounded-lg border border-primary-100 bg-primary-50/60 px-3 py-2 text-xs text-gray-600 dark:border-primary-900/50 dark:bg-primary-900/20 dark:text-gray-300">
+            <p class="font-medium text-gray-700 dark:text-gray-200">{{ t('admin.subscriptions.form.plan') }}：{{ getPlanName(extendingSubscription.plan_id) }}</p>
+            <p v-if="getPlanById(extendingSubscription.plan_id)" class="mt-1">
+              {{ t('admin.subscriptions.planValidity') }}：{{ formatPlanValidity(getPlanById(extendingSubscription.plan_id)!) }}
+              · {{ t('admin.subscriptions.planDaily') }}：{{ formatPlanQuota(getPlanById(extendingSubscription.plan_id)!.daily_limit_usd) }}
+              · {{ t('admin.subscriptions.planMonthly') }}：{{ formatPlanQuota(getPlanById(extendingSubscription.plan_id)!.monthly_limit_usd) }}
+            </p>
+          </div>
         </div>
         <div>
           <label class="input-label">{{ t('admin.subscriptions.form.adjustDays') }}</label>
@@ -840,11 +875,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { adminAPI } from '@/api/admin'
 import type { AdminUser, UserSubscription, Group, GroupPlatform, SubscriptionType } from '@/types'
+import type { SubscriptionPlan } from '@/types/payment'
 import type { SimpleUser } from '@/api/admin/usage'
 import type { SubscriptionBulkAction, SubscriptionBulkActionResult, BulkAssignSubscriptionResult } from '@/api/admin/subscriptions'
 import { useTableSelection } from '@/composables/useTableSelection'
@@ -881,6 +917,12 @@ interface GroupOption {
   platform: GroupPlatform
   subscriptionType: SubscriptionType
   rate: number
+}
+
+interface AssignPlanOption {
+  [key: string]: unknown
+  value: number
+  label: string
 }
 
 // Guide modal state
@@ -1009,6 +1051,10 @@ const statusOptions = computed(() => [
 
 const subscriptions = ref<UserSubscription[]>([])
 const groups = ref<Group[]>([])
+const subscriptionPlans = ref<SubscriptionPlan[]>([])
+const plansLoading = ref(false)
+const plansLoaded = ref(false)
+const plansLoadError = ref(false)
 const loading = ref(false)
 let abortController: AbortController | null = null
 
@@ -1096,6 +1142,7 @@ const restoringSubscription = ref<UserSubscription | null>(null)
 const assignForm = reactive({
   user_id: null as number | null,
   group_id: null as number | null,
+  plan_id: null as number | null,
   validity_days: 30
 })
 
@@ -1127,6 +1174,50 @@ const subscriptionGroupOptions = computed(() =>
       rate: g.rate_multiplier
     }))
 )
+
+const subscriptionPlanOptions = computed<AssignPlanOption[]>(() => {
+  if (!assignForm.group_id) return []
+  return subscriptionPlans.value
+    .filter((plan) => plan.group_id === assignForm.group_id)
+    .sort((a, b) => a.sort_order - b.sort_order || a.id - b.id)
+    .map((plan) => ({
+      value: plan.id,
+      label: `${plan.name} · ¥${formatPlanPrice(plan.price)} · ${formatPlanValidity(plan)}${plan.for_sale ? '' : ` · ${t('admin.subscriptions.planOffSale')}`}`
+    }))
+})
+
+const selectedAssignPlan = computed(() =>
+  subscriptionPlans.value.find((plan) => plan.id === assignForm.plan_id) || null
+)
+
+function formatPlanPrice(value: number | null | undefined): string {
+  const numeric = Number(value)
+  return Number.isFinite(numeric) ? numeric.toFixed(2) : '0.00'
+}
+
+function formatPlanValidity(plan: Pick<SubscriptionPlan, 'validity_days' | 'validity_unit'>): string {
+  const unit = String(plan.validity_unit || 'days').trim().toLowerCase()
+  const translated = t(`admin.subscriptions.validityUnits.${unit}`)
+  const unitText = translated === `admin.subscriptions.validityUnits.${unit}` ? unit : translated
+  return `${plan.validity_days}${unitText}`
+}
+
+function formatPlanQuota(value: number | null | undefined): string {
+  const numeric = Number(value)
+  return Number.isFinite(numeric) && numeric > 0
+    ? `$${numeric.toFixed(2)}`
+    : t('admin.subscriptions.unlimited')
+}
+
+function getPlanName(planID: number | null | undefined): string {
+  if (!planID) return ''
+  return subscriptionPlans.value.find((plan) => plan.id === planID)?.name || `#${planID}`
+}
+
+function getPlanById(planID: number | null | undefined): SubscriptionPlan | null {
+  if (!planID) return null
+  return subscriptionPlans.value.find((plan) => plan.id === planID) || null
+}
 
 const applyFilters = () => {
   clearSelection()
@@ -1186,6 +1277,32 @@ const loadGroups = async () => {
     console.error('Error loading groups:', error)
   }
 }
+
+const loadPlans = async () => {
+  plansLoading.value = true
+  plansLoadError.value = false
+  try {
+    const response = await adminAPI.payment.getPlans()
+    subscriptionPlans.value = response.data || []
+    plansLoaded.value = true
+  } catch (error) {
+    plansLoadError.value = true
+    subscriptionPlans.value = []
+    console.error('Error loading subscription plans:', error)
+  } finally {
+    plansLoading.value = false
+  }
+}
+
+const openAssignModal = () => {
+  showAssignModal.value = true
+  if (!plansLoaded.value && !plansLoading.value) void loadPlans()
+}
+
+watch(() => assignForm.group_id, () => {
+  assignForm.plan_id = null
+  assignForm.validity_days = 30
+})
 
 // Toolbar user filter search with debounce
 const debounceSearchFilterUsers = () => {
@@ -1332,6 +1449,7 @@ const closeAssignModal = () => {
   batchAssignResult.value = null
   assignForm.user_id = null
   assignForm.group_id = null
+  assignForm.plan_id = null
   assignForm.validity_days = 30
   // Clear user search state
   selectedUser.value = null
@@ -1350,7 +1468,19 @@ const handleAssignSubscription = async () => {
     appStore.showError(t('admin.subscriptions.pleaseSelectGroup'))
     return
   }
-  if (!Number.isInteger(assignForm.validity_days) || assignForm.validity_days < 1 || assignForm.validity_days > 36500) {
+  if (!plansLoaded.value || plansLoadError.value) {
+    appStore.showError(t('admin.subscriptions.failedToLoadPlans'))
+    return
+  }
+  if (subscriptionPlanOptions.value.length > 0 && !assignForm.plan_id) {
+    appStore.showError(t('admin.subscriptions.pleaseSelectPlan'))
+    return
+  }
+  if (assignForm.plan_id && !selectedAssignPlan.value) {
+    appStore.showError(t('admin.subscriptions.planUnavailable'))
+    return
+  }
+  if (!selectedAssignPlan.value && (!Number.isInteger(assignForm.validity_days) || assignForm.validity_days < 1 || assignForm.validity_days > 36500)) {
     appStore.showError(t('admin.subscriptions.validityDaysRequired'))
     return
   }
@@ -1361,6 +1491,7 @@ const handleAssignSubscription = async () => {
       batchAssignResult.value = await adminAPI.subscriptions.bulkAssign({
         user_ids: assignUsers.value.map((user) => user.id),
         group_id: assignForm.group_id,
+        ...(assignForm.plan_id ? { plan_id: assignForm.plan_id } : {}),
         validity_days: assignForm.validity_days
       })
       const result = batchAssignResult.value
@@ -1375,6 +1506,7 @@ const handleAssignSubscription = async () => {
     await adminAPI.subscriptions.assign({
       user_id: assignForm.user_id!,
       group_id: assignForm.group_id,
+      ...(assignForm.plan_id ? { plan_id: assignForm.plan_id } : {}),
       validity_days: assignForm.validity_days
     })
     appStore.showSuccess(t('admin.subscriptions.subscriptionAssigned'))
@@ -1521,6 +1653,24 @@ const isExpiringSoon = (expiresAt: string): boolean => {
   return days !== null && days <= 7
 }
 
+type QuotaWindow = 'daily' | 'weekly' | 'monthly'
+
+const getEffectiveLimit = (subscription: UserSubscription, window: QuotaWindow): number | null => {
+  const planLimit = window === 'daily'
+    ? subscription.daily_limit_usd
+    : window === 'weekly'
+      ? subscription.weekly_limit_usd
+      : subscription.monthly_limit_usd
+
+  if (subscription.plan_id != null) return planLimit ?? null
+  if (planLimit != null) return planLimit
+  return (window === 'daily'
+    ? subscription.group?.daily_limit_usd
+    : window === 'weekly'
+      ? subscription.group?.weekly_limit_usd
+      : subscription.group?.monthly_limit_usd) ?? null
+}
+
 const getProgressWidth = (used: number | null | undefined, limit: number | null): string => {
   if (!limit || limit === 0) return '0%'
   const usedValue = used ?? 0
@@ -1611,6 +1761,7 @@ onMounted(() => {
   loadSavedColumns()
   loadSubscriptions()
   loadGroups()
+  loadPlans()
   document.addEventListener('click', handleClickOutside)
 })
 

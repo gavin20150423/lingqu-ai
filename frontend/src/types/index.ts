@@ -2124,12 +2124,14 @@ export interface SubscriptionProgress {
 export interface AssignSubscriptionRequest {
   user_id: number
   group_id: number
+  plan_id?: number
   validity_days?: number
 }
 
 export interface BulkAssignSubscriptionRequest {
   user_ids: number[]
   group_id: number
+  plan_id?: number
   validity_days?: number
 }
 
