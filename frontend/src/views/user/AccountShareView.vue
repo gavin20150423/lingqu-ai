@@ -7033,7 +7033,10 @@ async function refreshManagedAccountToken(listing: AccountShareListing): Promise
     let warning = ''
     let message = ''
     if (managedAccountScope.value === 'admin') {
-      updated = await adminAPI.accounts.refreshCredentials(listing.account_id)
+      const result = await adminAPI.accounts.refreshCredentials(listing.account_id)
+      updated = result.account
+      warning = result.warning || ''
+      message = result.message || ''
     } else {
       const result = await accountsAPI.refreshCredentials(listing.account_id)
       updated = result.account

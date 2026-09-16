@@ -1,3 +1,5 @@
+import type { AccountLevel, AccountShareMode, AccountShareStatus, OpenAIAccountLevelConfig, UserMenuConfig } from './types/local_extensions'
+
 /**
  * Core Type Definitions for Sub2API Frontend
  */
@@ -221,6 +223,11 @@ export interface PublicSettings {
   force_email_on_third_party_signup: boolean
   registration_email_alias_restriction_enabled?: boolean
   user_menu_config?: UserMenuConfig
+  withdrawal_management_enabled?: boolean
+  withdrawal_rate_limit_window_days?: number
+  withdrawal_rate_limit_max?: number
+  withdrawal_rate_limit_exempt_amount?: number
+  openai_account_levels?: OpenAIAccountLevelConfig[]
   registration_email_suffix_whitelist: string[]
   registration_email_domain_quota_enabled?: boolean
   promo_code_enabled: boolean
@@ -1520,7 +1527,7 @@ export interface UpdateAccountRequest {
   priority?: number
   rate_multiplier?: number // Account billing multiplier (>=0, 0 means free)
   schedulable?: boolean
-  status?: 'active' | 'inactive' | 'error'
+  status?: 'active' | 'inactive' | 'disabled' | 'error'
   group_ids?: number[]
   expires_at?: number | null
   auto_pause_on_expired?: boolean

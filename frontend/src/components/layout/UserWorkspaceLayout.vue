@@ -514,7 +514,7 @@ function resolveConfiguredNav(items: WorkspaceNavItem[]): WorkspaceNavItem[] {
   const visibleItems = items.filter(item => config?.visibility?.[item.id] !== false)
   if (!config?.order?.length) return visibleItems
 
-  const orderIndex = new Map(config.order.map((id, index) => [id, index]))
+  const orderIndex = new Map<string, number>(config.order.map((id: string, index: number) => [id, index]))
   const purchaseIndex = orderIndex.get('purchase')
   const resolvedOrderIndex = (id: string) => {
     // Existing installations have a saved menu order without this new item.
