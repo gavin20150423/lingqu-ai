@@ -56,7 +56,9 @@ export default {
     enabled: '已启用',
     disabled: '已禁用',
 	    total: '总计',
-	    balance: '余额',
+    balance: '余额',
+    points: '积分',
+    uncategorized: '未分类',
 	    availableBalance: '可用余额',
 	    frozenBalance: '冻结金额',
 	    totalBalance: '总余额',
@@ -205,6 +207,7 @@ export default {
     paymentDashboard: '支付概览',
     paymentConfig: '支付配置',
     paymentPlans: '订阅套餐',
+    subscriptionPlans: '订阅套餐',
     channelManagement: '渠道管理',
     channelPricing: '渠道定价',
     channelMonitor: '渠道监控',
@@ -218,6 +221,11 @@ export default {
 
   // Auth
   auth: {
+    loginEyebrow: '欢迎回来',
+    loginHeading: '登录 {siteName}',
+    loginDescription: '使用您的账户继续操作。',
+    signUpEyebrow: '开始使用',
+    emailAliasNotAllowed: '该邮箱别名不允许使用。',
     welcomeBack: '欢迎回来',
     signInToAccount: '登录您的账户以继续',
     signIn: '登录',

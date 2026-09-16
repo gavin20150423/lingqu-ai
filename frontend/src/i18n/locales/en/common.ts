@@ -56,7 +56,9 @@ export default {
     enabled: 'Enabled',
     disabled: 'Disabled',
 	    total: 'Total',
-	    balance: 'Balance',
+    balance: 'Balance',
+    points: 'Points',
+    uncategorized: 'Uncategorized',
 	    availableBalance: 'Available balance',
 	    frozenBalance: 'Frozen balance',
 	    totalBalance: 'Total balance',
@@ -205,6 +207,7 @@ export default {
     paymentDashboard: 'Payment Dashboard',
     paymentConfig: 'Payment Config',
     paymentPlans: 'Plans',
+    subscriptionPlans: 'Subscription Plans',
     channelManagement: 'Channels',
     channelPricing: 'Channel Pricing',
     channelMonitor: 'Channel Monitor',
@@ -218,6 +221,11 @@ export default {
 
   // Auth
   auth: {
+    loginEyebrow: 'WELCOME BACK',
+    loginHeading: 'Sign in to {siteName}',
+    loginDescription: 'Use your account to continue.',
+    signUpEyebrow: 'GET STARTED',
+    emailAliasNotAllowed: 'This email alias is not allowed.',
     welcomeBack: 'Welcome Back',
     signInToAccount: 'Sign in to your account to continue',
     signIn: 'Sign In',
