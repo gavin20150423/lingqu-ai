@@ -784,8 +784,10 @@ const adminNavItems = computed((): NavItem[] => {
     // 「仅充值」站点连管理端的「订阅管理」入口也一并收起（路由本身不拦截）。
     { path: '/admin/subscriptions', label: t('nav.subscriptions'), icon: CreditCardIcon, hideInSimpleMode: true, featureFlag: flagSubscription },
     { path: '/admin/accounts', label: t('nav.accounts'), icon: GlobeIcon },
+    { path: '/admin/xiao-video', label: t('nav.xiaoVideo'), icon: ServerIcon },
     { path: '/admin/plugins', label: t('nav.plugins'), icon: PluginIcon, featureFlag: flagPluginManagement },
     { path: '/admin/announcements', label: t('nav.announcements'), icon: BellIcon },
+    { path: '/admin/conversations', label: t('nav.conversations'), icon: UsersIcon },
     { path: '/admin/proxies', label: t('nav.proxies'), icon: ServerIcon },
     {
       path: '/admin/security-audit',
@@ -800,6 +802,19 @@ const adminNavItems = computed((): NavItem[] => {
     },
     { path: '/admin/redeem', label: t('nav.redeemCodes'), icon: TicketIcon, hideInSimpleMode: true },
     { path: '/admin/promo-codes', label: t('nav.promoCodes'), icon: GiftIcon, hideInSimpleMode: true },
+    {
+      path: '/admin/store',
+      label: t('nav.storeManagement'),
+      icon: GiftIcon,
+      hideInSimpleMode: true,
+      expandOnly: true,
+      children: [
+        { path: '/admin/store/categories', label: t('nav.storeCategories'), icon: FolderIcon },
+        { path: '/admin/store/products', label: t('nav.storeProducts'), icon: GiftIcon },
+        { path: '/admin/store/cards', label: t('nav.storeCards'), icon: TicketIcon },
+        { path: '/admin/store/file-storage', label: t('nav.storeFileStorage'), icon: ServerIcon },
+      ],
+    },
     {
       path: '/admin/affiliates',
       label: t('nav.affiliateManagement'),
@@ -824,6 +839,7 @@ const adminNavItems = computed((): NavItem[] => {
         { path: '/admin/orders/dashboard', label: t('nav.paymentDashboard'), icon: ChartIcon },
         { path: '/admin/orders', label: t('nav.orderManagement'), icon: OrderIcon },
         { path: '/admin/orders/plans', label: t('nav.paymentPlans'), icon: CreditCardIcon },
+        { path: '/admin/withdrawals', label: t('nav.withdrawalManagement'), icon: CreditCardIcon },
       ],
     },
     { path: '/admin/usage', label: t('nav.usage'), icon: ChartIcon },
