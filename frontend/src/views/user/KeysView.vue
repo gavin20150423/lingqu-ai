@@ -1,5 +1,5 @@
 <template>
-  <AppLayout>
+  <UserWorkspaceLayout>
     <TablePageLayout>
       <template #filters>
         <div class="flex flex-col gap-3">
@@ -1194,7 +1194,7 @@
         </div>
       </div>
     </Teleport>
-  </AppLayout>
+  </UserWorkspaceLayout>
 </template>
 
 <script setup lang="ts">
@@ -1207,7 +1207,7 @@ import { getPersistedPageSize } from '@/composables/usePersistedPageSize'
 
 const { t } = useI18n()
 import { keysAPI, authAPI, usageAPI, userGroupsAPI } from '@/api'
-import AppLayout from '@/components/layout/AppLayout.vue'
+import UserWorkspaceLayout from '@/components/layout/UserWorkspaceLayout.vue'
 import TablePageLayout from '@/components/layout/TablePageLayout.vue'
 import BulkEditKeysModal from '@/components/keys/BulkEditKeysModal.vue'
 	import DataTable from '@/components/common/DataTable.vue'
