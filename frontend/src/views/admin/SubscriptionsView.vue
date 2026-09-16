@@ -159,11 +159,37 @@
             >
               <Icon name="questionCircle" size="md" />
             </button>
-            <button @click="openAssignModal" class="btn btn-primary">
+            <button @click="showAssignModal = true" class="btn btn-primary">
               <Icon name="plus" size="md" class="mr-2" />
               {{ t('admin.subscriptions.assignSubscription') }}
             </button>
           </div>
+        </div>
+        <div
+          v-if="selectedCount > 0"
+          class="mt-3 space-y-2 rounded-xl border border-primary-200 bg-primary-50 p-3 dark:border-primary-800 dark:bg-primary-900/20"
+          data-test="subscription-bulk-actions"
+        >
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="mr-2 text-sm font-medium text-primary-800 dark:text-primary-200">
+              {{ t('admin.subscriptions.bulk.selected', { count: selectedCount }) }}
+            </span>
+            <button
+              v-for="action in bulkActions"
+              :key="action"
+              type="button"
+              :class="action === 'revoke' ? 'btn btn-danger btn-sm' : 'btn btn-secondary btn-sm'"
+              :data-test="`bulk-${action}`"
+              :disabled="loading || bulkTargets[action].length === 0"
+              @click="openBulkAction(action)"
+            >
+              {{ t(`admin.subscriptions.bulk.${action}`) }} ({{ bulkTargets[action].length }})
+            </button>
+            <button type="button" class="btn btn-secondary btn-sm" @click="clearSelection">
+              {{ t('admin.subscriptions.bulk.clearSelection') }}
+            </button>
+          </div>
+          <p class="text-xs text-gray-600 dark:text-gray-400">{{ t('admin.subscriptions.bulk.selectionHint') }}</p>
         </div>
       </template>
 
@@ -173,10 +199,15 @@
           :columns="columns"
           :data="subscriptions"
           :loading="loading"
+          row-key="id"
+          selectable
+          :selected-keys="selectedIds"
+          :selection-label="getSubscriptionSelectionLabel"
           :server-side-sort="true"
           default-sort-key="created_at"
           default-sort-order="desc"
           @sort="handleSort"
+          @update:selected-keys="handleSelectedKeysUpdate"
         >
           <template #cell-user="{ row }">
             <div class="flex items-center gap-2">
@@ -203,40 +234,36 @@
           </template>
 
           <template #cell-group="{ row }">
-            <div v-if="row.group" class="space-y-1">
-              <GroupBadge
-                :name="row.group.name"
-                :platform="row.group.platform"
-                :subscription-type="row.group.subscription_type"
-                :rate-multiplier="row.group.rate_multiplier"
-                :show-rate="false"
-              />
-              <div v-if="row.plan_id" class="pl-1 text-xs text-gray-500 dark:text-gray-400">
-                {{ getPlanName(row.plan_id) }}
-              </div>
-            </div>
+            <GroupBadge
+              v-if="row.group"
+              :name="row.group.name"
+              :platform="row.group.platform"
+              :subscription-type="row.group.subscription_type"
+              :rate-multiplier="row.group.rate_multiplier"
+              :show-rate="false"
+            />
             <span v-else class="text-sm text-gray-400 dark:text-dark-500">-</span>
           </template>
 
           <template #cell-usage="{ row }">
             <div class="min-w-[280px] space-y-2">
               <!-- Daily Usage -->
-              <div v-if="getEffectiveLimit(row, 'daily')" class="usage-row">
+              <div v-if="row.group?.daily_limit_usd" class="usage-row">
                 <div class="flex items-center gap-2">
                   <span class="usage-label">{{ t('admin.subscriptions.daily') }}</span>
                   <div class="h-1.5 flex-1 rounded-full bg-gray-200 dark:bg-dark-600">
                     <div
                       class="h-1.5 rounded-full transition-all"
-                      :class="getProgressClass(row.daily_usage_usd, getEffectiveLimit(row, 'daily'))"
+                      :class="getProgressClass(row.daily_usage_usd, row.group?.daily_limit_usd)"
                       :style="{
-                        width: getProgressWidth(row.daily_usage_usd, getEffectiveLimit(row, 'daily'))
+                        width: getProgressWidth(row.daily_usage_usd, row.group?.daily_limit_usd)
                       }"
                     ></div>
                   </div>
                   <span class="usage-amount">
                     ${{ row.daily_usage_usd?.toFixed(2) || '0.00' }}
                     <span class="text-gray-400">/</span>
-                    ${{ getEffectiveLimit(row, 'daily')?.toFixed(2) }}
+                    ${{ row.group?.daily_limit_usd?.toFixed(2) }}
                   </span>
                 </div>
                 <div class="reset-info" v-if="row.daily_window_start">
@@ -258,22 +285,22 @@
               </div>
 
               <!-- Weekly Usage -->
-              <div v-if="getEffectiveLimit(row, 'weekly')" class="usage-row">
+              <div v-if="row.group?.weekly_limit_usd" class="usage-row">
                 <div class="flex items-center gap-2">
                   <span class="usage-label">{{ t('admin.subscriptions.weekly') }}</span>
                   <div class="h-1.5 flex-1 rounded-full bg-gray-200 dark:bg-dark-600">
                     <div
                       class="h-1.5 rounded-full transition-all"
-                      :class="getProgressClass(row.weekly_usage_usd, getEffectiveLimit(row, 'weekly'))"
+                      :class="getProgressClass(row.weekly_usage_usd, row.group?.weekly_limit_usd)"
                       :style="{
-                        width: getProgressWidth(row.weekly_usage_usd, getEffectiveLimit(row, 'weekly'))
+                        width: getProgressWidth(row.weekly_usage_usd, row.group?.weekly_limit_usd)
                       }"
                     ></div>
                   </div>
                   <span class="usage-amount">
                     ${{ row.weekly_usage_usd?.toFixed(2) || '0.00' }}
                     <span class="text-gray-400">/</span>
-                    ${{ getEffectiveLimit(row, 'weekly')?.toFixed(2) }}
+                    ${{ row.group?.weekly_limit_usd?.toFixed(2) }}
                   </span>
                 </div>
                 <div class="reset-info" v-if="row.weekly_window_start">
@@ -295,22 +322,22 @@
               </div>
 
               <!-- Monthly Usage -->
-              <div v-if="getEffectiveLimit(row, 'monthly')" class="usage-row">
+              <div v-if="row.group?.monthly_limit_usd" class="usage-row">
                 <div class="flex items-center gap-2">
                   <span class="usage-label">{{ t('admin.subscriptions.monthly') }}</span>
                   <div class="h-1.5 flex-1 rounded-full bg-gray-200 dark:bg-dark-600">
                     <div
                       class="h-1.5 rounded-full transition-all"
-                      :class="getProgressClass(row.monthly_usage_usd, getEffectiveLimit(row, 'monthly'))"
+                      :class="getProgressClass(row.monthly_usage_usd, row.group?.monthly_limit_usd)"
                       :style="{
-                        width: getProgressWidth(row.monthly_usage_usd, getEffectiveLimit(row, 'monthly'))
+                        width: getProgressWidth(row.monthly_usage_usd, row.group?.monthly_limit_usd)
                       }"
                     ></div>
                   </div>
                   <span class="usage-amount">
                     ${{ row.monthly_usage_usd?.toFixed(2) || '0.00' }}
                     <span class="text-gray-400">/</span>
-                    ${{ getEffectiveLimit(row, 'monthly')?.toFixed(2) }}
+                    ${{ row.group?.monthly_limit_usd?.toFixed(2) }}
                   </span>
                 </div>
                 <div class="reset-info" v-if="row.monthly_window_start">
@@ -334,9 +361,9 @@
               <!-- No Limits - Unlimited badge -->
               <div
                 v-if="
-                  !getEffectiveLimit(row, 'daily') &&
-                  !getEffectiveLimit(row, 'weekly') &&
-                  !getEffectiveLimit(row, 'monthly')
+                  !row.group?.daily_limit_usd &&
+                  !row.group?.weekly_limit_usd &&
+                  !row.group?.monthly_limit_usd
                 "
                 class="flex items-center gap-2 rounded-lg bg-gradient-to-r from-emerald-50 to-teal-50 px-3 py-2 dark:from-emerald-900/20 dark:to-teal-900/20"
               >
@@ -432,7 +459,7 @@
               :title="t('admin.subscriptions.noSubscriptionsYet')"
               :description="t('admin.subscriptions.assignFirstSubscription')"
               :action-text="t('admin.subscriptions.assignSubscription')"
-              @action="openAssignModal"
+              @action="showAssignModal = true"
             />
           </template>
         </DataTable>
@@ -451,11 +478,22 @@
       </template>
     </TablePageLayout>
 
+    <BulkSubscriptionActionDialog
+      v-if="bulkAction !== null"
+      :show="true"
+      :action="bulkAction"
+      :subscriptions="bulkSubscriptions"
+      @close="bulkAction = null"
+      @completed="handleBulkCompleted"
+    />
+
     <!-- Assign Subscription Modal -->
     <BaseDialog
       :show="showAssignModal"
       :title="t('admin.subscriptions.assignSubscription')"
       width="normal"
+      :show-close-button="!submitting"
+      :close-on-escape="!submitting"
       @close="closeAssignModal"
     >
       <form
@@ -463,12 +501,18 @@
         @submit.prevent="handleAssignSubscription"
         class="space-y-5"
       >
+        <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+          <input v-model="batchAssignEnabled" type="checkbox" :disabled="submitting" @change="resetAssignUsers" />
+          {{ t('admin.subscriptions.batchAssign.enable') }}
+        </label>
+        <p v-if="batchAssignEnabled" class="input-hint">{{ t('admin.subscriptions.batchAssign.hint') }}</p>
         <div>
           <label class="input-label">{{ t('admin.subscriptions.form.user') }}</label>
           <div class="relative" data-assign-user-search>
             <input
               v-model="userSearchKeyword"
               type="text"
+              :disabled="submitting || (batchAssignEnabled && assignUsers.length >= 100)"
               class="input pr-8"
               :placeholder="t('admin.usage.searchUserPlaceholder')"
               @input="debounceSearchUsers"
@@ -503,19 +547,39 @@
                 v-for="user in userSearchResults"
                 :key="user.id"
                 type="button"
+                :disabled="submitting || (batchAssignEnabled && assignUsers.some((selected) => selected.id === user.id))"
                 @click="selectUser(user)"
-                class="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-dark-700"
+                class="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 disabled:opacity-50 dark:hover:bg-dark-700"
               >
                 <span class="font-medium text-gray-900 dark:text-white">{{ user.email }}</span>
                 <span class="ml-2 text-gray-500 dark:text-gray-400">#{{ user.id }}</span>
               </button>
             </div>
           </div>
+          <div v-if="batchAssignEnabled && assignUsers.length > 0" class="mt-2 space-y-2" data-test="assign-users">
+            <p class="text-sm text-gray-600 dark:text-gray-400">
+              {{ t('admin.subscriptions.batchAssign.selected', { count: assignUsers.length }) }}
+            </p>
+            <ul class="max-h-40 space-y-1 overflow-y-auto">
+              <li v-for="user in assignUsers" :key="user.id" class="flex items-center justify-between gap-2 rounded-lg bg-gray-50 px-3 py-1 text-sm dark:bg-dark-700">
+                <span class="truncate">{{ user.email }} <span class="text-gray-500">#{{ user.id }}</span></span>
+                <button
+                  type="button"
+                  :disabled="submitting"
+                  :aria-label="t('admin.subscriptions.batchAssign.removeUser', { email: user.email })"
+                  @click="assignUsers = assignUsers.filter((selected) => selected.id !== user.id)"
+                >
+                  <Icon name="x" size="sm" />
+                </button>
+              </li>
+            </ul>
+          </div>
         </div>
         <div>
           <label class="input-label">{{ t('admin.subscriptions.form.group') }}</label>
           <Select
             v-model="assignForm.group_id"
+            :disabled="submitting"
             :options="subscriptionGroupOptions"
             :placeholder="t('admin.subscriptions.selectGroup')"
           >
@@ -543,43 +607,27 @@
           <p class="input-hint">{{ t('admin.subscriptions.groupHint') }}</p>
         </div>
         <div>
-          <label class="input-label">{{ t('admin.subscriptions.form.plan') }}</label>
-          <Select
-            v-model="assignForm.plan_id"
-            :options="subscriptionPlanOptions"
-            :placeholder="t('admin.subscriptions.selectPlan')"
-            :disabled="!assignForm.group_id || plansLoading || subscriptionPlanOptions.length === 0"
-          />
-          <p v-if="plansLoading" class="input-hint">{{ t('admin.subscriptions.plansLoading') }}</p>
-          <p v-else-if="assignForm.group_id && subscriptionPlanOptions.length === 0" class="input-hint">
-            {{ t('admin.subscriptions.noPlansForGroup') }}
-          </p>
-          <p v-else class="input-hint">{{ t('admin.subscriptions.planHint') }}</p>
-          <div
-            v-if="selectedAssignPlan"
-            class="mt-2 grid grid-cols-2 gap-2 rounded-lg border border-primary-100 bg-primary-50/60 px-3 py-2 text-xs text-gray-600 dark:border-primary-900/50 dark:bg-primary-900/20 dark:text-gray-300"
-          >
-            <span>{{ t('admin.subscriptions.planValidity') }}：{{ formatPlanValidity(selectedAssignPlan) }}</span>
-            <span>{{ t('admin.subscriptions.planDaily') }}：{{ formatPlanQuota(selectedAssignPlan.daily_limit_usd) }}</span>
-            <span>{{ t('admin.subscriptions.planWeekly') }}：{{ formatPlanQuota(selectedAssignPlan.weekly_limit_usd) }}</span>
-            <span>{{ t('admin.subscriptions.planMonthly') }}：{{ formatPlanQuota(selectedAssignPlan.monthly_limit_usd) }}</span>
-          </div>
-        </div>
-        <div v-if="!selectedAssignPlan">
           <label class="input-label">{{ t('admin.subscriptions.form.validityDays') }}</label>
-          <input v-model.number="assignForm.validity_days" type="number" min="1" class="input" />
+          <input v-model.number="assignForm.validity_days" type="number" min="1" max="36500" step="1" :disabled="submitting" class="input" />
           <p class="input-hint">{{ t('admin.subscriptions.validityHint') }}</p>
+        </div>
+        <div v-if="batchAssignResult" class="space-y-2 text-sm" role="status" data-test="batch-assign-result">
+          <p>{{ t('admin.subscriptions.batchAssign.result', { success: batchAssignResult.success_count, failed: batchAssignResult.failed_count }) }}</p>
+          <ul v-if="batchAssignResult.errors.length" class="max-h-40 space-y-1 overflow-y-auto text-red-600 dark:text-red-400">
+            <li v-for="(error, index) in batchAssignResult.errors" :key="index">{{ error }}</li>
+          </ul>
+          <p v-if="batchAssignResult.failed_count > 0" class="input-hint">{{ t('admin.subscriptions.batchAssign.retryHint') }}</p>
         </div>
       </form>
       <template #footer>
         <div class="flex justify-end gap-3">
-          <button @click="closeAssignModal" type="button" class="btn btn-secondary">
-            {{ t('common.cancel') }}
+          <button @click="closeAssignModal" type="button" :disabled="submitting" class="btn btn-secondary">
+            {{ batchAssignResult ? t('common.close') : t('common.cancel') }}
           </button>
           <button
             type="submit"
             form="assign-subscription-form"
-            :disabled="submitting"
+            :disabled="submitting || (batchAssignEnabled && assignUsers.length === 0)"
             class="btn btn-primary"
           >
             <svg
@@ -792,13 +840,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { adminAPI } from '@/api/admin'
-import type { UserSubscription, Group, GroupPlatform, SubscriptionType } from '@/types'
-import type { SubscriptionPlan } from '@/types/payment'
+import type { AdminUser, UserSubscription, Group, GroupPlatform, SubscriptionType } from '@/types'
 import type { SimpleUser } from '@/api/admin/usage'
+import type { SubscriptionBulkAction, SubscriptionBulkActionResult, BulkAssignSubscriptionResult } from '@/api/admin/subscriptions'
+import { useTableSelection } from '@/composables/useTableSelection'
+import BulkSubscriptionActionDialog from '@/components/admin/subscription/BulkSubscriptionActionDialog.vue'
 import type { Column } from '@/components/common/types'
 import { formatDateTimeToMinute } from '@/utils/format'
 import { getPersistedPageSize } from '@/composables/usePersistedPageSize'
@@ -831,12 +881,6 @@ interface GroupOption {
   platform: GroupPlatform
   subscriptionType: SubscriptionType
   rate: number
-}
-
-interface AssignPlanOption {
-  [key: string]: unknown
-  value: number
-  label: string
 }
 
 // Guide modal state
@@ -965,12 +1009,38 @@ const statusOptions = computed(() => [
 
 const subscriptions = ref<UserSubscription[]>([])
 const groups = ref<Group[]>([])
-const subscriptionPlans = ref<SubscriptionPlan[]>([])
-const plansLoading = ref(false)
-const plansLoaded = ref(false)
-const plansLoadError = ref(false)
 const loading = ref(false)
 let abortController: AbortController | null = null
+
+const { selectedIds, selectedCount, setSelectedIds, clear: clearSelection, removeMany: removeSelectedIds } =
+  useTableSelection<UserSubscription>({ rows: subscriptions, getId: (subscription) => subscription.id })
+const bulkActions: SubscriptionBulkAction[] = ['extend', 'reset_quota', 'revoke', 'restore']
+const bulkAction = ref<SubscriptionBulkAction | null>(null)
+const bulkSubscriptions = ref<UserSubscription[]>([])
+const bulkTargets = computed(() => {
+  const selected = subscriptions.value.filter((subscription) => selectedIds.value.includes(subscription.id))
+  return {
+    extend: selected.filter((subscription) => ['active', 'expired'].includes(subscription.status)),
+    reset_quota: selected.filter((subscription) => subscription.status === 'active'),
+    revoke: selected.filter((subscription) => subscription.status === 'active'),
+    restore: selected.filter((subscription) => subscription.status === 'revoked')
+  }
+})
+const getSubscriptionSelectionLabel = (subscription: UserSubscription) =>
+  t('admin.subscriptions.bulk.selectSubscription', { id: subscription.id })
+const handleSelectedKeysUpdate = (keys: Array<string | number>) => {
+  const visibleIds = new Set(subscriptions.value.map((subscription) => subscription.id))
+  setSelectedIds(keys.filter((key): key is number => typeof key === 'number' && visibleIds.has(key)))
+}
+const openBulkAction = (action: SubscriptionBulkAction) => {
+  if (loading.value || bulkTargets.value[action].length === 0) return
+  bulkSubscriptions.value = [...bulkTargets.value[action]]
+  bulkAction.value = action
+}
+const handleBulkCompleted = async (result: SubscriptionBulkActionResult) => {
+  removeSelectedIds(result.results.filter((item) => item.success).map((item) => item.subscription_id))
+  await loadSubscriptions()
+}
 
 // Toolbar user filter (fuzzy search -> select user_id)
 const filterUserKeyword = ref('')
@@ -982,10 +1052,13 @@ let filterUserSearchTimeout: ReturnType<typeof setTimeout> | null = null
 
 // User search state
 const userSearchKeyword = ref('')
-const userSearchResults = ref<SimpleUser[]>([])
+const userSearchResults = ref<AdminUser[]>([])
 const userSearchLoading = ref(false)
 const showUserDropdown = ref(false)
-const selectedUser = ref<SimpleUser | null>(null)
+const selectedUser = ref<AdminUser | null>(null)
+const batchAssignEnabled = ref(false)
+const assignUsers = ref<AdminUser[]>([])
+const batchAssignResult = ref<BulkAssignSubscriptionResult | null>(null)
 let userSearchTimeout: ReturnType<typeof setTimeout> | null = null
 
 const filters = reactive({
@@ -1023,7 +1096,6 @@ const restoringSubscription = ref<UserSubscription | null>(null)
 const assignForm = reactive({
   user_id: null as number | null,
   group_id: null as number | null,
-  plan_id: null as number | null,
   validity_days: 30
 })
 
@@ -1056,46 +1128,8 @@ const subscriptionGroupOptions = computed(() =>
     }))
 )
 
-const subscriptionPlanOptions = computed<AssignPlanOption[]>(() => {
-  if (!assignForm.group_id) return []
-  return subscriptionPlans.value
-    .filter((plan) => plan.group_id === assignForm.group_id)
-    .sort((a, b) => a.sort_order - b.sort_order || a.id - b.id)
-    .map((plan) => ({
-      value: plan.id,
-      label: `${plan.name} · ¥${formatPlanPrice(plan.price)} · ${formatPlanValidity(plan)}${plan.for_sale ? '' : ` · ${t('admin.subscriptions.planOffSale')}`}`
-    }))
-})
-
-const selectedAssignPlan = computed(() =>
-  subscriptionPlans.value.find((plan) => plan.id === assignForm.plan_id) || null
-)
-
-function formatPlanPrice(value: number | null | undefined): string {
-  const numeric = Number(value)
-  return Number.isFinite(numeric) ? numeric.toFixed(2) : '0.00'
-}
-
-function formatPlanValidity(plan: Pick<SubscriptionPlan, 'validity_days' | 'validity_unit'>): string {
-  const unit = String(plan.validity_unit || 'days').trim().toLowerCase()
-  const translated = t(`admin.subscriptions.validityUnits.${unit}`)
-  const unitText = translated === `admin.subscriptions.validityUnits.${unit}` ? unit : translated
-  return `${plan.validity_days}${unitText}`
-}
-
-function formatPlanQuota(value: number | null | undefined): string {
-  const numeric = Number(value)
-  return Number.isFinite(numeric) && numeric > 0
-    ? `$${numeric.toFixed(2)}`
-    : t('admin.subscriptions.unlimited')
-}
-
-function getPlanName(planID: number | null | undefined): string {
-  if (!planID) return ''
-  return subscriptionPlans.value.find((plan) => plan.id === planID)?.name || `#${planID}`
-}
-
 const applyFilters = () => {
+  clearSelection()
   pagination.page = 1
   loadSubscriptions()
 }
@@ -1127,6 +1161,8 @@ const loadSubscriptions = async () => {
     )
     if (signal.aborted || abortController !== requestController) return
     subscriptions.value = response.items
+    const visibleIds = new Set(response.items.map((subscription) => subscription.id))
+    setSelectedIds(selectedIds.value.filter((id) => visibleIds.has(id)))
     pagination.total = response.total
     pagination.pages = response.pages
   } catch (error: any) {
@@ -1150,34 +1186,6 @@ const loadGroups = async () => {
     console.error('Error loading groups:', error)
   }
 }
-
-const loadPlans = async () => {
-  plansLoading.value = true
-  plansLoadError.value = false
-  try {
-    const response = await adminAPI.payment.getPlans()
-    subscriptionPlans.value = response.data || []
-    plansLoaded.value = true
-  } catch (error) {
-    plansLoadError.value = true
-    subscriptionPlans.value = []
-    console.error('Error loading subscription plans:', error)
-  } finally {
-    plansLoading.value = false
-  }
-}
-
-const openAssignModal = () => {
-  showAssignModal.value = true
-  if (!plansLoaded.value && !plansLoading.value) {
-    void loadPlans()
-  }
-}
-
-watch(() => assignForm.group_id, () => {
-  assignForm.plan_id = null
-  assignForm.validity_days = 30
-})
 
 // Toolbar user filter search with debounce
 const debounceSearchFilterUsers = () => {
@@ -1232,6 +1240,11 @@ const clearFilterUser = () => {
 
 // User search with debounce
 const debounceSearchUsers = () => {
+  // Invalidate the assignment target before the debounced search runs.
+  if (selectedUser.value && userSearchKeyword.value.trim() !== selectedUser.value.email) {
+    selectedUser.value = null
+    assignForm.user_id = null
+  }
   if (userSearchTimeout) {
     clearTimeout(userSearchTimeout)
   }
@@ -1241,12 +1254,6 @@ const debounceSearchUsers = () => {
 const searchUsers = async () => {
   const keyword = userSearchKeyword.value.trim()
 
-  // Clear selection if user modified the search keyword
-  if (selectedUser.value && keyword !== selectedUser.value.email) {
-    selectedUser.value = null
-    assignForm.user_id = null
-  }
-
   if (!keyword) {
     userSearchResults.value = []
     return
@@ -1254,7 +1261,10 @@ const searchUsers = async () => {
 
   userSearchLoading.value = true
   try {
-    userSearchResults.value = await adminAPI.usage.searchUsers(keyword)
+    const result = await adminAPI.users.list(1, 30, {
+      search: keyword, sort_by: 'email', sort_order: 'asc'
+    })
+    userSearchResults.value = result.items
   } catch (error) {
     console.error('Failed to search users:', error)
     userSearchResults.value = []
@@ -1263,7 +1273,17 @@ const searchUsers = async () => {
   }
 }
 
-const selectUser = (user: SimpleUser) => {
+const selectUser = (user: AdminUser) => {
+  if (submitting.value) return
+  if (batchAssignEnabled.value) {
+    if (assignUsers.value.length < 100 && !assignUsers.value.some((selected) => selected.id === user.id)) {
+      assignUsers.value = [...assignUsers.value, user]
+    }
+    userSearchKeyword.value = ''
+    userSearchResults.value = []
+    showUserDropdown.value = false
+    return
+  }
   selectedUser.value = user
   userSearchKeyword.value = user.email
   showUserDropdown.value = false
@@ -1277,18 +1297,27 @@ const clearUserSelection = () => {
   assignForm.user_id = null
 }
 
+const resetAssignUsers = () => {
+  clearUserSelection()
+  assignUsers.value = []
+  batchAssignResult.value = null
+}
+
 const handlePageChange = (page: number) => {
+  clearSelection()
   pagination.page = page
   loadSubscriptions()
 }
 
 const handlePageSizeChange = (pageSize: number) => {
+  clearSelection()
   pagination.page_size = pageSize
   pagination.page = 1
   loadSubscriptions()
 }
 
 const handleSort = (key: string, order: 'asc' | 'desc') => {
+  clearSelection()
   sortState.sort_by = key
   sortState.sort_order = order
   pagination.page = 1
@@ -1296,10 +1325,13 @@ const handleSort = (key: string, order: 'asc' | 'desc') => {
 }
 
 const closeAssignModal = () => {
+  if (submitting.value) return
   showAssignModal.value = false
+  batchAssignEnabled.value = false
+  assignUsers.value = []
+  batchAssignResult.value = null
   assignForm.user_id = null
   assignForm.group_id = null
-  assignForm.plan_id = null
   assignForm.validity_days = 30
   // Clear user search state
   selectedUser.value = null
@@ -1309,7 +1341,8 @@ const closeAssignModal = () => {
 }
 
 const handleAssignSubscription = async () => {
-  if (!assignForm.user_id) {
+  if (submitting.value) return
+  if (batchAssignEnabled.value ? assignUsers.value.length === 0 : !assignForm.user_id) {
     appStore.showError(t('admin.subscriptions.pleaseSelectUser'))
     return
   }
@@ -1317,32 +1350,35 @@ const handleAssignSubscription = async () => {
     appStore.showError(t('admin.subscriptions.pleaseSelectGroup'))
     return
   }
-  if (!plansLoaded.value || plansLoadError.value) {
-    appStore.showError(t('admin.subscriptions.failedToLoadPlans'))
-    return
-  }
-  if (subscriptionPlanOptions.value.length > 0 && !assignForm.plan_id) {
-    appStore.showError(t('admin.subscriptions.pleaseSelectPlan'))
-    return
-  }
-  if (assignForm.plan_id && !selectedAssignPlan.value) {
-    appStore.showError(t('admin.subscriptions.planUnavailable'))
-    return
-  }
-  if (!selectedAssignPlan.value && (!assignForm.validity_days || assignForm.validity_days < 1)) {
+  if (!Number.isInteger(assignForm.validity_days) || assignForm.validity_days < 1 || assignForm.validity_days > 36500) {
     appStore.showError(t('admin.subscriptions.validityDaysRequired'))
     return
   }
 
   submitting.value = true
   try {
+    if (batchAssignEnabled.value) {
+      batchAssignResult.value = await adminAPI.subscriptions.bulkAssign({
+        user_ids: assignUsers.value.map((user) => user.id),
+        group_id: assignForm.group_id,
+        validity_days: assignForm.validity_days
+      })
+      const result = batchAssignResult.value
+      const successIds = new Set(result.subscriptions.map((subscription) => subscription.user_id))
+      assignUsers.value = assignUsers.value.filter((user) => !successIds.has(user.id))
+      if (result.success_count > 0) {
+        appStore.showSuccess(t('admin.subscriptions.batchAssign.result', { success: result.success_count, failed: result.failed_count }))
+        await loadSubscriptions()
+      }
+      return
+    }
     await adminAPI.subscriptions.assign({
-      user_id: assignForm.user_id,
+      user_id: assignForm.user_id!,
       group_id: assignForm.group_id,
-      ...(assignForm.plan_id ? { plan_id: assignForm.plan_id } : {}),
       validity_days: assignForm.validity_days
     })
     appStore.showSuccess(t('admin.subscriptions.subscriptionAssigned'))
+    submitting.value = false
     closeAssignModal()
     loadSubscriptions()
   } catch (error: any) {
@@ -1485,26 +1521,6 @@ const isExpiringSoon = (expiresAt: string): boolean => {
   return days !== null && days <= 7
 }
 
-type QuotaWindow = 'daily' | 'weekly' | 'monthly'
-
-const getEffectiveLimit = (subscription: UserSubscription, window: QuotaWindow): number | null => {
-  const planLimit = window === 'daily'
-    ? subscription.daily_limit_usd
-    : window === 'weekly'
-      ? subscription.weekly_limit_usd
-      : subscription.monthly_limit_usd
-
-  // A plan snapshot is authoritative, including an intentional unlimited
-  // (null) value. Legacy admin-assigned subscriptions fall back to the group.
-  if (subscription.plan_id != null) return planLimit ?? null
-  if (planLimit != null) return planLimit
-  return (window === 'daily'
-    ? subscription.group?.daily_limit_usd
-    : window === 'weekly'
-      ? subscription.group?.weekly_limit_usd
-      : subscription.group?.monthly_limit_usd) ?? null
-}
-
 const getProgressWidth = (used: number | null | undefined, limit: number | null): string => {
   if (!limit || limit === 0) return '0%'
   const usedValue = used ?? 0
@@ -1595,7 +1611,6 @@ onMounted(() => {
   loadSavedColumns()
   loadSubscriptions()
   loadGroups()
-  loadPlans()
   document.addEventListener('click', handleClickOutside)
 })
 

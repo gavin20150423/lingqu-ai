@@ -168,9 +168,23 @@ func customGeminiModelsList(group *service.Group) (gemini.ModelsListResponse, bo
 	if group == nil || !group.ModelAllowlistEnabled() || len(group.ModelAllowlist.Models) == 0 {
 		return gemini.ModelsListResponse{}, false
 	}
+	// Expand wildcard entries against the built-in catalog so a pattern such as
+	// "gemini-3-*" publishes concrete model IDs instead of a literal wildcard.
 	models := make([]gemini.Model, 0, len(group.ModelAllowlist.Models))
+	seen := make(map[string]struct{})
+	for _, candidate := range gemini.DefaultModels() {
+		if group.ModelAllowlist.Allows(candidate.Name) {
+			models = append(models, candidate)
+			seen[candidate.Name] = struct{}{}
+		}
+	}
+	// Keep explicit entries that are not part of the fallback catalog.
 	for _, modelID := range group.ModelAllowlist.Models {
-		models = append(models, gemini.FallbackModel(modelID))
+		model := gemini.FallbackModel(modelID)
+		if _, ok := seen[model.Name]; ok || strings.Contains(modelID, "*") {
+			continue
+		}
+		models = append(models, model)
 	}
 	return gemini.ModelsListResponse{Models: models}, true
 }

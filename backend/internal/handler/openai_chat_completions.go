@@ -253,7 +253,7 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 		if service.GetOpsCyberPolicy(c) != nil {
 			cyberBlockKeyChat = service.CyberSessionBlockKey(apiKey.ID, c, body)
 		}
-		h.recordCyberPolicyIfMarked(c, apiKey, account, subscription, reqModel, err != nil, cyberBlockKeyChat, clientRequestedUsageFields(c, channelMapping, reqModel, ""), service.HashUsageRequestPayload(body))
+		h.recordCyberPolicyIfMarked(c, apiKey, account, subscription, reqModel, err != nil, []byte(cyberBlockKeyChat), clientRequestedUsageFields(c, channelMapping, reqModel, ""), service.HashUsageRequestPayload(body))
 
 		forwardDurationMs := time.Since(forwardStart).Milliseconds()
 		upstreamLatencyMs, _ := getContextInt64(c, service.OpsUpstreamLatencyMsKey)

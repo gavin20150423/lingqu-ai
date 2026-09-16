@@ -63,16 +63,20 @@ describe('AppSidebar header styles', () => {
   })
 })
 
-describe('AppSidebar user portal entry', () => {
-  it('links administrators to the user workspace with the dedicated label', () => {
-    const adminPortalLink = componentSource.match(
-      /<router-link\s+v-if="!authStore\.isSimpleMode"[\s\S]*?<\/router-link>/
-    )?.[0]
+describe('AppSidebar subscription feature flag', () => {
+  it('gates the My Subscriptions entry behind the subscription public-settings flag', () => {
+    expect(componentSource).toContain('const flagSubscription = makeSidebarFlag(FeatureFlags.subscription)')
+    expect(componentSource).toMatch(/path: '\/subscriptions'[^\n]*featureFlag: flagSubscription/)
+  })
 
-    expect(adminPortalLink).toBeDefined()
-    expect(adminPortalLink).toContain('to="/dashboard"')
-    expect(adminPortalLink).toContain("t('nav.userPortal')")
-    expect(adminPortalLink).toContain("label: t('nav.userPortal'), icon: 'user'")
-    expect(adminPortalLink).not.toContain("t('nav.apiKeys')")
+  it('also hides the admin Subscription Management entry on recharge-only sites', () => {
+    expect(componentSource).toMatch(/path: '\/admin\/subscriptions'[^\n]*featureFlag: flagSubscription/)
+  })
+
+  it('derives the purchase entry label from the site billing mode', () => {
+    expect(componentSource).toContain("import { resolveSiteBillingMode } from '@/utils/siteBillingMode'")
+    expect(componentSource).toMatch(/case 'recharge_only':\s*return t\('nav\.recharge'\)/)
+    expect(componentSource).toMatch(/case 'subscription_only':\s*return t\('nav\.subscribe'\)/)
+    expect(componentSource).toMatch(/path: '\/purchase'[^\n]*label: purchaseNavLabel\.value/)
   })
 })

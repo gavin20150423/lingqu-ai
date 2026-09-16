@@ -178,6 +178,8 @@ func (s *AccountTestService) SetOpenAIGatewayService(gateway *OpenAIGatewayServi
 }
 
 // FetchOpenAIAccountModels uses the shared cached discovery path for the test picker.
+// It only fills picker-only gaps (local display-name fallbacks, OAuth image choices)
+// on its own copy; the shared catalog and its cache stay untouched.
 func (s *AccountTestService) FetchOpenAIAccountModels(ctx context.Context, account *Account) ([]openai.Model, error) {
 	if s == nil || s.openaiGatewayService == nil {
 		return nil, errors.New("OpenAI model discovery service is unavailable")
@@ -192,12 +194,14 @@ func (s *AccountTestService) FetchOpenAIAccountModels(ctx context.Context, accou
 	if err := json.Unmarshal(response.Body, &payload); err != nil {
 		return nil, fmt.Errorf("decode OpenAI account models: %w", err)
 	}
-	// Standard model catalogs do not require the fields used by the admin picker.
-	// Populate them here without changing the shared discovery response or cache.
+	// Every entry in the picker is labelled by the same rule: the upstream display
+	// name when the catalog has one, otherwise the local catalog name for that model
+	// ID, otherwise the raw ID. Without this the picker mixes "GPT-5.6 Sol" with
+	// "gpt-5.6-sol" for the same catalog.
 	for i := range payload.Data {
 		model := &payload.Data[i]
 		if strings.TrimSpace(model.DisplayName) == "" {
-			model.DisplayName = model.ID
+			model.DisplayName = openaiCodexDisplayName(model.ID)
 		}
 		if strings.TrimSpace(model.Type) == "" {
 			model.Type = "model"
@@ -219,7 +223,7 @@ func (s *AccountTestService) FetchOpenAIAccountModels(ctx context.Context, accou
 		}
 		for model := range account.GetModelMapping() {
 			if IsGPTImageGenerationModel(model) && !strings.Contains(model, "*") && !seen[model] {
-				payload.Data = append(payload.Data, openai.Model{ID: model, Object: "model", Type: "model", OwnedBy: "openai", DisplayName: model})
+				payload.Data = append(payload.Data, openai.Model{ID: model, Object: "model", Type: "model", OwnedBy: "openai", DisplayName: openaiCodexDisplayName(model)})
 			}
 		}
 	}
@@ -283,18 +287,13 @@ func generateSessionString() (string, error) {
 
 // createTestPayload creates a Claude Code style test request payload
 func createTestPayload(modelID string, prompts ...string) (map[string]any, error) {
+	prompt := "hi"
+	if len(prompts) > 0 && prompts[0] != "" {
+		prompt = prompts[0]
+	}
 	sessionID, err := generateSessionString()
 	if err != nil {
 		return nil, err
-	}
-
-	var prompt string
-	if len(prompts) > 0 {
-		prompt = prompts[0]
-	}
-	testPrompt := strings.TrimSpace(prompt)
-	if testPrompt == "" {
-		testPrompt = "hi"
 	}
 
 	return map[string]any{
@@ -305,7 +304,7 @@ func createTestPayload(modelID string, prompts ...string) (map[string]any, error
 				"content": []map[string]any{
 					{
 						"type": "text",
-						"text": testPrompt,
+						"text": prompt,
 						"cache_control": map[string]string{
 							"type": "ephemeral",
 						},
@@ -360,6 +359,12 @@ func (s *AccountTestService) TestAccountConnection(c *gin.Context, accountID int
 		return nil
 	}
 
+	// XiaoAPI is classified as a CN provider for routing purposes, but its
+	// read-only model-catalog probe is a distinct protocol from CN chat APIs.
+	if account.Platform == PlatformXiaoAPI {
+		return s.testXiaoAPIAccountConnection(c, account, modelID)
+	}
+
 	// Route to platform-specific test method
 	if account.IsCNProvider() {
 		switch account.GetAPIProtocol() {
@@ -386,19 +391,20 @@ func (s *AccountTestService) TestAccountConnection(c *gin.Context, accountID int
 		return s.testGrokAccountConnection(c, account, modelID, prompt, mode, testOpts)
 	}
 
-	if account.Platform == PlatformXiaoAPI {
-		return s.testXiaoAPIAccountConnection(c, account, modelID)
-	}
-
 	if account.Platform == PlatformAntigravity {
 		return s.routeAntigravityTest(c, account, modelID, prompt)
 	}
 
-	return s.testClaudeAccountConnection(c, account, modelID, prompt)
+	if account.IsOpenCodeGo() {
+		return s.testOpenCodeGoAccountConnection(c, account, modelID, prompt)
+	}
+
+	return s.testClaudeAccountConnection(c, account, modelID)
 }
 
-// testXiaoAPIAccountConnection performs a read-only provider probe. It only
-// lists upstream models, so testing an account never creates a billable job.
+// testXiaoAPIAccountConnection performs a read-only provider probe. XiaoAPI
+// video providers expose their model catalog and do not require a generation
+// request merely to validate credentials.
 func (s *AccountTestService) testXiaoAPIAccountConnection(c *gin.Context, account *Account, modelID string) error {
 	if s.httpUpstream == nil {
 		return s.sendErrorAndEnd(c, "HTTP upstream not configured")
@@ -426,7 +432,6 @@ func (s *AccountTestService) testXiaoAPIAccountConnection(c *gin.Context, accoun
 	if err != nil {
 		return s.sendErrorAndEnd(c, fmt.Sprintf("Invalid base URL: %s", err.Error()))
 	}
-
 	testModelID := strings.TrimSpace(modelID)
 	if testModelID == "" {
 		if pricing, pricingErr := account.XiaoVideoPricingRules(); pricingErr == nil && len(pricing) > 0 {
@@ -434,7 +439,6 @@ func (s *AccountTestService) testXiaoAPIAccountConnection(c *gin.Context, accoun
 		}
 	}
 	s.sendEvent(c, TestEvent{Type: "test_start", Model: testModelID})
-
 	req, err := http.NewRequestWithContext(c.Request.Context(), http.MethodGet, endpoint, nil)
 	if err != nil {
 		return s.sendErrorAndEnd(c, "Failed to create request")
@@ -445,7 +449,6 @@ func (s *AccountTestService) testXiaoAPIAccountConnection(c *gin.Context, accoun
 		req.Header.Set(name, value)
 	}
 	account.ApplyHeaderOverrides(req.Header)
-
 	proxyURL := ""
 	if account.ProxyID != nil && account.Proxy != nil {
 		proxyURL = account.Proxy.URL()
@@ -466,10 +469,52 @@ func (s *AccountTestService) testXiaoAPIAccountConnection(c *gin.Context, accoun
 	if decodeErr != nil {
 		return s.sendErrorAndEnd(c, "API returned an invalid models response")
 	}
-
 	s.sendEvent(c, TestEvent{Type: "content", Text: fmt.Sprintf("Connected; %d video models available", len(models))})
 	s.sendEvent(c, TestEvent{Type: "test_complete", Success: true})
 	return nil
+}
+
+// testOpenCodeGoAccountConnection probes the native endpoint for the selected
+// model. Adaptive accounts (the default) follow OpenCodeGoModelProtocol:
+// grok/gpt/muse-spark → Responses, minimax/qwen → Anthropic, everything else
+// (including deepseek-v4-flash) → Chat Completions. A pinned api_protocol
+// overrides that catalog. Falling through to the generic Claude tester used
+// credentials.base_url + /v1/messages?beta=true, which 404s as HTML on
+// https://opencode.ai/zen/go/v1/v1/messages.
+func (s *AccountTestService) testOpenCodeGoAccountConnection(c *gin.Context, account *Account, modelID string, prompt string) error {
+	testModelID := strings.TrimSpace(modelID)
+	if testModelID == "" {
+		testModelID = DefaultOpenCodeGoTestModel
+	}
+	testModelID = account.GetMappedModel(testModelID)
+	proto := account.GetAPIProtocol()
+	switch proto {
+	case APIProtocolChatCompletions, APIProtocolAnthropic, APIProtocolResponses:
+	default:
+		proto = openCodeGoNativeProtocol(account, testModelID)
+	}
+	switch proto {
+	case APIProtocolAnthropic:
+		return s.testCNProviderAnthropicConnection(c, account, testModelID)
+	case APIProtocolResponses:
+		return s.testOpenCodeGoResponsesConnection(c, account, testModelID)
+	default:
+		return s.testCNProviderChatCompletionsConnection(c, account, testModelID, prompt)
+	}
+}
+
+func (s *AccountTestService) testOpenCodeGoResponsesConnection(c *gin.Context, account *Account, testModelID string) error {
+	authToken := strings.TrimSpace(account.GetOpenAIProtocolAPIKey())
+	if authToken == "" {
+		return s.sendErrorAndEnd(c, "No API key available")
+	}
+	c.Writer.Header().Set("Content-Type", "text/event-stream")
+	c.Writer.Header().Set("Cache-Control", "no-cache")
+	c.Writer.Header().Set("Connection", "keep-alive")
+	c.Writer.Header().Set("X-Accel-Buffering", "no")
+	c.Writer.Flush()
+	s.sendEvent(c, TestEvent{Type: "test_start", Model: testModelID})
+	return s.testCNProviderAdaptiveResponsesConnection(c, account, testModelID, authToken)
 }
 
 func (s *AccountTestService) testCNProviderChatCompletionsConnection(c *gin.Context, account *Account, modelID string, prompt string) error {
@@ -494,7 +539,7 @@ func (s *AccountTestService) testCNProviderChatCompletionsConnection(c *gin.Cont
 }
 
 // testClaudeAccountConnection tests an Anthropic Claude account's connection
-func (s *AccountTestService) testClaudeAccountConnection(c *gin.Context, account *Account, modelID string, prompt string) error {
+func (s *AccountTestService) testClaudeAccountConnection(c *gin.Context, account *Account, modelID string) error {
 	ctx := c.Request.Context()
 
 	// Determine the model to use
@@ -510,10 +555,10 @@ func (s *AccountTestService) testClaudeAccountConnection(c *gin.Context, account
 
 	// Bedrock accounts use a separate test path
 	if account.IsBedrock() {
-		return s.testBedrockAccountConnection(c, ctx, account, testModelID, prompt)
+		return s.testBedrockAccountConnection(c, ctx, account, testModelID)
 	}
 	if account.Type == AccountTypeServiceAccount {
-		return s.testClaudeVertexServiceAccountConnection(c, ctx, account, testModelID, prompt)
+		return s.testClaudeVertexServiceAccountConnection(c, ctx, account, testModelID)
 	}
 
 	// Determine authentication method and API URL
@@ -553,7 +598,7 @@ func (s *AccountTestService) testClaudeAccountConnection(c *gin.Context, account
 	c.Writer.Flush()
 
 	// Create Claude Code style payload (same for all account types)
-	payload, err := createTestPayload(testModelID, prompt)
+	payload, err := createTestPayload(testModelID)
 	if err != nil {
 		return s.sendErrorAndEnd(c, "Failed to create test payload")
 	}
@@ -618,7 +663,7 @@ func (s *AccountTestService) testClaudeAccountConnection(c *gin.Context, account
 	return s.processClaudeStream(c, resp.Body)
 }
 
-func (s *AccountTestService) testClaudeVertexServiceAccountConnection(c *gin.Context, ctx context.Context, account *Account, testModelID string, prompt string) error {
+func (s *AccountTestService) testClaudeVertexServiceAccountConnection(c *gin.Context, ctx context.Context, account *Account, testModelID string) error {
 	if mappedModel, matched := account.ResolveMappedModel(testModelID); matched {
 		testModelID = mappedModel
 	} else {
@@ -631,7 +676,7 @@ func (s *AccountTestService) testClaudeVertexServiceAccountConnection(c *gin.Con
 	c.Writer.Header().Set("X-Accel-Buffering", "no")
 	c.Writer.Flush()
 
-	payload, err := createTestPayload(testModelID, prompt)
+	payload, err := createTestPayload(testModelID)
 	if err != nil {
 		return s.sendErrorAndEnd(c, "Failed to create test payload")
 	}
@@ -687,7 +732,7 @@ func (s *AccountTestService) testClaudeVertexServiceAccountConnection(c *gin.Con
 }
 
 // testBedrockAccountConnection tests a Bedrock (SigV4 or API Key) account using non-streaming invoke
-func (s *AccountTestService) testBedrockAccountConnection(c *gin.Context, ctx context.Context, account *Account, testModelID string, prompt string) error {
+func (s *AccountTestService) testBedrockAccountConnection(c *gin.Context, ctx context.Context, account *Account, testModelID string) error {
 	region := bedrockRuntimeRegion(account)
 	resolvedModelID, ok := ResolveBedrockModelID(account, testModelID)
 	if !ok {
@@ -703,10 +748,6 @@ func (s *AccountTestService) testBedrockAccountConnection(c *gin.Context, ctx co
 	c.Writer.Flush()
 
 	// Create a minimal Bedrock-compatible payload (no stream, no cache_control)
-	testPrompt := strings.TrimSpace(prompt)
-	if testPrompt == "" {
-		testPrompt = "hi"
-	}
 	bedrockPayload := map[string]any{
 		"anthropic_version": "bedrock-2023-05-31",
 		"messages": []map[string]any{
@@ -715,7 +756,7 @@ func (s *AccountTestService) testBedrockAccountConnection(c *gin.Context, ctx co
 				"content": []map[string]any{
 					{
 						"type": "text",
-						"text": testPrompt,
+						"text": "hi",
 					},
 				},
 			},
@@ -887,7 +928,7 @@ func (s *AccountTestService) testOpenAIAccountConnection(c *gin.Context, account
 	if isOAuth {
 		upstreamTestModelID = normalizeOpenAIModelForUpstream(credentialAccount, testModelID)
 	}
-	payload := createOpenAITestPayload(upstreamTestModelID, isOAuth, prompt)
+	payload := createOpenAITestPayload(upstreamTestModelID, isOAuth)
 	payloadBytes, _ := json.Marshal(payload)
 
 	// Send test_start event once. A task-invalid Agent Identity response may
@@ -2146,6 +2187,7 @@ func (s *AccountTestService) testOpenAIChatCompletionsConnection(
 
 	// 账号级请求头覆写：测试请求与真实转发保持一致的最终头
 	account.ApplyHeaderOverrides(req.Header)
+	applyOpenCodeSessionHeader(c, account, apiURL, req.Header, payloadBytes)
 
 	proxyURL := ""
 	if account.ProxyID != nil && account.Proxy != nil {
@@ -2455,7 +2497,7 @@ func (s *AccountTestService) routeAntigravityTest(c *gin.Context, account *Accou
 		if strings.HasPrefix(modelID, "gemini-") {
 			return s.testGeminiAccountConnection(c, account, modelID, prompt)
 		}
-		return s.testClaudeAccountConnection(c, account, modelID, prompt)
+		return s.testClaudeAccountConnection(c, account, modelID)
 	}
 	return s.testAntigravityAccountConnection(c, account, modelID)
 }
@@ -2766,13 +2808,9 @@ func (s *AccountTestService) processGeminiStream(c *gin.Context, body io.Reader)
 
 // createOpenAITestPayload creates a test payload for OpenAI Responses API
 func createOpenAITestPayload(modelID string, isOAuth bool, prompts ...string) map[string]any {
-	var prompt string
-	if len(prompts) > 0 {
+	prompt := "hi"
+	if len(prompts) > 0 && prompts[0] != "" {
 		prompt = prompts[0]
-	}
-	testPrompt := strings.TrimSpace(prompt)
-	if testPrompt == "" {
-		testPrompt = "hi"
 	}
 	payload := map[string]any{
 		"model": modelID,
@@ -2782,7 +2820,7 @@ func createOpenAITestPayload(modelID string, isOAuth bool, prompts ...string) ma
 				"content": []map[string]any{
 					{
 						"type": "input_text",
-						"text": testPrompt,
+						"text": prompt,
 					},
 				},
 			},
@@ -3118,7 +3156,7 @@ func (s *AccountTestService) testOpenAIImageAPIKey(c *gin.Context, ctx context.C
 	return nil
 }
 
-// testOpenAIImageOAuth tests OpenAI image generation using an OAuth account via Codex /responses API.
+// OAuth 图片测试与正式转发共用 Codex Images / Responses 分流规则。
 func (s *AccountTestService) testOpenAIImageOAuth(c *gin.Context, ctx context.Context, account *Account, modelID, prompt string) error {
 	credentialAccount := account
 	if account.IsShadow() {
@@ -3144,26 +3182,31 @@ func (s *AccountTestService) testOpenAIImageOAuth(c *gin.Context, ctx context.Co
 	c.Writer.Flush()
 
 	s.sendEvent(c, TestEvent{Type: "test_start", Model: modelID})
-	s.sendEvent(c, TestEvent{Type: "content", Text: "Calling Codex /responses image tool...\n"})
 
 	parsed := &OpenAIImagesRequest{
 		Endpoint: openAIImagesGenerationsEndpoint,
 		Model:    strings.TrimSpace(modelID),
 		Prompt:   prompt,
-		N:        1,
-		Size:     "1024x1024",
-		Quality:  "low",
 	}
 	applyOpenAIImagesDefaults(parsed)
+	// Keep the admin probe deterministic and aligned with the default image
+	// preview requested by the UI.
+	parsed.Size = "1024x1024"
+	parsed.Quality = "low"
 
-	s.sendEvent(c, TestEvent{Type: "content", Text: fmt.Sprintf("Responses driver: %s; image model: %s\n", openAIImagesResponsesMainModelValue(), parsed.Model)})
-
-	responsesBody, err := buildOpenAIImagesResponsesRequest(parsed, parsed.Model)
+	upstreamModel := account.GetMappedModel(parsed.Model)
+	responsesBody, targetURL, err := buildOpenAIImagesOAuthPayload(parsed, upstreamModel)
 	if err != nil {
 		return s.sendErrorAndEnd(c, fmt.Sprintf("Failed to build image request: %s", err.Error()))
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, chatgptCodexAPIURL, bytes.NewReader(responsesBody))
+	direct := usesCodexDirectImages(upstreamModel)
+	if direct {
+		s.sendEvent(c, TestEvent{Type: "content", Text: fmt.Sprintf("Calling Codex /images/generations; image model: %s\n", upstreamModel)})
+	} else {
+		s.sendEvent(c, TestEvent{Type: "content", Text: fmt.Sprintf("Calling Codex /responses image tool; driver: %s; image model: %s\n", openAIImagesResponsesMainModelValue(), upstreamModel)})
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, targetURL, bytes.NewReader(responsesBody))
 	if err != nil {
 		return s.sendErrorAndEnd(c, "Failed to create request")
 	}
@@ -3185,6 +3228,10 @@ func (s *AccountTestService) testOpenAIImageOAuth(c *gin.Context, ctx context.Co
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "text/event-stream")
 	req.Header.Set("OpenAI-Beta", "responses=experimental")
+	if direct {
+		req.Header.Del("OpenAI-Beta")
+		req.Header.Set("Accept", "application/json")
+	}
 	canonical := resolveCodexOutboundIdentity("")
 	req.Header.Set("originator", canonical.originator)
 	if customUA := strings.TrimSpace(credentialAccount.GetOpenAIUserAgent()); customUA != "" {
@@ -3203,7 +3250,7 @@ func (s *AccountTestService) testOpenAIImageOAuth(c *gin.Context, ctx context.Co
 	}
 	resp, err := s.doOpenAIAccountTestUpstream(req, proxyURL, account, false)
 	if err != nil {
-		return s.sendErrorAndEnd(c, fmt.Sprintf("Responses API request failed: %s", err.Error()))
+		return s.sendErrorAndEnd(c, fmt.Sprintf("Image upstream request failed: %s", err.Error()))
 	}
 	defer func() {
 		if resp != nil && resp.Body != nil {
@@ -3215,7 +3262,7 @@ func (s *AccountTestService) testOpenAIImageOAuth(c *gin.Context, ctx context.Co
 		body = redactAgentIdentitySensitiveBodyForAccount(ctx, s.accountRepo, credentialAccount, body)
 		message := strings.TrimSpace(extractUpstreamErrorMessage(body))
 		if message == "" {
-			message = fmt.Sprintf("Responses API returned %d", resp.StatusCode)
+			message = fmt.Sprintf("Image upstream returned %d", resp.StatusCode)
 		}
 		return s.sendErrorAndEnd(c, message)
 	}
@@ -3226,18 +3273,26 @@ func (s *AccountTestService) testOpenAIImageOAuth(c *gin.Context, ctx context.Co
 	}
 	body = redactAgentIdentitySensitiveBodyForAccount(ctx, s.accountRepo, credentialAccount, body)
 
-	results, _, _, _, _, err := collectOpenAIImagesFromResponsesBody(body)
+	var results []openAIResponsesImageResult
+	if direct {
+		results, err = parseCodexDirectImagesResponse(body)
+	} else {
+		if upstreamErr := extractOpenAIImagesUpstreamError(body); upstreamErr != nil {
+			return s.sendErrorAndEnd(c, upstreamErr.clientMessage())
+		}
+		results, _, _, _, _, err = collectOpenAIImagesFromResponsesBody(body)
+	}
 	if err != nil {
 		return s.sendErrorAndEnd(c, fmt.Sprintf("Failed to parse image response: %s", err.Error()))
 	}
 	if len(results) == 0 {
-		if upstreamErr := extractOpenAIImagesUpstreamError(body); upstreamErr != nil {
-			return s.sendErrorAndEnd(c, upstreamErr.clientMessage())
-		}
 		if textErr := openAIImagesTextFallbackError(body); textErr != nil {
 			return s.sendErrorAndEnd(c, textErr.clientMessage())
 		}
-		return s.sendErrorAndEnd(c, "No images returned from responses API")
+		if direct {
+			return s.sendErrorAndEnd(c, "No images returned from Codex Images API")
+		}
+		return s.sendErrorAndEnd(c, "No images returned from Codex Responses API")
 	}
 
 	for _, item := range results {
@@ -3285,6 +3340,9 @@ func (s *AccountTestService) RunTestBackground(ctx context.Context, accountID in
 	return s.RunTestBackgroundWithPrompt(ctx, accountID, modelID, "")
 }
 
+// RunTestBackgroundWithPrompt is the prompt-aware variant used by the internal
+// SubPilot test endpoint. It preserves the upstream background-test flow while
+// allowing callers to override the probe prompt.
 func (s *AccountTestService) RunTestBackgroundWithPrompt(ctx context.Context, accountID int64, modelID string, prompt string) (*ScheduledTestResult, error) {
 	startedAt := time.Now()
 

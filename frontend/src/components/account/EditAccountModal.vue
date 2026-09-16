@@ -26,39 +26,6 @@
         <p class="input-hint">{{ t('admin.accounts.notesHint') }}</p>
       </div>
 
-      <div v-if="isCNApiKeyAccount" class="space-y-4">
-        <div>
-          <label class="input-label">{{ t('admin.accounts.cnProviders.accountMode.title') }}</label>
-          <div class="mt-2 flex flex-wrap gap-2">
-            <button
-              v-for="opt in cnAccountModeOptions"
-              :key="opt.value"
-              type="button"
-              class="rounded-lg border-2 px-3 py-1.5 text-xs transition-all"
-              :class="editAccountMode === opt.value ? 'border-primary-500 bg-primary-50 font-medium text-primary-700 dark:bg-primary-900/30 dark:text-primary-300' : 'border-gray-200 text-gray-700 hover:border-gray-400 dark:border-dark-600 dark:text-gray-300'"
-              @click="editAccountMode = opt.value"
-            >
-              {{ t(`admin.accounts.cnProviders.accountMode.${opt.labelKey}`) }}
-            </button>
-          </div>
-        </div>
-        <div>
-          <label class="input-label">{{ t('admin.accounts.cnProviders.apiProtocol.title') }}</label>
-          <div class="mt-2 flex flex-wrap gap-2">
-            <button
-              v-for="opt in cnProtocolOptions"
-              :key="opt.value"
-              type="button"
-              class="rounded-lg border-2 px-3 py-1.5 text-xs transition-all"
-              :class="editApiProtocol === opt.value ? 'border-primary-500 bg-primary-50 font-medium text-primary-700 dark:bg-primary-900/30 dark:text-primary-300' : 'border-gray-200 text-gray-700 hover:border-gray-400 dark:border-dark-600 dark:text-gray-300'"
-              @click="editApiProtocol = opt.value"
-            >
-              {{ t(`admin.accounts.cnProviders.apiProtocol.${opt.labelKey}`) }}
-            </button>
-          </div>
-        </div>
-      </div>
-
       <!-- API Key fields (only for apikey type) -->
       <div v-if="account.type === 'apikey'" class="space-y-4">
         <div v-if="!isCNApiKeyAccount || editApiProtocol !== 'adaptive'">
@@ -68,13 +35,7 @@
             type="text"
             class="input"
             :placeholder="
-              account.platform === 'kimi'
-                ? defaultCNBaseUrl(account.platform, editAccountMode, editApiProtocol)
-                : account.platform === 'zhipu'
-                  ? defaultCNBaseUrl(account.platform, editAccountMode, editApiProtocol)
-                  : isLegacyCnApiPlatform(account.platform)
-                    ? defaultCNBaseUrl(account.platform, editAccountMode, editApiProtocol)
-                    : account.platform === 'openai'
+              account.platform === 'openai'
                 ? 'https://api.openai.com'
                 : account.platform === 'gemini'
                   ? 'https://generativelanguage.googleapis.com'
@@ -82,8 +43,6 @@
                     ? 'https://cloudcode-pa.googleapis.com'
                     : account.platform === 'grok'
                       ? 'https://api.x.ai/v1'
-                      : account.platform === 'xiaoapi'
-                        ? 'https://provider.example/v1'
                       : 'https://api.anthropic.com'
             "
           />
@@ -94,7 +53,7 @@
             @select="editBaseUrl = $event"
           />
           <CnBaseUrlPresets
-            v-if="isCNApiKeyAccount"
+            v-if="isCNApiKeyAccount && account.platform !== 'opencode_go'"
             class="mt-2"
             :platform="cnPresetPlatform"
             :mode="editAccountMode"
@@ -117,8 +76,60 @@
             {{ t('admin.accounts.cnProviders.apiProtocol.responsesFallbackDesc') }}
           </p>
         </div>
+        <!-- OpenCode Zen vs GO -->
+        <div v-if="isCNApiKeyAccount && account.platform === 'opencode_go'">
+          <label class="input-label">{{ t('admin.accounts.cnProviders.accountMode.title') }}</label>
+          <div class="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <button
+              type="button"
+              @click="editOpenCodeAccountMode = 'zen'"
+              :class="[
+                'flex items-center gap-3 rounded-lg border-2 p-3 text-left transition-all',
+                editOpenCodeAccountMode === 'zen'
+                  ? 'border-amber-500 bg-amber-50 dark:bg-amber-900/20'
+                  : 'border-gray-200 hover:border-gray-400 dark:border-dark-600 dark:hover:border-gray-600'
+              ]"
+            >
+              <div
+                :class="[
+                  'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg',
+                  editOpenCodeAccountMode === 'zen' ? 'bg-amber-500 text-white' : 'bg-gray-100 text-gray-500 dark:bg-dark-600 dark:text-gray-400'
+                ]"
+              >
+                <Icon name="creditCard" size="sm" />
+              </div>
+              <div>
+                <span class="block text-sm font-medium text-gray-900 dark:text-white">{{ t('admin.accounts.opencodeGo.accountMode.zen') }}</span>
+                <span class="text-xs text-gray-500 dark:text-gray-400">{{ t('admin.accounts.opencodeGo.accountMode.zenDesc') }}</span>
+              </div>
+            </button>
+            <button
+              type="button"
+              @click="editOpenCodeAccountMode = 'go'"
+              :class="[
+                'flex items-center gap-3 rounded-lg border-2 p-3 text-left transition-all',
+                editOpenCodeAccountMode === 'go'
+                  ? 'border-amber-500 bg-amber-50 dark:bg-amber-900/20'
+                  : 'border-gray-200 hover:border-gray-400 dark:border-dark-600 dark:hover:border-gray-600'
+              ]"
+            >
+              <div
+                :class="[
+                  'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg',
+                  editOpenCodeAccountMode === 'go' ? 'bg-amber-500 text-white' : 'bg-gray-100 text-gray-500 dark:bg-dark-600 dark:text-gray-400'
+                ]"
+              >
+                <Icon name="bolt" size="sm" />
+              </div>
+              <div>
+                <span class="block text-sm font-medium text-gray-900 dark:text-white">{{ t('admin.accounts.opencodeGo.accountMode.go') }}</span>
+                <span class="text-xs text-gray-500 dark:text-gray-400">{{ t('admin.accounts.opencodeGo.accountMode.goDesc') }}</span>
+              </div>
+            </button>
+          </div>
+        </div>
         <!-- Account Mode Selection (CN providers) -->
-        <div v-if="isCNApiKeyAccount">
+        <div v-if="isCNApiKeyAccount && account.platform !== 'opencode_go'">
           <label class="input-label">{{ t('admin.accounts.cnProviders.accountMode.title') }}</label>
           <div class="mt-2 flex flex-wrap gap-2">
             <button
@@ -138,7 +149,7 @@
           </div>
           <p class="input-hint">{{ t(`admin.accounts.cnProviders.accountMode.${editAccountMode}Desc`) }}</p>
         </div>
-        <!-- API Protocol Selection (CN providers) -->
+        <!-- API Protocol Selection (CN providers / OpenCode) -->
         <div v-if="isCNApiKeyAccount">
           <label class="input-label">{{ t('admin.accounts.cnProviders.apiProtocol.title') }}</label>
           <div class="mt-2 flex flex-wrap gap-2">
@@ -159,6 +170,11 @@
           </div>
           <p class="input-hint">{{ t(`admin.accounts.cnProviders.apiProtocol.${cnProtocolDescKey}Desc`) }}</p>
         </div>
+        <OpenCodeGoProtocolRulesEditor
+          v-if="account.platform === 'opencode_go' && editApiProtocol === 'adaptive'"
+          v-model:rows="editOpenCodeGoProtocolRules"
+          :plan="editOpenCodeAccountMode"
+        />
         <!-- Zhipu 团队版 Coding Plan：组织/项目 ID（可选，填写后用量查询走团队版端点） -->
         <div v-if="account.platform === 'zhipu' && editAccountMode === 'coding'">
           <div class="flex items-center">
@@ -199,13 +215,7 @@
             data-lpignore="true"
             data-bwignore="true"
             :placeholder="
-              account.platform === 'kimi'
-                ? 'sk-...'
-                : account.platform === 'zhipu'
-                  ? '<api-key>.<secret>'
-                  : isLegacyCnApiPlatform(account.platform)
-                    ? 'sk-...'
-                    : account.platform === 'openai'
+              account.platform === 'openai'
                 ? 'sk-proj-...'
                 : account.platform === 'gemini'
                   ? 'AIza...'
@@ -213,22 +223,14 @@
                     ? 'sk-...'
                     : account.platform === 'grok'
                       ? 'xai-...'
-                      : account.platform === 'xiaoapi'
-                        ? 'provider-key...'
                       : 'sk-ant-...'
             "
           />
           <p class="input-hint">{{ t('admin.accounts.leaveEmptyToKeep') }}</p>
         </div>
 
-        <XiaoVideoConfigEditor
-          v-if="account.platform === 'xiaoapi'"
-          v-model:pricing="xiaoVideoPricing"
-          v-model:mappings="modelMappings"
-        />
-
-        <!-- Model Restriction Section (不适用于 Antigravity/XiaoAPI) -->
-        <div v-if="account.platform !== 'antigravity' && account.platform !== 'xiaoapi'" class="border-t border-gray-200 pt-4 dark:border-dark-600">
+        <!-- Model Restriction Section (不适用于 Antigravity) -->
+        <div v-if="account.platform !== 'antigravity'" class="border-t border-gray-200 pt-4 dark:border-dark-600">
           <label class="input-label">{{ t('admin.accounts.modelRestriction') }}</label>
 
           <div
@@ -689,7 +691,7 @@
         </div>
       </div>
 
-      <!-- Header Override Section (anthropic/openai apikey + grok apikey/oauth) -->
+      <!-- Header Override Section (eligible API-key platforms + grok OAuth) -->
       <div v-if="headerOverrideCapable" class="border-t border-gray-200 pt-4 dark:border-dark-600">
         <div class="mb-3 flex items-center justify-between">
           <div>
@@ -1869,8 +1871,8 @@
             <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
               {{ t('admin.accounts.openai.wsModeDesc') }}
             </p>
-            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-              {{ t(openAIWSModeConcurrencyHintKey) }}
+            <p v-if="openAIWSModeHintKey" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              {{ t(openAIWSModeHintKey) }}
             </p>
           </div>
           <div class="w-52">
@@ -1967,37 +1969,7 @@
       </div>
 
       <div
-        v-if="account?.platform === 'openai' && account?.type === 'apikey'"
-        class="flex items-center justify-between gap-4 border-t border-gray-200 pt-4 dark:border-dark-600"
-      >
-        <div>
-          <label class="input-label mb-0">{{ t('admin.accounts.openai.imagesUrlToB64Json') }}</label>
-          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-            {{ t('admin.accounts.openai.imagesUrlToB64JsonDesc') }}
-          </p>
-        </div>
-        <button
-          type="button"
-          data-testid="openai-images-url-to-b64-json-toggle"
-          role="switch"
-          :aria-checked="openAIImagesUrlToB64JsonEnabled"
-          @click="openAIImagesUrlToB64JsonEnabled = !openAIImagesUrlToB64JsonEnabled"
-          :class="[
-            'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2',
-            openAIImagesUrlToB64JsonEnabled ? 'bg-primary-600' : 'bg-gray-200 dark:bg-dark-600'
-          ]"
-        >
-          <span
-            :class="[
-              'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
-              openAIImagesUrlToB64JsonEnabled ? 'translate-x-5' : 'translate-x-0'
-            ]"
-          />
-        </button>
-      </div>
-
-      <div
-        v-if="account?.type === 'apikey' && account.platform !== 'xiaoapi'"
+        v-if="account?.type === 'apikey'"
         class="flex items-center justify-between gap-4 border-t border-gray-200 pt-4 dark:border-dark-600"
       >
         <div>
@@ -2193,7 +2165,7 @@
 
       <!-- OpenAI API 长上下文计费开关 -->
       <div
-        v-if="account?.platform === 'openai' && !isSparkShadow && (account?.type === 'oauth' || account?.type === 'setup-token' || account?.type === 'apikey')"
+        v-if="account?.platform === 'openai' && !isSparkShadow && !hideAccountLongContextBilling && (account?.type === 'oauth' || account?.type === 'setup-token' || account?.type === 'apikey')"
         class="border-t border-gray-200 pt-4 dark:border-dark-600"
       >
         <div class="flex items-center justify-between gap-4">
@@ -3047,7 +3019,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, watch } from 'vue'
+import { ref, reactive, computed, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 
@@ -3077,25 +3049,24 @@ import ProxySelector from '@/components/common/ProxySelector.vue'
 import ProxyAdBanner from '@/components/common/ProxyAdBanner.vue'
 import GroupSelector from '@/components/common/GroupSelector.vue'
 import ModelWhitelistSelector from '@/components/account/ModelWhitelistSelector.vue'
-import XiaoVideoConfigEditor from '@/components/account/XiaoVideoConfigEditor.vue'
-import {
-  normalizeXiaoVideoPricing,
-  readXiaoVideoPricing,
-  validateXiaoVideoPricing,
-  type XiaoVideoPricingRule
-} from '@/components/account/xiaoVideoPricing'
 import QuotaLimitCard from '@/components/account/QuotaLimitCard.vue'
 import GrokBaseUrlPresets from '@/components/account/GrokBaseUrlPresets.vue'
 import CnBaseUrlPresets from '@/components/account/CnBaseUrlPresets.vue'
+import OpenCodeGoProtocolRulesEditor from '@/components/account/OpenCodeGoProtocolRulesEditor.vue'
 import HeaderOverrideEditor from '@/components/account/HeaderOverrideEditor.vue'
 import OllamaCloudUsageSettings from '@/components/account/OllamaCloudUsageSettings.vue'
 import {
   applyAntigravityProjectID,
   applyHeaderOverride,
   applyInterceptWarmup,
+  applyOpenCodeGoProtocolRules,
   applyPlanType,
   buildPlanTypeOptions,
+  cloneOpenCodeGoProtocolRules,
+  defaultOpenCodeProtocolRules,
+  parseOpenCodeGoProtocolRules,
   readPlanType,
+  resolveOpenCodeAccountMode,
   isCustomGrokBaseUrl,
   isHeaderOverrideCapable,
   splitHeaderOverridesObject,
@@ -3110,7 +3081,9 @@ import {
   type CnApiProtocol,
   type CnNativeApiProtocol,
   type CnProviderPlatform,
-  type HeaderOverrideRow
+  type HeaderOverrideRow,
+  type OpenCodeAccountMode,
+  type OpenCodeGoProtocolRule
 } from '@/components/account/credentialsBuilder'
 import {
   formatDateTime,
@@ -3120,6 +3093,7 @@ import {
 } from '@/utils/format'
 import { createStableObjectKeyResolver } from '@/utils/stableObjectKey'
 import { getAccountExpiryTimestamp } from '@/components/account/accountExpiry'
+import { allSelectedGroupsEnableLongContextPricing } from '@/components/account/longContextBilling'
 import { VERTEX_LOCATION_OPTIONS } from '@/constants/account'
 import {
   OPENAI_WS_MODE_CTX_POOL,
@@ -3127,7 +3101,7 @@ import {
   OPENAI_WS_MODE_PASSTHROUGH,
   OPENAI_WS_MODE_HTTP_BRIDGE,
   isOpenAIWSModeEnabled,
-  resolveOpenAIWSModeConcurrencyHintKey,
+  resolveOpenAIWSModeHintKey,
   type OpenAIWSMode,
   resolveOpenAIWSModeFromExtra
 } from '@/utils/openaiWsMode'
@@ -3171,6 +3145,10 @@ const selectableGroups = computed(() => {
 // 故隐藏代理选择器。
 const isSparkShadow = computed(() => props.account?.parent_account_id != null)
 
+const hideAccountLongContextBilling = computed(() => {
+  return allSelectedGroupsEnableLongContextPricing(form.group_ids, props.groups)
+})
+
 const handleOllamaCloudUsageUpdated = (state: OllamaCloudUsageState) => {
   if (props.account) emit('updated', { ...props.account, ollama_cloud_usage: state })
 }
@@ -3180,8 +3158,6 @@ const baseUrlHint = computed(() => {
   if (!props.account) return t('admin.accounts.baseUrlHint')
   if (props.account.platform === 'openai') return t('admin.accounts.openai.baseUrlHint')
   if (props.account.platform === 'gemini') return t('admin.accounts.gemini.baseUrlHint')
-  if (isCNApiKeyAccount.value) return ''
-  if (props.account.platform === 'xiaoapi') return t('admin.accounts.xiaoapi.baseUrlHint')
   if (props.account.platform === 'grok') return ''
   return t('admin.accounts.baseUrlHint')
 })
@@ -3211,7 +3187,9 @@ const editApiKey = ref('')
 // account_mode 决定额度/余额监控路径，api_protocol 决定转发端点与格式；
 // 二者均可修正（早期创建的账号可能存错默认值），切换时重置 base_url 预置。
 const isCNApiKeyAccount = computed(
-  () => props.account?.type === 'apikey' && isCNProviderPlatform(props.account.platform)
+  () =>
+    props.account?.type === 'apikey' &&
+    (isCNProviderPlatform(props.account.platform) || props.account.platform === 'opencode_go')
 )
 // CnBaseUrlPresets 的 platform prop 是平台字面量联合类型，模板里不能写
 // `as` 断言（其中的 `|` 会被 eslint 误判为 Vue2 filter 语法），经此 computed 传递。
@@ -3222,8 +3200,17 @@ const cnPresetPlatform = computed<CnProviderPlatform>(() => {
   }
   return 'kimi'
 })
+const adaptivePresetPlatform = computed<CnProviderPlatform | 'opencode_go'>(() => {
+  if (props.account?.platform === 'opencode_go') return 'opencode_go'
+  return cnPresetPlatform.value
+})
 const editApiProtocol = ref<CnApiProtocol>('adaptive')
+const editOpenCodeGoProtocolRules = ref<OpenCodeGoProtocolRule[]>(cloneOpenCodeGoProtocolRules())
 const editAccountMode = ref<CnAccountMode>('payg')
+const editOpenCodeAccountMode = ref<OpenCodeAccountMode>('go')
+function currentOpenCodeOrCNMode(): CnAccountMode | OpenCodeAccountMode {
+  return props.account?.platform === 'opencode_go' ? editOpenCodeAccountMode.value : editAccountMode.value
+}
 // 智谱团队版 Coding Plan：组织/项目 ID，写入 credentials 供额度探测切换团队端点
 const editZhipuOrganization = ref('')
 const editZhipuProject = ref('')
@@ -3232,75 +3219,112 @@ const editAdaptiveBaseUrls = ref<Record<CnNativeApiProtocol, string>>({
   anthropic: '',
   responses: ''
 })
-const isLegacyCnApiPlatform = (platform: string) =>
-  (platform === 'kimi' || platform === 'zhipu' || platform === 'deepseek') && !cnSupportsNativeResponses(platform)
-const cnAccountModeOptions = computed<Array<{ value: CnAccountMode; labelKey: 'payg' | 'coding' }>>(() =>
-  props.account?.platform === 'deepseek'
-    ? [{ value: 'payg', labelKey: 'payg' }]
-    : [{ value: 'payg', labelKey: 'payg' }, { value: 'coding', labelKey: 'coding' }]
+// 回填窗口标志：syncFormFromAccount 会同步改写 editAccountMode / editApiProtocol，
+// 而 watcher（pre-flush）在同步代码执行完之后才触发——若不抑制，会把刚恢复的
+// 存储版 base_url（可能是用户自定义/中转地址）覆盖为官方预设并在下次保存时持久化。
+// nextTick 后解除，此后用户主动切换模式/协议仍正常联动重置。
+const syncingForm = ref(false)
+const cnAccountModeOptions = computed<Array<{ value: CnAccountMode; labelKey: 'payg' | 'coding' }>>(
+  () => {
+    // DeepSeek 无 coding 套餐（与创建弹窗一致），仅保留按量付费。
+    if (props.account?.platform === 'deepseek') {
+      return [{ value: 'payg', labelKey: 'payg' }]
+    }
+    return [
+      { value: 'payg', labelKey: 'payg' },
+      { value: 'coding', labelKey: 'coding' }
+    ]
+  }
 )
 const cnProtocolOptions = computed<Array<{ value: CnApiProtocol; labelKey: string }>>(() => {
-  const options: Array<{ value: CnApiProtocol; labelKey: string }> = [
+  const opts: Array<{ value: CnApiProtocol; labelKey: string }> = [
     { value: 'adaptive', labelKey: 'adaptive' },
     { value: 'chat_completions', labelKey: 'chatCompletions' },
     { value: 'anthropic', labelKey: 'anthropic' }
   ]
   if (cnSupportsNativeResponses(props.account?.platform ?? '')) {
-    options.push({ value: 'responses', labelKey: 'responses' })
+    opts.push({ value: 'responses', labelKey: 'responses' })
   }
-  return options
+  return opts
 })
 const editAdaptiveProtocolOptions = computed<Array<{ value: CnNativeApiProtocol; labelKey: string }>>(() => {
-  const options: Array<{ value: CnNativeApiProtocol; labelKey: string }> = [
+  const opts: Array<{ value: CnNativeApiProtocol; labelKey: string }> = [
     { value: 'chat_completions', labelKey: 'chatCompletions' },
     { value: 'anthropic', labelKey: 'anthropic' }
   ]
-  if (cnSupportsNativeResponses(props.account?.platform ?? '')) options.push({ value: 'responses', labelKey: 'responses' })
-  return options
+  if (cnSupportsNativeResponses(props.account?.platform ?? '')) opts.push({ value: 'responses', labelKey: 'responses' })
+  return opts
 })
-const cnProtocolDescKey = computed(() => {
-  if (editApiProtocol.value === 'chat_completions') return 'chatCompletions'
-  return editApiProtocol.value
+watch(editApiProtocol, (protocol, previousProtocol) => {
+  if (!isCNApiKeyAccount.value || syncingForm.value) return
+  if (protocol === 'adaptive') {
+    const defaults = defaultCNAdaptiveBaseUrls(adaptivePresetPlatform.value, currentOpenCodeOrCNMode())
+    for (const item of editAdaptiveProtocolOptions.value) {
+      if (!editAdaptiveBaseUrls.value[item.value]) editAdaptiveBaseUrls.value[item.value] = defaults[item.value]
+    }
+    if (previousProtocol !== 'adaptive' && editBaseUrl.value.trim()) {
+      editAdaptiveBaseUrls.value[previousProtocol] = editBaseUrl.value.trim()
+    }
+    editBaseUrl.value = editAdaptiveBaseUrls.value.chat_completions
+    return
+  }
+  if (previousProtocol === 'adaptive') {
+    editBaseUrl.value = editAdaptiveBaseUrls.value[protocol] ||
+      defaultCNBaseUrl(props.account!.platform, currentOpenCodeOrCNMode(), protocol)
+    return
+  }
+  editBaseUrl.value = defaultCNBaseUrl(props.account!.platform, currentOpenCodeOrCNMode(), protocol)
 })
+watch(editAccountMode, (mode, previousMode) => {
+  if (!isCNApiKeyAccount.value || syncingForm.value) return
+  if (props.account?.platform === 'opencode_go') return
+  // deepseek 无 coding 套餐：防御性回退（UI 已隐藏该选项）。
+  const effectiveMode = props.account!.platform === 'deepseek' && mode === 'coding' ? 'payg' : mode
+  if (effectiveMode !== mode) {
+    editAccountMode.value = effectiveMode
+    return
+  }
+  if (editApiProtocol.value === 'adaptive') {
+    const previousDefaults = defaultCNAdaptiveBaseUrls(adaptivePresetPlatform.value, previousMode)
+    const nextDefaults = defaultCNAdaptiveBaseUrls(adaptivePresetPlatform.value, mode)
+    for (const item of editAdaptiveProtocolOptions.value) {
+      if (!editAdaptiveBaseUrls.value[item.value] || editAdaptiveBaseUrls.value[item.value] === previousDefaults[item.value]) {
+        editAdaptiveBaseUrls.value[item.value] = nextDefaults[item.value]
+      }
+    }
+    editBaseUrl.value = editAdaptiveBaseUrls.value.chat_completions
+    return
+  }
+  editBaseUrl.value = defaultCNBaseUrl(props.account!.platform, mode, editApiProtocol.value)
+})
+watch(editOpenCodeAccountMode, (mode, previousMode) => {
+  if (!isCNApiKeyAccount.value || props.account?.platform !== 'opencode_go' || syncingForm.value) return
+  if (editApiProtocol.value === 'adaptive') {
+    const previousDefaults = defaultCNAdaptiveBaseUrls('opencode_go', previousMode)
+    const nextDefaults = defaultCNAdaptiveBaseUrls('opencode_go', mode)
+    for (const item of editAdaptiveProtocolOptions.value) {
+      if (!editAdaptiveBaseUrls.value[item.value] || editAdaptiveBaseUrls.value[item.value] === previousDefaults[item.value]) {
+        editAdaptiveBaseUrls.value[item.value] = nextDefaults[item.value]
+      }
+    }
+    editBaseUrl.value = editAdaptiveBaseUrls.value.chat_completions
+  } else {
+    editBaseUrl.value = defaultCNBaseUrl('opencode_go', mode, editApiProtocol.value)
+  }
+  const previousRules = JSON.stringify(defaultOpenCodeProtocolRules(previousMode))
+  if (JSON.stringify(editOpenCodeGoProtocolRules.value) === previousRules) {
+    editOpenCodeGoProtocolRules.value = cloneOpenCodeGoProtocolRules(defaultOpenCodeProtocolRules(mode))
+  }
+})
+const cnProtocolDescKey = computed(
+  () => cnProtocolOptions.value.find(o => o.value === editApiProtocol.value)?.labelKey ?? 'chatCompletions'
+)
+// 点击预设端点：回填 base url 与对应模式/协议。
 function onCnPresetSelect(preset: { mode: CnAccountMode; protocol: CnApiProtocol; url: string }) {
   editAccountMode.value = preset.mode
   editApiProtocol.value = preset.protocol
   editBaseUrl.value = preset.url
 }
-watch(editApiProtocol, (protocol, previousProtocol) => {
-  if (!isCNApiKeyAccount.value) return
-  if (protocol === 'adaptive') {
-    // Preserve a custom single-protocol relay when entering adaptive mode.
-    // The initial account sync also changes this ref asynchronously, so the
-    // current base URL may already contain a value loaded from credentials.
-    if (previousProtocol && previousProtocol !== 'adaptive' && editBaseUrl.value.trim()) {
-      const previousKey = previousProtocol as CnNativeApiProtocol
-      if (editAdaptiveProtocolOptions.value.some((item) => item.value === previousKey)) {
-        editAdaptiveBaseUrls.value[previousKey] = editBaseUrl.value.trim()
-      }
-    }
-    const defaults = defaultCNAdaptiveBaseUrls(cnPresetPlatform.value, editAccountMode.value)
-    for (const item of editAdaptiveProtocolOptions.value) {
-      if (!editAdaptiveBaseUrls.value[item.value]) editAdaptiveBaseUrls.value[item.value] = defaults[item.value]
-    }
-    editBaseUrl.value = editAdaptiveBaseUrls.value.chat_completions
-  } else {
-    // Keep a loaded/custom relay instead of replacing it with the provider
-    // preset during the initial protocol watcher flush.
-    if (!editBaseUrl.value.trim()) {
-      editBaseUrl.value = defaultCNBaseUrl(cnPresetPlatform.value, editAccountMode.value, protocol)
-    }
-  }
-})
-watch(editAccountMode, (mode) => {
-  if (!isCNApiKeyAccount.value) return
-  const defaults = defaultCNAdaptiveBaseUrls(cnPresetPlatform.value, mode)
-  for (const item of editAdaptiveProtocolOptions.value) {
-    if (!editAdaptiveBaseUrls.value[item.value]) editAdaptiveBaseUrls.value[item.value] = defaults[item.value]
-  }
-  if (editApiProtocol.value === 'adaptive') editBaseUrl.value = editAdaptiveBaseUrls.value.chat_completions
-  else editBaseUrl.value = defaultCNBaseUrl(cnPresetPlatform.value, mode, editApiProtocol.value)
-})
 // Bedrock credentials
 const editBedrockAccessKeyId = ref('')
 const editBedrockSecretAccessKey = ref('')
@@ -3316,13 +3340,12 @@ const isBedrockAPIKeyMode = computed(() =>
   (props.account?.credentials as Record<string, unknown>)?.auth_mode === 'apikey'
 )
 const modelMappings = ref<ModelMapping[]>([])
-const xiaoVideoPricing = ref<XiaoVideoPricingRule[]>([])
 const openAICompactModelMappings = ref<ModelMapping[]>([])
 const modelRestrictionMode = ref<'whitelist' | 'mapping'>('whitelist')
 const allowedModels = ref<string[]>([])
 const DEFAULT_POOL_MODE_RETRY_COUNT = 3
 const MAX_POOL_MODE_RETRY_COUNT = 10
-const DEFAULT_POOL_MODE_RETRY_STATUS_CODES = [401, 403, 429, 502, 503, 504]
+const DEFAULT_POOL_MODE_RETRY_STATUS_CODES = [401, 403, 429]
 const GROK_CLIENT_TOOL_CACHE_EXTRA_KEY = 'grok_client_tool_cache_enabled'
 const poolModeEnabled = ref(false)
 const poolModeRetryCount = ref(DEFAULT_POOL_MODE_RETRY_COUNT)
@@ -3492,7 +3515,8 @@ const openaiPassthroughEnabled = ref(false)
 // OpenAI Codex namespace 工具摊平兼容开关（仅 OAuth），缺省关闭即原样保留
 const openaiFlattenNamespacesEnabled = ref(false)
 const openAILongContextBillingEnabled = ref(false)
-// OpenAI 订阅档位（Plus/Pro/Free）手动覆盖值,存于 credentials.plan_type;'' 表示清空/自动识别
+// OpenAI 订阅档位（Plus / Pro 20x / Pro 5x / Business Standard / Business Premium / Free）手动覆盖值,
+// 存于 credentials.plan_type;'' 表示清空/自动识别
 const editPlanType = ref<string>('')
 const openAICompactMode = ref<OpenAICompactMode>('auto')
 const openAIResponsesMode = ref<OpenAIResponsesMode>('auto')
@@ -3504,7 +3528,7 @@ const openaiAPIKeyResponsesWebSocketV2Mode = ref<OpenAIWSMode>(OPENAI_WS_MODE_OF
 const codexCLIOnlyEnabled = ref(false)
 const codexCLIOnlyAppServerEnabled = ref(false)
 type CodexFingerprintMode = 'off' | 'device' | 'session' | 'full'
-const codexFingerprintMode = ref<CodexFingerprintMode>('session')
+const codexFingerprintMode = ref<CodexFingerprintMode>('off')
 type CodexImageToolMode = 'inherit' | 'enabled' | 'disabled' | 'block'
 const codexImageToolMode = ref<CodexImageToolMode>('inherit')
 type AnthropicAPIKeyAuthScheme = 'x_api_key' | 'authorization_bearer'
@@ -3564,8 +3588,8 @@ const openaiResponsesWebSocketV2Mode = computed({
     openaiOAuthResponsesWebSocketV2Mode.value = mode
   }
 })
-const openAIWSModeConcurrencyHintKey = computed(() =>
-  resolveOpenAIWSModeConcurrencyHintKey(openaiResponsesWebSocketV2Mode.value)
+const openAIWSModeHintKey = computed(() =>
+  resolveOpenAIWSModeHintKey(openaiResponsesWebSocketV2Mode.value)
 )
 const codexImageToolOptions = computed<Array<{
   value: CodexImageToolMode
@@ -3665,12 +3689,10 @@ const openAITextGenerationCapabilityEnabled = computed(() =>
   openAIEndpointCapabilities.value.includes('chat_completions')
 )
 
-const normalizeOpenAIEndpointCapabilities = (
-  values: OpenAIEndpointCapability[]
-): OpenAIEndpointCapability[] => {
+const normalizeOpenAIEndpointCapabilities = (values: OpenAIEndpointCapability[]) => {
   const allowed: OpenAIEndpointCapability[] = ['chat_completions', 'embeddings']
   const selected = allowed.filter((value) => values.includes(value))
-  return selected.length > 0 ? selected : ['chat_completions', 'embeddings']
+  return selected.length > 0 ? selected : allowed
 }
 
 const readOpenAIEndpointCapabilities = (credentials?: Record<string, unknown>): OpenAIEndpointCapability[] => {
@@ -3716,7 +3738,6 @@ const toggleOpenAIEndpointCapability = (capability: OpenAIEndpointCapability, ev
 
 const applyOpenAIEndpointCapabilities = (credentials: Record<string, unknown>) => {
   const capabilities = normalizeOpenAIEndpointCapabilities(openAIEndpointCapabilities.value)
-  delete credentials.video_preauthorization_amount
   if (capabilities.length === 2) {
     delete credentials.openai_capabilities
     return
@@ -3796,11 +3817,19 @@ const tempUnschedPresets = computed(() => [
 
 // Computed: default base URL based on platform
 const defaultBaseUrl = computed(() => {
-  if (isCNApiKeyAccount.value) return defaultCNBaseUrl(cnPresetPlatform.value, editAccountMode.value, editApiProtocol.value)
   if (props.account?.platform === 'openai') return 'https://api.openai.com'
   if (props.account?.platform === 'gemini') return 'https://generativelanguage.googleapis.com'
   if (props.account?.platform === 'grok') return 'https://api.x.ai/v1'
-  if (props.account?.platform === 'xiaoapi') return ''
+  // CN 供应商：按当前模式/协议回落到官方预设（清空输入框提交时使用），
+  // 不能落到 anthropic 默认值（会被当 CC base 拼出错误端点）。
+  if (
+    props.account?.platform === 'kimi' ||
+    props.account?.platform === 'zhipu' ||
+    props.account?.platform === 'deepseek' ||
+    props.account?.platform === 'opencode_go'
+  ) {
+    return defaultCNBaseUrl(props.account.platform, currentOpenCodeOrCNMode(), editApiProtocol.value)
+  }
   return 'https://api.anthropic.com'
 })
 
@@ -3882,11 +3911,7 @@ const loadModelRestrictionFromMapping = (rawMapping?: Record<string, unknown>) =
 }
 
 const buildModelRestrictionMapping = () =>
-  buildModelMappingObject(
-    props.account?.platform === 'xiaoapi' ? 'mapping' : 'combined',
-    allowedModels.value,
-    modelMappings.value
-  )
+  buildModelMappingObject('combined', allowedModels.value, modelMappings.value)
 
 const applyOpenAIModelMappingCredentials = (credentials: Record<string, unknown>) => {
   const shouldApplyModelMapping = !openaiPassthroughEnabled.value
@@ -3914,6 +3939,11 @@ const syncFormFromAccount = (newAccount: Account | null) => {
   if (!newAccount) {
     return
   }
+  // 进入回填窗口：抑制 CN 模式/协议 watcher 联动重置 base_url（见 syncingForm 注释）。
+  syncingForm.value = true
+  void nextTick(() => {
+    syncingForm.value = false
+  })
   antigravityMixedChannelConfirmed.value = false
   showMixedChannelWarning.value = false
   mixedChannelWarningDetails.value = null
@@ -3975,15 +4005,12 @@ const syncFormFromAccount = (newAccount: Account | null) => {
   openAICompactMode.value = 'auto'
   openAIResponsesMode.value = 'auto'
   openAIEndpointCapabilities.value = ['chat_completions', 'embeddings']
-  xiaoVideoPricing.value = readXiaoVideoPricing(
-    (newAccount.credentials as Record<string, unknown> | undefined)?.video_pricing
-  )
   openAICompactModelMappings.value = []
   openaiOAuthResponsesWebSocketV2Mode.value = OPENAI_WS_MODE_OFF
   openaiAPIKeyResponsesWebSocketV2Mode.value = OPENAI_WS_MODE_OFF
   codexCLIOnlyEnabled.value = false
   codexCLIOnlyAppServerEnabled.value = false
-  codexFingerprintMode.value = 'session'
+  codexFingerprintMode.value = 'off'
   codexImageToolMode.value = 'inherit'
   anthropicPassthroughEnabled.value = false
   anthropicAPIKeyAuthScheme.value = 'x_api_key'
@@ -4037,9 +4064,10 @@ const syncFormFromAccount = (newAccount: Account | null) => {
     }
     if (newAccount.type === 'oauth') {
       const fpMode = extra?.codex_fingerprint_mode as string | undefined
+      // 缺省/非法值按 off 呈现，与后端 GetCodexFingerprintMode 的 opt-in 语义一致（#5610）
       codexFingerprintMode.value = (['off', 'device', 'session', 'full'].includes(fpMode || '')
         ? fpMode as CodexFingerprintMode
-        : 'session')
+        : 'off')
     }
     const credentials = newAccount.credentials as Record<string, unknown> | undefined
     const compactMappings = credentials?.compact_model_mapping as Record<string, string> | undefined
@@ -4131,7 +4159,7 @@ const syncFormFromAccount = (newAccount: Account | null) => {
   loadTempUnschedRules(credentials)
   loadAccountSchedulingThresholdOverride(newAccount.platform, credentials)
 
-  // Load header override state (anthropic/openai apikey + grok apikey/oauth)
+  // Load header override state for eligible account platforms/types
   headerOverrideEnabled.value = false
   headerOverrideRows.value = []
   if (newAccount.credentials && isHeaderOverrideCapable(newAccount.platform, newAccount.type)) {
@@ -4175,8 +4203,12 @@ const syncFormFromAccount = (newAccount: Account | null) => {
     const credentials = newAccount.credentials as Record<string, unknown>
     // 国产供应商：读取 account_mode 与 api_protocol 作为可编辑初始值
     // （编辑弹窗允许修正两者，用于修复早期存错默认值的账号）。
-    if (isCNProviderPlatform(newAccount.platform)) {
-      editAccountMode.value = credentials.account_mode === 'coding' ? 'coding' : 'payg'
+    if (isCNProviderPlatform(newAccount.platform) || newAccount.platform === 'opencode_go') {
+      if (newAccount.platform === 'opencode_go') {
+        editOpenCodeAccountMode.value = resolveOpenCodeAccountMode(credentials.account_mode)
+      } else {
+        editAccountMode.value = credentials.account_mode === 'coding' ? 'coding' : 'payg'
+      }
       const storedProtocol = credentials.api_protocol
       editApiProtocol.value =
         storedProtocol === 'adaptive' ||
@@ -4188,24 +4220,46 @@ const syncFormFromAccount = (newAccount: Account | null) => {
       if (!cnSupportsNativeResponses(newAccount.platform) && editApiProtocol.value === 'responses') {
         editApiProtocol.value = 'chat_completions'
       }
+      const adaptiveDefaults = defaultCNAdaptiveBaseUrls(newAccount.platform, currentOpenCodeOrCNMode())
       const storedBaseUrls = (credentials.api_base_urls as Record<string, unknown> | undefined) || {}
-      const defaults = defaultCNAdaptiveBaseUrls(newAccount.platform, editAccountMode.value)
       const legacyBaseUrl = typeof credentials.base_url === 'string' ? credentials.base_url.trim() : ''
-      const legacyAdaptiveChatUrl = editApiProtocol.value === 'adaptive' ? legacyBaseUrl : ''
-      editAdaptiveBaseUrls.value = {
-        chat_completions: typeof storedBaseUrls.chat_completions === 'string' && storedBaseUrls.chat_completions.trim()
-          ? storedBaseUrls.chat_completions.trim()
-          : legacyAdaptiveChatUrl || defaults.chat_completions,
-        anthropic: typeof storedBaseUrls.anthropic === 'string' && storedBaseUrls.anthropic.trim() ? storedBaseUrls.anthropic.trim() : defaults.anthropic,
-        responses: typeof storedBaseUrls.responses === 'string' && storedBaseUrls.responses.trim() ? storedBaseUrls.responses.trim() : defaults.responses
+      const storedChatBaseUrl = typeof storedBaseUrls.chat_completions === 'string'
+        ? storedBaseUrls.chat_completions.trim()
+        : ''
+      const storedAnthropicBaseUrl = typeof storedBaseUrls.anthropic === 'string'
+        ? storedBaseUrls.anthropic.trim()
+        : ''
+      const storedResponsesBaseUrl = typeof storedBaseUrls.responses === 'string'
+        ? storedBaseUrls.responses.trim()
+        : ''
+      const nextAdaptiveBaseUrls: Record<CnNativeApiProtocol, string> = {
+        chat_completions: storedChatBaseUrl || adaptiveDefaults.chat_completions,
+        anthropic: storedAnthropicBaseUrl || adaptiveDefaults.anthropic,
+        responses: storedResponsesBaseUrl || adaptiveDefaults.responses
       }
-      editBaseUrl.value = editApiProtocol.value === 'adaptive'
-        ? editAdaptiveBaseUrls.value.chat_completions
-        : (credentials.base_url as string) || defaultCNBaseUrl(newAccount.platform, editAccountMode.value, editApiProtocol.value)
+      const legacyProtocol: CnNativeApiProtocol = editApiProtocol.value === 'anthropic'
+        ? 'anthropic'
+        : editApiProtocol.value === 'responses'
+          ? 'responses'
+          : 'chat_completions'
+      const storedLegacyBaseUrl = legacyProtocol === 'anthropic'
+        ? storedAnthropicBaseUrl
+        : legacyProtocol === 'responses'
+          ? storedResponsesBaseUrl
+          : storedChatBaseUrl
+      if (legacyBaseUrl && !storedLegacyBaseUrl) {
+        nextAdaptiveBaseUrls[legacyProtocol] = legacyBaseUrl
+      }
+      editAdaptiveBaseUrls.value = nextAdaptiveBaseUrls
       // 智谱团队版 Coding Plan：回填组织/项目 ID
       if (newAccount.platform === 'zhipu') {
         editZhipuOrganization.value = typeof credentials.zhipu_organization === 'string' ? credentials.zhipu_organization : ''
         editZhipuProject.value = typeof credentials.zhipu_project === 'string' ? credentials.zhipu_project : ''
+      }
+      if (newAccount.platform === 'opencode_go') {
+        editOpenCodeGoProtocolRules.value =
+          parseOpenCodeGoProtocolRules(credentials.protocol_rules) ??
+          cloneOpenCodeGoProtocolRules(defaultOpenCodeProtocolRules(editOpenCodeAccountMode.value))
       }
     }
     const platformDefaultUrl =
@@ -4215,8 +4269,15 @@ const syncFormFromAccount = (newAccount: Account | null) => {
           ? 'https://generativelanguage.googleapis.com'
           : newAccount.platform === 'grok'
             ? 'https://api.x.ai/v1'
-            : 'https://api.anthropic.com'
-    if (!isCNApiKeyAccount.value) editBaseUrl.value = (credentials.base_url as string) || platformDefaultUrl
+            : newAccount.platform === 'kimi' ||
+                newAccount.platform === 'zhipu' ||
+                newAccount.platform === 'deepseek' ||
+                newAccount.platform === 'opencode_go'
+              ? defaultCNBaseUrl(newAccount.platform, currentOpenCodeOrCNMode(), editApiProtocol.value)
+              : 'https://api.anthropic.com'
+    editBaseUrl.value = isCNApiKeyAccount.value && editApiProtocol.value === 'adaptive'
+      ? editAdaptiveBaseUrls.value.chat_completions
+      : (credentials.base_url as string) || platformDefaultUrl
 
     // Load model mappings and detect mode
     loadModelRestrictionFromMapping(credentials.model_mapping as Record<string, unknown> | undefined)
@@ -4908,23 +4969,8 @@ const handleSubmit = async () => {
 		}
 	}
 
-  if (props.account.platform === 'xiaoapi') {
-    if (!editBaseUrl.value.trim()) {
-      appStore.showError(t('admin.accounts.xiaoapi.baseUrlRequired'))
-      return
-    }
-    const pricingError = validateXiaoVideoPricing(xiaoVideoPricing.value)
-    if (pricingError) {
-      appStore.showError(t(`admin.accounts.xiaoapi.validation.${pricingError}`))
-      return
-    }
-  }
-
   const updatePayload: Record<string, unknown> = { ...form }
   try {
-    // Keep the payload stable even when an account was loaded from a stale
-    // duplicated group snapshot or multiple checkbox events arrive together.
-    updatePayload.group_ids = Array.from(new Set(form.group_ids))
     // 后端期望 proxy_id: 0 表示清除代理，而不是 null
     if (updatePayload.proxy_id === null) {
       updatePayload.proxy_id = 0
@@ -4939,8 +4985,8 @@ const handleSubmit = async () => {
     }
     updatePayload.auto_pause_on_expired = autoPauseOnExpired.value
     if (props.account.type === 'apikey') {
-      updatePayload.upstream_billing_probe_enabled = props.account.platform === 'xiaoapi' ? false : upstreamBillingAutoProbeEnabled.value
-      updatePayload.upstream_billing_rate_sync_enabled = props.account.platform === 'xiaoapi' ? false : upstreamBillingRateSyncEnabled.value
+      updatePayload.upstream_billing_probe_enabled = upstreamBillingAutoProbeEnabled.value
+      updatePayload.upstream_billing_rate_sync_enabled = upstreamBillingRateSyncEnabled.value
       if (upstreamBillingRateSyncEnabled.value) {
         delete updatePayload.rate_multiplier
       }
@@ -4957,20 +5003,24 @@ const handleSubmit = async () => {
         ...currentCredentials,
         base_url: newBaseUrl
       }
+
+      // 国产供应商：模式与协议写入凭据（决定额度/余额探测与转发端点/格式）。
       if (isCNApiKeyAccount.value) {
-        newCredentials.account_mode = editAccountMode.value
+        newCredentials.account_mode = currentOpenCodeOrCNMode()
         newCredentials.api_protocol = editApiProtocol.value
         if (editApiProtocol.value === 'adaptive') {
-          const defaults = defaultCNAdaptiveBaseUrls(cnPresetPlatform.value, editAccountMode.value)
-          newCredentials.api_base_urls = Object.fromEntries(
-            editAdaptiveProtocolOptions.value.map(item => [
-              item.value,
-              editAdaptiveBaseUrls.value[item.value].trim() || defaults[item.value]
-            ])
-          )
-          newCredentials.base_url = (newCredentials.api_base_urls as Record<string, string>).chat_completions
+          const defaults = defaultCNAdaptiveBaseUrls(adaptivePresetPlatform.value, currentOpenCodeOrCNMode())
+          const protocolBaseUrls: Record<string, string> = {}
+          for (const item of editAdaptiveProtocolOptions.value) {
+            protocolBaseUrls[item.value] = (editAdaptiveBaseUrls.value[item.value] || defaults[item.value]).trim()
+          }
+          newCredentials.api_base_urls = protocolBaseUrls
+          newCredentials.base_url = protocolBaseUrls.chat_completions
         } else {
           delete newCredentials.api_base_urls
+        }
+        if (props.account.platform === 'opencode_go') {
+          applyOpenCodeGoProtocolRules(newCredentials, editOpenCodeGoProtocolRules.value, 'edit')
         }
         // 智谱团队版 Coding Plan：组织/项目 ID 写入凭据（非空才写，清空即移除回落个人版路径）
         if (props.account.platform === 'zhipu') {
@@ -5021,9 +5071,6 @@ const handleSubmit = async () => {
           delete newCredentials.compact_model_mapping
         }
       }
-      if (props.account.platform === 'xiaoapi') {
-        newCredentials.video_pricing = normalizeXiaoVideoPricing(xiaoVideoPricing.value)
-      }
 
       // Add pool mode if enabled
       if (poolModeEnabled.value) {
@@ -5050,7 +5097,7 @@ const handleSubmit = async () => {
         delete newCredentials.custom_error_codes
       }
 
-      // Add header override if enabled (anthropic/openai/grok apikey)
+      // Add header override if enabled for this API-key platform
       if (isHeaderOverrideCapable(props.account.platform, 'apikey')) {
         if (headerOverrideEnabled.value) {
           const headerError = validateHeaderOverrideRows(headerOverrideRows.value)
@@ -5274,7 +5321,8 @@ const handleSubmit = async () => {
       updatePayload.extra = newExtra
     }
 
-    // OpenAI: 手动覆盖订阅档位 plan_type（Plus/Pro/Free）。仅 OAuth 非影子账号：
+    // OpenAI: 手动覆盖订阅档位 plan_type（Plus / Pro 20x / Pro 5x / Business Standard / Business Premium / Free）。
+    // 仅 OAuth 非影子账号：
     // 影子账号凭据由母账号管理(且后端会 sanitize),setup-token 无订阅调度语义。
     if (props.account.platform === 'openai' && props.account.type === 'oauth' && !isSparkShadow.value) {
       const currentCredentials = (updatePayload.credentials as Record<string, unknown>) ||
@@ -5548,9 +5596,10 @@ const handleSubmit = async () => {
         }
       }
 
-      // 指纹收敛模式：默认 session，不写入；非默认值显式写入（包括 off）
+      // 指纹收敛模式：默认 off（不写入）；device/session/full 是显式 opt-in，
+      // 必须落键，否则管理员的选择会被后端当作"未设置"而回落到 off（#5610）。
       if (props.account.type === 'oauth') {
-        if (codexFingerprintMode.value !== 'session') {
+        if (codexFingerprintMode.value !== 'off') {
           newExtra.codex_fingerprint_mode = codexFingerprintMode.value
         } else {
           delete newExtra.codex_fingerprint_mode
@@ -5637,13 +5686,11 @@ const handleSubmit = async () => {
       await submitUpdateAccount(accountID, updatePayload)
     })
     if (!canContinue) {
-      submitting.value = false
       return
     }
 
     await submitUpdateAccount(accountID, updatePayload)
   } catch (error: any) {
-    submitting.value = false
     appStore.showError(error.message || t('admin.accounts.failedToUpdate'))
   }
 }

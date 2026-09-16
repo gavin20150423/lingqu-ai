@@ -22,48 +22,6 @@ export interface FetchOptions {
   signal?: AbortSignal
 }
 
-export type ReceiptCodePaymentMethod = 'alipay' | 'wechat'
-
-export interface ReceiptCode {
-  id: number
-  user_id: number
-  payment_method: ReceiptCodePaymentMethod
-  storage_provider: string
-  url?: string | null
-  content_type: string
-  byte_size: number
-  sha256: string
-  created_at: string
-  updated_at: string
-}
-
-export type WithdrawalStatus = 'PENDING' | 'SETTLED' | 'CANCELLED' | 'REJECTED'
-
-export interface WithdrawalRequest {
-  id: number
-  user_id: number
-  user_email: string
-  amount: number
-  fee_amount: number
-  total_deducted: number
-  balance_before: number
-  balance_after: number
-  payment_method: ReceiptCodePaymentMethod
-  receipt_code_url?: string | null
-  receipt_code_content_type: string
-  receipt_code_byte_size: number
-  receipt_code_sha256: string
-  receipt_code_updated_at: string
-  status: WithdrawalStatus
-  user_cancel_reason?: string | null
-  admin_note?: string | null
-  rejection_reason?: string | null
-  processed_by_user_id?: number | null
-  processed_at?: string | null
-  created_at: string
-  updated_at: string
-}
-
 // ==================== Notification Types ====================
 
 /** Notification email entry with enable/disable and verification state.
@@ -129,10 +87,6 @@ export interface User {
   role: 'admin' | 'user' // User role for authorization
   balance: number // User balance for API usage
   frozen_balance?: number // Balance currently held by async batch jobs
-  points_balance?: number // Points available for store purchases
-  load_factor_credits_balance?: number // Load-factor credits available for billing
-  load_factor_credits_used_total?: number // Total consumed load-factor credits
-  prefer_points_billing?: boolean // Whether model calls should use points before balance
   concurrency: number // Allowed concurrent requests
   rpm_limit?: number // User-level RPM cap (0 = unlimited); effective as fallback when group has no rpm_limit
   status: 'active' | 'disabled' // Account status
@@ -207,7 +161,6 @@ export interface UserAffiliateDetail {
   aff_quota: number
   aff_frozen_quota: number
   aff_history_quota: number
-  transfer_disabled: boolean
   /** 当前用户作为邀请人时实际生效的返利比例（专属覆盖全局）。0-100。 */
   effective_rebate_rate_percent: number
   invitees: AffiliateInvitee[]
@@ -238,6 +191,7 @@ export interface CustomMenuItem {
   icon_svg: string
   url: string
   page_slug?: string
+  hide_open_button?: boolean
   visibility: 'user' | 'admin'
   sort_order: number
 }
@@ -248,31 +202,16 @@ export interface CustomEndpoint {
   description: string
 }
 
-export interface UserMenuConfig {
-  visibility: Record<string, boolean>
-  order: string[]
-}
-
 export interface LoginAgreementDocument {
   id: string
   title: string
   content_md: string
 }
 
-export interface OpenAIAccountLevelConfig {
-  key: string
-  label: string
-  aliases?: string[]
-  enabled: boolean
-  requires_proxy_login: boolean
-  sort_order: number
-}
-
 export interface PublicSettings {
   registration_enabled: boolean
   email_verify_enabled: boolean
   force_email_on_third_party_signup: boolean
-  registration_email_alias_restriction_enabled: boolean
   registration_email_suffix_whitelist: string[]
   registration_email_domain_quota_enabled?: boolean
   promo_code_enabled: boolean
@@ -308,7 +247,6 @@ export interface PublicSettings {
   table_page_size_options: number[]
   custom_menu_items: CustomMenuItem[]
   custom_endpoints: CustomEndpoint[]
-  user_menu_config: UserMenuConfig
   linuxdo_oauth_enabled: boolean
   dingtalk_oauth_enabled?: boolean
   wechat_oauth_enabled: boolean
@@ -328,22 +266,21 @@ export interface PublicSettings {
   balance_low_notify_enabled: boolean
   account_quota_notify_enabled: boolean
   balance_low_notify_threshold: number
-  withdrawal_management_enabled?: boolean
-  withdrawal_rate_limit_window_days?: number
-  withdrawal_rate_limit_max?: number
-  withdrawal_rate_limit_exempt_amount?: number
   channel_monitor_enabled: boolean
   /** Exclusive mode: v1 active probes or v2 passive aggregation. Default v2. */
   channel_monitor_mode?: 'v1' | 'v2'
   channel_monitor_default_interval_seconds: number
   /** When true, user monitor hides RPM/TPM so scale cannot be reverse-estimated. */
   channel_monitor_hide_throughput?: boolean
+  /** When true, user monitor shows account quota/balance snapshots (default off). */
   channel_monitor_show_quota?: boolean
   /** When true, user monitor hides the user ranking tab and /users payload. */
   channel_monitor_hide_user_ranking?: boolean
   available_channels_enabled: boolean
-  user_account_import_limit?: number
-  openai_account_levels?: OpenAIAccountLevelConfig[]
+  /** When false, the whole user-facing subscription surface is hidden. Default true. */
+  subscription_enabled: boolean
+  /** Mirrors payment config BALANCE_PAYMENT_DISABLED; true = balance top-up closed (subscription-only site). */
+  payment_balance_disabled: boolean
   model_plaza_enabled: boolean
   model_plaza_require_auth: boolean
   plugin_management_enabled: boolean
@@ -601,7 +538,7 @@ export interface PaginationConfig {
 
 // ==================== API Key & Group Types ====================
 
-export type GroupPlatform = 'anthropic' | 'openai' | 'gemini' | 'antigravity' | 'grok' | 'kimi' | 'zhipu' | 'deepseek' | 'minimax' | 'xiaoapi' | 'composite'
+export type GroupPlatform = 'anthropic' | 'openai' | 'gemini' | 'antigravity' | 'grok' | 'kimi' | 'zhipu' | 'deepseek' | 'minimax' | 'opencode_go' | 'composite'
 
 export type VideoModelPrices = Record<string, Record<string, number>>
 
@@ -629,8 +566,6 @@ export interface Group {
   description: string | null
   platform: GroupPlatform
   rate_multiplier: number
-  auto_assign_accounts_by_rate: boolean
-  auto_assign_max_rate: number | null
   rpm_limit?: number // Group-level RPM cap (0 = unlimited); overrides user-level rpm_limit when set
   max_reasoning_effort?: string // Anthropic/OpenAI reasoning ceiling; empty means unlimited
   max_reasoning_effort_over_limit?: string // downgrade (default) or deny when over the ceiling
@@ -856,8 +791,6 @@ export interface CreateGroupRequest {
   description?: string | null
   platform?: GroupPlatform
   rate_multiplier?: number
-  auto_assign_accounts_by_rate?: boolean
-  auto_assign_max_rate?: number | null
   is_exclusive?: boolean
   subscription_type?: SubscriptionType
   daily_limit_usd?: number | null
@@ -923,8 +856,6 @@ export interface UpdateGroupRequest {
   description?: string | null
   platform?: GroupPlatform
   rate_multiplier?: number
-  auto_assign_accounts_by_rate?: boolean
-  auto_assign_max_rate?: number | null
   is_exclusive?: boolean
   status?: 'active' | 'inactive'
   subscription_type?: SubscriptionType
@@ -987,12 +918,8 @@ export interface UpdateGroupRequest {
 
 // ==================== Account & Proxy Types ====================
 
-export type AccountPlatform = 'anthropic' | 'openai' | 'gemini' | 'antigravity' | 'grok' | 'kimi' | 'zhipu' | 'deepseek' | 'minimax' | 'xiaoapi'
+export type AccountPlatform = 'anthropic' | 'openai' | 'gemini' | 'antigravity' | 'grok' | 'kimi' | 'zhipu' | 'deepseek' | 'minimax' | 'opencode_go'
 export type AccountType = 'oauth' | 'setup-token' | 'apikey' | 'upstream' | 'bedrock' | 'service_account'
-export type AccountLevel = 'unknown' | (string & {})
-export type AccountShareMode = 'private' | 'public'
-export type AccountShareStatus = 'pending' | 'approved' | 'suspended'
-export type AccountStatus = 'active' | 'inactive' | 'disabled' | 'error'
 export type OAuthAddMethod = 'oauth' | 'setup-token'
 export type ProxyProtocol = 'http' | 'https' | 'socks5' | 'socks5h'
 
@@ -1012,9 +939,7 @@ export interface Proxy {
   port: number
   username: string | null
   password?: string | null
-  owner_user_id?: number | null
   status: 'active' | 'inactive' | 'expired'
-  max_accounts: number
   account_count?: number // Number of accounts using this proxy
   latency_ms?: number
   latency_status?: 'success' | 'failed'
@@ -1235,7 +1160,6 @@ export interface Account {
   name: string
   notes?: string | null
   platform: AccountPlatform
-  account_level: AccountLevel
   type: AccountType
   // 后端响应里 credentials 已脱敏：access_token / refresh_token / id_token /
   // api_key / session_key / cookie / aws_secret_access_key / aws_session_token /
@@ -1268,11 +1192,6 @@ export interface Account {
     }
   } & Record<string, unknown>)
   proxy_id: number | null
-  owner_user_id?: number | null
-  share_mode?: AccountShareMode | string
-  share_status?: AccountShareStatus | string
-  share_policy_id?: number | null
-  account_share_mode_listing_id?: number | null
   proxy_fallback_origin_id?: number | null
   proxy_fallback_origin_name?: string | null
   concurrency: number
@@ -1287,9 +1206,8 @@ export interface Account {
   scheduler_scores?: AccountSchedulerGroupScore[] | null
   priority: number
   rate_multiplier?: number // Account billing multiplier (>=0, 0 means free)
-  status: AccountStatus
+  status: 'active' | 'inactive' | 'error'
   error_message: string | null
-  error_since?: string | null
   last_used_at: string | null
   expires_at: number | null
   auto_pause_on_expired: boolean
@@ -1388,63 +1306,6 @@ export interface AccountSchedulerGroupScore {
   sticky_score?: number
   sticky_score_infinity?: boolean
   sticky_weighted_enabled: boolean
-}
-
-export interface AccountQuotaDimensionSummary {
-  enabled_account_count: number
-  exhausted_account_count: number
-  limit: number
-  used: number
-  remaining: number
-  utilization: number
-}
-
-export interface AccountUsageWindowSummary {
-  window: string
-  account_count: number
-  known_account_count: number
-  average_utilization: number
-  remaining_capacity_percent: number
-  estimated_support_hours?: number | null
-  min_remaining_seconds?: number | null
-  next_reset_at?: string | null
-}
-
-export interface AccountQuotaSummary {
-  platform: AccountPlatform | 'all' | string
-  type: AccountType | 'all' | string
-  account_count: number
-  active_account_count: number
-  schedulable_account_count: number
-  rate_limited_account_count: number
-  codex_quota_protected_account_count: number
-  error_account_count: number
-  disabled_account_count: number
-  quota_account_count: number
-  unlimited_account_count: number
-  total: AccountQuotaDimensionSummary
-  daily: AccountQuotaDimensionSummary
-  weekly: AccountQuotaDimensionSummary
-  usage_windows?: AccountUsageWindowSummary[]
-}
-
-export interface AccountQuotaGroupSummary extends AccountQuotaSummary {
-  group_id?: number | null
-  group_name: string
-  group_status: string
-}
-
-export interface AccountQuotaDashboard {
-  generated_at: string
-  summaries: AccountQuotaSummary[]
-  totals: AccountQuotaSummary
-  group_summaries?: AccountQuotaGroupSummary[]
-}
-
-export interface UserAccountQuotaPoolDashboard {
-  generated_at: string
-  mine: AccountQuotaDashboard
-  platform: AccountQuotaDashboard
 }
 
 // Account Usage types
@@ -1568,57 +1429,6 @@ export interface AccountUsageInfo {
 }
 
 // OpenAI Codex usage snapshot (from response headers)
-export interface OpenAIRateLimitWindow {
-  used_percent: number
-  limit_window_seconds: number
-  reset_after_seconds: number
-  reset_at: number
-}
-
-export interface OpenAIRateLimit {
-  allowed: boolean
-  limit_reached: boolean
-  primary_window?: OpenAIRateLimitWindow | null
-  secondary_window?: OpenAIRateLimitWindow | null
-}
-
-export interface OpenAIAdditionalRateLimit {
-  limit_name: string
-  metered_feature: string
-  rate_limit?: OpenAIRateLimit | null
-}
-
-export interface OpenAIRateLimitResetCredits {
-  available_count: number
-}
-
-export interface OpenAIQuotaUsage {
-  user_id?: string
-  account_id?: string
-  email?: string
-  plan_type?: string
-  rate_limit?: OpenAIRateLimit | null
-  additional_rate_limits?: OpenAIAdditionalRateLimit[]
-  rate_limit_reset_credits?: OpenAIRateLimitResetCredits | null
-  fetched_at: number
-}
-
-export interface OpenAIQuotaResetCredit {
-  id?: string
-  reset_type?: string
-  status?: string
-  granted_at?: string
-  expires_at?: string
-  redeem_started_at?: string
-  redeemed_at?: string
-}
-
-export interface OpenAIQuotaResetResult {
-  code: string
-  credit?: OpenAIQuotaResetCredit | null
-  windows_reset: number
-}
-
 export interface CodexUsageSnapshot {
   // Legacy fields (kept for backwards compatibility)
   // NOTE: The naming is ambiguous - actual window type is determined by window_minutes value
@@ -1691,7 +1501,7 @@ export interface UpdateAccountRequest {
   priority?: number
   rate_multiplier?: number // Account billing multiplier (>=0, 0 means free)
   schedulable?: boolean
-  status?: AccountStatus
+  status?: 'active' | 'inactive' | 'error'
   group_ids?: number[]
   expires_at?: number | null
   auto_pause_on_expired?: boolean
@@ -2241,7 +2051,6 @@ export interface UserSubscription {
   id: number
   user_id: number
   group_id: number
-  plan_id?: number | null
   status: 'active' | 'expired' | 'revoked' | 'suspended'
   starts_at: string
   daily_usage_usd: number
@@ -2250,14 +2059,10 @@ export interface UserSubscription {
   daily_window_start: string | null
   weekly_window_start: string | null
   monthly_window_start: string | null
-  daily_limit_usd?: number | null
-  weekly_limit_usd?: number | null
-  monthly_limit_usd?: number | null
   created_at: string
   updated_at: string
   revoked_at?: string | null
   expires_at: string | null
-  entitlements?: Record<string, number>
   user?: User
   group?: Group
 }
@@ -2289,14 +2094,12 @@ export interface SubscriptionProgress {
 export interface AssignSubscriptionRequest {
   user_id: number
   group_id: number
-  plan_id?: number
   validity_days?: number
 }
 
 export interface BulkAssignSubscriptionRequest {
   user_ids: number[]
   group_id: number
-  plan_id?: number
   validity_days?: number
 }
 
@@ -2502,9 +2305,6 @@ export interface PromoCode {
   bonus_amount: number
   max_uses: number
   used_count: number
-  discount_percent: number
-  applies_to_subscriptions: boolean
-  starts_at: string | null
   status: 'active' | 'disabled'
   expires_at: string | null
   notes: string | null
@@ -2527,9 +2327,6 @@ export interface CreatePromoCodeRequest {
   max_uses?: number
   expires_at?: number | null
   notes?: string
-  discount_percent?: number
-  applies_to_subscriptions?: boolean
-  starts_at?: number | null
 }
 
 export interface UpdatePromoCodeRequest {
@@ -2539,9 +2336,6 @@ export interface UpdatePromoCodeRequest {
   status?: 'active' | 'disabled'
   expires_at?: number | null
   notes?: string
-  discount_percent?: number
-  applies_to_subscriptions?: boolean
-  starts_at?: number | null
 }
 
 // ==================== TOTP (2FA) Types ====================
@@ -2648,93 +2442,3 @@ export type {
   PlatformQuotaWindow,
   PlatformQuotasResponse,
 } from '@/api/admin/users'
-
-export type ConversationStatus = 'open' | 'pending_user' | 'pending_admin' | 'resolved' | 'closed'
-export type ConversationPriority = 'low' | 'normal' | 'high' | 'urgent'
-export type ConversationType = 'support' | 'notice' | 'billing' | 'subscription' | 'account' | 'security'
-export type ConversationKind = 'ticket' | 'system_notice'
-export type ConversationSenderType = 'user' | 'admin' | 'system'
-export type ConversationMessageType = 'text' | 'notice' | 'operation_log' | 'system_event'
-export type ConversationContentFormat = 'plain' | 'markdown'
-
-export interface Conversation {
-  id: number
-  user_id: number
-  user_email?: string
-  user_name?: string
-  subject: string
-  kind: ConversationKind
-  referenced_notice_id?: number | null
-  status: ConversationStatus
-  priority: ConversationPriority
-  type: ConversationType
-  source?: string
-  source_id?: string
-  assigned_admin_id?: number | null
-  last_message_id?: number | null
-  last_message_sender_type: ConversationSenderType | ''
-  last_message_excerpt: string
-  last_message_at: string
-  user_last_read_message_id?: number | null
-  user_last_read_at?: string | null
-  admin_last_read_message_id?: number | null
-  admin_last_read_at?: string | null
-  user_unread: boolean
-  admin_unread?: boolean
-  created_at: string
-  updated_at: string
-  messages?: ConversationMessage[]
-}
-
-export interface ConversationMessage {
-  id: number
-  conversation_id: number
-  sender_type: ConversationSenderType
-  sender_id?: number | null
-  message_type: ConversationMessageType
-  content_format: ConversationContentFormat
-  content: string
-  metadata?: Record<string, unknown>
-  created_at: string
-}
-
-export interface ConversationMessageListOptions extends FetchOptions {
-  beforeId?: number
-  latest?: boolean
-}
-
-export interface ConversationListFilters {
-  kind?: ConversationKind | ''
-  status?: ConversationStatus | ''
-  priority?: ConversationPriority | ''
-  type?: ConversationType | ''
-  search?: string
-  unread_only?: boolean
-  sort_by?: string
-  sort_order?: 'asc' | 'desc'
-}
-
-export interface AdminConversationListFilters extends ConversationListFilters {
-  user_id?: number | null
-  assigned_admin_id?: number | null
-}
-
-export interface CreateConversationRequest {
-  subject: string
-  content: string
-  priority?: ConversationPriority
-  type?: ConversationType
-  referenced_notice_id?: number | null
-}
-
-export interface CreateAdminConversationRequest extends CreateConversationRequest {
-  user_id: number
-  kind?: ConversationKind
-  source?: string
-  source_id?: string
-  content_format?: ConversationContentFormat
-}
-
-export interface AddConversationMessageRequest {
-  content: string
-}

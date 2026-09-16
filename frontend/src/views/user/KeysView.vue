@@ -1,257 +1,469 @@
 <template>
-  <UserWorkspaceLayout>
-    <div class="lingqu-keys">
-      <section class="lingqu-keys__hero">
-        <div class="lingqu-keys__copy">
-          <span>我的 Key</span>
-          <h1>创建一个 Key，马上接入 AI</h1>
-          <p>复制 Key 和 Base URL 即可使用，额度与限制可以之后再设置。</p>
-        </div>
-
-        <div class="lingqu-keys__hero-tools">
-          <button @click="showCreateModal = true" class="lingqu-keys__primary lingqu-keys__primary--hero" data-tour="keys-create-btn">
-            <Icon name="plus" size="md" />
-            创建 Key
-          </button>
-
-          <router-link to="/usage" class="lingqu-keys__usage-entry">
-            <Icon name="chart" size="md" />
-            使用记录
-          </router-link>
-
-          <button
-            type="button"
-            class="lingqu-keys__endpoint"
-            :title="baseUrlCopied ? 'Base URL 已复制' : '复制 Base URL'"
-            @click="copyBaseUrl"
-          >
-            <span>
-              <Icon name="terminal" size="sm" />
-              Base URL
-            </span>
-            <code>{{ apiBaseUrl }}</code>
-            <Icon :name="baseUrlCopied ? 'check' : 'copy'" size="sm" />
-          </button>
-        </div>
-      </section>
-
-      <section class="lingqu-keys__stats" aria-label="Key 概览">
-        <article>
-          <Icon name="key" size="md" />
-          <small>全部 Key</small>
-          <strong>{{ keySummary.total }}</strong>
-        </article>
-        <article>
-          <Icon name="checkCircle" size="md" />
-          <small>可用 Key</small>
-          <strong>{{ keySummary.active }}</strong>
-        </article>
-        <article>
-          <Icon name="dollar" size="md" />
-          <small>今日消耗</small>
-          <strong>${{ keySummary.todayCost }}</strong>
-        </article>
-        <article>
-          <Icon name="chart" size="md" />
-          <small>累计消耗</small>
-          <strong>${{ keySummary.totalCost }}</strong>
-        </article>
-      </section>
-
-      <section class="lingqu-keys__toolbar">
-        <SearchInput
-          v-model="filterSearch"
-          :placeholder="t('keys.searchPlaceholder')"
-          class="lingqu-keys__search"
-          @search="onFilterChange"
-        />
-        <Select
-          :model-value="filterGroupId"
-          class="lingqu-keys__select"
-          :options="groupFilterOptions"
-          @update:model-value="onGroupFilterChange"
-        />
-        <Select
-          :model-value="filterStatus"
-          class="lingqu-keys__select"
-          :options="statusFilterOptions"
-          @update:model-value="onStatusFilterChange"
-        />
-        <EndpointPopover
-          v-if="publicSettings?.api_base_url || (publicSettings?.custom_endpoints?.length ?? 0) > 0"
-          :api-base-url="publicSettings?.api_base_url || ''"
-          :custom-endpoints="publicSettings?.custom_endpoints || []"
-        />
-        <button @click="loadApiKeys" :disabled="loading" class="lingqu-keys__secondary lingqu-keys__refresh">
-          <Icon name="refresh" size="md" :class="loading ? 'animate-spin' : ''" />
-          刷新
-        </button>
-      </section>
-
-      <section class="lingqu-key-list" aria-label="我的 API Keys">
-        <template v-if="loading">
-          <article v-for="item in 4" :key="item" class="lingqu-key-card lingqu-key-card--loading">
-            <div></div>
-            <div></div>
-            <div></div>
-          </article>
-        </template>
-
-        <article v-else-if="apiKeys.length === 0" class="lingqu-keys__empty">
-          <div class="lingqu-keys__empty-icon">
-            <Icon name="key" size="xl" />
+  <AppLayout>
+    <TablePageLayout>
+      <template #filters>
+        <div class="flex flex-col gap-3">
+          <div class="flex flex-wrap items-center gap-3">
+            <SearchInput
+              v-model="filterSearch"
+              :placeholder="t('keys.searchPlaceholder')"
+              class="w-full sm:w-64"
+              @search="onFilterChange"
+            />
+            <Select
+              :model-value="filterGroupId"
+              class="w-40"
+              :options="groupFilterOptions"
+              @update:model-value="onGroupFilterChange"
+            />
+            <Select
+              :model-value="filterStatus"
+              class="w-40"
+              :options="statusFilterOptions"
+              @update:model-value="onStatusFilterChange"
+            />
           </div>
-          <h2>{{ t('keys.noKeysYet') }}</h2>
-          <p>{{ t('keys.createFirstKey') }}</p>
-          <button type="button" class="lingqu-keys__primary" @click="showCreateModal = true">
-            <Icon name="plus" size="md" />
+          <EndpointPopover
+            v-if="publicSettings?.api_base_url || (publicSettings?.custom_endpoints?.length ?? 0) > 0"
+            :api-base-url="publicSettings?.api_base_url || ''"
+            :custom-endpoints="publicSettings?.custom_endpoints || []"
+          />
+          <div v-if="selectedIds.length" class="flex flex-wrap items-center gap-3 text-sm">
+            <span class="text-gray-600 dark:text-gray-300">
+              {{ t('keys.bulkEdit.selectedCount', { count: selectedIds.length }) }}
+            </span>
+            <button
+              class="btn btn-primary btn-sm"
+              :disabled="loading"
+              data-test="bulk-edit-keys"
+              @click="showBulkEditModal = true"
+            >
+              {{ t('keys.bulkEdit.title') }}
+            </button>
+            <button class="btn btn-secondary btn-sm" @click="selectedIds = []">
+              {{ t('keys.bulkEdit.clearSelection') }}
+            </button>
+          </div>
+        </div>
+      </template>
+
+      <template #actions>
+        <div class="flex justify-end gap-3">
+          <button
+            @click="loadApiKeys"
+            :disabled="loading"
+            class="btn btn-secondary"
+            :title="t('common.refresh')"
+          >
+            <Icon name="refresh" size="md" :class="loading ? 'animate-spin' : ''" />
+          </button>
+          <div class="relative" ref="columnDropdownRef">
+            <button
+              @click="showColumnDropdown = !showColumnDropdown"
+              class="btn btn-secondary px-2 md:px-3"
+              :title="t('keys.columnSettings')"
+            >
+              <svg class="h-4 w-4 md:mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 4.5v15m6-15v15m-10.875 0h15.75c.621 0 1.125-.504 1.125-1.125V5.625c0-.621-.504-1.125-1.125-1.125H4.125C3.504 4.5 3 5.004 3 5.625v12.75c0 .621.504 1.125 1.125 1.125z" />
+              </svg>
+              <span class="hidden md:inline">{{ t('keys.columnSettings') }}</span>
+            </button>
+            <div
+              v-if="showColumnDropdown"
+              class="absolute right-0 top-full z-50 mt-1 max-h-80 w-48 overflow-y-auto rounded-lg border border-gray-200 bg-white py-1 shadow-lg dark:border-dark-600 dark:bg-dark-800"
+            >
+              <button
+                v-for="col in toggleableColumns"
+                :key="col.key"
+                @click="toggleColumn(col.key)"
+                class="flex w-full items-center justify-between px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-700"
+              >
+                <span>{{ col.label }}</span>
+                <Icon
+                  v-if="isColumnVisible(col.key)"
+                  name="check"
+                  size="sm"
+                  class="text-primary-500"
+                  :stroke-width="2"
+                />
+              </button>
+            </div>
+          </div>
+          <button @click="showCreateModal = true" class="btn btn-primary" data-tour="keys-create-btn">
+            <Icon name="plus" size="md" class="mr-2" />
             {{ t('keys.createKey') }}
           </button>
-        </article>
+        </div>
+      </template>
 
-        <article v-for="key in apiKeys" v-else :key="key.id" class="lingqu-key-card">
-          <div class="lingqu-key-card__top">
-            <div>
-              <div class="lingqu-key-card__title-row">
-                <h2>{{ key.name }}</h2>
-                <span :class="['lingqu-key-card__status', `lingqu-key-card__status--${key.status}`]">
-                  {{ t('keys.status.' + key.status) }}
+      <template #table>
+        <DataTable
+          :columns="columns"
+          :data="apiKeys"
+          :loading="loading"
+          selectable
+          row-key="id"
+          :selected-keys="selectedIds"
+          :selection-label="(key: ApiKey) => t('keys.bulkEdit.selectKey', { name: key.name })"
+          @update:selected-keys="handleSelectionChange"
+          :server-side-sort="true"
+          default-sort-key="created_at"
+          default-sort-order="desc"
+          @sort="handleSort"
+        >
+          <template #cell-id="{ value }">
+            <span class="font-mono text-xs text-gray-500 dark:text-gray-400">#{{ value }}</span>
+          </template>
+
+          <template #cell-key="{ value, row }">
+            <div class="flex items-center gap-2">
+              <code class="code text-xs">
+                {{ maskApiKey(value) }}
+              </code>
+              <button
+                @click="copyToClipboard(value, row.id)"
+                class="rounded-lg p-1 transition-colors hover:bg-gray-100 dark:hover:bg-dark-700"
+                :class="
+                  copiedKeyId === row.id
+                    ? 'text-green-500'
+                    : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
+                "
+                :title="copiedKeyId === row.id ? t('keys.copied') : t('keys.copyToClipboard')"
+              >
+                <Icon
+                  v-if="copiedKeyId === row.id"
+                  name="check"
+                  size="sm"
+                  :stroke-width="2"
+                />
+                <Icon v-else name="clipboard" size="sm" />
+              </button>
+            </div>
+          </template>
+
+          <template #cell-name="{ value, row }">
+            <div class="flex items-center gap-1.5">
+              <span class="font-medium text-gray-900 dark:text-white">{{ value }}</span>
+              <Icon
+                v-if="row.ip_whitelist?.length > 0 || row.ip_blacklist?.length > 0"
+                name="shield"
+                size="sm"
+                class="text-blue-500"
+                :title="t('keys.ipRestrictionEnabled')"
+              />
+            </div>
+          </template>
+
+          <template #cell-group="{ row }">
+            <div class="group/dropdown relative">
+              <button
+                :ref="(el) => setGroupButtonRef(row.id, el)"
+                @click="openGroupSelector(row)"
+                class="-mx-2 -my-1 flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1 transition-all duration-200 hover:bg-gray-100 dark:hover:bg-dark-700"
+                :title="t('keys.clickToChangeGroup')"
+              >
+                <GroupBadge
+                  v-if="row.group"
+                  :name="row.group.name"
+                  :platform="row.group.platform"
+                  :subscription-type="row.group.subscription_type"
+                  :rate-multiplier="row.group.rate_multiplier"
+                  :user-rate-multiplier="userGroupRates[row.group.id]"
+                  :peak-rate-enabled="row.group.peak_rate_enabled"
+                  :peak-start="row.group.peak_start"
+                  :peak-end="row.group.peak_end"
+                  :peak-rate-multiplier="row.group.peak_rate_multiplier"
+                />
+                <span v-else class="text-sm text-gray-400 dark:text-dark-500">{{
+                  t('keys.noGroup')
+                }}</span>
+                <span class="text-xs text-gray-500 dark:text-gray-400">{{ t('keys.selectGroup') }}</span>
+                <svg
+                  class="h-3.5 w-3.5 text-gray-400 opacity-60 transition-opacity group-hover/dropdown:opacity-100"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  stroke-width="2"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    d="M8.25 15L12 18.75 15.75 15m-7.5-6L12 5.25 15.75 9"
+                  />
+                </svg>
+              </button>
+            </div>
+          </template>
+
+          <template #cell-current_concurrency="{ value }">
+            <span
+              :class="[
+                'inline-flex min-w-8 items-center justify-center rounded px-2 py-1 text-sm font-semibold tabular-nums',
+                (value ?? 0) > 0
+                  ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-900/25 dark:text-emerald-300 dark:ring-emerald-800'
+                  : 'bg-gray-100 text-gray-500 dark:bg-dark-700 dark:text-dark-400'
+              ]"
+            >
+              {{ value ?? 0 }}
+            </span>
+          </template>
+
+          <template #cell-usage="{ row }">
+            <div class="text-sm">
+              <div class="flex items-center gap-1.5">
+                <span class="text-gray-500 dark:text-gray-400">{{ t('keys.today') }}:</span>
+                <span class="font-medium text-gray-900 dark:text-white">
+                  ${{ (usageStats[row.id]?.today_actual_cost ?? 0).toFixed(4) }}
                 </span>
               </div>
-              <div class="lingqu-key-card__meta">
-                <button
-                  :ref="(el) => setGroupButtonRef(key.id, el)"
-                  type="button"
-                  class="lingqu-key-card__group group/dropdown"
-                  :title="t('keys.clickToChangeGroup')"
-                  @click="openGroupSelector(key)"
-                >
-                  <GroupBadge
-                    v-if="key.group"
-                    :name="key.group.name"
-                    :platform="key.group.platform"
-                    :subscription-type="key.group.subscription_type"
-                    :rate-multiplier="key.group.rate_multiplier"
-                    :user-rate-multiplier="userGroupRates[key.group.id]"
-                    :peak-rate-enabled="key.group.peak_rate_enabled"
-                    :peak-start="key.group.peak_start"
-                    :peak-end="key.group.peak_end"
-                    :peak-rate-multiplier="key.group.peak_rate_multiplier"
+              <div class="mt-0.5 flex items-center gap-1.5">
+                <span class="text-gray-500 dark:text-gray-400">{{ t('keys.total') }}:</span>
+                <span class="font-medium text-gray-900 dark:text-white">
+                  ${{ (usageStats[row.id]?.total_actual_cost ?? 0).toFixed(4) }}
+                </span>
+              </div>
+              <!-- Quota progress (if quota is set) -->
+              <div v-if="row.quota > 0" class="mt-1.5">
+                <div class="flex items-center gap-1.5">
+                  <span class="text-gray-500 dark:text-gray-400">{{ t('keys.quota') }}:</span>
+                  <span :class="[
+                    'font-medium',
+                    row.quota_used >= row.quota ? 'text-red-500' :
+                    row.quota_used >= row.quota * 0.8 ? 'text-yellow-500' :
+                    'text-gray-900 dark:text-white'
+                  ]">
+                    ${{ row.quota_used?.toFixed(2) || '0.00' }} / ${{ row.quota?.toFixed(2) }}
+                  </span>
+                </div>
+                <div class="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-gray-200 dark:bg-dark-600">
+                  <div
+                    :class="[
+                      'h-full rounded-full transition-all',
+                      row.quota_used >= row.quota ? 'bg-red-500' :
+                      row.quota_used >= row.quota * 0.8 ? 'bg-yellow-500' :
+                      'bg-primary-500'
+                    ]"
+                    :style="{ width: Math.min((row.quota_used / row.quota) * 100, 100) + '%' }"
                   />
-                  <span v-else>{{ t('keys.noGroup') }}</span>
-                  <Icon name="chevronDown" size="xs" />
-                </button>
-                <span>{{ t('keys.created') }} {{ formatDateTime(key.created_at) }}</span>
+                </div>
               </div>
             </div>
-            <div class="lingqu-key-card__tools">
+          </template>
+
+          <template #cell-rate_limit="{ row }">
+            <div v-if="row.rate_limit_5h > 0 || row.rate_limit_1d > 0 || row.rate_limit_7d > 0" class="space-y-1.5 min-w-[140px]">
+              <!-- 5h window -->
+              <div v-if="row.rate_limit_5h > 0">
+                <div class="flex items-center justify-between text-xs">
+                  <span class="text-gray-500 dark:text-gray-400">5h</span>
+                  <span :class="[
+                    'font-medium tabular-nums',
+                    row.usage_5h >= row.rate_limit_5h ? 'text-red-500' :
+                    row.usage_5h >= row.rate_limit_5h * 0.8 ? 'text-yellow-500' :
+                    'text-gray-700 dark:text-gray-300'
+                  ]">
+                    ${{ row.usage_5h?.toFixed(2) || '0.00' }}/${{ row.rate_limit_5h?.toFixed(2) }}
+                  </span>
+                </div>
+                <div class="h-1 w-full overflow-hidden rounded-full bg-gray-200 dark:bg-dark-600">
+                  <div
+                    :class="[
+                      'h-full rounded-full transition-all',
+                      row.usage_5h >= row.rate_limit_5h ? 'bg-red-500' :
+                      row.usage_5h >= row.rate_limit_5h * 0.8 ? 'bg-yellow-500' :
+                      'bg-emerald-500'
+                    ]"
+                    :style="{ width: Math.min((row.usage_5h / row.rate_limit_5h) * 100, 100) + '%' }"
+                  />
+                </div>
+                <div v-if="row.reset_5h_at && formatResetTime(row.reset_5h_at)" class="text-[10px] text-gray-400 dark:text-gray-500 tabular-nums">
+                  ⟳ {{ formatResetTime(row.reset_5h_at) }}
+                </div>
+              </div>
+              <!-- 1d window -->
+              <div v-if="row.rate_limit_1d > 0">
+                <div class="flex items-center justify-between text-xs">
+                  <span class="text-gray-500 dark:text-gray-400">1d</span>
+                  <span :class="[
+                    'font-medium tabular-nums',
+                    row.usage_1d >= row.rate_limit_1d ? 'text-red-500' :
+                    row.usage_1d >= row.rate_limit_1d * 0.8 ? 'text-yellow-500' :
+                    'text-gray-700 dark:text-gray-300'
+                  ]">
+                    ${{ row.usage_1d?.toFixed(2) || '0.00' }}/${{ row.rate_limit_1d?.toFixed(2) }}
+                  </span>
+                </div>
+                <div class="h-1 w-full overflow-hidden rounded-full bg-gray-200 dark:bg-dark-600">
+                  <div
+                    :class="[
+                      'h-full rounded-full transition-all',
+                      row.usage_1d >= row.rate_limit_1d ? 'bg-red-500' :
+                      row.usage_1d >= row.rate_limit_1d * 0.8 ? 'bg-yellow-500' :
+                      'bg-emerald-500'
+                    ]"
+                    :style="{ width: Math.min((row.usage_1d / row.rate_limit_1d) * 100, 100) + '%' }"
+                  />
+                </div>
+                <div v-if="row.reset_1d_at && formatResetTime(row.reset_1d_at)" class="text-[10px] text-gray-400 dark:text-gray-500 tabular-nums">
+                  ⟳ {{ formatResetTime(row.reset_1d_at) }}
+                </div>
+              </div>
+              <!-- 7d window -->
+              <div v-if="row.rate_limit_7d > 0">
+                <div class="flex items-center justify-between text-xs">
+                  <span class="text-gray-500 dark:text-gray-400">7d</span>
+                  <span :class="[
+                    'font-medium tabular-nums',
+                    row.usage_7d >= row.rate_limit_7d ? 'text-red-500' :
+                    row.usage_7d >= row.rate_limit_7d * 0.8 ? 'text-yellow-500' :
+                    'text-gray-700 dark:text-gray-300'
+                  ]">
+                    ${{ row.usage_7d?.toFixed(2) || '0.00' }}/${{ row.rate_limit_7d?.toFixed(2) }}
+                  </span>
+                </div>
+                <div class="h-1 w-full overflow-hidden rounded-full bg-gray-200 dark:bg-dark-600">
+                  <div
+                    :class="[
+                      'h-full rounded-full transition-all',
+                      row.usage_7d >= row.rate_limit_7d ? 'bg-red-500' :
+                      row.usage_7d >= row.rate_limit_7d * 0.8 ? 'bg-yellow-500' :
+                      'bg-emerald-500'
+                    ]"
+                    :style="{ width: Math.min((row.usage_7d / row.rate_limit_7d) * 100, 100) + '%' }"
+                  />
+                </div>
+                <div v-if="row.reset_7d_at && formatResetTime(row.reset_7d_at)" class="text-[10px] text-gray-400 dark:text-gray-500 tabular-nums">
+                  ⟳ {{ formatResetTime(row.reset_7d_at) }}
+                </div>
+              </div>
+              <!-- Reset button -->
               <button
-                type="button"
-                class="lingqu-key-card__visibility"
-                :title="revealedKeyIds.has(key.id) ? t('keys.hideFullKey') : t('keys.showFullKey')"
-                :aria-label="revealedKeyIds.has(key.id) ? t('keys.hideFullKey') : t('keys.showFullKey')"
-                :aria-pressed="revealedKeyIds.has(key.id)"
-                @click="toggleKeyVisibility(key.id)"
+                v-if="row.usage_5h > 0 || row.usage_1d > 0 || row.usage_7d > 0"
+                @click.stop="confirmResetRateLimitFromTable(row)"
+                class="mt-0.5 inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-gray-500 transition-colors hover:bg-gray-100 hover:text-primary-600 dark:hover:bg-dark-700 dark:hover:text-primary-400"
+                :title="t('keys.resetRateLimitUsage')"
               >
-                <Icon :name="revealedKeyIds.has(key.id) ? 'eyeOff' : 'eye'" size="sm" />
+                <Icon name="refresh" size="xs" />
+                {{ t('keys.resetUsage') }}
               </button>
+            </div>
+            <span v-else class="text-sm text-gray-400 dark:text-dark-500">-</span>
+          </template>
+
+          <template #cell-expires_at="{ value }">
+            <span v-if="value" :class="[
+              'text-sm',
+              new Date(value) < new Date() ? 'text-red-500 dark:text-red-400' : 'text-gray-500 dark:text-dark-400'
+            ]">
+              {{ formatDateTime(value) }}
+            </span>
+            <span v-else class="text-sm text-gray-400 dark:text-dark-500">{{ t('keys.noExpiration') }}</span>
+          </template>
+
+          <template #cell-status="{ value }">
+            <span :class="[
+              'badge',
+              value === 'active' ? 'badge-success' :
+              value === 'quota_exhausted' ? 'badge-warning' :
+              value === 'expired' ? 'badge-danger' :
+              'badge-gray'
+            ]">
+              {{ t('keys.status.' + value) }}
+            </span>
+          </template>
+
+          <template #cell-last_used_at="{ value }">
+            <span v-if="value" class="text-sm text-gray-500 dark:text-dark-400">
+              {{ formatDateTime(value) }}
+            </span>
+            <span v-else class="text-sm text-gray-400 dark:text-dark-500">-</span>
+          </template>
+
+          <template #cell-last_used_ip="{ value }">
+            <span v-if="value" class="text-sm text-gray-500 dark:text-dark-400">
+              {{ value }}
+            </span>
+            <span v-else class="text-sm text-gray-400 dark:text-dark-500">-</span>
+          </template>
+
+          <template #cell-created_at="{ value }">
+            <span class="text-sm text-gray-500 dark:text-dark-400">{{ formatDateTime(value) }}</span>
+          </template>
+
+          <template #cell-actions="{ row }">
+            <div class="flex items-center gap-1">
+              <!-- Use Key Button -->
               <button
-                type="button"
-                class="lingqu-key-card__copy"
-                :title="copiedKeyId === key.id ? t('keys.copied') : t('keys.copyToClipboard')"
-                @click="copyToClipboard(key.key, key.id)"
+                @click="openUseKeyModal(row)"
+                class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-green-50 hover:text-green-600 dark:hover:bg-green-900/20 dark:hover:text-green-400"
               >
-                <Icon :name="copiedKeyId === key.id ? 'check' : 'copy'" size="sm" />
+                <Icon name="terminal" size="sm" />
+                <span class="text-xs">{{ t('keys.useKey') }}</span>
+              </button>
+              <!-- Import to CC Switch Button -->
+              <button
+                v-if="!publicSettings?.hide_ccs_import_button"
+                @click="importToCcswitch(row)"
+                class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-900/20 dark:hover:text-blue-400"
+              >
+                <Icon name="upload" size="sm" />
+                <span class="text-xs">{{ t('keys.importToCcSwitch') }}</span>
+              </button>
+              <!-- Toggle Status Button -->
+              <button
+                @click="toggleKeyStatus(row)"
+                :class="[
+                  'flex flex-col items-center gap-0.5 rounded-lg p-1.5 transition-colors',
+                  row.status === 'active'
+                    ? 'text-gray-500 hover:bg-yellow-50 hover:text-yellow-600 dark:hover:bg-yellow-900/20 dark:hover:text-yellow-400'
+                    : 'text-gray-500 hover:bg-green-50 hover:text-green-600 dark:hover:bg-green-900/20 dark:hover:text-green-400'
+                ]"
+              >
+                <Icon v-if="row.status === 'active'" name="ban" size="sm" />
+                <Icon v-else name="checkCircle" size="sm" />
+                <span class="text-xs">{{ row.status === 'active' ? t('keys.disable') : t('keys.enable') }}</span>
+              </button>
+              <!-- Edit Button -->
+              <button
+                @click="editKey(row)"
+                class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-primary-600 dark:hover:bg-dark-700 dark:hover:text-primary-400"
+              >
+                <Icon name="edit" size="sm" />
+                <span class="text-xs">{{ t('common.edit') }}</span>
+              </button>
+              <!-- Delete Button -->
+              <button
+                @click="confirmDelete(row)"
+                class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
+              >
+                <Icon name="trash" size="sm" />
+                <span class="text-xs">{{ t('common.delete') }}</span>
               </button>
             </div>
-          </div>
+          </template>
 
-          <div class="lingqu-key-card__secret">
-            <small>API Key</small>
-            <code>{{ revealedKeyIds.has(key.id) ? key.key : maskApiKey(key.key) }}</code>
-          </div>
+          <template #empty>
+            <EmptyState
+              :title="t('keys.noKeysYet')"
+              :description="t('keys.createFirstKey')"
+              :action-text="t('keys.createKey')"
+              @action="showCreateModal = true"
+            />
+          </template>
+        </DataTable>
+      </template>
 
-          <div class="lingqu-key-card__metrics">
-            <div>
-              <small>{{ t('keys.today') }}</small>
-              <strong>${{ (usageStats[key.id]?.today_actual_cost ?? 0).toFixed(4) }}</strong>
-            </div>
-            <div>
-              <small>{{ t('keys.total') }}</small>
-              <strong>${{ (usageStats[key.id]?.total_actual_cost ?? 0).toFixed(4) }}</strong>
-            </div>
-            <div>
-              <small>{{ t('keys.quota') }}</small>
-              <strong>{{ formatQuota(key) }}</strong>
-            </div>
-            <div>
-              <small>{{ t('keys.lastUsedAt') }}</small>
-              <strong>{{ key.last_used_at ? formatDateTime(key.last_used_at) : '-' }}</strong>
-            </div>
-          </div>
-
-          <div class="lingqu-key-card__limits">
-            <span>
-              <Icon name="calendar" size="sm" />
-              {{ key.expires_at ? formatDateTime(key.expires_at) : t('keys.noExpiration') }}
-            </span>
-            <span>
-              <Icon name="bolt" size="sm" />
-              {{ formatRateLimit(key) }}
-            </span>
-            <span>
-              <Icon name="users" size="sm" />
-              {{ t('keys.currentConcurrency') }}: {{ key.current_concurrency ?? 0 }}
-            </span>
-            <span v-if="key.last_used_ip">
-              <Icon name="globe" size="sm" />
-              {{ t('keys.lastUsedIP') }}: {{ key.last_used_ip }}
-            </span>
-          </div>
-
-          <div class="lingqu-key-card__actions">
-            <router-link :to="{ path: '/usage', query: { api_key_id: key.id } }">
-              <Icon name="chart" size="sm" />
-              用量明细
-            </router-link>
-            <button type="button" @click="openUseKeyModal(key)">
-              <Icon name="terminal" size="sm" />
-              {{ t('keys.useKey') }}
-            </button>
-            <button
-              v-if="!publicSettings?.hide_ccs_import_button"
-              type="button"
-              @click="importToCcswitch(key)"
-            >
-              <Icon name="upload" size="sm" />
-              {{ t('keys.importToCcSwitch') }}
-            </button>
-            <button type="button" @click="toggleKeyStatus(key)">
-              <Icon :name="key.status === 'active' ? 'ban' : 'checkCircle'" size="sm" />
-              {{ key.status === 'active' ? t('keys.disable') : t('keys.enable') }}
-            </button>
-            <button type="button" @click="editKey(key)">
-              <Icon name="edit" size="sm" />
-              {{ t('common.edit') }}
-            </button>
-            <button type="button" class="lingqu-key-card__danger" @click="confirmDelete(key)">
-              <Icon name="trash" size="sm" />
-              {{ t('common.delete') }}
-            </button>
-          </div>
-        </article>
-      </section>
-
-      <Pagination
-        v-if="pagination.total > 0"
-        class="lingqu-keys__pagination"
-        :page="pagination.page"
-        :total="pagination.total"
-        :page-size="pagination.page_size"
-        @update:page="handlePageChange"
-        @update:pageSize="handlePageSizeChange"
-      />
-    </div>
+      <template #pagination>
+        <Pagination
+          v-if="pagination.total > 0"
+          :page="pagination.page"
+          :total="pagination.total"
+          :page-size="pagination.page_size"
+          @update:page="handlePageChange"
+          @update:pageSize="handlePageSizeChange"
+        />
+      </template>
+    </TablePageLayout>
 
     <!-- Create/Edit Modal -->
     <BaseDialog
@@ -273,12 +485,64 @@
           />
         </div>
 
+        <fieldset v-if="!showEditModal" data-tour="key-form-provider">
+          <legend class="input-label">{{ t('keys.providerLabel') }}</legend>
+          <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <label
+              v-for="provider in createProviderOptions"
+              :key="provider.value"
+              class="relative min-w-0"
+              :class="provider.count === 0 ? 'cursor-not-allowed' : 'cursor-pointer'"
+            >
+              <input
+                type="radio"
+                name="key-provider"
+                :value="provider.value"
+                :checked="createProvider === provider.value"
+                :disabled="provider.count === 0"
+                class="peer sr-only"
+                @change="selectCreateProvider(provider.value)"
+              />
+              <span
+                class="flex h-full flex-col items-center gap-2 rounded-xl border border-gray-200 bg-white px-2 py-3 text-center transition-colors peer-checked:border-primary-500 peer-checked:bg-primary-50/60 peer-checked:ring-1 peer-checked:ring-primary-500 peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-primary-500 peer-disabled:opacity-40 dark:border-dark-600 dark:bg-dark-800 dark:peer-checked:border-primary-500 dark:peer-checked:bg-primary-500/10"
+                :class="provider.count > 0 && 'hover:border-primary-300 dark:hover:border-primary-700'"
+              >
+                <span class="flex h-8 items-center justify-center gap-1.5" aria-hidden="true">
+                  <span
+                    v-for="platform in KEY_GROUP_PROVIDER_ICONS[provider.value]"
+                    :key="platform"
+                    class="flex h-8 w-8 items-center justify-center rounded-lg"
+                    :class="platformBadgeLightClass(platform)"
+                  >
+                    <PlatformIcon :platform="platform" size="lg" />
+                  </span>
+                </span>
+                <span class="text-sm font-semibold text-gray-800 dark:text-gray-100">{{ provider.label }}</span>
+              </span>
+              <span
+                v-if="createProvider === provider.value"
+                class="absolute right-1.5 top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-primary-500 text-white"
+                aria-hidden="true"
+              >
+                <Icon name="check" size="xs" :stroke-width="3" />
+              </span>
+            </label>
+          </div>
+          <p class="mt-2 text-xs leading-5 text-gray-500 dark:text-gray-400" aria-live="polite">
+            {{ groups.length === 0 ? t('common.noGroupsAvailable') : t(`keys.providerHints.${createProvider}`) }}
+          </p>
+        </fieldset>
+
         <div>
-          <label class="input-label">{{ t('keys.groupLabel') }}</label>
+          <label class="input-label" for="key-form-group">{{ t('keys.groupLabel') }}</label>
           <Select
+            :key="showEditModal ? 'edit' : createProvider"
+            id="key-form-group"
+            :aria-label="t('keys.groupLabel')"
             v-model="formData.group_id"
-            :options="groupOptions"
+            :options="formGroupOptions"
             :placeholder="t('keys.selectGroup')"
+            :empty-text="t('common.noGroupsAvailable')"
             :searchable="true"
             :search-placeholder="t('keys.searchGroup')"
             data-tour="key-form-group"
@@ -291,6 +555,10 @@
                 :subscription-type="(option as unknown as GroupOption).subscriptionType"
                 :rate-multiplier="(option as unknown as GroupOption).rate"
                 :user-rate-multiplier="(option as unknown as GroupOption).userRate"
+                :peak-rate-enabled="(option as unknown as GroupOption).peakRateEnabled"
+                :peak-start="(option as unknown as GroupOption).peakStart"
+                :peak-end="(option as unknown as GroupOption).peakEnd"
+                :peak-rate-multiplier="(option as unknown as GroupOption).peakRateMultiplier"
               />
               <span v-else class="text-gray-400">{{ t('keys.selectGroup') }}</span>
             </template>
@@ -301,6 +569,10 @@
                 :subscription-type="(option as unknown as GroupOption).subscriptionType"
                 :rate-multiplier="(option as unknown as GroupOption).rate"
                 :user-rate-multiplier="(option as unknown as GroupOption).userRate"
+                :peak-rate-enabled="(option as unknown as GroupOption).peakRateEnabled"
+                :peak-start="(option as unknown as GroupOption).peakStart"
+                :peak-end="(option as unknown as GroupOption).peakEnd"
+                :peak-rate-multiplier="(option as unknown as GroupOption).peakRateMultiplier"
                 :description="(option as unknown as GroupOption).description"
                 :selected="selected"
               />
@@ -308,31 +580,8 @@
           </Select>
         </div>
 
-        <div
-          v-if="!showEditModal"
-          class="rounded-2xl border border-dashed border-gray-200 bg-white/70 p-4 dark:border-dark-600 dark:bg-dark-700/40"
-        >
-          <div class="flex flex-wrap items-center justify-between gap-3">
-            <div class="min-w-0">
-              <p class="text-sm font-semibold text-gray-900 dark:text-white">默认配置已经可以直接使用</p>
-              <p class="mt-1 text-xs leading-relaxed text-gray-500 dark:text-gray-400">
-                创建后马上复制 Key 接入；自定义密钥、IP、额度和有效期可以之后再设置。
-              </p>
-            </div>
-            <button
-              type="button"
-              class="btn btn-secondary shrink-0 px-3 py-2 text-sm"
-              :aria-expanded="showAdvancedCreateOptions"
-              @click="showAdvancedCreateOptions = !showAdvancedCreateOptions"
-            >
-              <Icon :name="showAdvancedCreateOptions ? 'chevronUp' : 'chevronDown'" size="sm" class="mr-1" />
-              {{ showAdvancedCreateOptions ? '收起高级设置' : '高级设置' }}
-            </button>
-          </div>
-        </div>
-
         <!-- Custom Key Section (only for create) -->
-        <div v-if="!showEditModal && showAdvancedCreateOptions" class="space-y-3">
+        <div v-if="!showEditModal" class="space-y-3">
           <div class="flex items-center justify-between">
             <label class="input-label mb-0">{{ t('keys.customKeyLabel') }}</label>
             <button
@@ -374,7 +623,7 @@
         </div>
 
         <!-- IP Restriction Section -->
-        <div v-if="showEditModal || showAdvancedCreateOptions" class="space-y-3">
+        <div class="space-y-3">
           <div class="flex items-center justify-between">
             <label class="input-label mb-0">{{ t('keys.ipRestriction') }}</label>
             <button
@@ -420,7 +669,7 @@
         </div>
 
         <!-- Quota Limit Section -->
-        <div v-if="showEditModal || showAdvancedCreateOptions" class="space-y-3">
+        <div class="space-y-3">
           <label class="input-label">{{ t('keys.quotaLimit') }}</label>
           <!-- Switch commented out - always show input, 0 = unlimited
           <div class="flex items-center justify-between">
@@ -486,7 +735,7 @@
         </div>
 
         <!-- Rate Limit Section -->
-        <div v-if="showEditModal || showAdvancedCreateOptions" class="space-y-3">
+        <div class="space-y-3">
           <div class="flex items-center justify-between">
             <label class="input-label mb-0">{{ t('keys.rateLimitSection') }}</label>
             <button
@@ -660,7 +909,7 @@
         </div>
 
         <!-- Expiration Section -->
-        <div v-if="showEditModal || showAdvancedCreateOptions" class="space-y-3">
+        <div class="space-y-3">
           <div class="flex items-center justify-between">
             <label class="input-label mb-0">{{ t('keys.expiration') }}</label>
             <button
@@ -775,6 +1024,14 @@
         </div>
       </template>
     </BaseDialog>
+
+    <BulkEditKeysModal
+      :show="showBulkEditModal"
+      :selected-keys="selectedApiKeys"
+      :groups="groups"
+      @close="showBulkEditModal = false"
+      @updated="handleBulkUpdated"
+    />
 
     <!-- Delete Confirmation Dialog -->
     <ConfirmDialog
@@ -919,6 +1176,10 @@
               :subscription-type="option.subscriptionType"
               :rate-multiplier="option.rate"
               :user-rate-multiplier="option.userRate"
+              :peak-rate-enabled="option.peakRateEnabled"
+              :peak-start="option.peakStart"
+              :peak-end="option.peakEnd"
+              :peak-rate-multiplier="option.peakRateMultiplier"
               :description="option.description"
               :selected="
                 selectedKeyForGroup?.group_id === option.value ||
@@ -933,37 +1194,42 @@
         </div>
       </div>
     </Teleport>
-  </UserWorkspaceLayout>
+  </AppLayout>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch, type ComponentPublicInstance } from 'vue'
-import { useI18n } from 'vue-i18n'
-import { useRoute, useRouter } from 'vue-router'
-import { useAppStore } from '@/stores/app'
-import { useOnboardingStore } from '@/stores/onboarding'
-import { useClipboard } from '@/composables/useClipboard'
+	import { ref, reactive, computed, watch, onMounted, onUnmounted, type ComponentPublicInstance } from 'vue'
+	import { useI18n } from 'vue-i18n'
+	import { useAppStore } from '@/stores/app'
+	import { useOnboardingStore } from '@/stores/onboarding'
+	import { useClipboard } from '@/composables/useClipboard'
 import { getPersistedPageSize } from '@/composables/usePersistedPageSize'
 
 const { t } = useI18n()
-const route = useRoute()
-const router = useRouter()
 import { keysAPI, authAPI, usageAPI, userGroupsAPI } from '@/api'
-import UserWorkspaceLayout from '@/components/layout/UserWorkspaceLayout.vue'
-import Pagination from '@/components/common/Pagination.vue'
-import BaseDialog from '@/components/common/BaseDialog.vue'
-import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
-import Select from '@/components/common/Select.vue'
-import SearchInput from '@/components/common/SearchInput.vue'
-import Icon from '@/components/icons/Icon.vue'
-import UseKeyModal from '@/components/keys/UseKeyModal.vue'
-import EndpointPopover from '@/components/keys/EndpointPopover.vue'
-import GroupBadge from '@/components/common/GroupBadge.vue'
-import GroupOptionItem from '@/components/common/GroupOptionItem.vue'
-import type { ApiKey, Group, PublicSettings, SubscriptionType, GroupPlatform } from '@/types'
+import AppLayout from '@/components/layout/AppLayout.vue'
+import TablePageLayout from '@/components/layout/TablePageLayout.vue'
+import BulkEditKeysModal from '@/components/keys/BulkEditKeysModal.vue'
+	import DataTable from '@/components/common/DataTable.vue'
+	import Pagination from '@/components/common/Pagination.vue'
+	import BaseDialog from '@/components/common/BaseDialog.vue'
+	import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
+	import EmptyState from '@/components/common/EmptyState.vue'
+	import Select from '@/components/common/Select.vue'
+	import SearchInput from '@/components/common/SearchInput.vue'
+	import Icon from '@/components/icons/Icon.vue'
+	import UseKeyModal from '@/components/keys/UseKeyModal.vue'
+	import EndpointPopover from '@/components/keys/EndpointPopover.vue'
+	import GroupBadge from '@/components/common/GroupBadge.vue'
+	import GroupOptionItem from '@/components/common/GroupOptionItem.vue'
+	import type { ApiKey, Group, PublicSettings, SubscriptionType, GroupPlatform, UpdateApiKeyRequest } from '@/types'
+import type { Column } from '@/components/common/types'
 import type { BatchApiKeyUsageStats } from '@/api/usage'
 import { formatDateTime } from '@/utils/format'
 import { maskApiKey } from '@/utils/maskApiKey'
+import PlatformIcon from '@/components/common/PlatformIcon.vue'
+import { platformBadgeLightClass } from '@/utils/platformColors'
+import { KEY_GROUP_PROVIDERS, KEY_GROUP_PROVIDER_ICONS, getKeyGroupProvider, type KeyGroupProvider } from '@/utils/keyGroupProviders'
 import {
   buildCcSwitchImportDeeplink,
   type CcSwitchClientType
@@ -982,6 +1248,10 @@ interface GroupOption {
   description: string | null
   rate: number
   userRate: number | null
+  peakRateEnabled: boolean
+  peakStart: string
+  peakEnd: string
+  peakRateMultiplier: number
   subscriptionType: SubscriptionType
   platform: GroupPlatform
 }
@@ -990,10 +1260,121 @@ const appStore = useAppStore()
 const onboardingStore = useOnboardingStore()
 const { copyToClipboard: clipboardCopy } = useClipboard()
 
+const allColumns = computed<Column[]>(() => [
+  { key: 'name', label: t('common.name'), sortable: true },
+  { key: 'id', label: t('keys.id'), sortable: true },
+  { key: 'key', label: t('keys.apiKey'), sortable: false },
+  { key: 'group', label: t('keys.group'), sortable: false },
+  { key: 'current_concurrency', label: t('keys.currentConcurrency'), sortable: true },
+  { key: 'usage', label: t('keys.usage'), sortable: false },
+  { key: 'rate_limit', label: t('keys.rateLimitColumn'), sortable: false },
+  { key: 'expires_at', label: t('keys.expiresAt'), sortable: true },
+  { key: 'status', label: t('common.status'), sortable: true },
+  { key: 'last_used_at', label: t('keys.lastUsedAt'), sortable: true },
+  { key: 'last_used_ip', label: t('keys.lastUsedIP'), sortable: false },
+  { key: 'created_at', label: t('keys.created'), sortable: true },
+  { key: 'actions', label: t('common.actions'), sortable: false }
+])
+
+const ALWAYS_VISIBLE_COLUMNS = new Set(['name', 'actions'])
+const DEFAULT_HIDDEN_COLUMNS = ['id', 'rate_limit', 'last_used_at', 'last_used_ip']
+const HIDDEN_COLUMNS_KEY = 'api-key-hidden-columns'
+const COLUMN_SETTINGS_VERSION_KEY = 'api-key-column-settings-version'
+const COLUMN_SETTINGS_VERSION = 3
+const VERSION_NEW_HIDDEN_COLUMNS: Record<number, string[]> = {
+  2: ['last_used_ip'],
+  3: ['id']
+}
+
+const toggleableColumns = computed(() =>
+  allColumns.value.filter((col) => !ALWAYS_VISIBLE_COLUMNS.has(col.key))
+)
+
+const hiddenColumns = reactive<Set<string>>(new Set())
+
+const saveColumnsToStorage = () => {
+  try {
+    localStorage.setItem(HIDDEN_COLUMNS_KEY, JSON.stringify([...hiddenColumns]))
+    localStorage.setItem(COLUMN_SETTINGS_VERSION_KEY, String(COLUMN_SETTINGS_VERSION))
+  } catch (error) {
+    console.error('Failed to save API key table columns:', error)
+  }
+}
+
+const loadSavedColumns = () => {
+  hiddenColumns.clear()
+  try {
+    const saved = localStorage.getItem(HIDDEN_COLUMNS_KEY)
+    if (saved) {
+      const parsed = JSON.parse(saved) as string[]
+      const validColumnKeys = new Set(allColumns.value.map((col) => col.key))
+      parsed
+        .filter((key) =>
+          typeof key === 'string' &&
+          validColumnKeys.has(key) &&
+          !ALWAYS_VISIBLE_COLUMNS.has(key)
+        )
+        .forEach((key) => hiddenColumns.add(key))
+      const storedVersion = Number(localStorage.getItem(COLUMN_SETTINGS_VERSION_KEY) ?? '1')
+      if (storedVersion < COLUMN_SETTINGS_VERSION) {
+        for (let v = storedVersion + 1; v <= COLUMN_SETTINGS_VERSION; v++) {
+          for (const key of VERSION_NEW_HIDDEN_COLUMNS[v] ?? []) {
+            if (validColumnKeys.has(key) && !ALWAYS_VISIBLE_COLUMNS.has(key)) {
+              hiddenColumns.add(key)
+            }
+          }
+        }
+        saveColumnsToStorage()
+      } else {
+        localStorage.setItem(COLUMN_SETTINGS_VERSION_KEY, String(COLUMN_SETTINGS_VERSION))
+      }
+    } else {
+      DEFAULT_HIDDEN_COLUMNS.forEach((key) => hiddenColumns.add(key))
+      localStorage.setItem(COLUMN_SETTINGS_VERSION_KEY, String(COLUMN_SETTINGS_VERSION))
+    }
+  } catch (error) {
+    console.error('Failed to load API key table columns:', error)
+    DEFAULT_HIDDEN_COLUMNS.forEach((key) => hiddenColumns.add(key))
+  }
+}
+
+const toggleColumn = (key: string) => {
+  if (ALWAYS_VISIBLE_COLUMNS.has(key)) return
+  if (hiddenColumns.has(key)) {
+    hiddenColumns.delete(key)
+  } else {
+    hiddenColumns.add(key)
+  }
+  saveColumnsToStorage()
+}
+
+const isColumnVisible = (key: string) => !hiddenColumns.has(key)
+
+const columns = computed<Column[]>(() =>
+  allColumns.value.filter((col) => ALWAYS_VISIBLE_COLUMNS.has(col.key) || !hiddenColumns.has(col.key))
+)
+
 const apiKeys = ref<ApiKey[]>([])
+const selectedIds = ref<number[]>([])
+const showBulkEditModal = ref(false)
+const selectedApiKeys = computed(() => apiKeys.value.filter((key) => selectedIds.value.includes(key.id)))
+
+const handleSelectionChange = (ids: Array<string | number>) => {
+  const visibleIds = new Set(apiKeys.value.map((key) => key.id))
+  selectedIds.value = [...new Set(ids.map(Number))].filter((id) => visibleIds.has(id))
+}
+
+const handleBulkUpdated = (succeededIds: number[]) => {
+  const succeeded = new Set(succeededIds)
+  selectedIds.value = selectedIds.value.filter((id) => !succeeded.has(id))
+  loadApiKeys()
+}
+
 const groups = ref<Group[]>([])
 const loading = ref(false)
 const submitting = ref(false)
+const now = ref(new Date())
+let resetTimer: ReturnType<typeof setInterval> | null = null
 const usageStats = ref<Record<string, BatchApiKeyUsageStats>>({})
 const userGroupRates = ref<Record<number, number>>({})
 
@@ -1003,6 +1384,11 @@ const pagination = ref({
   total: 0,
   pages: 0
 })
+const sortState = ref({
+  sort_by: 'created_at',
+  sort_order: 'desc' as 'asc' | 'desc'
+})
+
 // Filter state
 const filterSearch = ref('')
 const filterStatus = ref('')
@@ -1015,53 +1401,22 @@ const showResetQuotaDialog = ref(false)
 const showResetRateLimitDialog = ref(false)
 const showUseKeyModal = ref(false)
 const showCcsClientSelect = ref(false)
-const showAdvancedCreateOptions = ref(false)
+const showColumnDropdown = ref(false)
 const pendingCcsRow = ref<ApiKey | null>(null)
 const selectedKey = ref<ApiKey | null>(null)
 const copiedKeyId = ref<number | null>(null)
-const revealedKeyIds = ref<Set<number>>(new Set())
-const baseUrlCopied = ref(false)
 const groupSelectorKeyId = ref<number | null>(null)
 const publicSettings = ref<PublicSettings | null>(null)
 const dropdownRef = ref<HTMLElement | null>(null)
+const columnDropdownRef = ref<HTMLElement | null>(null)
 const dropdownPosition = ref<{ top?: number; bottom?: number; left: number } | null>(null)
 const groupButtonRefs = ref<Map<number, HTMLElement>>(new Map())
 let abortController: AbortController | null = null
-
-const apiBaseUrl = computed(() => {
-  const configured = publicSettings.value?.api_base_url?.trim()
-  return configured || `${window.location.origin}/v1`
-})
-
-const keySummary = computed(() => {
-  const stats = Object.values(usageStats.value)
-  return {
-    total: pagination.value.total || apiKeys.value.length,
-    active: apiKeys.value.filter((key) => key.status === 'active').length,
-    todayCost: stats.reduce((sum, item) => sum + (item.today_actual_cost ?? 0), 0).toFixed(4),
-    totalCost: stats.reduce((sum, item) => sum + (item.total_actual_cost ?? 0), 0).toFixed(4)
-  }
-})
-
-function openCreateModalFromQuery(): void {
-  if (route.query.create === '1' || route.query.create === 'true') {
-    showCreateModal.value = true
-    const nextQuery = { ...route.query }
-    delete nextQuery.create
-    router.replace({ path: route.path, query: nextQuery }).catch(() => undefined)
-  }
-}
 
 // Get the currently selected key for group change
 const selectedKeyForGroup = computed(() => {
   if (groupSelectorKeyId.value === null) return null
   return apiKeys.value.find((k) => k.id === groupSelectorKeyId.value) || null
-})
-
-watch(showCreateModal, (open) => {
-  if (open) {
-    showAdvancedCreateOptions.value = false
-  }
 })
 
 const setGroupButtonRef = (keyId: number, el: Element | ComponentPublicInstance | null) => {
@@ -1115,6 +1470,13 @@ const statusOptions = computed(() => [
   { value: 'inactive', label: t('common.inactive') }
 ])
 
+const shouldSubmitEditStatus = (key: ApiKey, status: 'active' | 'inactive') => {
+  if (key.status === 'quota_exhausted' || key.status === 'expired') {
+    return status === 'active'
+  }
+  return true
+}
+
 // Filter dropdown options
 const groupFilterOptions = computed(() => [
   { value: '', label: t('keys.allGroups') },
@@ -1131,6 +1493,7 @@ const statusFilterOptions = computed(() => [
 ])
 
 const onFilterChange = () => {
+  selectedIds.value = []
   pagination.value.page = 1
   loadApiKeys()
 }
@@ -1153,10 +1516,43 @@ const groupOptions = computed(() =>
     description: group.description,
     rate: group.rate_multiplier,
     userRate: userGroupRates.value[group.id] ?? null,
+    peakRateEnabled: group.peak_rate_enabled,
+    peakStart: group.peak_start,
+    peakEnd: group.peak_end,
+    peakRateMultiplier: group.peak_rate_multiplier,
     subscriptionType: group.subscription_type,
     platform: group.platform
   }))
 )
+
+const createProvider = ref<KeyGroupProvider>('anthropic')
+const createProviderOptions = computed(() => KEY_GROUP_PROVIDERS.map((value) => ({
+  value,
+  label: t(`keys.providers.${value}`),
+  count: groups.value.filter((group) => getKeyGroupProvider(group.platform) === value).length
+})))
+
+const formGroupOptions = computed(() => showEditModal.value
+  ? groupOptions.value
+  : groupOptions.value.filter((group) => getKeyGroupProvider(group.platform) === createProvider.value)
+)
+
+const selectCreateProvider = (provider: KeyGroupProvider) => {
+  if (createProvider.value === provider) return
+  createProvider.value = provider
+  formData.value.group_id = null
+}
+
+// Also handles groups arriving after the create dialog has already opened.
+watch([showCreateModal, createProviderOptions], ([isOpen, providers], [wasOpen]) => {
+  if (!isOpen) return
+  if (!wasOpen || !providers.some((provider) => provider.value === createProvider.value && provider.count > 0)) {
+    selectCreateProvider(providers.find((provider) => provider.count > 0)?.value ?? 'anthropic')
+  }
+  if (!formGroupOptions.value.some((group) => group.value === formData.value.group_id)) {
+    formData.value.group_id = null
+  }
+})
 
 // Group dropdown search
 const groupSearchQuery = ref('')
@@ -1176,26 +1572,6 @@ const copyToClipboard = async (text: string, keyId: number) => {
     setTimeout(() => {
       copiedKeyId.value = null
     }, 800)
-  }
-}
-
-const toggleKeyVisibility = (keyId: number) => {
-  const nextRevealedKeyIds = new Set(revealedKeyIds.value)
-  if (nextRevealedKeyIds.has(keyId)) {
-    nextRevealedKeyIds.delete(keyId)
-  } else {
-    nextRevealedKeyIds.add(keyId)
-  }
-  revealedKeyIds.value = nextRevealedKeyIds
-}
-
-const copyBaseUrl = async () => {
-  const success = await clipboardCopy(apiBaseUrl.value, 'Base URL 已复制')
-  if (success) {
-    baseUrlCopied.value = true
-    setTimeout(() => {
-      baseUrlCopied.value = false
-    }, 900)
   }
 }
 
@@ -1223,14 +1599,15 @@ const loadApiKeys = async () => {
     if (filterSearch.value) filters.search = filterSearch.value
     if (filterStatus.value) filters.status = filterStatus.value
     if (filterGroupId.value !== '') filters.group_id = filterGroupId.value
-    filters.sort_by = 'created_at'
-    filters.sort_order = 'desc'
+    filters.sort_by = sortState.value.sort_by
+    filters.sort_order = sortState.value.sort_order
 
     const response = await keysAPI.list(pagination.value.page, pagination.value.page_size, filters, {
       signal
     })
     if (signal.aborted) return
     apiKeys.value = response.items
+    handleSelectionChange(selectedIds.value)
     pagination.value.total = response.total
     pagination.value.pages = response.pages
 
@@ -1294,12 +1671,22 @@ const closeUseKeyModal = () => {
 }
 
 const handlePageChange = (page: number) => {
+  selectedIds.value = []
   pagination.value.page = page
   loadApiKeys()
 }
 
 const handlePageSizeChange = (pageSize: number) => {
+  selectedIds.value = []
   pagination.value.page_size = pageSize
+  pagination.value.page = 1
+  loadApiKeys()
+}
+
+const handleSort = (key: string, order: 'asc' | 'desc') => {
+  selectedIds.value = []
+  sortState.value.sort_by = key
+  sortState.value.sort_order = order
   pagination.value.page = 1
   loadApiKeys()
 }
@@ -1398,6 +1785,9 @@ const closeGroupSelector = (event: MouseEvent) => {
     groupSelectorKeyId.value = null
     dropdownPosition.value = null
   }
+  if (columnDropdownRef.value && !columnDropdownRef.value.contains(target)) {
+    showColumnDropdown.value = false
+  }
 }
 
 const confirmDelete = (key: ApiKey) => {
@@ -1462,10 +1852,9 @@ const handleSubmit = async () => {
   submitting.value = true
   try {
     if (showEditModal.value && selectedKey.value) {
-      await keysAPI.update(selectedKey.value.id, {
+      const updates: UpdateApiKeyRequest = {
         name: formData.value.name,
         group_id: formData.value.group_id,
-        status: formData.value.status,
         ip_whitelist: ipWhitelist,
         ip_blacklist: ipBlacklist,
         quota: quota,
@@ -1473,7 +1862,11 @@ const handleSubmit = async () => {
         rate_limit_5h: rateLimitData.rate_limit_5h,
         rate_limit_1d: rateLimitData.rate_limit_1d,
         rate_limit_7d: rateLimitData.rate_limit_7d,
-      })
+      }
+      if (shouldSubmitEditStatus(selectedKey.value, formData.value.status)) {
+        updates.status = formData.value.status
+      }
+      await keysAPI.update(selectedKey.value.id, updates)
       appStore.showSuccess(t('keys.keyUpdatedSuccess'))
     } else {
       const customKey = formData.value.use_custom_key ? formData.value.custom_key : undefined
@@ -1527,7 +1920,6 @@ const handleDelete = async () => {
 const closeModals = () => {
   showCreateModal.value = false
   showEditModal.value = false
-  showAdvancedCreateOptions.value = false
   selectedKey.value = null
   formData.value = {
     name: '',
@@ -1565,14 +1957,18 @@ const setExpirationDays = (days: number) => {
 
 // Reset quota used for an API key
 const resetQuotaUsed = async () => {
-  if (!selectedKey.value) return
+  const key = selectedKey.value
+  if (!key) return
   showResetQuotaDialog.value = false
   try {
-    await keysAPI.update(selectedKey.value.id, { reset_quota: true })
+    const updatedKey = await keysAPI.update(key.id, { reset_quota: true })
     appStore.showSuccess(t('keys.quotaResetSuccess'))
-    // Update local state
-    if (selectedKey.value) {
-      selectedKey.value.quota_used = 0
+    key.quota_used = updatedKey.quota_used
+    if (key.status !== updatedKey.status) {
+      key.status = updatedKey.status
+      if (selectedKey.value?.id === key.id) {
+        formData.value.status = updatedKey.status === 'active' ? 'active' : 'inactive'
+      }
     }
   } catch (error: any) {
     const errorMsg = error.response?.data?.detail || t('keys.failedToResetQuota')
@@ -1582,6 +1978,12 @@ const resetQuotaUsed = async () => {
 
 // Show reset rate limit confirmation dialog (from edit modal)
 const confirmResetRateLimit = () => {
+  showResetRateLimitDialog.value = true
+}
+
+// Show reset rate limit confirmation dialog (from table row)
+const confirmResetRateLimitFromTable = (row: ApiKey) => {
+  selectedKey.value = row
   showResetRateLimitDialog.value = true
 }
 
@@ -1677,600 +2079,30 @@ const closeCcsClientSelect = () => {
   pendingCcsRow.value = null
 }
 
-function formatQuota(key: ApiKey): string {
-  if (!key.quota || key.quota <= 0) return t('dashboard.platformQuota.noLimit')
-  return `$${(key.quota_used || 0).toFixed(2)} / $${key.quota.toFixed(2)}`
-}
-
-function formatRateLimit(key: ApiKey): string {
-  const limits = [
-    key.rate_limit_5h > 0 ? `5h $${key.rate_limit_5h.toFixed(2)}` : '',
-    key.rate_limit_1d > 0 ? `1d $${key.rate_limit_1d.toFixed(2)}` : '',
-    key.rate_limit_7d > 0 ? `7d $${key.rate_limit_7d.toFixed(2)}` : ''
-  ].filter(Boolean)
-  return limits.length > 0 ? limits.join(' / ') : t('dashboard.platformQuota.noLimit')
+function formatResetTime(resetAt: string | null): string {
+  if (!resetAt) return ''
+  const diff = new Date(resetAt).getTime() - now.value.getTime()
+  if (diff <= 0) return t('keys.resetNow')
+  const days = Math.floor(diff / 86400000)
+  const hours = Math.floor((diff % 86400000) / 3600000)
+  const mins = Math.floor((diff % 3600000) / 60000)
+  if (days > 0) return `${days}d ${hours}h`
+  if (hours > 0) return `${hours}h ${mins}m`
+  return `${mins}m`
 }
 
 onMounted(() => {
+  loadSavedColumns()
   loadApiKeys()
   loadGroups()
   loadUserGroupRates()
   loadPublicSettings()
-  openCreateModalFromQuery()
   document.addEventListener('click', closeGroupSelector)
+  resetTimer = setInterval(() => { now.value = new Date() }, 60000)
 })
-
-watch(
-  () => route.query.create,
-  () => {
-    openCreateModalFromQuery()
-  }
-)
 
 onUnmounted(() => {
   document.removeEventListener('click', closeGroupSelector)
+  if (resetTimer) clearInterval(resetTimer)
 })
 </script>
-
-<style scoped>
-.lingqu-keys {
-  display: grid;
-  gap: 0.72rem;
-}
-
-.lingqu-keys__hero,
-.lingqu-keys__stats article,
-.lingqu-keys__toolbar,
-.lingqu-key-card,
-.lingqu-keys__empty {
-  position: relative;
-  overflow: hidden;
-  border: 1px solid rgba(33, 31, 28, 0.1);
-  background: rgba(255, 255, 255, 0.86);
-  box-shadow: 0 10px 26px rgba(29, 42, 42, 0.06);
-}
-
-.lingqu-keys__hero {
-  min-height: 4.6rem;
-  display: grid;
-  grid-template-columns: minmax(17rem, 0.9fr) minmax(24rem, 1fr);
-  align-items: center;
-  gap: clamp(0.75rem, 2vw, 1.2rem);
-  border-radius: 20px;
-  background:
-    linear-gradient(90deg, rgba(255, 248, 223, 0.9), rgba(255, 255, 255, 0.78) 46%, rgba(231, 250, 255, 0.78)),
-    rgba(255, 255, 255, 0.9);
-  padding: 0.72rem 0.85rem;
-  animation: keyPageRise 520ms ease both;
-}
-
-.lingqu-keys__hero::before,
-.lingqu-key-card::before,
-.lingqu-keys__empty::before {
-  display: none;
-}
-
-.lingqu-keys__hero > *,
-.lingqu-key-card > *,
-.lingqu-keys__empty > * {
-  position: relative;
-  z-index: 1;
-}
-
-.lingqu-keys__copy > span {
-  display: inline-flex;
-  width: fit-content;
-  border: 1px solid rgba(33, 31, 28, 0.12);
-  border-radius: 999px;
-  background: #fff8df;
-  padding: 0.14rem 0.48rem;
-  font-size: 0.62rem;
-  font-weight: 950;
-}
-
-.lingqu-keys__copy h1 {
-  max-width: none;
-  margin-top: 0.22rem;
-  font-family: theme('fontFamily.display');
-  font-size: clamp(1.08rem, 1.8vw, 1.42rem);
-  font-weight: 950;
-  letter-spacing: 0;
-  line-height: 1.08;
-  color: #211f1c;
-}
-
-.lingqu-keys__copy p {
-  max-width: 36rem;
-  margin-top: 0.1rem;
-  color: rgba(33, 31, 28, 0.58);
-  font-size: 0.73rem;
-  font-weight: 800;
-  line-height: 1.35;
-}
-
-.lingqu-keys__hero-tools {
-  min-width: 0;
-  display: grid;
-  grid-template-columns: minmax(8rem, 12rem) minmax(7rem, 10rem) minmax(12rem, 1fr);
-  align-items: center;
-  gap: 0.46rem;
-}
-
-.lingqu-keys__primary,
-.lingqu-keys__secondary,
-.lingqu-keys__endpoint,
-.lingqu-keys__usage-entry,
-.lingqu-key-card__actions a,
-.lingqu-key-card__actions button,
-.lingqu-key-card__visibility,
-.lingqu-key-card__copy {
-  display: inline-flex;
-  min-height: 2.12rem;
-  align-items: center;
-  justify-content: center;
-  gap: 0.32rem;
-  border: 1px solid rgba(33, 31, 28, 0.13);
-  border-radius: 12px;
-  color: #211f1c;
-  font-size: 0.78rem;
-  font-weight: 950;
-  box-shadow: none;
-  transition: transform 150ms ease, box-shadow 150ms ease, filter 150ms ease;
-}
-
-.lingqu-keys__primary {
-  background: linear-gradient(135deg, #f8df86, #f4b4bd);
-  padding: 0 0.78rem;
-}
-
-.lingqu-keys__primary--hero {
-  min-height: 2.28rem;
-  border-radius: 13px;
-  font-size: 0.82rem;
-}
-
-.lingqu-keys__secondary,
-.lingqu-keys__usage-entry,
-.lingqu-key-card__actions a,
-.lingqu-key-card__actions button,
-.lingqu-key-card__visibility,
-.lingqu-key-card__copy {
-  background: rgba(255, 255, 255, 0.72);
-  padding: 0 0.66rem;
-}
-
-.lingqu-keys__usage-entry,
-.lingqu-key-card__actions a {
-  text-decoration: none;
-}
-
-.lingqu-keys__endpoint {
-  min-width: 0;
-  max-width: none;
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  border-color: rgba(38, 51, 49, 0.92);
-  border-radius: 13px;
-  background: #263331;
-  color: #fffdf5;
-  padding: 0 0.62rem;
-}
-
-.lingqu-keys__endpoint span {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  color: rgba(255, 253, 245, 0.72);
-  font-size: 0.66rem;
-}
-
-.lingqu-keys__endpoint code {
-  overflow: hidden;
-  color: #f8e08a;
-  font-size: 0.66rem;
-  font-weight: 950;
-  text-align: left;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.lingqu-keys__primary:hover,
-.lingqu-keys__secondary:hover:not(:disabled),
-.lingqu-keys__endpoint:hover,
-.lingqu-keys__usage-entry:hover,
-.lingqu-key-card__actions a:hover,
-.lingqu-key-card__actions button:hover,
-.lingqu-key-card__visibility:hover,
-.lingqu-key-card__copy:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 12px 24px rgba(29, 42, 42, 0.1);
-  filter: none;
-}
-
-.lingqu-keys__stats {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0.48rem;
-}
-
-.lingqu-keys__stats article {
-  min-height: 3.15rem;
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  align-items: center;
-  gap: 0.45rem;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.64);
-  padding: 0.48rem 0.62rem;
-  transition: transform 160ms ease, box-shadow 160ms ease;
-}
-
-.lingqu-keys__stats article:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 12px 24px rgba(29, 42, 42, 0.08);
-}
-
-.lingqu-keys__stats svg {
-  color: #08a9d6;
-  width: 1.05rem;
-  height: 1.05rem;
-}
-
-.lingqu-keys__stats small,
-.lingqu-key-card small {
-  color: rgba(33, 31, 28, 0.54);
-  font-size: 0.68rem;
-  font-weight: 950;
-}
-
-.lingqu-keys__stats strong {
-  overflow-wrap: anywhere;
-  font-size: 0.92rem;
-  font-weight: 950;
-  color: #211f1c;
-  text-align: right;
-}
-
-.lingqu-keys__toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.46rem;
-  border-radius: 14px;
-  padding: 0.48rem;
-}
-
-.lingqu-keys__refresh {
-  margin-left: auto;
-}
-
-.lingqu-keys__search {
-  min-width: min(100%, 18rem);
-  flex: 1 1 18rem;
-}
-
-.lingqu-keys__select {
-  width: 10.5rem;
-}
-
-.lingqu-key-list {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.8rem;
-}
-
-.lingqu-key-card,
-.lingqu-keys__empty {
-  border-radius: 18px;
-  background:
-    radial-gradient(circle at 100% 0%, rgba(72, 185, 200, 0.08), transparent 34%),
-    rgba(255, 255, 255, 0.86);
-  padding: 0.86rem;
-  animation: keyPageRise 460ms ease both;
-}
-
-.lingqu-key-card {
-  display: grid;
-  gap: 0.85rem;
-}
-
-.lingqu-key-card__top {
-  display: flex;
-  justify-content: space-between;
-  gap: 1rem;
-}
-
-.lingqu-key-card__title-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.lingqu-key-card h2,
-.lingqu-keys__empty h2 {
-  font-family: theme('fontFamily.display');
-  font-size: 1.28rem;
-  font-weight: 950;
-  line-height: 1.1;
-  color: #211f1c;
-}
-
-.lingqu-key-card__status {
-  border: 1px solid rgba(33, 31, 28, 0.12);
-  border-radius: 999px;
-  background: #fff;
-  padding: 0.16rem 0.52rem;
-  font-size: 0.7rem;
-  font-weight: 950;
-}
-
-.lingqu-key-card__status--active {
-  background: #edf9f3;
-}
-
-.lingqu-key-card__status--inactive {
-  background: #e8e8e8;
-}
-
-.lingqu-key-card__status--quota_exhausted,
-.lingqu-key-card__status--expired {
-  background: #ffd7d7;
-}
-
-.lingqu-key-card__meta,
-.lingqu-key-card__limits {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem;
-  margin-top: 0.42rem;
-  color: rgba(33, 31, 28, 0.56);
-  font-size: 0.78rem;
-  font-weight: 850;
-}
-
-.lingqu-key-card__group,
-.lingqu-key-card__limits span {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  border: 1px solid rgba(33, 31, 28, 0.12);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.74);
-  padding: 0.3rem 0.55rem;
-  color: #211f1c;
-  font-weight: 900;
-}
-
-.lingqu-key-card__tools {
-  width: fit-content;
-  display: flex;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 0.38rem;
-}
-
-.lingqu-key-card__visibility,
-.lingqu-key-card__copy {
-  width: 2.34rem;
-  min-height: 2.34rem;
-  flex: 0 0 auto;
-  padding: 0;
-}
-
-.lingqu-key-card__secret {
-  display: grid;
-  gap: 0.3rem;
-  border: 1px solid rgba(38, 51, 49, 0.92);
-  border-radius: 14px;
-  background: #263331;
-  padding: 0.68rem;
-  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.05);
-}
-
-.lingqu-key-card__secret small {
-  color: rgba(255, 253, 245, 0.54);
-}
-
-.lingqu-key-card__secret code {
-  overflow-wrap: anywhere;
-  color: #f8e08a;
-  font-size: 0.78rem;
-  font-weight: 900;
-}
-
-.lingqu-key-card__metrics {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0.42rem;
-}
-
-.lingqu-key-card__metrics > div {
-  display: grid;
-  gap: 0.18rem;
-  border: 1px solid rgba(33, 31, 28, 0.1);
-  border-radius: 13px;
-  background: rgba(255, 255, 255, 0.58);
-  padding: 0.52rem;
-}
-
-.lingqu-key-card__metrics strong {
-  overflow-wrap: anywhere;
-  color: #211f1c;
-  font-size: 0.92rem;
-  font-weight: 950;
-}
-
-.lingqu-key-card__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.42rem;
-}
-
-.lingqu-key-card__actions a,
-.lingqu-key-card__actions button {
-  min-height: 2.14rem;
-  border-radius: 13px;
-  font-size: 0.74rem;
-  padding: 0 0.58rem;
-}
-
-.lingqu-key-card__actions .lingqu-key-card__danger {
-  background: #ffe0e4;
-}
-
-.lingqu-keys__empty {
-  min-height: 18rem;
-  grid-column: 1 / -1;
-  display: grid;
-  place-items: center;
-  text-align: center;
-  padding: 2rem;
-}
-
-.lingqu-keys__empty p {
-  max-width: 28rem;
-  color: rgba(33, 31, 28, 0.62);
-  font-weight: 800;
-  line-height: 1.7;
-}
-
-.lingqu-keys__empty-icon {
-  width: 4.2rem;
-  height: 4.2rem;
-  display: grid;
-  place-items: center;
-  border: 1px solid rgba(33, 31, 28, 0.12);
-  border-radius: 18px;
-  background: #fff7d0;
-  box-shadow: 0 10px 24px rgba(29, 42, 42, 0.07);
-}
-
-.lingqu-key-card--loading {
-  min-height: 16rem;
-}
-
-.lingqu-key-card--loading div {
-  height: 2rem;
-  border-radius: 999px;
-  background: rgba(33, 31, 28, 0.08);
-  animation: keyPulse 1.2s ease-in-out infinite;
-}
-
-.lingqu-key-card--loading div:nth-child(2) {
-  width: 72%;
-}
-
-.lingqu-key-card--loading div:nth-child(3) {
-  width: 52%;
-}
-
-@media (max-width: 1080px) {
-  .lingqu-keys__hero,
-  .lingqu-key-list {
-    grid-template-columns: 1fr;
-  }
-
-  .lingqu-keys__stats {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .lingqu-keys__hero-tools {
-    grid-template-columns: minmax(8rem, 1fr) minmax(7rem, 0.8fr) minmax(12rem, 1fr);
-  }
-}
-
-@media (max-width: 680px) {
-  .lingqu-keys__hero {
-    grid-template-columns: 1fr;
-    min-height: auto;
-    padding: 0.7rem;
-  }
-
-  .lingqu-keys__stats {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .lingqu-key-card__metrics {
-    grid-template-columns: 1fr;
-  }
-
-  .lingqu-keys__select {
-    width: 100%;
-  }
-
-  .lingqu-key-card__top {
-    flex-direction: column;
-  }
-
-  .lingqu-keys__copy h1 {
-    max-width: none;
-    font-size: 1.55rem;
-  }
-
-  .lingqu-keys__copy p {
-    max-width: none;
-    font-size: 0.78rem;
-  }
-
-  .lingqu-keys__hero-tools {
-    grid-template-columns: 1fr;
-  }
-
-  .lingqu-keys__primary--hero,
-  .lingqu-keys__usage-entry,
-  .lingqu-keys__endpoint {
-    width: 100%;
-    max-width: none;
-  }
-
-  .lingqu-keys__refresh {
-    width: 100%;
-    margin-left: 0;
-  }
-
-  .lingqu-keys__primary,
-  .lingqu-keys__secondary,
-  .lingqu-keys__usage-entry {
-    min-height: 2rem;
-    padding: 0 0.62rem;
-  }
-
-  .lingqu-keys__toolbar {
-    padding: 0.5rem;
-  }
-}
-
-@media (max-width: 380px) {
-  .lingqu-keys__stats article {
-    min-height: 4.8rem;
-    padding: 0.55rem;
-  }
-
-  .lingqu-keys__stats strong {
-    font-size: 0.95rem;
-  }
-}
-
-@keyframes keyPageRise {
-  from {
-    opacity: 0;
-    transform: translateY(12px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes keyPulse {
-  0%,
-  100% {
-    opacity: 0.48;
-  }
-  50% {
-    opacity: 0.9;
-  }
-}
-</style>

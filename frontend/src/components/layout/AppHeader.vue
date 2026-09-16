@@ -1,6 +1,6 @@
 <template>
-  <header class="app-header sticky top-0 z-30 border-b border-slate-200/80">
-    <div class="flex h-14 items-center justify-between gap-2 px-2 sm:px-4 md:px-6">
+  <header class="glass sticky top-0 z-30 border-b border-gray-200/50 dark:border-dark-700/50">
+    <div class="flex h-16 items-center justify-between gap-2 px-2 sm:px-4 md:px-6">
       <!-- Left: Mobile Menu Toggle + Page Title -->
       <div class="flex shrink-0 items-center gap-2 sm:gap-4">
         <button
@@ -12,7 +12,7 @@
         </button>
 
         <div class="hidden lg:block">
-          <h1 class="text-base font-semibold text-gray-900 dark:text-white">
+          <h1 class="text-lg font-semibold text-gray-900 dark:text-white">
             {{ pageTitle }}
           </h1>
           <p v-if="pageDescription" class="text-xs text-gray-500 dark:text-dark-400">
@@ -28,7 +28,7 @@
 
         <!-- Docs Link -->
         <a
-          v-if="docUrl && !authStore.isAdmin"
+          v-if="docUrl"
           :href="docUrl"
           target="_blank"
           rel="noopener noreferrer"
@@ -51,13 +51,13 @@
         <!-- Language Switcher -->
         <LocaleSwitcher />
 
-        <!-- Subscription Progress (for users with active subscriptions) -->
-        <SubscriptionProgressMini v-if="user && !authStore.isAdmin" />
+        <!-- Subscription Progress (for users with active subscriptions; not mounted at all when the feature is off) -->
+        <SubscriptionProgressMini v-if="user && subscriptionFeatureEnabled" />
 
         <!-- Balance Display -->
         <div
           v-if="user"
-          class="hidden items-center gap-2 rounded-full border border-red-100 bg-red-50/80 px-3 py-1.5 dark:bg-primary-900/20 sm:flex"
+          class="group relative hidden items-center gap-2 rounded-xl bg-primary-50 px-3 py-1.5 dark:bg-primary-900/20 sm:flex"
         >
           <svg
             class="h-4 w-4 text-primary-600 dark:text-primary-400"
@@ -73,18 +73,42 @@
             />
           </svg>
           <span class="text-sm font-semibold text-primary-700 dark:text-primary-300">
-            ${{ user.balance?.toFixed(2) || '0.00' }}
+            {{ formatHeaderMoney(availableBalance) }}
           </span>
+          <span
+            v-if="frozenBalance > 0"
+            class="rounded-full bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/40 dark:text-amber-200"
+          >
+            {{ balanceFrozenLabel }}
+          </span>
+          <div
+            class="pointer-events-none absolute right-0 top-full mt-2 hidden w-56 rounded-lg border border-gray-200 bg-white p-3 text-xs shadow-lg group-hover:block dark:border-dark-700 dark:bg-dark-800"
+          >
+            <div class="flex items-center justify-between">
+              <span class="text-gray-500 dark:text-dark-400">{{ balanceAvailableText }}</span>
+              <span class="font-medium text-gray-900 dark:text-white">{{ formatHeaderMoney(availableBalance) }}</span>
+            </div>
+            <div class="mt-2 flex items-center justify-between">
+              <span class="text-gray-500 dark:text-dark-400">{{ balanceFrozenText }}</span>
+              <span class="font-medium text-amber-700 dark:text-amber-200">{{ formatHeaderMoney(frozenBalance) }}</span>
+            </div>
+            <div class="mt-2 border-t border-gray-100 pt-2 dark:border-dark-700">
+              <div class="flex items-center justify-between">
+                <span class="text-gray-500 dark:text-dark-400">{{ balanceTotalText }}</span>
+                <span class="font-semibold text-gray-900 dark:text-white">{{ formatHeaderMoney(totalBalance) }}</span>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- User Dropdown -->
         <div v-if="user" class="relative" ref="dropdownRef">
           <button
             @click="toggleDropdown"
-            class="flex items-center gap-2 rounded-full border border-transparent py-1 pl-1 pr-2 transition-colors hover:border-slate-200 hover:bg-white"
+            class="flex items-center gap-2 rounded-xl p-1.5 transition-colors hover:bg-gray-100 dark:hover:bg-dark-800"
             :aria-label="t('common.userMenu')"
           >
-            <div class="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-primary-500 to-primary-600 text-sm font-medium text-white shadow-sm">
+            <div class="flex h-8 w-8 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-primary-500 to-primary-600 text-sm font-medium text-white shadow-sm">
               <img
                 v-if="avatarUrl"
                 :src="avatarUrl"
@@ -121,7 +145,10 @@
                   {{ t('common.balance') }}
                 </div>
                 <div class="text-sm font-semibold text-primary-600 dark:text-primary-400">
-                  ${{ user.balance?.toFixed(2) || '0.00' }}
+                  {{ formatHeaderMoney(availableBalance) }}
+                </div>
+                <div v-if="frozenBalance > 0" class="mt-1 text-xs text-amber-600 dark:text-amber-300">
+                  {{ balanceFrozenText }} {{ formatHeaderMoney(frozenBalance) }}
                 </div>
               </div>
 
@@ -234,6 +261,8 @@ import AnnouncementBell from '@/components/common/AnnouncementBell.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { sanitizeUrl } from '@/utils/url'
 import { FeatureFlags, isFeatureFlagEnabled } from '@/utils/featureFlags'
+import { resolveRouteMetaKeys } from '@/router/title'
+import { resolveSiteBillingMode } from '@/utils/siteBillingMode'
 
 const router = useRouter()
 const route = useRoute()
@@ -250,6 +279,13 @@ const contactInfo = computed(() => appStore.contactInfo)
 const docUrl = computed(() => sanitizeUrl(appStore.docUrl))
 const modelPlazaEnabled = computed(() => isFeatureFlagEnabled(FeatureFlags.modelPlaza))
 const avatarUrl = computed(() => user.value?.avatar_url?.trim() || '')
+const availableBalance = computed(() => Number(user.value?.balance || 0))
+const frozenBalance = computed(() => Number(user.value?.frozen_balance || 0))
+const totalBalance = computed(() => availableBalance.value + frozenBalance.value)
+const balanceAvailableText = computed(() => t('common.availableBalance') === 'common.availableBalance' ? '可用余额' : t('common.availableBalance'))
+const balanceFrozenText = computed(() => t('common.frozenBalance') === 'common.frozenBalance' ? '冻结金额' : t('common.frozenBalance'))
+const balanceTotalText = computed(() => t('common.totalBalance') === 'common.totalBalance' ? '总余额' : t('common.totalBalance'))
+const balanceFrozenLabel = computed(() => `${balanceFrozenText.value} ${formatHeaderMoney(frozenBalance.value)}`)
 
 // 只在标准模式的管理员下显示新手引导按钮
 const showOnboardingButton = computed(() => {
@@ -275,6 +311,14 @@ const displayName = computed(() => {
   return user.value.username || user.value.email?.split('@')[0] || ''
 })
 
+// 订阅功能关闭时不挂载顶栏订阅徽章（组件 onMounted 会拉取订阅接口）。
+const subscriptionFeatureEnabled = computed(() => isFeatureFlagEnabled(FeatureFlags.subscription))
+
+// /purchase 的标题/描述随站点计费模式切换，与 document.title 共用同一解析。
+const routeMetaKeys = computed(() => resolveRouteMetaKeys(route, {
+  billingMode: resolveSiteBillingMode(appStore.cachedPublicSettings),
+}))
+
 const pageTitle = computed(() => {
   // For custom pages, use the menu item's label instead of generic "自定义页面"
   if (route.name === 'CustomPage') {
@@ -284,7 +328,7 @@ const pageTitle = computed(() => {
       ?? (authStore.isAdmin ? adminSettingsStore.customMenuItems.find((item) => item.id === id) : undefined)
     if (menuItem?.label) return menuItem.label
   }
-  const titleKey = route.meta.titleKey as string
+  const titleKey = routeMetaKeys.value.titleKey
   if (titleKey) {
     return t(titleKey)
   }
@@ -292,7 +336,7 @@ const pageTitle = computed(() => {
 })
 
 const pageDescription = computed(() => {
-  const descKey = route.meta.descriptionKey as string
+  const descKey = routeMetaKeys.value.descriptionKey
   if (descKey) {
     return t(descKey)
   }
@@ -327,6 +371,11 @@ function handleReplayGuide() {
   onboardingStore.replay()
 }
 
+function formatHeaderMoney(value: number) {
+  if (!Number.isFinite(value)) return '$0.00'
+  return `$${value.toFixed(2)}`
+}
+
 function handleClickOutside(event: MouseEvent) {
   if (dropdownRef.value && !dropdownRef.value.contains(event.target as Node)) {
     closeDropdown()
@@ -343,12 +392,6 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-.app-header {
-  background: rgba(255, 255, 255, 0.92);
-  backdrop-filter: blur(18px);
-  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.04);
-}
-
 .dropdown-enter-active,
 .dropdown-leave-active {
   transition: all 0.2s ease;

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, shallowMount } from '@vue/test-utils'
 import PaymentView from '../PaymentView.vue'
 import { PAYMENT_RECOVERY_STORAGE_KEY } from '@/components/payment/paymentFlow'
@@ -26,20 +26,11 @@ const showWarning = vi.hoisted(() => vi.fn())
 const getCheckoutInfo = vi.hoisted(() => vi.fn())
 const bridgeInvoke = vi.hoisted(() => vi.fn())
 const translate = vi.hoisted(() => vi.fn((key: string) => key))
-
-const paymentViewStubs = {
-  AppLayout: {
-    template: '<div><slot /></div>',
-  },
-  UserWorkspaceLayout: {
-    template: '<div><slot /></div>',
-  },
-  RouterLink: {
-    template: '<a><slot /></a>',
-  },
-  Teleport: true,
-  Transition: false,
-}
+// Public settings live in a reactive holder so tests can flip feature flags after mount
+// and exercise the watchers that react to them.
+const appStoreState = vi.hoisted(() => ({
+  setPublicSettings: (_value: Record<string, unknown> | undefined) => {},
+}))
 
 vi.mock('vue-router', async () => {
   const actual = await vi.importActual<typeof import('vue-router')>('vue-router')
@@ -87,17 +78,23 @@ vi.mock('@/stores/subscriptions', () => ({
   }),
 }))
 
-vi.mock('@/stores', () => ({
-  useAppStore: () => ({
-    cachedPublicSettings: {
-      payment_enabled: true,
-      server_utc_offset: '+00:00',
-    },
-    showError,
-    showInfo,
-    showWarning,
-  }),
-}))
+vi.mock('@/stores', async () => {
+  const { reactive } = await import('vue')
+  const state = reactive({ cachedPublicSettings: undefined as Record<string, unknown> | undefined })
+  appStoreState.setPublicSettings = (value) => {
+    state.cachedPublicSettings = value
+  }
+  return {
+    useAppStore: () => ({
+      showError,
+      showInfo,
+      showWarning,
+      get cachedPublicSettings() {
+        return state.cachedPublicSettings
+      },
+    }),
+  }
+})
 
 vi.mock('@/api/payment', () => ({
   paymentAPI: {
@@ -214,7 +211,7 @@ function oauthOrderFixture() {
     payment_type: 'wxpay',
     result_type: 'oauth_required' as const,
     oauth: {
-      authorize_url: '/api/v1/auth/oauth/wechat/payment/start?payment_type=wxpay&redirect=%2Fsubscription-plans%3Ffrom%3Dwechat',
+      authorize_url: '/api/v1/auth/oauth/wechat/payment/start?payment_type=wxpay&redirect=%2Fpurchase%3Ffrom%3Dwechat',
       appid: 'wx123',
       scope: 'snsapi_base',
       redirect_url: '/auth/wechat/payment/callback',
@@ -224,8 +221,11 @@ function oauthOrderFixture() {
 
 async function mountSubscriptionConfirm(options: Parameters<typeof checkoutInfoWithPlansFixture>[0] = {}) {
   vi.useRealTimers()
-  routeState.path = '/subscription-plans'
-  routeState.query = { group: '3' }
+  routeState.path = '/purchase'
+  routeState.query = {
+    tab: 'subscription',
+    group: '3',
+  }
   routerReplace.mockReset().mockResolvedValue(undefined)
   routerPush.mockReset().mockResolvedValue(undefined)
   routerResolve.mockClear()
@@ -243,7 +243,11 @@ async function mountSubscriptionConfirm(options: Parameters<typeof checkoutInfoW
   const wrapper = shallowMount(PaymentView, {
     global: {
       stubs: {
-        ...paymentViewStubs,
+        AppLayout: {
+          template: '<div><slot /></div>',
+        },
+        Teleport: true,
+        Transition: false,
       },
     },
   })
@@ -254,8 +258,8 @@ async function mountSubscriptionConfirm(options: Parameters<typeof checkoutInfoW
 
 async function mountSubscriptionPlanList(planCount: number) {
   vi.useRealTimers()
-  routeState.path = '/subscription-plans'
-  routeState.query = {}
+  routeState.path = '/purchase'
+  routeState.query = { tab: 'subscription' }
   routerReplace.mockReset().mockResolvedValue(undefined)
   routerPush.mockReset().mockResolvedValue(undefined)
   routerResolve.mockClear()
@@ -279,7 +283,11 @@ async function mountSubscriptionPlanList(planCount: number) {
   const wrapper = shallowMount(PaymentView, {
     global: {
       stubs: {
-        ...paymentViewStubs,
+        AppLayout: {
+          template: '<div><slot /></div>',
+        },
+        Teleport: true,
+        Transition: false,
       },
     },
   })
@@ -303,7 +311,6 @@ describe('PaymentView help text', () => {
       global: {
         stubs: {
           AppLayout: { template: '<div><slot /></div>' },
-          UserWorkspaceLayout: { template: '<div><slot /></div>' },
           Teleport: true,
           Transition: false,
         },
@@ -352,48 +359,6 @@ describe('PaymentView help text', () => {
   })
 })
 
-describe('PaymentView route-specific summary', () => {
-  it('hides the recharge summary cards on the standalone subscription page', async () => {
-    routeState.path = '/subscription-plans'
-    routeState.query = {}
-    getCheckoutInfo.mockReset().mockResolvedValue(checkoutInfoWithPlansFixture())
-
-    const wrapper = shallowMount(PaymentView, {
-      global: { stubs: paymentViewStubs },
-    })
-    await flushPromises()
-
-    expect(wrapper.find('.lingqu-console-stats').exists()).toBe(false)
-  })
-
-  it('keeps the subscription page clean when the URL has a trailing slash', async () => {
-    routeState.path = '/subscription-plans/'
-    routeState.query = {}
-    getCheckoutInfo.mockReset().mockResolvedValue(checkoutInfoWithPlansFixture())
-
-    const wrapper = shallowMount(PaymentView, {
-      global: { stubs: paymentViewStubs },
-    })
-    await flushPromises()
-
-    expect(wrapper.find('.lingqu-console-stats').exists()).toBe(false)
-    expect(wrapper.text()).toContain('订阅套餐')
-  })
-
-  it('keeps the account summary cards on the recharge page', async () => {
-    routeState.path = '/purchase'
-    routeState.query = {}
-    getCheckoutInfo.mockReset().mockResolvedValue(checkoutInfoFixture())
-
-    const wrapper = shallowMount(PaymentView, {
-      global: { stubs: paymentViewStubs },
-    })
-    await flushPromises()
-
-    expect(wrapper.find('.lingqu-console-stats').exists()).toBe(true)
-  })
-})
-
 describe('PaymentView subscription plan grid', () => {
   it.each([3, 4, 6])('keeps %i plans on the existing mobile/tablet/desktop grid', async (planCount) => {
     const wrapper = await mountSubscriptionPlanList(planCount)
@@ -401,25 +366,11 @@ describe('PaymentView subscription plan grid', () => {
 
     expect(cards).toHaveLength(planCount)
     expect([...(cards[0].element.parentElement?.classList ?? [])]).toEqual(expect.arrayContaining([
-      'subscription-plan-grid',
+      'grid',
+      'grid-cols-1',
+      'sm:grid-cols-2',
+      'lg:grid-cols-3',
     ]))
-  })
-})
-
-describe('PaymentView purchase route isolation', () => {
-  it('ignores the legacy subscription query on the recharge page', async () => {
-    routeState.path = '/purchase'
-    routeState.query = { tab: 'subscription', group: '3' }
-    getCheckoutInfo.mockReset().mockResolvedValue(checkoutInfoWithPlansFixture())
-
-    const wrapper = shallowMount(PaymentView, {
-      global: { stubs: paymentViewStubs },
-    })
-    await flushPromises()
-
-    expect(wrapper.find('.lingqu-console-stats').exists()).toBe(true)
-    expect(wrapper.find('.subscription-catalog').exists()).toBe(false)
-    expect(wrapper.text()).toContain('充值')
   })
 })
 
@@ -441,7 +392,9 @@ describe('PaymentView recharge rate preview', () => {
     const wrapper = shallowMount(PaymentView, {
       global: {
         stubs: {
-          ...paymentViewStubs,
+          AppLayout: { template: '<div><slot /></div>' },
+          Teleport: true,
+          Transition: false,
         },
       },
     })
@@ -471,7 +424,6 @@ describe('PaymentView subscription confirmation amounts', () => {
       plan: {
         price: 9.99,
         original_price: 12.99,
-        currency: 'USD',
       },
     })
 
@@ -516,7 +468,6 @@ describe('PaymentView subscription confirmation amounts', () => {
       plan: {
         price: 7.99,
         original_price: 9.99,
-        currency: 'USD',
       },
     })
 
@@ -535,7 +486,6 @@ describe('PaymentView subscription confirmation amounts', () => {
       },
       plan: {
         price: 9.99,
-        currency: 'USD',
       },
     })
 
@@ -548,27 +498,6 @@ describe('PaymentView subscription confirmation amounts', () => {
     expect(text).toContain(fee)
     expect(text).toContain(total)
     expect(wrapper.findAll('button').some(button => button.text().includes(total))).toBe(true)
-  })
-
-  it('keeps a CNY plan sale price in CNY when the global USD/CNY rate is configured', async () => {
-    const wrapper = await mountSubscriptionConfirm({
-      checkout: {
-        subscription_usd_to_cny_rate: 7.15,
-      },
-      method: {
-        currency: 'CNY',
-      },
-      plan: {
-        price: 270,
-        original_price: 300,
-        currency: 'CNY',
-      },
-    })
-
-    const text = wrapper.text()
-    expect(text).toContain(formatPaymentAmount(270, 'CNY'))
-    expect(text).toContain(formatPaymentAmount(300, 'CNY'))
-    expect(text).not.toContain(formatPaymentAmount(1930.5, 'CNY'))
   })
 })
 
@@ -630,7 +559,9 @@ describe('PaymentView payment recovery', () => {
     const wrapper = shallowMount(PaymentView, {
       global: {
         stubs: {
-          ...paymentViewStubs,
+          AppLayout: {
+            template: '<div><slot /></div>',
+          },
           PaymentStatusPanel: {
             template: '<button data-test="payment-done" @click="$emit(\'done\')" />',
           },
@@ -685,7 +616,8 @@ describe('PaymentView WeChat JSAPI flow', () => {
     shallowMount(PaymentView, {
       global: {
         stubs: {
-          ...paymentViewStubs,
+          Teleport: true,
+          Transition: false,
         },
       },
     })
@@ -699,7 +631,6 @@ describe('PaymentView WeChat JSAPI flow', () => {
         order_id: '123',
         out_trade_no: 'sub2_jsapi_123',
         resume_token: 'resume-token-123',
-        order_type: 'balance',
       },
     })
     expect(window.localStorage.getItem(PAYMENT_RECOVERY_STORAGE_KEY)).toBeNull()
@@ -714,7 +645,8 @@ describe('PaymentView WeChat JSAPI flow', () => {
     shallowMount(PaymentView, {
       global: {
         stubs: {
-          ...paymentViewStubs,
+          Teleport: true,
+          Transition: false,
         },
       },
     })
@@ -734,7 +666,8 @@ describe('PaymentView WeChat JSAPI flow', () => {
     const wrapper = shallowMount(PaymentView, {
       global: {
         stubs: {
-          ...paymentViewStubs,
+          Teleport: true,
+          Transition: false,
         },
       },
     })
@@ -777,7 +710,8 @@ describe('PaymentView WeChat JSAPI flow', () => {
     shallowMount(PaymentView, {
       global: {
         stubs: {
-          ...paymentViewStubs,
+          Teleport: true,
+          Transition: false,
         },
       },
     })
@@ -803,7 +737,7 @@ describe('PaymentView WeChat JSAPI flow', () => {
 
     const originalLocation = window.location
     const locationState = {
-      href: 'http://localhost/subscription-plans',
+      href: 'http://localhost/purchase',
       origin: 'http://localhost',
     }
     Object.defineProperty(window, 'location', {
@@ -814,14 +748,15 @@ describe('PaymentView WeChat JSAPI flow', () => {
     shallowMount(PaymentView, {
       global: {
         stubs: {
-          ...paymentViewStubs,
+          Teleport: true,
+          Transition: false,
         },
       },
     })
     await flushPromises()
     await flushPromises()
 
-    expect(routerReplace).toHaveBeenCalledWith({ path: '/subscription-plans', query: {} })
+    expect(routerReplace).toHaveBeenCalledWith({ path: '/purchase', query: {} })
     expect(createOrder).toHaveBeenCalledWith(expect.objectContaining({
       payment_type: 'wxpay',
       order_type: 'subscription',
@@ -830,7 +765,7 @@ describe('PaymentView WeChat JSAPI flow', () => {
     }))
     expect(locationState.href).toContain('/api/v1/auth/oauth/wechat/payment/start?')
     expect(new URL(locationState.href, 'http://localhost').searchParams.get('redirect')).toBe(
-      '/subscription-plans?from=wechat&payment_type=wxpay&order_type=subscription&plan_id=7',
+      '/purchase?from=wechat&payment_type=wxpay&order_type=subscription&plan_id=7',
     )
 
     Object.defineProperty(window, 'location', {
@@ -861,7 +796,8 @@ describe('PaymentView WeChat JSAPI flow', () => {
     shallowMount(PaymentView, {
       global: {
         stubs: {
-          ...paymentViewStubs,
+          Teleport: true,
+          Transition: false,
         },
       },
     })
@@ -881,5 +817,73 @@ describe('PaymentView WeChat JSAPI flow', () => {
     expect(showWarning).toHaveBeenCalledWith('payment.errors.mobilePaymentFallbackToQr')
     expect(showError).not.toHaveBeenCalled()
     expect(window.localStorage.getItem(PAYMENT_RECOVERY_STORAGE_KEY)).toContain('weixin://wxpay/bizpayurl?pr=fallback-native')
+  })
+})
+
+describe('PaymentView subscription feature flag', () => {
+  afterEach(() => {
+    appStoreState.setPublicSettings(undefined)
+  })
+
+  function tabLabels(wrapper: Awaited<ReturnType<typeof mountSubscriptionPlanList>>) {
+    return wrapper
+      .findAll('button')
+      .map((button) => button.text())
+      .filter((text) => text === 'payment.tabTopUp' || text === 'payment.tabSubscribe')
+  }
+
+  it('keeps the top-up / subscribe switcher when subscription_enabled is absent (opt-out default)', async () => {
+    const wrapper = await mountSubscriptionPlanList(2)
+
+    expect(tabLabels(wrapper)).toEqual(['payment.tabTopUp', 'payment.tabSubscribe'])
+    expect(wrapper.findAllComponents(SubscriptionPlanCard)).toHaveLength(2)
+  })
+
+  it('drops the subscribe tab, hides the switcher and ignores ?tab=subscription when subscriptions are disabled', async () => {
+    appStoreState.setPublicSettings({ subscription_enabled: false })
+    const wrapper = await mountSubscriptionPlanList(2)
+
+    expect(tabLabels(wrapper)).toEqual([])
+    expect(wrapper.findAllComponents(SubscriptionPlanCard)).toHaveLength(0)
+    expect(wrapper.text()).toContain('payment.rechargeAccount')
+  })
+
+  it('shows an unavailable notice instead of a doomed top-up form when balance recharge is disabled too', async () => {
+    appStoreState.setPublicSettings({ subscription_enabled: false })
+    const wrapper = await mountSubscriptionConfirm({ checkout: { balance_disabled: true } })
+
+    expect(tabLabels(wrapper)).toEqual([])
+    expect(wrapper.findAllComponents(SubscriptionPlanCard)).toHaveLength(0)
+    expect(wrapper.text()).not.toContain('payment.confirmSubscription')
+    expect(wrapper.text()).not.toContain('payment.rechargeAccount')
+    expect(wrapper.text()).toContain('payment.billingUnavailable')
+    wrapper.unmount()
+  })
+
+  it('falls back from the subscribe tab to top-up when the flag flips off after mount', async () => {
+    const wrapper = await mountSubscriptionPlanList(2)
+    expect(wrapper.findAllComponents(SubscriptionPlanCard)).toHaveLength(2)
+
+    appStoreState.setPublicSettings({ subscription_enabled: false })
+    await flushPromises()
+
+    expect(tabLabels(wrapper)).toEqual([])
+    expect(wrapper.findAllComponents(SubscriptionPlanCard)).toHaveLength(0)
+    expect(wrapper.text()).toContain('payment.rechargeAccount')
+    wrapper.unmount()
+  })
+
+  it('enters the subscribe tab when a subscription-only site turns subscriptions back on', async () => {
+    appStoreState.setPublicSettings({ subscription_enabled: false })
+    const wrapper = await mountSubscriptionConfirm({ checkout: { balance_disabled: true } })
+    expect(wrapper.text()).toContain('payment.billingUnavailable')
+
+    appStoreState.setPublicSettings({ subscription_enabled: true })
+    await flushPromises()
+
+    expect(wrapper.text()).not.toContain('payment.billingUnavailable')
+    expect(wrapper.text()).not.toContain('payment.rechargeAccount')
+    expect(wrapper.findAllComponents(SubscriptionPlanCard).length).toBeGreaterThan(0)
+    wrapper.unmount()
   })
 })

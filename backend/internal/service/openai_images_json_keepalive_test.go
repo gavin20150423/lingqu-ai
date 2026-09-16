@@ -140,7 +140,7 @@ func TestOpenAIImagesJSONKeepalive_KeepsOAuthNonStreamResponseValid(t *testing.T
 		Body:       reader,
 	}
 	svc := &OpenAIGatewayService{}
-	_, imageCount, _, _, err := svc.handleOpenAIImagesOAuthNonStreamingResponse(resp, c, "b64_json", "gpt-image-2", time.Now())
+	_, imageCount, _, err := svc.handleOpenAIImagesOAuthNonStreamingResponse(resp, c, "b64_json", "gpt-image-2")
 	stop()
 
 	require.NoError(t, err)
@@ -180,7 +180,7 @@ func TestOpenAIImagesJSONKeepaliveWriter_NilGuards(t *testing.T) {
 // 可重试上游错误必须仍转换为 UpstreamFailoverError（而非裸错误吞掉换号）。
 func TestOpenAIImagesJSONKeepalive_HeartbeatBeforeForwardStillFailsOver(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	body := []byte(`{"model":"gpt-image-2","prompt":"draw a cat","response_format":"b64_json"}`)
+	body := []byte(`{"model":"gpt-image-1","prompt":"draw a cat","response_format":"b64_json"}`)
 
 	req := httptest.NewRequest(http.MethodPost, "/v1/images/generations", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")

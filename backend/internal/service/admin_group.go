@@ -294,61 +294,8 @@ func defaultModelsListCandidateIDs(platform string) []string {
 		return ids
 	case PlatformGrok:
 		return xai.DefaultModelIDs()
-	case PlatformKimi:
-		return []string{
-			"kimi-k3",
-			"kimi-k2.6",
-			"kimi-k2.5",
-			"kimi-k2-thinking",
-			"kimi-k2",
-			"kimi-for-coding",
-		}
-	case PlatformZhipu:
-		return []string{
-			"glm-5.3",
-			"glm-5.3-flash",
-			"glm-5.2",
-			"glm-5.1",
-			"glm-5",
-			"glm-5-turbo",
-			"glm-4.7",
-			"glm-4.7-flash",
-			"glm-4.6",
-			"glm-4.5",
-			"glm-4.5-flash",
-		}
-	case PlatformDeepseek:
-		return []string{
-			"deepseek-v4-pro",
-			"deepseek-v4-flash",
-			"deepseek-v4-flash-vision-exp",
-			"deepseek-chat",
-			"deepseek-reasoner",
-			"deepseek-coder",
-			"deepseek-v3",
-			"deepseek-v3-0324",
-			"deepseek-r1",
-			"deepseek-r1-0528",
-		}
-	case PlatformMiniMax:
-		return []string{
-			"MiniMax-M3",
-			"MiniMax-M2.7",
-			"MiniMax-M2.7-highspeed",
-			"MiniMax-M2.5",
-			"MiniMax-M2.5-highspeed",
-			"MiniMax-M2.1",
-			"MiniMax-M2.1-highspeed",
-			"MiniMax-M2",
-			"abab6.5-chat",
-			"abab6.5s-chat",
-			"abab6.5s-chat-pro",
-			"abab6-chat",
-			"abab5.5-chat",
-			"abab5.5s-chat",
-		}
-	case PlatformXiaoAPI:
-		return nil
+	case PlatformOpenCodeGo:
+		return DefaultOpenCodeGoModelIDs()
 	case PlatformComposite:
 		return compositeDefaultModelsListCandidateIDs()
 	default:
@@ -369,7 +316,7 @@ func defaultAllowImageGenerationForPlatform(platform string) bool {
 func compositeDefaultModelsListCandidateIDs() []string {
 	seen := make(map[string]struct{})
 	ids := make([]string, 0)
-	for _, platform := range []string{PlatformAnthropic, PlatformGemini, PlatformOpenAI, PlatformAntigravity, PlatformGrok, PlatformKimi, PlatformZhipu, PlatformDeepseek, PlatformMiniMax} {
+	for _, platform := range []string{PlatformAnthropic, PlatformGemini, PlatformOpenAI, PlatformAntigravity, PlatformGrok, PlatformKimi, PlatformZhipu, PlatformDeepseek, PlatformMiniMax, PlatformOpenCodeGo} {
 		for _, id := range defaultModelsListCandidateIDs(platform) {
 			if _, ok := seen[id]; ok {
 				continue
@@ -436,19 +383,6 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 	}
 	if input.RateMultiplier <= 0 {
 		return nil, errors.New("rate_multiplier must be > 0")
-	}
-	if input.AutoAssignAccountsByRate {
-		if input.AutoAssignMaxRate == nil {
-			return nil, errors.New("auto_assign_max_rate is required when automatic account assignment is enabled")
-		}
-		if *input.AutoAssignMaxRate < 0 {
-			return nil, errors.New("auto_assign_max_rate must be >= 0")
-		}
-		if len(input.CopyAccountsFromGroupIDs) > 0 {
-			return nil, infraerrors.BadRequest("DYNAMIC_GROUP_COPY_CONFLICT", "automatic account assignment cannot be combined with copying accounts from other groups")
-		}
-	} else {
-		input.AutoAssignMaxRate = nil
 	}
 
 	platform := NormalizeGroupPlatform(input.Platform)
@@ -537,7 +471,7 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 	// 先归一化（非订阅分组清空高峰配置、清洗停用状态下的脏字段）再校验，与 UpdateGroup 同一收口。
 	peakRateEnabled, peakStart, peakEnd, peakRateMultiplier := NormalizePeakRateConfig(subscriptionType, input.PeakRateEnabled, input.PeakStart, input.PeakEnd, peakRateMultiplier)
 	if err := ValidatePeakRateConfig(subscriptionType, peakRateEnabled, peakStart, peakEnd, peakRateMultiplier); err != nil {
-		return nil, err
+		return nil, infraerrors.BadRequest("INVALID_PEAK_RATE_CONFIG", err.Error())
 	}
 
 	profitMinMargin := 0.0
@@ -623,8 +557,6 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 		Description:                     input.Description,
 		Platform:                        platform,
 		RateMultiplier:                  input.RateMultiplier,
-		AutoAssignAccountsByRate:        input.AutoAssignAccountsByRate,
-		AutoAssignMaxRate:               input.AutoAssignMaxRate,
 		IsExclusive:                     input.IsExclusive,
 		Status:                          StatusActive,
 		SubscriptionType:                subscriptionType,
@@ -843,24 +775,6 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 		}
 		group.RateMultiplier = *input.RateMultiplier
 	}
-	if input.AutoAssignAccountsByRate != nil {
-		group.AutoAssignAccountsByRate = *input.AutoAssignAccountsByRate
-		if !group.AutoAssignAccountsByRate {
-			group.AutoAssignMaxRate = nil
-		}
-	}
-	if input.AutoAssignMaxRate != nil {
-		if *input.AutoAssignMaxRate < 0 {
-			return nil, errors.New("auto_assign_max_rate must be >= 0")
-		}
-		group.AutoAssignMaxRate = input.AutoAssignMaxRate
-	}
-	if group.AutoAssignAccountsByRate && group.AutoAssignMaxRate == nil {
-		return nil, errors.New("auto_assign_max_rate is required when automatic account assignment is enabled")
-	}
-	if group.AutoAssignAccountsByRate && len(input.CopyAccountsFromGroupIDs) > 0 {
-		return nil, infraerrors.BadRequest("DYNAMIC_GROUP_COPY_CONFLICT", "automatic account assignment cannot be combined with copying accounts from other groups")
-	}
 	if input.IsExclusive != nil {
 		group.IsExclusive = *input.IsExclusive
 	}
@@ -955,7 +869,7 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 	// 防止单独修改 start/end 导致最终 start>=end 等非法配置入库。与 CreateGroup 同一收口。
 	group.PeakRateEnabled, group.PeakStart, group.PeakEnd, group.PeakRateMultiplier = NormalizePeakRateConfig(group.SubscriptionType, group.PeakRateEnabled, group.PeakStart, group.PeakEnd, group.PeakRateMultiplier)
 	if err := ValidatePeakRateConfig(group.SubscriptionType, group.PeakRateEnabled, group.PeakStart, group.PeakEnd, group.PeakRateMultiplier); err != nil {
-		return nil, err
+		return nil, infraerrors.BadRequest("INVALID_PEAK_RATE_CONFIG", err.Error())
 	}
 	if input.ProfitControlEnabled != nil {
 		group.ProfitControlEnabled = *input.ProfitControlEnabled
@@ -1088,9 +1002,6 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 			return nil, err
 		}
 		group.ModelAllowlist = modelAllowlist
-	}
-	if input.CodexModelsManifestConfig != nil {
-		group.CodexModelsManifestConfig = *input.CodexModelsManifestConfig
 	}
 	if input.CodexModelsManifestConfig != nil {
 		group.CodexModelsManifestConfig = *input.CodexModelsManifestConfig
