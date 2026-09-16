@@ -418,7 +418,8 @@ const routes: RouteRecordRaw[] = [
       title: '订阅套餐',
       titleKey: 'nav.subscriptionPlans',
       descriptionKey: 'payment.tabSubscribe',
-      requiresPayment: true
+      requiresPayment: true,
+      requiresSubscription: true
     }
   },
   {
