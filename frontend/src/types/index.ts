@@ -1,4 +1,4 @@
-import type { AccountLevel, AccountShareMode, AccountShareStatus, OpenAIAccountLevelConfig, UserMenuConfig } from './types/local_extensions'
+import type { AccountLevel, AccountShareMode, AccountShareStatus, OpenAIAccountLevelConfig, UserMenuConfig } from './local_extensions'
 
 /**
  * Core Type Definitions for Sub2API Frontend
