@@ -80,3 +80,17 @@ describe('AppSidebar subscription feature flag', () => {
     expect(componentSource).toMatch(/path: '\/purchase'[^\n]*label: purchaseNavLabel\.value/)
   })
 })
+
+describe('AppSidebar local admin navigation', () => {
+  it('keeps local video, support, store, and withdrawal entries', () => {
+    expect(componentSource).toContain("path: '/admin/xiao-video'")
+    expect(componentSource).toContain("path: '/admin/conversations'")
+    expect(componentSource).toContain("path: '/admin/store'")
+    expect(componentSource).toContain("path: '/admin/withdrawals'")
+  })
+
+  it('uses one user portal entry instead of duplicating the full user menu', () => {
+    expect(componentSource).toContain("to=\"/dashboard\"")
+    expect(componentSource).not.toContain('personalNavItems')
+  })
+})
