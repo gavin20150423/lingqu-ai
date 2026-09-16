@@ -89,6 +89,10 @@ export interface User {
   role: 'admin' | 'user' // User role for authorization
   balance: number // User balance for API usage
   frozen_balance?: number // Balance currently held by async batch jobs
+  points_balance?: number
+  load_factor_credits_balance?: number
+  load_factor_credits_used_total?: number
+  prefer_points_billing?: boolean
   concurrency: number // Allowed concurrent requests
   rpm_limit?: number // User-level RPM cap (0 = unlimited); effective as fallback when group has no rpm_limit
   status: 'active' | 'disabled' // Account status
@@ -165,6 +169,7 @@ export interface UserAffiliateDetail {
   aff_history_quota: number
   /** 当前用户作为邀请人时实际生效的返利比例（专属覆盖全局）。0-100。 */
   effective_rebate_rate_percent: number
+  transfer_disabled?: boolean
   invitees: AffiliateInvitee[]
 }
 
@@ -214,6 +219,8 @@ export interface PublicSettings {
   registration_enabled: boolean
   email_verify_enabled: boolean
   force_email_on_third_party_signup: boolean
+  registration_email_alias_restriction_enabled?: boolean
+  user_menu_config?: UserMenuConfig
   registration_email_suffix_whitelist: string[]
   registration_email_domain_quota_enabled?: boolean
   promo_code_enabled: boolean
@@ -600,6 +607,8 @@ export interface Group {
   web_search_price_per_call: number | null
   // Grok Voice 显式定价（分组级）
   search_price_per_1k: number | null
+  auto_assign_accounts_by_rate?: boolean
+  auto_assign_max_rate?: number | null
   audio_realtime_price_per_min: number | null
   audio_tts_price_per_million_chars: number | null
   audio_stt_price_per_hour: number | null
@@ -962,6 +971,7 @@ export interface Proxy {
   expiry_warn_days: number
   created_at: string
   updated_at: string
+  max_accounts?: number
 }
 
 export interface ProxyAccountSummary {
@@ -1163,6 +1173,13 @@ export interface Account {
   notes?: string | null
   platform: AccountPlatform
   type: AccountType
+  account_level?: AccountLevel
+  owner_user_id?: number | null
+  max_accounts?: number
+  share_mode?: AccountShareMode | string
+  share_status?: AccountShareStatus | string
+  share_policy_id?: number | null
+  account_share_mode_listing_id?: number | null
   // 后端响应里 credentials 已脱敏：access_token / refresh_token / id_token /
   // api_key / session_key / cookie / aws_secret_access_key / aws_session_token /
   // service_account_json / service_account / private_key 不会出现，
@@ -2065,6 +2082,10 @@ export interface UserSubscription {
   updated_at: string
   revoked_at?: string | null
   expires_at: string | null
+  plan_id?: number | null
+  daily_limit_usd?: number | null
+  weekly_limit_usd?: number | null
+  monthly_limit_usd?: number | null
   user?: User
   group?: Group
 }
@@ -2312,6 +2333,9 @@ export interface PromoCode {
   notes: string | null
   created_at: string
   updated_at: string
+  discount_percent?: number
+  applies_to_subscriptions?: boolean
+  starts_at?: string | null
 }
 
 export interface PromoCodeUsage {
@@ -2329,6 +2353,9 @@ export interface CreatePromoCodeRequest {
   max_uses?: number
   expires_at?: number | null
   notes?: string
+  discount_percent?: number
+  applies_to_subscriptions?: boolean
+  starts_at?: number | null
 }
 
 export interface UpdatePromoCodeRequest {
@@ -2338,6 +2365,9 @@ export interface UpdatePromoCodeRequest {
   status?: 'active' | 'disabled'
   expires_at?: number | null
   notes?: string
+  discount_percent?: number
+  applies_to_subscriptions?: boolean
+  starts_at?: number | null
 }
 
 // ==================== TOTP (2FA) Types ====================
