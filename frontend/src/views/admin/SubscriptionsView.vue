@@ -729,6 +729,22 @@
           </div>
         </div>
         <div>
+          <label class="input-label">{{ t('admin.subscriptions.form.plan') }}</label>
+          <Select
+            v-model="extendPlanId"
+            :options="extendPlanOptions"
+            :placeholder="t('admin.subscriptions.selectPlan')"
+            :disabled="plansLoading || extendPlanOptions.length === 0"
+          />
+          <p v-if="plansLoading" class="input-hint">{{ t('admin.subscriptions.plansLoading') }}</p>
+          <p v-else class="input-hint">{{ t('admin.subscriptions.planHint') }}</p>
+          <div v-if="getPlanById(extendPlanId)" class="mt-2 rounded-lg border border-primary-100 bg-primary-50/60 px-3 py-2 text-xs text-gray-600 dark:border-primary-900/50 dark:bg-primary-900/20 dark:text-gray-300">
+            {{ t('admin.subscriptions.planValidity') }}：{{ formatPlanValidity(getPlanById(extendPlanId)!) }}
+            · {{ t('admin.subscriptions.planDaily') }}：{{ formatPlanQuota(getPlanById(extendPlanId)!.daily_limit_usd) }}
+            · {{ t('admin.subscriptions.planMonthly') }}：{{ formatPlanQuota(getPlanById(extendPlanId)!.monthly_limit_usd) }}
+          </div>
+        </div>
+        <div>
           <label class="input-label">{{ t('admin.subscriptions.form.adjustDays') }}</label>
           <div class="flex items-center gap-2">
             <input
@@ -1190,6 +1206,19 @@ const selectedAssignPlan = computed(() =>
   subscriptionPlans.value.find((plan) => plan.id === assignForm.plan_id) || null
 )
 
+const extendPlanId = ref<number | null>(null)
+const extendPlanOptions = computed<AssignPlanOption[]>(() => {
+  const groupID = extendingSubscription.value?.group_id
+  if (!groupID) return []
+  return subscriptionPlans.value
+    .filter((plan) => plan.group_id === groupID)
+    .sort((a, b) => a.sort_order - b.sort_order || a.id - b.id)
+    .map((plan) => ({
+      value: plan.id,
+      label: `${plan.name} · ¥${formatPlanPrice(plan.price)} · ${formatPlanValidity(plan)}${plan.for_sale ? '' : ` · ${t('admin.subscriptions.planOffSale')}`}`
+    }))
+})
+
 function formatPlanPrice(value: number | null | undefined): string {
   const numeric = Number(value)
   return Number.isFinite(numeric) ? numeric.toFixed(2) : '0.00'
@@ -1523,6 +1552,7 @@ const handleAssignSubscription = async () => {
 
 const handleExtend = (subscription: UserSubscription) => {
   extendingSubscription.value = subscription
+  extendPlanId.value = subscription.plan_id ?? null
   extendForm.days = 30
   showExtendModal.value = true
 }
@@ -1530,6 +1560,7 @@ const handleExtend = (subscription: UserSubscription) => {
 const closeExtendModal = () => {
   showExtendModal.value = false
   extendingSubscription.value = null
+  extendPlanId.value = null
 }
 
 const handleExtendSubscription = async () => {
@@ -1547,9 +1578,16 @@ const handleExtendSubscription = async () => {
 
   submitting.value = true
   try {
-    await adminAPI.subscriptions.extend(extendingSubscription.value.id, {
-      days: extendForm.days
-    })
+    if (extendPlanId.value && extendPlanId.value !== (extendingSubscription.value.plan_id ?? null)) {
+      await adminAPI.subscriptions.assign({
+        user_id: extendingSubscription.value.user_id,
+        group_id: extendingSubscription.value.group_id,
+        plan_id: extendPlanId.value
+      })
+    }
+    if (extendForm.days !== 0) {
+      await adminAPI.subscriptions.extend(extendingSubscription.value.id, { days: extendForm.days })
+    }
     appStore.showSuccess(t('admin.subscriptions.subscriptionAdjusted'))
     closeExtendModal()
     loadSubscriptions()
