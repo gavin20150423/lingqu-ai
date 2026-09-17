@@ -2,6 +2,37 @@
 
 每次正式发布都必须新增版本条目，并分别写清楚“修复了什么”、“增加了什么”和“当前已有功能”。没有新增功能时也必须明确记录。
 
+## v0.2.5-lingqu.2 - 2026-09-18
+
+> 说明：上一版 `0.2.5-lingqu-4904ba07a`（2026-09-17 前后上线，未写入本日志）等效于
+> `0.2.5-lingqu.1`；本版按 Runbook 命名规范顺延为 `0.2.5-lingqu.2`。
+
+### 修复了什么
+
+- 无（本版无修复项）。
+
+### 增加了什么
+
+- 调度请求（SubPilot select）新增 `client_type` 字段：网关按既有 User-Agent 机制识别
+  Claude Code 客户端后在调度请求中声明 `claude_code`，供 SubPilot 按"账号客户端类型
+  标签"分流（仅 CC / 仅普通 / 不限）。调用方为旧版本 SubPilot 时字段被忽略，行为不变。
+- 发布工具 `deploy/safe-blue-green-cutover.sh` 新增 `--upstream` 参数，支持按稳定网络
+  别名（`gavin2api:8080`）切流并校验别名解析到新容器；此后 Caddyfile 与 SubPilot 的
+  upstream 固定为别名，发布不再需要改任何引用（Runbook"生产实例稳定别名"落地）。
+
+### 当前已有功能
+
+- 与 `v0.2.4-lingqu.7` 一致（订阅系列、OAuth/API Key 多账号、SubPilot 调度、精确计费、
+  充值订阅、视频工作台、无限画布、管理后台等全部保留）。
+
+### 验证重点
+
+- 候选容器 `/health` 200、日志无 panic/数据库/Redis 连接错误。
+- 切流后公网 `api/cdn /health` 连续 200，`/v1/models` 未授权 401。
+- SubPilot 委托探测（`SUB2API_BASE_URL=http://gavin2api:8080`）对带
+  `probe_as_claude_code=true` 的账号成功。
+- SubPilot 调度决策中 CC 请求不再选中"仅普通"标签账号、普通请求不再选中"仅 CC"标签账号。
+
 ## v0.2.4-lingqu.7 - 2026-09-14
 
 ### 修复了什么

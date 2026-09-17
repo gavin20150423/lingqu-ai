@@ -10,7 +10,14 @@ Usage:
   safe-blue-green-cutover.sh --old-container OLD --new-container NEW \
     --caddy-container CADDY --caddyfile HOST_CADDYFILE \
     --api-url https://api.example.com/health \
-    --cdn-url https://cdn.example.com/health
+    --cdn-url https://cdn.example.com/health \
+    [--upstream HOST:PORT]
+
+--upstream: stable upstream address (e.g. a network alias like gavin2api:8080)
+  that the candidate Caddyfile switches traffic to. When set, runtime checks
+  look for this upstream instead of the new container name, and the script
+  additionally verifies that the alias resolves to the new container.
+  Without it, the Caddyfile is expected to reference the new container name.
 EOF
   exit 2
 }
@@ -21,6 +28,7 @@ CADDY_CONTAINER=''
 CADDYFILE=''
 API_URL=''
 CDN_URL=''
+UPSTREAM=''
 OBSERVATION_ROUNDS="${OBSERVATION_ROUNDS:-3}"
 OBSERVATION_DELAY="${OBSERVATION_DELAY:-3}"
 LOCK_FILE="${RELEASE_LOCK_FILE:-/opt/gavin2api/.safe-blue-green.lock}"
@@ -33,6 +41,7 @@ while (($#)); do
     --caddyfile) CADDYFILE="${2:-}"; shift 2 ;;
     --api-url) API_URL="${2:-}"; shift 2 ;;
     --cdn-url) CDN_URL="${2:-}"; shift 2 ;;
+    --upstream) UPSTREAM="${2:-}"; shift 2 ;;
     --help|-h) usage ;;
     *) echo "unknown argument: $1" >&2; usage ;;
   esac
@@ -41,6 +50,9 @@ done
 [[ -n "$OLD_CONTAINER" && -n "$NEW_CONTAINER" && -n "$CADDY_CONTAINER" && -n "$CADDYFILE" && -n "$API_URL" && -n "$CDN_URL" ]] || usage
 [[ "$OLD_CONTAINER" != "$NEW_CONTAINER" ]] || { echo 'old and new containers must differ' >&2; exit 2; }
 [[ -f "$CADDYFILE" ]] || { echo "Caddyfile not found: $CADDYFILE" >&2; exit 2; }
+
+# 切流后运行态里应当出现的目标：优先稳定别名（--upstream），否则新容器名。
+SWITCH_TARGET="${UPSTREAM:-$NEW_CONTAINER}"
 
 exec 9>"$LOCK_FILE"
 flock -n 9 || { echo "another release is active: $LOCK_FILE" >&2; exit 1; }
@@ -78,6 +90,21 @@ public_health() {
   [[ "$api" == 200 && "$cdn" == 200 ]]
 }
 
+# 稳定别名模式下额外校验：别名必须在 Caddy 容器内解析到新容器的 IP，
+# 且通过别名访问 /health 可用（Runbook 第 5 节"生产实例稳定别名"第 3 条）。
+verify_alias_points_at_new() {
+  local alias_host ips resolved ip
+  alias_host="${UPSTREAM%%:*}"
+  ips="$(docker inspect "$NEW_CONTAINER" --format '{{range $k,$v := .NetworkSettings.Networks}}{{$v.IPAddress}}{{"\n"}}{{end}}' | sort -u | grep -v '^$')"
+  resolved="$(docker exec "$CADDY_CONTAINER" getent hosts "$alias_host" 2>/dev/null | awk '{print $1}' | sort -u)"
+  [[ -n "$resolved" ]] || fail "alias $alias_host does not resolve inside $CADDY_CONTAINER"
+  while IFS= read -r ip; do
+    grep -Fxq "$ip" <<<"$ips" || fail "alias $alias_host resolves to $ip which is not an IP of $NEW_CONTAINER"
+  done <<<"$resolved"
+  docker exec "$CADDY_CONTAINER" wget -qO- --timeout=5 "http://${UPSTREAM}/health" >/dev/null || fail "alias upstream $UPSTREAM /health check failed"
+  log "alias $alias_host resolves to $NEW_CONTAINER and /health is OK"
+}
+
 wait_public_health() {
   local rounds="$1" i
   for ((i = 1; i <= rounds; i++)); do
@@ -105,7 +132,7 @@ rollback() {
   fi
   [[ "$old_health" == healthy || "$old_health" == no-healthcheck ]] || fail "rollback blocked: old health is $old_health"
   docker cp "$CADDYFILE" "$CADDY_CONTAINER:$ROLLBACK_CADDY"
-  docker exec "$CADDY_CONTAINER" sed -i "s/${NEW_CONTAINER}/${OLD_CONTAINER}/g" "$ROLLBACK_CADDY"
+  docker exec "$CADDY_CONTAINER" sed -i "s/${SWITCH_TARGET}/${OLD_CONTAINER}/g" "$ROLLBACK_CADDY"
   grep -Fq "$OLD_CONTAINER" <(docker exec "$CADDY_CONTAINER" cat "$ROLLBACK_CADDY") || fail 'rollback config does not reference old container'
   reload_caddy_file "$ROLLBACK_CADDY"
   runtime_has_upstream "$OLD_CONTAINER" || fail "Caddy runtime did not switch back to $OLD_CONTAINER"
@@ -130,12 +157,13 @@ docker cp "$CADDYFILE" "$CADDY_CONTAINER:$CANDIDATE_CADDY"
 docker exec "$CADDY_CONTAINER" caddy validate --config "$CANDIDATE_CADDY" --adapter caddyfile >/dev/null
 
 runtime_has_upstream "$OLD_CONTAINER" || fail "Caddy runtime is not serving old upstream: $OLD_CONTAINER"
-grep -Fq "$NEW_CONTAINER" "$CADDYFILE" || fail "candidate Caddyfile does not reference new container: $NEW_CONTAINER"
+grep -Fq "$SWITCH_TARGET" "$CADDYFILE" || fail "candidate Caddyfile does not reference switch target: $SWITCH_TARGET"
 
 log 'reloading Caddy through 127.0.0.1:2019'
 reload_caddy_file "$CANDIDATE_CADDY"
-runtime_has_upstream "$NEW_CONTAINER" || fail "Caddy runtime did not switch to $NEW_CONTAINER"
+runtime_has_upstream "$SWITCH_TARGET" || fail "Caddy runtime did not switch to $SWITCH_TARGET"
 runtime_has_upstream "$OLD_CONTAINER" && fail "Caddy runtime still contains old upstream: $OLD_CONTAINER"
+[[ -z "$UPSTREAM" ]] || verify_alias_points_at_new
 
 log 'verifying public traffic before stopping old container'
 wait_public_health "$OBSERVATION_ROUNDS"
