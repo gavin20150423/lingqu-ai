@@ -136,6 +136,48 @@ docker save local/gavin2api:<version>-<short-commit> | gzip > gavin2api-<version
 
 发布操作不得覆盖或修改 `.env`、数据库、Redis 数据、Docker volumes、网络或凭据。
 
+### 生产实例稳定别名（强制）
+
+`gavin2api` 这个网络别名必须由**当前生产容器**持有，并在每次发布时交接给新容器。
+
+**为什么**：Caddy 的 upstream 和 SubPilot 的 `SUB2API_BASE_URL` 都需要一个指向"当前生产实例"的地址。
+如果它们写的是每次发布都会变的容器名（`gavin2api-release-<版本>-<sha>`），就会有两个后果：
+
+- 每次发布都要同步改 Caddyfile 和 SubPilot 的环境变量，**漏一个就出故障**；
+- 一旦有历史容器残留并抢占该别名，请求会被**静默路由到错误实例**，且很难排查。
+
+**2026-09-18 的真实事故（本规则因此确立）**：线上残留 8 个旧版本容器，其中
+`gavin2api-account-batch-candidate` 抢到了 `gavin2api` 别名。SubPilot 的委托探测
+（走 `http://gavin2api:8080`）因此**对所有账号**返回 `Account not found`
+（1~13 ms，从不打上游），导致 `probe_as_claude_code=true` 的账号探测 100% 失败、
+永远无法恢复。同一批残留容器还因数据库已被新版本迁移而每分钟刷 1,000+ 条
+`pq: column groups.models_list_config does not exist`。清理后运行中容器从 26 降到 18。
+
+**强制做法**：
+
+1. 启动新生产容器时**必须**带稳定别名：
+   - `docker run ... --network <net> --network-alias gavin2api ...`
+   - 或 Compose：`networks: { <net>: { aliases: [gavin2api] } }`
+2. Caddy 的 upstream 与 SubPilot 的 `SUB2API_BASE_URL` **统一写 `gavin2api:8080`**，
+   不得再写具体容器名。
+3. Caddy reload 后除现有的 upstream 校验外，还必须确认别名解析到的是**新容器**：
+   ```bash
+   docker exec gavin2api-caddy sh -c 'wget -qO- http://gavin2api:8080/health'
+   ```
+4. 旧容器在观察窗口结束、确认切换稳定后**必须删除**（`docker rm`），
+   **不允许以 running 状态残留** —— 残留容器会持续抢占别名、刷错误日志并给数据库加压。
+   回滚用**镜像**即可，不需要保留容器。
+5. 每次发布前执行一次残留与别名检查：
+   ```bash
+   # 1) 谁持有 gavin2api 别名（应当只有当前生产容器）
+   for c in $(docker ps --format '{{.Names}}'); do
+     docker inspect -f '{{.Name}} {{range $k,$v := .NetworkSettings.Networks}}{{$k}}:{{$v.Aliases}}{{end}}' "$c"
+   done | grep -i gavin2api
+   # 2) 是否有非生产的 gavin2api 容器在跑
+   docker ps --format '{{.Names}}' | grep -iE 'gavin2api-(release|candidate|subpilot|video|media|ba2|account)'
+   ```
+   任一条出现**当前生产容器之外**的条目，先停止并清理，再开始发布。
+
 ## 6. 回滚条件
 
 出现以下任一情况必须自动回滚：
@@ -164,6 +206,20 @@ docker save local/gavin2api:<version>-<short-commit> | gzip > gavin2api-<version
 本地构建上传是本项目批准的正式发布方式，但必须同时记录构建提交、镜像 ID/摘要、服务器上传时间、Caddy 切换时间、健康检查结果和回滚点；不得把未验证的本地镜像宣称为已发布。
 
 ## 8. 2026-08-11 发布偏差记录
+
+> **⚠️ 历史记录，口径已被取代（2026-09-18 标注）**
+>
+> 本节记录的是 2026-08-11 当时的口径（"正式发布应由本机推送标签触发 GitHub Actions，
+> 服务器拉取 GHCR 镜像"）。**该链路已不再使用**：现行正式发布方式就是本节当年被判为
+> "偏差"的**本地构建 + `docker save`/`load` 上传 + 蓝绿切换**（见第 4 节与第 7 节末段，
+> 以及本文末"本项目正式生产发布以本 Runbook 规定的本地镜像蓝绿切换和健康检查完成为准"）。
+> 生产当前运行的就是本地镜像 `local/gavin2api:0.2.5-lingqu-4904ba07a`。
+>
+> 本节保留的价值只剩下两条仍然成立的教训：
+> 1. **不要把"当前进程认证失败"当成"不具备发布能力"** —— 先排查认证环境本身；
+> 2. **不要把本地提交/本地标签当成已经完成的远端发布** —— 远端同步仍是可选的独立步骤。
+>
+> 本节其余内容（尤其是"必须完成的纠正动作"里要求切回 GHCR 的部分）**已失效，不要照做**。
 
 ### 事件
 

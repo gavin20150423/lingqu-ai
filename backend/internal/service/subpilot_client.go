@@ -104,8 +104,21 @@ type subPilotSelectRequest struct {
 	GroupID            string   `json:"group_id,omitempty"`
 	Model              string   `json:"model"`
 	SessionKey         string   `json:"session_key,omitempty"`
+	// ClientType 告诉调度器本次请求来自哪类客户端，用于把"仅限 Claude Code 客户端"
+	// 的上游账号与普通账号分流（`claude_code` / `other`）。
+	//
+	// 取空值时表示调用方还不知道客户端类型。调度器必须把"字段缺失"当作
+	// "不做客户端类型过滤"，而不是当作"非 Claude Code"——否则滚动升级期间
+	// （旧网关 + 新调度器）会把 CC 请求误判成普通请求，把账号排除掉。
+	ClientType         string   `json:"client_type,omitempty"`
 	ExcludedAccountIDs []string `json:"excluded_account_ids,omitempty"`
 }
+
+// subPilotClientTypeClaudeCode 是 subPilotSelectRequest.ClientType 的取值之一。
+// 目前只定义这一个非空值：调度器只关心"这是不是 Claude Code 请求"，
+// 其它情况一律留空（= 未提供客户端类型，调度器不过滤任何账号），
+// 这样就不存在"新网关发了 other、旧调度器不认识"的兼容问题。
+const subPilotClientTypeClaudeCode = "claude_code"
 
 type subPilotSelectResponse struct {
 	Decision string `json:"decision"`

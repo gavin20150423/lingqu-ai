@@ -420,7 +420,25 @@ func newSubPilotSelectRequest(ctx context.Context, platform string, groupID int6
 		GroupID:    strconv.FormatInt(groupID, 10),
 		Model:      model,
 		SessionKey: sessionKey,
+		ClientType: subPilotClientType(ctx),
 	}
+}
+
+// subPilotClientType 把"这个请求是不是 Claude Code 客户端发的"传给调度器。
+//
+// 调度器需要它来分流账号：部分上游账号是"仅限 Claude Code 客户端接入"的
+// （非 CC 请求会直接被上游 403），另一些账号则只服务普通请求。识别结果本身
+// 已经由本仓库的 claude_code_validator（基于 User-Agent 解析）写进 context，
+// 这里只做取值映射。
+//
+// 只在确定为 Claude Code 时返回非空值：其它情况一律留空，让调度器按
+// "未提供客户端类型"处理（不过滤账号）。这样旧调度器、以及任何还没接上
+// 该字段的调用路径，行为都与之前完全一致。
+func subPilotClientType(ctx context.Context) string {
+	if IsClaudeCodeClient(ctx) {
+		return subPilotClientTypeClaudeCode
+	}
+	return ""
 }
 
 func subPilotReportAPIKeyID(ctx context.Context, apiKey *APIKey) string {
