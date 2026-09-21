@@ -300,3 +300,54 @@ docker save local/gavin2api:<version>-<short-commit> | gzip > gavin2api-<version
 - 禁止忽略 Caddy reload 的非零退出、管理 API 错误或运行时 upstream 未变化。
 - 禁止只看宿主机配置文件就认为 Caddy 已完成切流。
 - 禁止多个会话同时执行发布、Caddy reload 或应用容器启停。
+
+---
+
+## 发布加速：增量文件发布（2026-09-21 补充）
+
+**场景**：只改了少量源码文件（如 2 个 .go），无需重传全量上下文。
+
+**前置事实**：服务器 `/tmp/gavin2api-build-<sha>/` 的完整源码目录**每次发布后保留**
+（约几十 MB，别删），它可作为下一次发布的构建基底。
+
+```bash
+# 1. 只上传改动的文件（psftp put，注意脚本文件要放 Windows 路径——psftp 不认 /tmp）
+#    目标目录先 mkdir -p /tmp/g2a-<ver>/
+# 2. 覆盖到源码目录对应路径：
+cd /tmp/gavin2api-build-<旧sha> && cp /tmp/g2a-<ver>/xxx.go backend/internal/service/xxx.go
+# 3. legacy 构建（Dockerfile 是剥过 BuildKit 特性的版本，直接用）
+DOCKER_BUILDKIT=0 docker build --build-arg VERSION=<ver> --build-arg COMMIT=<sha或workdir> \
+  -t local/gavin2api:<ver> .
+```
+
+**教训（2026-09-21）**：本地 Windows 打包全量上下文会因遍历巨型目录（backend 里
+有十几个 145-162MB 的历史二进制备份）卡几十分钟且体积失控（1.7-3.2GB）；
+改走"服务器源码目录 + 增量文件"后 **5 分钟完成构建**。
+
+## 无中断切换手法：别名金丝雀（2026-09-21 补充）
+
+新容器启动时**不带** `gavin2api` 别名（只有自身名字），验证通过后：
+
+```bash
+# 1. 给已连接的容器补别名：network connect 会报 already exists，
+#    必须 disconnect 后用 --alias 重连（容器此刻无流量，操作零影响）
+docker network disconnect <NET> <新容器>
+docker network connect --alias gavin2api --alias <新容器> <NET> <新容器>
+# 2. 观察 20-30s：新旧容器都在（DNS 偏向新容器），流量自然过渡
+# 3. 摘旧容器别名 → 完全切流：
+docker network disconnect <NET> <旧容器>
+# 4. 旧容器 docker stop 保留为回滚位（不回滚时也先别删，留一个版本）
+```
+
+**验证命令**：
+- 别名解析：`docker exec subpilot sh -c 'getent hosts gavin2api'`（应唯一指向新容器 IP）
+- 流量计数：`docker logs --since 30s <容器> | grep -c 'http request completed'`
+  （注意 gavin2api 的日志是 slog 格式，**不是** GIN）
+- 候选直连验证：`docker exec subpilot wget -qO- <新容器IP>:8080/health`
+- 内部测试端点验证（IQ 类功能）：
+  `POST http://<新容器IP>:8080/api/v1/internal/subpilot/probe/<账号>`
+  带 `X-SubPilot-Secret`，body `{"model_id":..., "prompt":"...", "max_tokens":...}`
+  → 应返回 `response_text`
+
+**注意**：caddy 日志里的 `aborting with incomplete response / context canceled`
+是客户端主动断开（流式场景常态），**不是**服务错误，勿误判为发布故障。
