@@ -21,6 +21,8 @@ type subPilotProbeRequest struct {
 	// MaxTokens 可选：覆盖测试请求输出上限（0 = 默认 1024）。智商测试等长输
 	// 出场景由 SubPilot 传更大值。
 	MaxTokens int `json:"max_tokens,omitempty"`
+	// ReasoningEffort 可选：思考强度 low/medium/high（OpenAI Responses 路径生效）。
+	ReasoningEffort string `json:"reasoning_effort,omitempty"`
 }
 
 type subPilotProbeResponse struct {
@@ -70,7 +72,7 @@ func (h *SubPilotInternalHandler) ProbeAccount(c *gin.Context) {
 		return
 	}
 
-	result, err := h.accountTestService.RunTestBackgroundWithPrompt(c.Request.Context(), accountID, strings.TrimSpace(req.ModelID), strings.TrimSpace(req.Prompt), req.MaxTokens)
+	result, err := h.accountTestService.RunTestBackgroundWithPrompt(c.Request.Context(), accountID, strings.TrimSpace(req.ModelID), strings.TrimSpace(req.Prompt), req.MaxTokens, strings.TrimSpace(req.ReasoningEffort))
 	if err != nil && result == nil {
 		c.JSON(http.StatusOK, subPilotProbeResponse{
 			Success:      false,

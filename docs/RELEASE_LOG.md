@@ -2,6 +2,27 @@
 
 每次正式发布都必须新增版本条目，并分别写清楚“修复了什么”、“增加了什么”和“当前已有功能”。没有新增功能时也必须明确记录。
 
+## v0.2.5-lingqu.4 - 2026-09-21
+
+### 修复了什么
+
+- **内部测试端点（IQ 测试）在 OpenAI 系账号上提示词丢失**：`Responses` 主路径与 CN 自适应路径（Responses/Anthropic）调用测试 payload 构造函数时未透传调用方提示词，始终发送默认 "hi" —— 表现为糖果题/鹈鹕题发出后模型只回一句招呼语。现全部路径透传 prompt。
+
+### 增加了什么
+
+- 测试端点支持思考强度：请求新增 `reasoning_effort`（low/medium/high），在 OpenAI Responses 路径写入 `reasoning.effort`；请求新增 `max_output_tokens` 支持（跟随既有 `max_tokens` 语义）。
+- 供 SubPilot v4.36 智商测试弹窗的"模型 / 思考强度"选择使用。
+
+### 当前已有功能
+
+- 与 `0.2.5-lingqu.3` 一致（自定义提示词输出回传、client_type 调度上报等全部保留）。
+
+### 验证重点
+
+- 对 OpenAI apikey 账号（如 1034 aigateway-pro）发糖果题：应返回题目相关回答而非 "Hi"。
+- `reasoning_effort=high` 时 gpt-5 系响应应体现更长思考（延迟/内容变化）。
+- 常规探测（空 prompt）行为不变（默认 "hi"、1024 上限）。
+
 ## v0.2.5-lingqu.3 - 2026-09-21
 
 ### 修复了什么

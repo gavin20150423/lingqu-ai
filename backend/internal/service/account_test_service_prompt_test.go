@@ -18,7 +18,7 @@ func TestClaudeTestPayloadUsesConfiguredPrompt(t *testing.T) {
 }
 
 func TestOpenAITestPayloadUsesConfiguredPrompt(t *testing.T) {
-	payload := createOpenAITestPayload("gpt-test", false, "reply only READY")
+	payload := createOpenAITestPayload("gpt-test", false, "reply only READY", 0, "")
 	input, ok := payload["input"].([]map[string]any)
 	require.True(t, ok)
 	content, ok := input[0]["content"].([]map[string]any)

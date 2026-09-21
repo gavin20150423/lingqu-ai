@@ -73,6 +73,9 @@ type AccountTestOptions struct {
 	// MaxTokens 覆盖测试请求的输出上限（0 = 默认 1024）。智商测试等需要长输出
 	// （SVG/HTML 生成）的调用方通过它放宽上限。
 	MaxTokens int
+	// ReasoningEffort 覆盖思考强度（low / medium / high；空 = 不设置）。
+	// 目前 OpenAI Responses 路径生效。
+	ReasoningEffort string
 }
 
 func firstAccountTestOptions(opts []AccountTestOptions) AccountTestOptions {
@@ -382,16 +385,16 @@ func (s *AccountTestService) TestAccountConnection(c *gin.Context, accountID int
 		case APIProtocolAdaptive:
 			return s.testCNProviderAdaptiveConnection(c, account, modelID, prompt)
 		case APIProtocolResponses:
-			return s.testOpenAIAccountConnection(c, account, modelID, prompt, normalizeAccountTestMode(mode))
+			return s.testOpenAIAccountConnection(c, account, modelID, prompt, normalizeAccountTestMode(mode), testOpts.MaxTokens, testOpts.ReasoningEffort)
 		case APIProtocolChatCompletions:
 			return s.testCNProviderChatCompletionsConnection(c, account, modelID, prompt)
 		case APIProtocolAnthropic:
-			return s.testCNProviderAnthropicConnection(c, account, modelID)
+			return s.testCNProviderAnthropicConnection(c, account, modelID, prompt)
 		}
 	}
 
 	if account.IsOpenAI() {
-		return s.testOpenAIAccountConnection(c, account, modelID, prompt, normalizeAccountTestMode(mode))
+		return s.testOpenAIAccountConnection(c, account, modelID, prompt, normalizeAccountTestMode(mode), testOpts.MaxTokens, testOpts.ReasoningEffort)
 	}
 
 	if account.IsGemini() {
@@ -506,15 +509,15 @@ func (s *AccountTestService) testOpenCodeGoAccountConnection(c *gin.Context, acc
 	}
 	switch proto {
 	case APIProtocolAnthropic:
-		return s.testCNProviderAnthropicConnection(c, account, testModelID)
+		return s.testCNProviderAnthropicConnection(c, account, testModelID, prompt)
 	case APIProtocolResponses:
-		return s.testOpenCodeGoResponsesConnection(c, account, testModelID)
+		return s.testOpenCodeGoResponsesConnection(c, account, testModelID, prompt)
 	default:
 		return s.testCNProviderChatCompletionsConnection(c, account, testModelID, prompt)
 	}
 }
 
-func (s *AccountTestService) testOpenCodeGoResponsesConnection(c *gin.Context, account *Account, testModelID string) error {
+func (s *AccountTestService) testOpenCodeGoResponsesConnection(c *gin.Context, account *Account, testModelID string, prompt string) error {
 	authToken := strings.TrimSpace(account.GetOpenAIProtocolAPIKey())
 	if authToken == "" {
 		return s.sendErrorAndEnd(c, "No API key available")
@@ -525,7 +528,7 @@ func (s *AccountTestService) testOpenCodeGoResponsesConnection(c *gin.Context, a
 	c.Writer.Header().Set("X-Accel-Buffering", "no")
 	c.Writer.Flush()
 	s.sendEvent(c, TestEvent{Type: "test_start", Model: testModelID})
-	return s.testCNProviderAdaptiveResponsesConnection(c, account, testModelID, authToken)
+	return s.testCNProviderAdaptiveResponsesConnection(c, account, testModelID, authToken, prompt)
 }
 
 func (s *AccountTestService) testCNProviderChatCompletionsConnection(c *gin.Context, account *Account, modelID string, prompt string) error {
@@ -846,7 +849,7 @@ func (s *AccountTestService) testBedrockAccountConnection(c *gin.Context, ctx co
 }
 
 // testOpenAIAccountConnection tests an OpenAI account's connection
-func (s *AccountTestService) testOpenAIAccountConnection(c *gin.Context, account *Account, modelID string, prompt string, mode string) error {
+func (s *AccountTestService) testOpenAIAccountConnection(c *gin.Context, account *Account, modelID string, prompt string, mode string, maxTokens int, reasoningEffort string) error {
 	ctx := c.Request.Context()
 	mode = normalizeAccountTestMode(mode)
 
@@ -939,7 +942,7 @@ func (s *AccountTestService) testOpenAIAccountConnection(c *gin.Context, account
 	if isOAuth {
 		upstreamTestModelID = normalizeOpenAIModelForUpstream(credentialAccount, testModelID)
 	}
-	payload := createOpenAITestPayload(upstreamTestModelID, isOAuth)
+	payload := createOpenAITestPayload(upstreamTestModelID, isOAuth, prompt, maxTokens, reasoningEffort)
 	payloadBytes, _ := json.Marshal(payload)
 
 	// Send test_start event once. A task-invalid Agent Identity response may
@@ -1022,7 +1025,7 @@ func (s *AccountTestService) testOpenAIAccountConnection(c *gin.Context, account
 				return s.sendErrorAndEnd(c, fmt.Sprintf("Agent Identity task recovery failed: %s", err.Error()))
 			}
 			c.Request = c.Request.WithContext(markAgentIdentityTaskRecoveryTried(ctx))
-			return s.testOpenAIAccountConnection(c, account, modelID, prompt, mode)
+			return s.testOpenAIAccountConnection(c, account, modelID, prompt, mode, maxTokens, reasoningEffort)
 		}
 		if resp.StatusCode == http.StatusTooManyRequests {
 			s.reconcileOpenAI429State(ctx, account, resp.Header, body)
@@ -2818,10 +2821,13 @@ func (s *AccountTestService) processGeminiStream(c *gin.Context, body io.Reader)
 }
 
 // createOpenAITestPayload creates a test payload for OpenAI Responses API
-func createOpenAITestPayload(modelID string, isOAuth bool, prompts ...string) map[string]any {
-	prompt := "hi"
-	if len(prompts) > 0 && prompts[0] != "" {
-		prompt = prompts[0]
+// createOpenAITestPayload 构造 OpenAI Responses API 的测试请求体。
+// prompt 为空时使用 "hi"（连通性探测默认）；maxOutputTokens > 0 时设置输出
+// 上限；reasoningEffort 非空时设置 reasoning.effort（gpt-5 系思考强度）。
+func createOpenAITestPayload(modelID string, isOAuth bool, prompt string, maxOutputTokens int, reasoningEffort string) map[string]any {
+	testPrompt := strings.TrimSpace(prompt)
+	if testPrompt == "" {
+		testPrompt = "hi"
 	}
 	payload := map[string]any{
 		"model": modelID,
@@ -2831,12 +2837,18 @@ func createOpenAITestPayload(modelID string, isOAuth bool, prompts ...string) ma
 				"content": []map[string]any{
 					{
 						"type": "input_text",
-						"text": prompt,
+						"text": testPrompt,
 					},
 				},
 			},
 		},
 		"stream": true,
+	}
+	if maxOutputTokens > 0 {
+		payload["max_output_tokens"] = maxOutputTokens
+	}
+	if effort := strings.TrimSpace(reasoningEffort); effort != "" {
+		payload["reasoning"] = map[string]any{"effort": effort}
 	}
 
 	// OAuth accounts using ChatGPT internal API require store: false
@@ -3348,20 +3360,20 @@ func (s *AccountTestService) sendErrorAndEnd(c *gin.Context, errorMsg string) er
 // RunTestBackground executes an account test in-memory (no real HTTP client),
 // capturing SSE output via httptest.NewRecorder, then parses the result.
 func (s *AccountTestService) RunTestBackground(ctx context.Context, accountID int64, modelID string) (*ScheduledTestResult, error) {
-	return s.RunTestBackgroundWithPrompt(ctx, accountID, modelID, "", 0)
+	return s.RunTestBackgroundWithPrompt(ctx, accountID, modelID, "", 0, "")
 }
 
 // RunTestBackgroundWithPrompt is the prompt-aware variant used by the internal
 // SubPilot test endpoint. It preserves the upstream background-test flow while
 // allowing callers to override the probe prompt.
-func (s *AccountTestService) RunTestBackgroundWithPrompt(ctx context.Context, accountID int64, modelID string, prompt string, maxTokens int) (*ScheduledTestResult, error) {
+func (s *AccountTestService) RunTestBackgroundWithPrompt(ctx context.Context, accountID int64, modelID string, prompt string, maxTokens int, reasoningEffort string) (*ScheduledTestResult, error) {
 	startedAt := time.Now()
 
 	w := httptest.NewRecorder()
 	ginCtx, _ := gin.CreateTestContext(w)
 	ginCtx.Request = (&http.Request{}).WithContext(ctx)
 
-	testErr := s.TestAccountConnection(ginCtx, accountID, modelID, prompt, AccountTestModeDefault, AccountTestOptions{MaxTokens: maxTokens})
+	testErr := s.TestAccountConnection(ginCtx, accountID, modelID, prompt, AccountTestModeDefault, AccountTestOptions{MaxTokens: maxTokens, ReasoningEffort: reasoningEffort})
 
 	finishedAt := time.Now()
 	body := w.Body.String()
