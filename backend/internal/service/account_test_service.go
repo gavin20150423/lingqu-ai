@@ -70,6 +70,9 @@ type TestEvent struct {
 type AccountTestOptions struct {
 	ImageDataURL string
 	AudioDataURL string
+	// MaxTokens 覆盖测试请求的输出上限（0 = 默认 1024）。智商测试等需要长输出
+	// （SVG/HTML 生成）的调用方通过它放宽上限。
+	MaxTokens int
 }
 
 func firstAccountTestOptions(opts []AccountTestOptions) AccountTestOptions {
@@ -285,11 +288,19 @@ func generateSessionString() (string, error) {
 	return FormatMetadataUserID(hex64, "", sessionUUID, uaVersion), nil
 }
 
-// createTestPayload creates a Claude Code style test request payload
+// createTestPayload creates a Claude Code style test request payload.
+// maxTokens <= 0 时使用默认 1024；prompts 首个非空值作为用户消息。
 func createTestPayload(modelID string, prompts ...string) (map[string]any, error) {
+	return createTestPayloadForTest(modelID, 0, prompts...)
+}
+
+func createTestPayloadForTest(modelID string, maxTokens int, prompts ...string) (map[string]any, error) {
 	prompt := "hi"
 	if len(prompts) > 0 && prompts[0] != "" {
 		prompt = prompts[0]
+	}
+	if maxTokens <= 0 {
+		maxTokens = 1024
 	}
 	sessionID, err := generateSessionString()
 	if err != nil {
@@ -324,7 +335,7 @@ func createTestPayload(modelID string, prompts ...string) (map[string]any, error
 		"metadata": map[string]string{
 			"user_id": sessionID,
 		},
-		"max_tokens":  1024,
+		"max_tokens":  maxTokens,
 		"temperature": 1,
 		"stream":      true,
 	}, nil
@@ -399,7 +410,7 @@ func (s *AccountTestService) TestAccountConnection(c *gin.Context, accountID int
 		return s.testOpenCodeGoAccountConnection(c, account, modelID, prompt)
 	}
 
-	return s.testClaudeAccountConnection(c, account, modelID)
+	return s.testClaudeAccountConnection(c, account, modelID, prompt, testOpts.MaxTokens)
 }
 
 // testXiaoAPIAccountConnection performs a read-only provider probe. XiaoAPI
@@ -539,7 +550,7 @@ func (s *AccountTestService) testCNProviderChatCompletionsConnection(c *gin.Cont
 }
 
 // testClaudeAccountConnection tests an Anthropic Claude account's connection
-func (s *AccountTestService) testClaudeAccountConnection(c *gin.Context, account *Account, modelID string) error {
+func (s *AccountTestService) testClaudeAccountConnection(c *gin.Context, account *Account, modelID string, prompt string, maxTokens int) error {
 	ctx := c.Request.Context()
 
 	// Determine the model to use
@@ -598,7 +609,7 @@ func (s *AccountTestService) testClaudeAccountConnection(c *gin.Context, account
 	c.Writer.Flush()
 
 	// Create Claude Code style payload (same for all account types)
-	payload, err := createTestPayload(testModelID)
+	payload, err := createTestPayloadForTest(testModelID, maxTokens, prompt)
 	if err != nil {
 		return s.sendErrorAndEnd(c, "Failed to create test payload")
 	}
@@ -2497,7 +2508,7 @@ func (s *AccountTestService) routeAntigravityTest(c *gin.Context, account *Accou
 		if strings.HasPrefix(modelID, "gemini-") {
 			return s.testGeminiAccountConnection(c, account, modelID, prompt)
 		}
-		return s.testClaudeAccountConnection(c, account, modelID)
+		return s.testClaudeAccountConnection(c, account, modelID, prompt, 0)
 	}
 	return s.testAntigravityAccountConnection(c, account, modelID)
 }
@@ -3337,20 +3348,20 @@ func (s *AccountTestService) sendErrorAndEnd(c *gin.Context, errorMsg string) er
 // RunTestBackground executes an account test in-memory (no real HTTP client),
 // capturing SSE output via httptest.NewRecorder, then parses the result.
 func (s *AccountTestService) RunTestBackground(ctx context.Context, accountID int64, modelID string) (*ScheduledTestResult, error) {
-	return s.RunTestBackgroundWithPrompt(ctx, accountID, modelID, "")
+	return s.RunTestBackgroundWithPrompt(ctx, accountID, modelID, "", 0)
 }
 
 // RunTestBackgroundWithPrompt is the prompt-aware variant used by the internal
 // SubPilot test endpoint. It preserves the upstream background-test flow while
 // allowing callers to override the probe prompt.
-func (s *AccountTestService) RunTestBackgroundWithPrompt(ctx context.Context, accountID int64, modelID string, prompt string) (*ScheduledTestResult, error) {
+func (s *AccountTestService) RunTestBackgroundWithPrompt(ctx context.Context, accountID int64, modelID string, prompt string, maxTokens int) (*ScheduledTestResult, error) {
 	startedAt := time.Now()
 
 	w := httptest.NewRecorder()
 	ginCtx, _ := gin.CreateTestContext(w)
 	ginCtx.Request = (&http.Request{}).WithContext(ctx)
 
-	testErr := s.TestAccountConnection(ginCtx, accountID, modelID, prompt, AccountTestModeDefault)
+	testErr := s.TestAccountConnection(ginCtx, accountID, modelID, prompt, AccountTestModeDefault, AccountTestOptions{MaxTokens: maxTokens})
 
 	finishedAt := time.Now()
 	body := w.Body.String()
