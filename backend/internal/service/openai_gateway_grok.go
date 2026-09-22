@@ -198,6 +198,7 @@ func (s *OpenAIGatewayService) forwardGrokResponses(
 				SameAccountRetryDelay:    retryDelay,
 				SameAccountRetryDeadline: retryDeadline,
 				SameAccountRetryMax:      retryMax,
+				PoolModeSameAccountRetry: retryable && account.PoolModeSameAccountRetryFor(resp.StatusCode),
 			}
 		}
 		return s.handleErrorResponse(ctx, resp, c, account, patchedBody, upstreamModel)
@@ -1445,6 +1446,7 @@ func (s *OpenAIGatewayService) describeGrokComposerImage(
 				SameAccountRetryDelay:    retryDelay,
 				SameAccountRetryDeadline: retryDeadline,
 				SameAccountRetryMax:      retryMax,
+				PoolModeSameAccountRetry: retryable && account.PoolModeSameAccountRetryFor(resp.StatusCode),
 			}
 		}
 		return "", OpenAIUsage{}, fmt.Errorf("grok composer image bridge upstream error: %s", upstreamMsg)

@@ -1516,6 +1516,13 @@ func (a *Account) IsPoolModeRetryableStatus(statusCode int) bool {
 	return false
 }
 
+// PoolModeSameAccountRetryFor 报告该账号是否对给定状态码显式启用了池模式同账号重试。
+// 这是「管理员显式配置」而非启发式判断，因此优先级高于 handler 层针对普通账号的
+// 确定性拒绝（401/403）拦截；错误构造方据此置 UpstreamFailoverError.PoolModeSameAccountRetry。
+func (a *Account) PoolModeSameAccountRetryFor(statusCode int) bool {
+	return a != nil && a.IsPoolMode() && a.IsPoolModeRetryableStatus(statusCode)
+}
+
 func (a *Account) GetCustomErrorCodes() []int {
 	if a.Credentials == nil {
 		return nil

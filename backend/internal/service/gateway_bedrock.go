@@ -288,10 +288,12 @@ func (s *GatewayService) handleBedrockUpstreamErrors(
 				Kind:               "retry_exhausted_failover",
 				Message:            extractUpstreamErrorMessage(respBody),
 			})
+			poolModeSameAccountRetry := account.PoolModeSameAccountRetryFor(resp.StatusCode)
 			return nil, &UpstreamFailoverError{
-				StatusCode:             resp.StatusCode,
-				ResponseBody:           respBody,
-				RetryableOnSameAccount: account.IsPoolMode() && account.IsPoolModeRetryableStatus(resp.StatusCode),
+				StatusCode:               resp.StatusCode,
+				ResponseBody:             respBody,
+				RetryableOnSameAccount:   poolModeSameAccountRetry,
+				PoolModeSameAccountRetry: poolModeSameAccountRetry,
 			}
 		}
 		return s.handleRetryExhaustedError(ctx, resp, c, account)
@@ -314,10 +316,12 @@ func (s *GatewayService) handleBedrockUpstreamErrors(
 			Kind:               "failover",
 			Message:            extractUpstreamErrorMessage(respBody),
 		})
+		poolModeSameAccountRetry := account.PoolModeSameAccountRetryFor(resp.StatusCode)
 		return nil, &UpstreamFailoverError{
-			StatusCode:             resp.StatusCode,
-			ResponseBody:           respBody,
-			RetryableOnSameAccount: account.IsPoolMode() && account.IsPoolModeRetryableStatus(resp.StatusCode),
+			StatusCode:               resp.StatusCode,
+			ResponseBody:             respBody,
+			RetryableOnSameAccount:   poolModeSameAccountRetry,
+			PoolModeSameAccountRetry: poolModeSameAccountRetry,
 		}
 	}
 

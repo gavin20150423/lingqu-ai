@@ -147,7 +147,12 @@ func (s *OpenAIGatewayService) ForwardEmbeddings(
 			if isOpenAIHTTPUpstreamAccessStateError(resp.StatusCode, upstreamMsg, respBody) {
 				return nil, newOpenAIUpstreamFailoverError(resp.StatusCode, resp.Header, respBody, upstreamMsg, retryableOnSameAccount)
 			}
-			return nil, &UpstreamFailoverError{StatusCode: resp.StatusCode, ResponseBody: respBody, RetryableOnSameAccount: retryableOnSameAccount}
+			return nil, &UpstreamFailoverError{
+				StatusCode:               resp.StatusCode,
+				ResponseBody:             respBody,
+				RetryableOnSameAccount:   retryableOnSameAccount,
+				PoolModeSameAccountRetry: retryableOnSameAccount,
+			}
 		}
 		writeOpenAIEmbeddingsUpstreamResponse(c, resp, respBody, s.responseHeaderFilter)
 		return nil, fmt.Errorf("upstream returned status %d", resp.StatusCode)

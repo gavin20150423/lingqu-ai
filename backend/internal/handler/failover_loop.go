@@ -79,7 +79,13 @@ func sameAccountRetryAllowed(failoverErr *service.UpstreamFailoverError, limits 
 	// These statuses are either request-scoped or account-scoped failures. A
 	// second attempt with the same credentials only adds latency and can repeat
 	// a deterministic rejection (especially content policy 403s).
-	if failoverErr.RequestScopedTransient || failoverErr.StatusCode == http.StatusUnauthorized || failoverErr.StatusCode == http.StatusForbidden {
+	//
+	// 例外：池模式账号通过 credentials.pool_mode_retry_status_codes 显式声明了
+	// 同账号重试状态码（默认列表即含 401/403）。此时 401/403 表达的是共享上游
+	// 池内的凭证轮换/临时拒绝，而不是针对本次请求的确定性拒绝，故不得拦截。
+	if failoverErr.RequestScopedTransient ||
+		((failoverErr.StatusCode == http.StatusUnauthorized || failoverErr.StatusCode == http.StatusForbidden) &&
+			!failoverErr.PoolModeSameAccountRetry) {
 		return false
 	}
 	if len(limits) >= 2 {

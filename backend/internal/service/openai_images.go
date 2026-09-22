@@ -699,7 +699,12 @@ func (s *OpenAIGatewayService) forwardOpenAIImagesAPIKey(
 			if isOpenAIHTTPUpstreamAccessStateError(resp.StatusCode, upstreamMsg, respBody) {
 				return nil, newOpenAIUpstreamFailoverError(resp.StatusCode, resp.Header, respBody, upstreamMsg, retryableOnSameAccount)
 			}
-			return nil, &UpstreamFailoverError{StatusCode: resp.StatusCode, ResponseBody: respBody, RetryableOnSameAccount: retryableOnSameAccount}
+			return nil, &UpstreamFailoverError{
+				StatusCode:               resp.StatusCode,
+				ResponseBody:             respBody,
+				RetryableOnSameAccount:   retryableOnSameAccount,
+				PoolModeSameAccountRetry: retryableOnSameAccount,
+			}
 		}
 		return s.handleOpenAIImagesErrorResponse(upstreamCtx, resp, c, account, upstreamModel)
 	}

@@ -434,6 +434,13 @@ func (s *OpenAIGatewayService) newOpenAIAccountFailoverErrorWithClassificationHe
 		failoverErr.SameAccountRetryDeadline = s.openAIOAuth429RetryDeadline(account)
 		failoverErr.SameAccountRetryDelay = openAIOAuth429SameAccountRetryDelay(responseHeaders, failoverErr.SameAccountRetryDeadline)
 	}
+	// 池模式显式选入的同账号重试必须随错误一起交给 handler：handler 层对普通账号
+	// 拦截 401/403 的确定性拒绝（见 sameAccountRetryAllowed），但池模式账号持的是
+	// 共享上游凭证，其中的 401/403 属于池内凭证轮换/临时拒绝，不得被该拦截压掉。
+	// 在此统一补写标记，避免每个调用点各自漏标导致不同端点行为不一致。
+	if failoverErr.RetryableOnSameAccount && account.PoolModeSameAccountRetryFor(statusCode) {
+		failoverErr.PoolModeSameAccountRetry = true
+	}
 	return failoverErr
 }
 

@@ -225,6 +225,7 @@ func (s *OpenAIGatewayService) forwardAsRawChatCompletions(
 					SameAccountRetryDelay:    retryDelay,
 					SameAccountRetryDeadline: retryDeadline,
 					SameAccountRetryMax:      retryMax,
+					PoolModeSameAccountRetry: retryable && account.PoolModeSameAccountRetryFor(resp.StatusCode),
 				}
 			}
 			return s.handleChatCompletionsErrorResponse(resp, c, account, billingModel)

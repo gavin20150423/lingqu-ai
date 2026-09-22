@@ -105,11 +105,13 @@ func TestOpenAIImagesNonStreamingDurationExcludesDownstreamWrite(t *testing.T) {
 		c.Set("api_key", &APIKey{ID: 42})
 		c.Writer = &delayedOpenAIImageWriter{ResponseWriter: c.Writer, delay: downstreamDelay}
 
-		upstreamBody := "data: {\"type\":\"response.completed\",\"response\":{\"created_at\":1710000000,\"output\":[{\"type\":\"image_generation_call\",\"result\":\"aW1hZ2U=\",\"output_format\":\"png\"}]}}\n\n" +
-			"data: [DONE]\n\n"
+		// gpt-image-2 命中 usesCodexDirectImages，OAuth 非流式请求已改走 Codex 直连
+		// Images 端点（Expect: application/json），返回的是 Images API JSON，
+		// 而不再是旧 Responses SSE（"type":"response.completed" 帧）。
+		upstreamBody := `{"created":1710000000,"data":[{"b64_json":"aW1hZ2U=","output_format":"png"}],"usage":{"input_tokens":10,"output_tokens":20,"total_tokens":30}}`
 		svc := newOpenAIImagesTestService(&httpUpstreamRecorder{resp: &http.Response{
 			StatusCode: http.StatusOK,
-			Header:     http.Header{"Content-Type": []string{"text/event-stream"}},
+			Header:     http.Header{"Content-Type": []string{"application/json"}},
 			Body:       io.NopCloser(strings.NewReader(upstreamBody)),
 		}})
 		parsed, err := svc.ParseOpenAIImagesRequest(c, body)
@@ -1276,7 +1278,7 @@ func TestOpenAIImagesOAuthBodyReadTransportErrorFailover(t *testing.T) {
 	account := &Account{ID: 5400, Name: "openai-oauth", Platform: PlatformOpenAI, Type: AccountTypeOAuth}
 	svc := &OpenAIGatewayService{}
 
-	_, _, _, readErr := svc.handleOpenAIImagesOAuthNonStreamingResponse(resp, c, "b64_json", "gpt-image-2")
+	_, _, _, _, readErr := svc.handleOpenAIImagesOAuthNonStreamingResponse(resp, c, "b64_json", "gpt-image-2", time.Time{})
 	require.Error(t, readErr)
 	err := svc.handleOpenAIImagesOAuthResponseError(context.Background(), c, account, "gpt-image-2", "https://api.openai.com/v1/responses", resp, OpenAIImagesJSONKeepaliveAdjustedWrittenSize(c), readErr)
 

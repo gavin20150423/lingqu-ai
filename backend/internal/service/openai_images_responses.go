@@ -1330,19 +1330,23 @@ func boundedJSONNonNegativeInt(value gjson.Result) (int, bool) {
 	return parsed, true
 }
 
+// startTime 用于取样「上游耗时」。与 handleCodexDirectImagesNonStreamingResponse 同理，
+// 它必须在写下游之前取样，否则慢客户端会把 Duration 撑大，污染上游耗时/计费口径。
 func (s *OpenAIGatewayService) handleOpenAIImagesOAuthNonStreamingResponse(
 	resp *http.Response,
 	c *gin.Context,
 	responseFormat string,
 	fallbackModel string,
-) (OpenAIUsage, int, []string, error) {
+	startTime time.Time,
+) (OpenAIUsage, int, []string, time.Duration, error) {
 	body, err := ReadUpstreamResponseBody(resp.Body, s.cfg, c, openAITooLargeError)
 	if err != nil {
 		if shouldClassifyOpenAIUpstreamStreamReadError(err, c.Request.Context()) {
 			err = newOpenAIUpstreamStreamReadError(err)
 		}
-		return OpenAIUsage{}, 0, nil, err
+		return OpenAIUsage{}, 0, nil, 0, err
 	}
+	upstreamDuration := time.Since(startTime)
 
 	var usage OpenAIUsage
 	forEachOpenAISSEDataPayload(string(body), func(data []byte) {
@@ -1350,7 +1354,7 @@ func (s *OpenAIGatewayService) handleOpenAIImagesOAuthNonStreamingResponse(
 	})
 	results, createdAt, usageRaw, firstMeta, _, err := collectOpenAIImagesFromResponsesBody(body)
 	if err != nil {
-		return OpenAIUsage{}, 0, nil, err
+		return OpenAIUsage{}, 0, nil, 0, err
 	}
 	if len(results) == 0 {
 		if upstreamErr := extractOpenAIImagesUpstreamError(body); upstreamErr != nil {
@@ -1358,14 +1362,14 @@ func (s *OpenAIGatewayService) handleOpenAIImagesOAuthNonStreamingResponse(
 			if !IsOpenAIImagesRetryableUpstreamError(upstreamErr) {
 				writeOpenAIImagesUpstreamErrorResponse(c, upstreamErr)
 			}
-			return OpenAIUsage{}, 0, nil, upstreamErr
+			return OpenAIUsage{}, 0, nil, 0, upstreamErr
 		}
 		if textFallbackErr := openAIImagesTextFallbackError(body); textFallbackErr != nil {
 			setOpsUpstreamError(c, textFallbackErr.clientStatusCode(), textFallbackErr.clientMessage(), summarizeOpenAIImagesNoOutputBody(body))
 			if !IsOpenAIImagesRetryableUpstreamError(textFallbackErr) {
 				writeOpenAIImagesUpstreamErrorResponse(c, textFallbackErr)
 			}
-			return OpenAIUsage{}, 0, nil, textFallbackErr
+			return OpenAIUsage{}, 0, nil, 0, textFallbackErr
 		}
 		// 真空响应：既无图也无文字输出。它保持短暂可重试语义，优先同账号重试。
 		// (B) 真空响应：记录上游诊断摘要到 ops（last_event/status/model/body 片段）便于
@@ -1374,7 +1378,7 @@ func (s *OpenAIGatewayService) handleOpenAIImagesOAuthNonStreamingResponse(
 		// 由 handler 自然换账号 failover（switchCount 上限保护），既提高成功率又不无谓
 		// 消耗其它账号配额。
 		setOpsUpstreamError(c, http.StatusBadGateway, "upstream did not return image output", summarizeOpenAIImagesNoOutputBody(body))
-		return OpenAIUsage{}, 0, nil, &UpstreamFailoverError{
+		return OpenAIUsage{}, 0, nil, 0, &UpstreamFailoverError{
 			StatusCode:             http.StatusBadGateway,
 			ResponseBody:           body,
 			RetryableOnSameAccount: true,
@@ -1386,11 +1390,11 @@ func (s *OpenAIGatewayService) handleOpenAIImagesOAuthNonStreamingResponse(
 
 	responseBody, err := buildOpenAIImagesAPIResponse(results, createdAt, usageRaw, firstMeta, responseFormat)
 	if err != nil {
-		return OpenAIUsage{}, 0, nil, err
+		return OpenAIUsage{}, 0, nil, 0, err
 	}
 	responseheaders.WriteFilteredHeaders(c.Writer.Header(), resp.Header, s.responseHeaderFilter)
 	c.Data(resp.StatusCode, "application/json; charset=utf-8", responseBody)
-	return usage, len(results), openAIResponsesImageResultSizes(results), nil
+	return usage, len(results), openAIResponsesImageResultSizes(results), upstreamDuration, nil
 }
 
 func (s *OpenAIGatewayService) handleOpenAIImagesOAuthStreamingResponse(
@@ -1930,6 +1934,9 @@ func (s *OpenAIGatewayService) forwardOpenAIImagesOAuth(
 		imageCount       int
 		imageOutputSizes []string
 		firstTokenMs     *int
+		// nonStreamingUpstreamDuration 由非流式分支在「写下游之前」取样的上游耗时填充；
+		// 流式分支保持零值（流式的 Duration 沿用墙上时间，见下方赋值处）。
+		nonStreamingUpstreamDuration time.Duration
 	)
 	// 与 handleOpenAIImagesOAuthResponseError 的比较端同口径：排除非流式 JSON
 	// keepalive 心跳字节，避免 failover 第 2 轮起把上一轮心跳残留误判为已写响应。
@@ -1974,9 +1981,9 @@ func (s *OpenAIGatewayService) forwardOpenAIImagesOAuth(
 		}
 	} else {
 		if direct {
-			usage, imageCount, imageOutputSizes, err = s.handleCodexDirectImagesNonStreamingResponse(resp, c, parsed)
+			usage, imageCount, imageOutputSizes, nonStreamingUpstreamDuration, err = s.handleCodexDirectImagesNonStreamingResponse(resp, c, parsed, startTime)
 		} else {
-			usage, imageCount, imageOutputSizes, err = s.handleOpenAIImagesOAuthNonStreamingResponse(resp, c, parsed.ResponseFormat, requestModel)
+			usage, imageCount, imageOutputSizes, nonStreamingUpstreamDuration, err = s.handleOpenAIImagesOAuthNonStreamingResponse(resp, c, parsed.ResponseFormat, requestModel, startTime)
 		}
 		if err != nil {
 			return nil, s.handleOpenAIImagesOAuthResponseError(
@@ -1994,6 +2001,12 @@ func (s *OpenAIGatewayService) forwardOpenAIImagesOAuth(
 	if imageCount <= 0 {
 		imageCount = parsed.N
 	}
+	// 非流式：Duration 采用上游耗时口径，不含写下游（慢客户端不得放大上游耗时/计费）；
+	// 流式：写下游本身就是流的一部分，沿用墙上时间，与 api_key 流式路径一致。
+	responseDuration := time.Since(startTime)
+	if !parsed.Stream {
+		responseDuration = nonStreamingUpstreamDuration
+	}
 	return &OpenAIForwardResult{
 		RequestID:                     resp.Header.Get("x-request-id"),
 		UpstreamHeaders:               resp.Header,
@@ -2005,7 +2018,7 @@ func (s *OpenAIGatewayService) forwardOpenAIImagesOAuth(
 		UpstreamResponseModelConflict: observedUpstreamResponseModelConflict(c),
 		Stream:                        parsed.Stream,
 		ResponseHeaders:               resp.Header.Clone(),
-		Duration:                      time.Since(startTime),
+		Duration:                      responseDuration,
 		FirstTokenMs:                  firstTokenMs,
 		ImageCount:                    imageCount,
 		ImageSize:                     parsed.SizeTier,

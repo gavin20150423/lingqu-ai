@@ -1355,6 +1355,7 @@ func (s *OpenAIGatewayService) handleGrokMediaErrorResponse(
 			SameAccountRetryDelay:    retryDelay,
 			SameAccountRetryDeadline: retryDeadline,
 			SameAccountRetryMax:      retryMax,
+			PoolModeSameAccountRetry: retryable && account.PoolModeSameAccountRetryFor(resp.StatusCode),
 		}
 	}
 

@@ -706,11 +706,15 @@ type GatewayFailureReason string
 // trigger account failover. Additive metadata keeps existing composite literals
 // source-compatible and preserves their legacy retry-next-account behavior.
 type UpstreamFailoverError struct {
-	StatusCode               int
-	ResponseBody             []byte        // 上游响应体，用于错误透传规则匹配
-	ResponseHeaders          http.Header   // 上游响应头，用于透传 cf-ray/cf-mitigated/content-type 等诊断信息
-	ForceCacheBilling        bool          // Antigravity 粘性会话切换时设为 true
-	RetryableOnSameAccount   bool          // 临时性错误（如 Google 间歇性 400、空响应），应在同一账号上重试 N 次再切换
+	StatusCode             int
+	ResponseBody           []byte      // 上游响应体，用于错误透传规则匹配
+	ResponseHeaders        http.Header // 上游响应头，用于透传 cf-ray/cf-mitigated/content-type 等诊断信息
+	ForceCacheBilling      bool        // Antigravity 粘性会话切换时设为 true
+	RetryableOnSameAccount bool        // 临时性错误（如 Google 间歇性 400、空响应），应在同一账号上重试 N 次再切换
+	// PoolModeSameAccountRetry 标记「按账号 pool_mode_retry_status_codes 显式选入」的同账号重试。
+	// 池模式下网关持的是共享上游凭证，401/403 通常表示池内凭证轮换/被临时拒绝，而不是
+	// 针对本次请求的确定性拒绝；因此 handler 不得对这类错误套用通用的 401/403 同账号重试拦截。
+	PoolModeSameAccountRetry bool
 	SameAccountRetryDelay    time.Duration // 同账号重试的最小间隔；零值使用 handler 默认值
 	SameAccountRetryDeadline time.Time     // 同账号重试截止时间；零值表示仅受 retryLimit 限制
 	SameAccountRetryMax      int           // 可选的错误级同账号重试上限，低于 handler 默认预算时优先采用

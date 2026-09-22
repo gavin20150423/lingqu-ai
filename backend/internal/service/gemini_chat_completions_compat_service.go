@@ -218,10 +218,12 @@ func (s *GeminiMessagesCompatService) forwardClaudeBodyAsChatCompletions(
 				Kind:               "failover",
 				Message:            upstreamMsg,
 			})
+			poolModeSameAccountRetry := account.PoolModeSameAccountRetryFor(resp.StatusCode)
 			return nil, &UpstreamFailoverError{
-				StatusCode:             resp.StatusCode,
-				ResponseBody:           evBody,
-				RetryableOnSameAccount: account.IsPoolMode() && account.IsPoolModeRetryableStatus(resp.StatusCode),
+				StatusCode:               resp.StatusCode,
+				ResponseBody:             evBody,
+				RetryableOnSameAccount:   poolModeSameAccountRetry,
+				PoolModeSameAccountRetry: poolModeSameAccountRetry,
 			}
 		}
 
