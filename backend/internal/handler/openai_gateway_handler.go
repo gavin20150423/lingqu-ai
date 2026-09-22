@@ -815,6 +815,8 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 					UserAgent:          userAgent,
 					IPAddress:          clientIP,
 					RequestPayloadHash: requestPayloadHash,
+					SubPilotLeaseID:    selection.SubPilotLeaseID,
+					SubPilotSessionKey: sessionHash,
 					APIKeyService:      h.apiKeyService,
 					QuotaPlatform:      quotaPlatform,
 					SessionID:          sessionID,
@@ -1397,6 +1399,8 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 					UserAgent:          userAgent,
 					IPAddress:          clientIP,
 					RequestPayloadHash: requestPayloadHash,
+					SubPilotLeaseID:    selection.SubPilotLeaseID,
+					SubPilotSessionKey: sessionHash,
 					APIKeyService:      h.apiKeyService,
 					QuotaPlatform:      quotaPlatform,
 					SessionID:          sessionID,
@@ -2984,6 +2988,8 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 						UserAgent:          userAgent,
 						IPAddress:          clientIP,
 						RequestPayloadHash: requestPayloadHash,
+						SubPilotLeaseID:    selection.SubPilotLeaseID,
+						SubPilotSessionKey: sessionHash,
 						APIKeyService:      h.apiKeyService,
 						QuotaPlatform:      quotaPlatform,
 						SessionID:          sessionID,
@@ -3339,6 +3345,7 @@ func (h *OpenAIGatewayHandler) handleFailoverExhausted(c *gin.Context, failoverE
 		h.handleFailoverExhaustedSimple(c, http.StatusBadGateway, streamStarted)
 		return
 	}
+	copyFailoverRetryAfter(c, failoverErr.ResponseHeaders)
 	if failoverErr.IsOpenAIRequestBodyTooLarge() {
 		service.SetOpsUpstreamError(c, http.StatusRequestEntityTooLarge, service.OpenAIRequestBodyTooLargeClientMessage, "")
 		h.handleStreamingAwareError(
@@ -3358,10 +3365,38 @@ func (h *OpenAIGatewayHandler) handleFailoverExhausted(c *gin.Context, failoverE
 		h.handleStreamingAwareError(c, http.StatusBadRequest, "invalid_request_error", message, streamStarted)
 		return
 	}
-	copyFailoverRetryAfter(c, failoverErr.ResponseHeaders)
+	if failoverErr.Reason == service.OpenAIImagesInsufficientBalanceReason {
+		status := failoverErr.ClientStatusCode
+		if status <= 0 {
+			status = http.StatusPaymentRequired
+		}
+		message := strings.TrimSpace(failoverErr.ClientMessage)
+		if message == "" {
+			message = service.OpenAIImagesInsufficientBalanceMessage
+		}
+		service.SetOpsUpstreamError(c, failoverErr.StatusCode, message, "")
+		h.handleStreamingAwareErrorWithCode(c, status, "upstream_error", service.OpenAIImagesInsufficientBalanceCode, message, streamStarted, false)
+		return
+	}
 	if failoverErr.IsCredentialFailure() {
 		status, message := credentialFailoverClientResponse(failoverErr)
 		h.handleStreamingAwareError(c, status, "upstream_error", message, streamStarted)
+		return
+	}
+	// 内池整体被限流不等于"我这一个账号被限流"。直接把最后一个账号的 429 抛出去，
+	// 会让下游网关（newapi 等）把 gavin2api 整个当成一个被限流的账号去冷却；
+	// 改为 503 + upstream_pool_exhausted，并清掉 Retry-After 避免下游按上游节奏重试。
+	if isUpstreamPoolRateLimitExhausted(failoverErr) {
+		clearUpstreamPoolRetryAfter(c)
+		h.handleStreamingAwareErrorWithCode(
+			c,
+			upstreamPoolExhaustedStatus,
+			"upstream_error",
+			upstreamPoolExhaustedCode,
+			upstreamPoolExhaustedMessage,
+			streamStarted,
+			false,
+		)
 		return
 	}
 	if failoverErr.IsOpenAICapacityShed() && strings.TrimSpace(failoverErr.ClientMessage) != "" {

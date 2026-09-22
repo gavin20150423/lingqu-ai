@@ -32,6 +32,14 @@ func (r *contentModerationRepository) CreateLog(ctx context.Context, log *servic
 	if err != nil {
 		return fmt.Errorf("marshal moderation thresholds: %w", err)
 	}
+	var engineMeta any
+	if log.EngineMeta != nil {
+		raw, err := json.Marshal(log.EngineMeta)
+		if err != nil {
+			return fmt.Errorf("marshal moderation engine metadata: %w", err)
+		}
+		engineMeta = string(raw)
+	}
 	var userID any
 	if log.UserID != nil {
 		userID = *log.UserID
@@ -54,19 +62,19 @@ INSERT INTO content_moderation_logs (
     scope_type, account_share_listing_id, account_id, owner_user_id, consumer_user_id, membership_id,
     endpoint, provider, model, mode, action, flagged, highest_category, highest_score,
     category_scores, threshold_snapshot, input_excerpt, upstream_latency_ms, error,
-    violation_count, auto_banned, email_sent, queue_delay_ms, matched_keyword
+    violation_count, auto_banned, email_sent, queue_delay_ms, matched_keyword, engine_meta
 ) VALUES (
     $1, $2, $3, $4, $5, $6, $7,
     $8, $9, $10, $11, $12, $13,
     $14, $15, $16, $17, $18, $19, $20, $21,
     $22::jsonb, $23::jsonb, $24, $25, $26,
-    $27, $28, $29, $30, $31
+    $27, $28, $29, $30, $31, $32::jsonb
 ) RETURNING id, created_at`,
 		log.RequestID, userID, log.UserEmail, apiKeyID, log.APIKeyName, groupID, log.GroupName,
 		log.ScopeType, nullableInt64Ptr(log.AccountShareListingID), nullableInt64Ptr(log.AccountID), nullableInt64Ptr(log.OwnerUserID), nullableInt64Ptr(log.ConsumerUserID), nullableInt64Ptr(log.MembershipID),
 		log.Endpoint, log.Provider, log.Model, log.Mode, log.Action, log.Flagged, log.HighestCategory, log.HighestScore,
 		string(categoryScores), string(thresholdSnapshot), log.InputExcerpt, latency, log.Error,
-		log.ViolationCount, log.AutoBanned, log.EmailSent, nullableIntPtr(log.QueueDelayMS), log.MatchedKeyword,
+		log.ViolationCount, log.AutoBanned, log.EmailSent, nullableIntPtr(log.QueueDelayMS), log.MatchedKeyword, engineMeta,
 	).Scan(&log.ID, &log.CreatedAt)
 	if err != nil {
 		return fmt.Errorf("insert content moderation log: %w", err)
@@ -101,7 +109,7 @@ SELECT
     l.scope_type, l.account_share_listing_id, l.account_id, l.owner_user_id, l.consumer_user_id, l.membership_id,
     l.endpoint, l.provider, l.model, l.mode, l.action, l.flagged, l.highest_category, l.highest_score,
     l.category_scores, l.threshold_snapshot, l.input_excerpt, l.upstream_latency_ms, l.error,
-    l.violation_count, l.auto_banned, l.email_sent, COALESCE(u.status, ''), l.queue_delay_ms, l.matched_keyword, l.created_at
+    l.violation_count, l.auto_banned, l.email_sent, COALESCE(u.status, ''), l.queue_delay_ms, l.matched_keyword, l.created_at, l.engine_meta
 FROM content_moderation_logs l
 LEFT JOIN users u ON u.id = l.user_id `+whereSQL+`
 ORDER BY l.created_at DESC, l.id DESC
@@ -117,7 +125,7 @@ LIMIT $`+fmt.Sprint(len(queryArgs)-1)+` OFFSET $`+fmt.Sprint(len(queryArgs)),
 	for rows.Next() {
 		var item service.ContentModerationLog
 		var userID, apiKeyID, groupID, accountShareListingID, accountID, ownerUserID, consumerUserID, membershipID, latency, queueDelay sql.NullInt64
-		var scoresRaw, thresholdsRaw []byte
+		var scoresRaw, thresholdsRaw, engineRaw []byte
 		if err := rows.Scan(
 			&item.ID,
 			&item.RequestID,
@@ -153,6 +161,7 @@ LIMIT $`+fmt.Sprint(len(queryArgs)-1)+` OFFSET $`+fmt.Sprint(len(queryArgs)),
 			&queueDelay,
 			&item.MatchedKeyword,
 			&item.CreatedAt,
+			&engineRaw,
 		); err != nil {
 			return nil, nil, fmt.Errorf("scan content moderation log: %w", err)
 		}
@@ -203,6 +212,11 @@ LIMIT $`+fmt.Sprint(len(queryArgs)-1)+` OFFSET $`+fmt.Sprint(len(queryArgs)),
 		_ = json.Unmarshal(scoresRaw, &item.CategoryScores)
 		item.ThresholdSnapshot = map[string]float64{}
 		_ = json.Unmarshal(thresholdsRaw, &item.ThresholdSnapshot)
+		if len(engineRaw) > 0 {
+			if err := json.Unmarshal(engineRaw, &item.EngineMeta); err != nil {
+				return nil, nil, fmt.Errorf("decode moderation engine metadata: %w", err)
+			}
+		}
 		items = append(items, item)
 	}
 	if err := rows.Err(); err != nil {

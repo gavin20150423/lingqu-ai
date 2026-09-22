@@ -45,7 +45,8 @@ describe('DateRangePicker', () => {
       },
       global: {
         stubs: {
-          Icon: true
+          Icon: true,
+          teleport: true
         }
       }
     })
@@ -64,7 +65,8 @@ describe('DateRangePicker', () => {
       },
       global: {
         stubs: {
-          Icon: true
+          Icon: true,
+          teleport: true
         }
       }
     })
@@ -92,5 +94,33 @@ describe('DateRangePicker', () => {
         preset: 'last24Hours'
       }
     ])
+  })
+
+  // 回归：下拉弹层曾被下方卡片遮挡（z-index 受 .card 层叠上下文限制），
+  // 修复方式是 Teleport 到 body + position: fixed + 全局弹层 z-index。
+  it('teleports the dropdown to body with fixed positioning and a modal-level z-index', async () => {
+    const wrapper = mount(DateRangePicker, {
+      attachTo: document.body,
+      props: {
+        startDate: formatLocalDate(new Date()),
+        endDate: formatLocalDate(new Date())
+      },
+      global: {
+        stubs: {
+          Icon: true
+        }
+      }
+    })
+
+    try {
+      await wrapper.find('.date-picker-trigger').trigger('click')
+
+      const dropdown = document.body.querySelector<HTMLElement>('.date-picker-dropdown')
+      expect(dropdown).not.toBeNull()
+      expect(dropdown!.style.position).toBe('fixed')
+      expect(Number(dropdown!.style.zIndex)).toBeGreaterThanOrEqual(1000000)
+    } finally {
+      wrapper.unmount()
+    }
   })
 })

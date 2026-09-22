@@ -39,6 +39,11 @@ func TestBindGroupsUsesIdempotentUpsert(t *testing.T) {
 	t.Cleanup(func() { _ = client.Close() })
 
 	mock.ExpectBegin()
+	// BindGroups 先对本轮涉及的 group 打 FOR SHARE 活体锁（与 group 删除方的
+	// FOR UPDATE 互斥），再串行化账号侧改动。返回行数必须等于去重后的 group 数，
+	// 否则 lockLiveGroups 会判定 ErrGroupNotFound。
+	mock.ExpectQuery(regexp.QuoteMeta(`/* account_group_live_group_lock */`)).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(int64(2)).AddRow(int64(3)))
 	mock.ExpectQuery(`(?s)SELECT .* FROM "accounts".*FOR UPDATE`).
 		WithArgs(int64(27)).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(int64(27)))

@@ -8,7 +8,7 @@ import UsageTable from '@/components/admin/usage/UsageTable.vue'
 
 const {
   query,
-  getStatsByDateRange,
+  getStats,
   getDashboardModels,
   getDashboardSnapshotV2,
   listMyErrorRequests,
@@ -20,7 +20,7 @@ const {
   showInfo,
 } = vi.hoisted(() => ({
   query: vi.fn(),
-  getStatsByDateRange: vi.fn(),
+  getStats: vi.fn(),
   getDashboardModels: vi.fn(),
   getDashboardSnapshotV2: vi.fn(),
   listMyErrorRequests: vi.fn(),
@@ -78,7 +78,7 @@ const messages: Record<string, string> = {
 vi.mock('@/api', () => ({
   usageAPI: {
     query,
-    getStatsByDateRange,
+    getStats,
     getDashboardModels,
     getDashboardSnapshotV2,
     listMyErrorRequests,
@@ -180,7 +180,7 @@ function mountUsageView() {
 describe('user UsageView', () => {
   beforeEach(() => {
     query.mockReset()
-    getStatsByDateRange.mockReset()
+    getStats.mockReset()
     getDashboardModels.mockReset()
     getDashboardSnapshotV2.mockReset()
     listMyErrorRequests.mockReset()
@@ -192,7 +192,7 @@ describe('user UsageView', () => {
     showInfo.mockReset()
 
     query.mockResolvedValue({ items: [usageLog], total: 1, pages: 1 })
-    getStatsByDateRange.mockResolvedValue({
+    getStats.mockResolvedValue({
       total_requests: 1,
       total_input_tokens: 10,
       total_output_tokens: 20,
@@ -375,14 +375,15 @@ describe('user UsageView', () => {
     }))
     expect(clickSpy).toHaveBeenCalled()
     expect(showSuccess).toHaveBeenCalled()
-    expect(csvContent).toBe([
-      'Time,API Key Name,Model,Reasoning Effort,Inbound Endpoint,Type,Billing Mode,Input Tokens,Output Tokens,Cache Read Tokens,Cache Creation Tokens,Rate Multiplier,Billed Cost,Original Cost,First Token (ms),Duration (ms)',
-      '2026-03-08T00:00:00Z,demo-key,gpt-5.4,"\'-",,Sync,Token,4057,101,278272,4,1,0.09288300,0.09288300,12,345',
+    expect(csvContent.startsWith('\uFEFF')).toBe(true)
+    expect(csvContent.slice(1)).toBe([
+      'Time,API Key Name,Model,Reasoning Effort,Inbound Endpoint,IP Address,Type,Billing Mode,Input Tokens,Output Tokens,Cache Read Tokens,Cache Creation Tokens,Rate Multiplier,Billed Cost,Original Cost,First Token (ms),Duration (ms)',
+      '2026-03-08T00:00:00Z,demo-key,gpt-5.4,-,,203.0.113.10,Sync,Token,4057,101,278272,4,1,0.09288300,0.09288300,12,345',
     ].join('\n'))
     expect(csvContent).toContain('Billed Cost')
     expect(csvContent).toContain('Original Cost')
-    expect(csvContent).not.toContain('IP Address')
-    expect(csvContent).not.toContain('203.0.113.10')
+    expect(csvContent).toContain('IP Address')
+    expect(csvContent).toContain('203.0.113.10')
     expect(csvContent).not.toContain('Upstream Endpoint')
     expect(csvContent).not.toContain('account_cost')
     expect(csvContent).not.toContain('account_rate_multiplier')
@@ -391,6 +392,39 @@ describe('user UsageView', () => {
     window.URL.revokeObjectURL = originalRevokeObjectURL
     vi.unstubAllGlobals()
     clickSpy.mockRestore()
+  })
+
+  it('keeps formula-injection protection for dangerous exported values', async () => {
+    query.mockResolvedValue({
+      items: [{ ...usageLog, api_key: { name: '-1+1' } }],
+      total: 1,
+      pages: 1,
+    })
+    const wrapper = mountUsageView()
+    await flushPromises()
+
+    let csvContent = ''
+    const OriginalBlob = globalThis.Blob
+    vi.stubGlobal('Blob', vi.fn((parts: BlobPart[], options?: BlobPropertyBag) => {
+      csvContent = parts.map((part) => String(part)).join('')
+      return new OriginalBlob(parts, options)
+    }))
+    const originalCreateObjectURL = window.URL.createObjectURL
+    const originalRevokeObjectURL = window.URL.revokeObjectURL
+    window.URL.createObjectURL = vi.fn(() => 'blob:usage-export') as typeof window.URL.createObjectURL
+    window.URL.revokeObjectURL = vi.fn(() => {}) as typeof window.URL.revokeObjectURL
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+
+    await (wrapper.vm as any).exportToCSV()
+
+    expect(csvContent).toContain(',"\'-1+1",gpt-5.4,-,')
+    expect(showSuccess).toHaveBeenCalled()
+
+    window.URL.createObjectURL = originalCreateObjectURL
+    window.URL.revokeObjectURL = originalRevokeObjectURL
+    vi.unstubAllGlobals()
+    clickSpy.mockRestore()
+    wrapper.unmount()
   })
 
   it('keeps the initial filters, sort, and filename while exporting multiple pages', async () => {
