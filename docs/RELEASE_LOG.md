@@ -2,6 +2,38 @@
 
 每次正式发布都必须新增版本条目，并分别写清楚“修复了什么”、“增加了什么”和“当前已有功能”。没有新增功能时也必须明确记录。
 
+## v0.2.7-lingqu.1 - 2026-09-23
+
+### 修复了什么
+
+- 修复合并上游 Sub2API v0.2.7（`20a94fbb5`）过程中被 git 自动合并**静默吃掉**的三处本地改动：
+  - `grok_media.go` 视频 create 路径丢失 `StoreGrokVideoPendingBilling` 落快照块，导致 status 侧 `prepareGrokVideoCompletionBilling` 因缺快照 fail-closed —— **视频用量会彻底漏计费**。已补回落快照双写重试块。
+  - `openai_gateway_handler.go` 的 SubPilot 租约释放字段：3 处 `RecordUsage` 缺 `SubPilotLeaseID` / `SubPilotSessionKey`（由上一次 v0.2.5 合并丢失）。缺失会导致成功请求不归还 sidecar 租约，账号在 SubPilot 侧被持续误判为并发已满。
+  - `openai_gateway_handler.go` 的内池耗尽 503 / `upstream_pool_exhausted` 分支（同样由上一次 v0.2.5 合并丢失）。缺失会把内池最后一个账号的 429 原样抛给下游，使 newapi 等下游把本服务整条链路当作**单个被限流账号整体冷却**。
+- 修复 `content_moderation.go` 合并产生的字段重复声明（导致后端编译失败）。
+- 修复合并引入的若干断言过时：内容审核日志列数、账号快照 denylist 分类、gemini 白名单断言、前端平台数与分页签名等。
+
+### 增加了什么
+
+- 合并上游 0.2.5 → 0.2.7 的全部上游功能（内容审核 `engine_meta` 审计溯源、渠道 reasoning effort 分档计费倍率、订阅目录与配额、插件、channel monitor v2、opencode-go / minimax 平台接入等，明细见上游版本记录）。
+- 新增数据库迁移（均为增量、向后兼容）：
+  - `238b_content_moderation_engine_meta.sql`：`content_moderation_logs` 增加**可空** `engine_meta JSONB`（老行与老版本写入保持 NULL）。
+  - `239_channel_reasoning_effort_multipliers.sql`：`channel_model_pricing` 与 `channel_account_stats_model_pricing` 增加 `reasoning_effort_multipliers JSONB`，并把旧的 `max_reasoning_effort_multiplier` 回填/迁移；`groups.model_pricing` 中的旧键一并迁移并移除。
+- 本仓专有业务功能**无新增**。
+
+### 当前已有功能
+
+- 与 `0.2.5-lingqu.4` 一致：自定义提示词输出回传、`client_type` 调度上报、`gavin2api` 稳定网络别名部署、账号共享/商城/积分/社区、Composite 多供应商分组、异步图片任务与视频工作台等全部保留。
+
+### 验证重点
+
+- 视频生成（Grok 媒体）完成后 usage 应正常入账，不再漏计费。
+- SubPilot 侧观察：OpenAI 系（`/v1/responses`、messages、WebSocket）请求结束后租约应立即释放，账号并发同步下降。
+- 内池整体被限流时，客户端应收到 503 `upstream_pool_exhausted`，而不是最后一个账号的 429。
+- 迁移校验：`content_moderation_logs.engine_meta`、`channel_model_pricing.reasoning_effort_multipliers`、`channel_account_stats_model_pricing.reasoning_effort_multipliers` 三列存在；`groups.model_pricing` 中原先带 `max_reasoning_effort_multiplier` 的条目已迁移为 `reasoning_effort_multipliers`。
+- ⚠️ 回滚提示：`239` 会从 `groups.model_pricing` 移除旧键 `max_reasoning_effort_multiplier`。若需回滚到 `0.2.5-lingqu.4`，这些分组的分档倍率将不再被旧代码读取，需手工按 `reasoning_effort_multipliers` 回填为旧键。
+
+
 ## v0.2.5-lingqu.4 - 2026-09-21
 
 ### 修复了什么
