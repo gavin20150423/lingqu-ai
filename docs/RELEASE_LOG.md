@@ -2,6 +2,29 @@
 
 每次正式发布都必须新增版本条目，并分别写清楚“修复了什么”、“增加了什么”和“当前已有功能”。没有新增功能时也必须明确记录。
 
+## v0.2.7-lingqu.2 - 2026-09-24
+
+### 修复了什么
+
+- **池模式（`pool_mode`）显式配置的 401/403 同账号重试被 handler 层拦截压掉的回归**。`sameAccountRetryAllowed` 对 401/403 无条件拒绝，而池模式默认重试状态码列表 `defaultPoolModeRetryableStatusCodes` 本就含 401/403，两者语义冲突：池模式账号持的是共享上游凭证，其中的 401/403 属于池内凭证轮换/临时拒绝，**不是针对本次请求的确定性拒绝**。现新增 `UpstreamFailoverError.PoolModeSameAccountRetry` 标记及该状态下的拦截例外（账号侧判定入口 `Account.PoolModeSameAccountRetryFor`）。标记在 `newOpenAIAccountFailoverErrorWithClassificationHeaders` 统一补写，覆盖 passthrough / forward / images / embeddings / alpha_search / cc_pipeline 等全部漏斗调用点，并在不走该漏斗的字面量构造点（`gateway_forward`、`gemini_*`、`anthropic_passthrough`、`bedrock`、`grok` 家族、`forward_as_*`）显式补写，避免不同端点行为不一致。**非池模式账号的 401/403 确定性拒绝拦截行为保持不变。**
+- **OAuth 非流式出图把「写下游」耗时算进了上游耗时**。`handleOpenAIImagesOAuthNonStreamingResponse` 与 `handleCodexDirectImagesNonStreamingResponse` 原先在 `c.Data` 之后才取 `time.Since(startTime)`，慢客户端会放大上游耗时与计费口径；现改为读完上游 body、写下游之前取样并作为返回值传出，与 api_key 路径 `handleOpenAIImagesNonStreamingResponse` 同口径。流式路径沿用墙上时间，不变。
+
+### 增加了什么
+
+- 无新增业务功能；本版只修实现侧回归与耗时口径。
+- 测试同步：`TestOpenAIImagesNonStreamingDurationExcludesDownstreamWrite/oauth` 的桩由旧 Responses SSE 更新为 Codex 直连 Images 端点的 `application/json`（`gpt-image-2` 已由 `c0d511937` 改走该端点）；三个测试文件按新签名补 duration 返回值入参。
+- **本版无新增数据库迁移**，不触碰任何表结构或计费数据。
+
+### 当前已有功能
+
+- 与 `0.2.7-lingqu.1` 一致：内容审核 `engine_meta` 审计溯源、渠道 reasoning effort 分档计费倍率、订阅目录与配额、插件、channel monitor v2、opencode-go / minimax 平台接入、Grok 视频 pending 计费快照、SubPilot 租约释放与内池耗尽 503 `upstream_pool_exhausted` 分支、`gavin2api` 稳定网络别名部署、账号共享/商城/积分/社区、Composite 多供应商分组、异步图片任务与视频工作台等全部保留。
+
+### 验证重点
+
+- 池模式账号遇到 401/403 时应**在同账号内重试** `pool_mode_retry_count` 次，而不是立刻换号；非池模式账号的 401/403 行为必须与发布前一致（未被放宽）。
+- OAuth 非流式出图的 usage 耗时口径应只反映上游耗时，慢客户端不再放大该值。
+- ⚠️ 回滚提示：本版无新增迁移，回滚到 `0.2.7-lingqu.1`（容器 `gavin2api-release-0.2.7-lingqu.1-150be00d2`，当前生产容器，只 stop 不删）无 DB 侧遗留；按回滚顺序恢复别名后 start 旧容器即可。回滚后将**重新丢失池模式 401/403 同账号重试**。
+
 ## v0.2.7-lingqu.1 - 2026-09-23
 
 ### 修复了什么
