@@ -334,10 +334,21 @@ DOCKER_BUILDKIT=0 docker build --build-arg VERSION=<ver> --build-arg COMMIT=<sha
 docker network disconnect <NET> <新容器>
 docker network connect --alias gavin2api --alias <新容器> <NET> <新容器>
 # 2. 观察 20-30s：新旧容器都在（DNS 偏向新容器），流量自然过渡
-# 3. 摘旧容器别名 → 完全切流：
+# 3. 退役旧容器 → 完全切流（2026-09-24 修订：必须用优雅 stop，不要用 network disconnect）
+#    原因：network disconnect 是「黑洞式断链」——套接字被销毁但不发 FIN/RST。
+#    Caddy 的上游连接池按【配置主机名】gavin2api:8080 建池，池中指向旧 IP 的
+#    ESTABLISHED 长连接仍被复用，写进去的请求无人应答 → 挂到客户端超时。
+#    优雅 stop 会发 FIN，连接池立即失效；容器停止后其 DNS 记录也一并消失。
+docker stop -t 90 <旧容器>
+# 4. 旧容器保留为回滚位（只 stop 不删；删容器严禁带 -v，共用命名卷）
+#    规范化：stop 后把旧容器从网络摘除（去掉 gavin2api 别名），避免将来误 start
+#    造成新旧两个容器同时持有别名 → 双版本混合承载。
+#    （stopped 容器不参与 DNS 解析，这一步无流量风险）
 docker network disconnect <NET> <旧容器>
-# 4. 旧容器 docker stop 保留为回滚位（不回滚时也先别删，留一个版本）
 ```
+
+**退役前的防呆门禁（2026-09-24 增补）**：退役旧容器之前，必须已观测到候选**真实承载线上流量**
+（观察窗内 `docker logs --since 30s <候选> | grep -c 'http request completed'` ≥ 1，为 0 则先延长观察，仍为 0 就回滚而不是退役旧容器）。只靠「公网 health 200」不足以证明候选在接单。
 
 **验证命令**：
 - 别名解析：`docker exec subpilot sh -c 'getent hosts gavin2api'`（应唯一指向新容器 IP）
@@ -351,3 +362,17 @@ docker network disconnect <NET> <旧容器>
 
 **注意**：caddy 日志里的 `aborting with incomplete response / context canceled`
 是客户端主动断开（流式场景常态），**不是**服务错误，勿误判为发布故障。
+
+**切流期间的两条硬性误判防线（2026-09-24 增补，均来自真实事故）：**
+
+1. **别名归属判断必须精确整行匹配。** 容器名（`gavin2api-release-<ver>-<sha>`）与别名
+   `gavin2api` 都含 `gavin2api` 子串，`grep -q gavin2api` 会把容器自己的名字算作命中 →
+   误判「候选已持有生产别名」而中止发布。用 `{{range .Aliases}}{{println .}}{{end}}` 展平后
+   `grep -qx gavin2api`。
+2. **公网可用性判据必须包含外部 vantage。** 服务器本机 `curl https://<自己的公网域名>` 走宿主
+   DNAT hairpin，可能受本机网络重编程干扰而误报（会假失败）。同时要注意反向陷阱：本拓扑流量
+   稀疏（约 1.5 req/s，突发状 1–9 req/s），**自然静默间隙常态可达 8–14s**，单次 `000` 不足以判定
+   公网降级，也不能凭吞吐曲线认定发生了降级。判定需要「外部连续探针（1–2s 间隔，覆盖整个切流）
+   + 逐秒逐容器请求时间线 + drain 窗口审计」三者一起看。
+
+**`getent hosts` 只返回第一个地址**，别名交接后不能用它检查「新旧是否都在解析」，需逐行比对 IP 集合。

@@ -23,7 +23,8 @@
 
 - 池模式账号遇到 401/403 时应**在同账号内重试** `pool_mode_retry_count` 次，而不是立刻换号；非池模式账号的 401/403 行为必须与发布前一致（未被放宽）。
 - OAuth 非流式出图的 usage 耗时口径应只反映上游耗时，慢客户端不再放大该值。
-- ⚠️ 回滚提示：本版无新增迁移，回滚到 `0.2.7-lingqu.1`（容器 `gavin2api-release-0.2.7-lingqu.1-150be00d2`，当前生产容器，只 stop 不删）无 DB 侧遗留；按回滚顺序恢复别名后 start 旧容器即可。回滚后将**重新丢失池模式 401/403 同账号重试**。
+- ⚠️ 回滚提示：本版无新增迁移，回滚到 `0.2.7-lingqu.1`（容器 `gavin2api-release-0.2.7-lingqu.1-150be00d2`，已退役保留的上一版生产容器，只 stop 不删）无 DB 侧遗留；按 `docker network connect --alias gavin2api …` → `docker start` 顺序恢复别名后即可。回滚后将**重新丢失池模式 401/403 同账号重试**。
+- 切流手法：稳定别名金丝雀；**退役旧容器用优雅 `docker stop`（SIGTERM → FIN），不再用 `docker network disconnect`**（黑洞式断链会挂死 Caddy 按主机名建的上游连接池）。详见 `docs/release-reports/20260924-v0.2.7-lingqu.2.md` §6。
 
 ## v0.2.7-lingqu.1 - 2026-09-23
 
