@@ -2,6 +2,60 @@
 
 每次正式发布都必须新增版本条目，并分别写清楚“修复了什么”、“增加了什么”和“当前已有功能”。没有新增功能时也必须明确记录。
 
+## v0.2.13-lingqu.1 - 2026-10-06
+
+本版为**合并上游 Sub2API v0.2.13（`b8dece900`）后的首个发版**，合并提交 `a63f3cde4`（本地上一版 `08cc24322`，合并基线 `20a94fbb5`）。
+规模：上游新增 246 提交，双边改动文件交集 159，冲突文件 36 / 冲突块 60。**本次合并本身没有引入新功能**，功能增量全部来自上游。
+
+### 修复了什么
+
+本版修掉的都是「git 自动合并静默吃掉本地改动 / 并集语义未对齐」，其中数条会导致**线上功能静默失效或漏计费**：
+
+- **`payment_orders.bonus_amount` 列在本地生成代码里不存在**。上游新增该列，本地新增 `provider_instance_id`/`provider_key`/`provider_snapshot`，两侧列索引不同（本地 42 / 上游 41 / 并集 43）。手工改索引必错，本版用 ent v0.14.5 重新生成 `ent/` 代码后拿到一致结果（`PaymentOrderMutation.Fields()` 容量 41 → 42，`PaymentOrdersColumns[42]`）。**不重新生成则上游充值赠送金额会静默不落库。**
+- **`affiliate_repo.go`**：本地线下结算 `ClearAvailableQuotaOfflineSettlement` 与上游线下提现 `WithdrawQuota` 被 diff3 **交错进同一段函数体**，两个能力都残缺；提取记录 SQL 的 action 白名单只剩上游的 `('transfer','withdraw')` → **本地 `offline_settlement` 流水会从后台列表整体消失**。已整块重写为两个完整函数，白名单补成三值并集。
+- **`affiliate_service.go`**：`AffiliateTransferRecord.Action` 字段被上游字段块**整段复制写入两遍** → 后端编译失败。
+- **`content_moderation_repo.go`**：与 `affiliate_repo.go` 出现**同名不同签名的 `nullableInt64Ptr`** → 重复声明；本地版改名 `nullableInt64Any`。
+- **`wire_gen.go` 注入链三处**（`ProvideAdminHandlers` / `ProvideOpenAIGatewayHandler` / `provideCleanup`）两侧都加参数 → 按并集补齐（`openCodeGoUsage` / `claudeResetCredit` / `claudeCodeVersionSync` / `compositeRouteResolver` / `imageAsyncTaskStore` / `xiaoVideoRuntime` / `communityBilling`），并去掉重复的 `idempotencyCoordinator`。
+- **`payment_order.go`**：上游把订单金额计算后移到 `methodCurrency` 解析之后并引入 `quoteRechargeBonus`，本地有 `planCurrency` + 优惠码折扣 → plan 分支保留本地促销折扣，balance 分支采用上游赠金报价。
+- **`content_moderation.go`**：保留本地账号共享/会员归属字段（`ScopeType`/`AccountShareListingID`/`AccountID`/`OwnerUserID`/`ConsumerUserID`/`MembershipID`），同时接纳上游 `riskControlLogOnly` 的 mode 覆盖。
+- **`gemini_v1beta_handler.go`**：保留本地 SubPilot 失败回报，同时接纳上游 `failoverClientGone` 的 499 标记。
+- **前端 `PaymentView.vue`**：`marked` / `DOMPurify` / `announcement-markdown.css` 的 import 被合并吃掉（组件仍在用），同时存在与本地重复的 `subscriptionEnabled` 和未引用的 `AppLayout`。已保留本地 `UserWorkspaceLayout` 布局，补回上述 import 与 `renderedHelpText` / `renderedBonusNotice`。
+- **前端 `AdminAffiliateRecordsTable.vue`**：合并后**出现两个 `<template #cell-action>`**（Vue 会静默取一个）→ 合并为一处，三类流水文案统一。
+- **前端 `DateRangePicker.vue`**：保留本地 Teleport + fixed 定位版式；`today` 统一为函数式（模板与预设调用的是 `today()`）。
+- **前端 `affiliates.ts`**：`AffiliateTransferRecord.action` 重复声明去重，并集为 `transfer | offline_settlement | withdraw`。
+- **前端平台清单**统一为 **12 平台并集**（本地 `xiaoapi` + 上游 `typesafe`，与后端 `service.AllowedQuotaPlatforms` 一致）。
+
+### 增加了什么
+
+以下均为**上游 v0.2.5 → v0.2.13 引入**，本版随合并带入：
+
+- **充值赠送（recharge bonus）**：赠送阶梯配置与文案，`payment_orders.bonus_amount` 落列，前端 `utils/rechargeBonus` 与金额卡展示。新增迁移 `241_add_payment_order_bonus_amount.sql`。
+- **线下提现登记（affiliate withdraw）幂等**：管理员登记站外打款，同 `Idempotency-Key` 只扣减一次。新增迁移 `240_affiliate_ledger_operation_id.sql`（加列 + 部分唯一索引）。
+- **TypeSafe（Jev System One）平台接入**：平台常量、账号测试服务（`account_test_service_typesafe.go`）、前端平台清单。新增迁移 `241_add_typesafe_platform.sql`。
+- **内容审核 risk-control 仅记录模式**（`riskControlLogOnly`）：命中后只记日志不改判定。
+- **简易模式 API Key 限流计费路径**（`SimpleModeKeyRateLimitOnly`）：只累计 5h/1d/7d 窗口用量，不触发余额/订阅/账号/平台/终身额度效果。
+- **在途余额预留**（inflight balance reservation）：`billing_inflight_reservation.go` / `gateway_inflight_reservation.go`，余额模式下按估算预占、计费后释放。
+- **备份归档与保留策略**：`backup_restore_state.go` / `backup_retention.go` 与前端 `BackupArchiveSettings.vue`。
+- **Composite 路由解析器接入 OpenAI 网关**（`compositeRouteResolver`）；**Claude Code 版本同步服务**与 Claude reset credits；**opencode-go 用量服务**。
+- **Grok CLI 版本门槛与官方无界面请求头对齐**；**Antigravity 上游错误脱敏**；**Cyber policy allowlist**（`cyber_policy_allowlist.go` / `openai_cyber_allowlist.go`）。
+- 前端 **Axios 升级至 1.20.0**（修复前端安全审计）、平台配额/看板/支付页若干改进。
+
+### 当前已有功能
+
+- 与 `0.2.7-lingqu.2` 一致并全部保留：内容审核 `engine_meta` 审计溯源、渠道 reasoning effort 分档计费倍率、订阅目录与配额、插件、channel monitor v2、opencode-go / minimax 平台接入、Grok 视频 pending 计费快照、SubPilot 租约释放与内池耗尽 503 `upstream_pool_exhausted` 分支、池模式 401/403 同账号重试、`gavin2api` 稳定网络别名部署、账号共享/商城/积分/社区、小视频工作台与异步图片任务等。
+- 本版额外保留的本地扩展：`xiaoapi` 视频平台与只读探针、线下结算（`offline_settlement`）、账号共享模式结算、OpenAI 网关在途余额预留接入、SubPilot 内部探针路由。
+
+### 验证重点
+
+- **充值赠送**：余额充值命中赠送阶梯时，`payment_orders.amount` 为到账总额、`bonus_amount` 为赠送额，返利基数剔除正确。
+- **线下提现幂等**：同 `Idempotency-Key` 重复登记不重复扣减；提取记录列表同时列出 `transfer` / `offline_settlement` / `withdraw` 三类流水。
+- **TypeSafe 平台**：`user_platform_quotas` / `composite_model_routes` 的 CHECK 约束重建后包含 `typesafe`；存量行瞬时校验通过。
+- **原有本地能力不回退**：grok 视频 pending 计费快照、SubPilot 租约释放（3 处 `RecordUsage`）、内池耗尽 503、池模式同账号重试仍在位（已用符号计数审计前后对照）。
+- ⚠️ **迁移风险已实测**：本库 `user_platform_quotas` 0 行、`composite_model_routes` 7 行且全部为 `openai`、`payment_orders` 107 行、`user_affiliate_ledger` 12 行 → 三条新迁移均为安全操作（近乎空操作），`ADD CONSTRAINT` 不会因存量行失败。
+- ⚠️ **回滚提示**：本版**新增 3 条迁移**（240_affiliate_ledger_operation_id、241_add_payment_order_bonus_amount、241_add_typesafe_platform）。回滚到 `0.2.7-lingqu.2`（容器 `gavin2api-release-0.2.7-lingqu.2-dc3d8e3f4`，只 stop 不删）**不会**因这三条迁移失败——它们只加列/加索引/放宽 CHECK，属向后兼容；旧版本忽略新列即可，唯一影响是旧版本不再校验 `typesafe` 平台。
+- 切流手法：稳定别名金丝雀；**退役旧容器用优雅 `docker stop`（SIGTERM → FIN），不使用 `docker network disconnect`**。别名交接后必须显式验证候选的 redis/postgres 名称解析与一次业务请求。
+- ⚠️ 遗留（**合并前既有，非本版引入**）：`service.AllowedQuotaPlatforms` 含 `xiaoapi`，但 ent 构建期校验（`ent/schema/user_platform_quota.go`）与数据库 CHECK 约束都**不含** `xiaoapi` → 目前为用户配置 xiaoapi 平台配额会失败。已用三方对照确认 `08cc24322` 同样如此。本版按最小改动未处理，待单独修。
+
 ## v0.2.7-lingqu.2 - 2026-09-24
 
 ### 修复了什么
