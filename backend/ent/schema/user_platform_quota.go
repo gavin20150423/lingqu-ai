@@ -40,9 +40,11 @@ func (UserPlatformQuota) Fields() []ent.Field {
 			Validate(func(s string) error {
 				// 注意：平台列表的单一权威源为 service.AllowedQuotaPlatforms；
 				// 此处为 ent 构建期约束，需与 service.AllowedQuotaPlatforms 保持同步。
+				// xiaoapi 为本地视频平台，合并上游时曾被漏掉，导致 service 允许但
+				// ent 校验/DB CHECK 拒绝；补回后三者一致（12 平台）。
 				switch s {
 				case "anthropic", "openai", "gemini", "antigravity", "grok",
-					"kimi", "zhipu", "deepseek", "minimax", "opencode_go", "typesafe":
+					"kimi", "zhipu", "deepseek", "xiaoapi", "minimax", "opencode_go", "typesafe":
 					return nil
 				default:
 					return fmt.Errorf("platform %q is not allowed", s)
