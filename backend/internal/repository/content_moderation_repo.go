@@ -71,7 +71,7 @@ INSERT INTO content_moderation_logs (
     $27, $28, $29, $30, $31, $32::jsonb
 ) RETURNING id, created_at`,
 		log.RequestID, userID, log.UserEmail, apiKeyID, log.APIKeyName, groupID, log.GroupName,
-		log.ScopeType, nullableInt64Ptr(log.AccountShareListingID), nullableInt64Ptr(log.AccountID), nullableInt64Ptr(log.OwnerUserID), nullableInt64Ptr(log.ConsumerUserID), nullableInt64Ptr(log.MembershipID),
+		log.ScopeType, nullableInt64Any(log.AccountShareListingID), nullableInt64Any(log.AccountID), nullableInt64Any(log.OwnerUserID), nullableInt64Any(log.ConsumerUserID), nullableInt64Any(log.MembershipID),
 		log.Endpoint, log.Provider, log.Model, log.Mode, log.Action, log.Flagged, log.HighestCategory, log.HighestScore,
 		string(categoryScores), string(thresholdSnapshot), log.InputExcerpt, latency, log.Error,
 		log.ViolationCount, log.AutoBanned, log.EmailSent, nullableIntPtr(log.QueueDelayMS), log.MatchedKeyword, engineMeta,
@@ -230,6 +230,8 @@ func (r *contentModerationRepository) CountFlaggedByUserSince(ctx context.Contex
 		return 0, nil
 	}
 	// SQL 中的 'cyber_policy' 字面量须与 service.ContentModerationActionCyberPolicy 保持一致。
+	// 'cyber_log_only' matches service.ContentModerationModeCyberLogOnly; these
+	// events remain evidence but never become penalties after allowlist removal.
 	var count int
 	err := r.db.QueryRowContext(ctx, `
 WITH last_auto_ban AS (
@@ -242,6 +244,8 @@ FROM content_moderation_logs
 WHERE user_id = $1
   AND flagged = TRUE
   AND action <> 'hash_block'
+  AND mode <> 'cyber_log_only'
+  AND mode <> 'risk_control_log_only'
   AND ($3::bool IS FALSE OR action <> 'cyber_policy')
   AND created_at >= $2
   AND created_at > COALESCE((SELECT at FROM last_auto_ban), '-infinity'::timestamptz)
@@ -294,7 +298,10 @@ func nullableIntPtr(value *int) any {
 	return *value
 }
 
-func nullableInt64Ptr(value *int64) any {
+// nullableInt64Any 把可空 int64 指针转成可直接入参的 any。
+// 注意：本包内另有 affiliate_repo.go 的 nullableInt64Ptr（sql.NullInt64 -> *int64），
+// 合并上游后两者同名会冲突，故此处改名。
+func nullableInt64Any(value *int64) any {
 	if value == nil {
 		return nil
 	}
