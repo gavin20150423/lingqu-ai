@@ -2,6 +2,65 @@
 
 每次正式发布都必须新增版本条目，并分别写清楚“修复了什么”、“增加了什么”和“当前已有功能”。没有新增功能时也必须明确记录。
 
+## v0.2.13-lingqu.2 - 2026-10-06
+
+发布提交 `f61dd5d65`（上一个发版提交 `9876782d5`）。本版为**单点修复版**，只包含 xiaoapi 平台白名单漂移的修复，不含新功能。
+
+### 修复了什么
+
+- **平台配额白名单三处副本漂移，导致 xiaoapi 平台配额「能选不能存」**。
+  平台白名单存在三处副本：① `service.AllowedQuotaPlatforms`（单一权威源）② `ent/schema/user_platform_quota.go`
+  的构建期 `Validate` ③ 数据库 `CHECK` 约束（由迁移维护）。本地视频平台 `xiaoapi` **只在 ① 里**：
+  237/238/241 三次平台迁移各自照抄了当时的列表，从未包含 xiaoapi。后果是管理后台的用户平台配额弹窗会
+  正常渲染出 xiaoapi 一行并允许填写，但保存时先被 ent 构建期校验拒绝；即使绕过，也会被
+  `user_platform_quotas_platform_check` 拒绝。
+  - 修法一：`ent/schema/user_platform_quota.go` 的 `Validate` switch 补上 `"xiaoapi"`。
+    （该处的校验闭包在运行时由 schema 描述符提供，生成代码只引用 `validators[N]`，因此**不需要重新生成 ent 代码**。）
+  - 修法二：新增迁移 **`250_add_xiaoapi_quota_platform.sql`** —— `DROP CONSTRAINT IF EXISTS` 后重建
+    `user_platform_quotas.platform` 与 `composite_model_routes.target_platform` 两个 CHECK 约束，
+    列表 = 241 的 11 平台 + `xiaoapi` = `service.AllowedQuotaPlatforms` 的 **12 平台**。
+    与 241 同型，是**严格超集**，存量行瞬时校验通过；`user_platform_quotas` 本库 0 行、
+    `composite_model_routes` 7 行且全为 `openai`，不存在因存量行失败的路径。
+- **防回归（关键）**：此漂移此前**不会让任何既有测试变红**，这正是它能潜伏的原因。本版补两条测试：
+  - `internal/service/platform_quota_sync_test.go` —— **同步守卫**：断言 `AllowedQuotaPlatforms` 中每个平台
+    都出现在 ent schema 的 `Validate` 里。已**反向验证非空转**（临时移除 `"xiaoapi"` 该测试立即失败）。
+  - `migrations/xiaoapi_platform_migration_test.go` —— 锁定 250 号迁移的 SQL 文本与 12 平台列表。
+
+### 增加了什么
+
+- 无新增业务功能。
+- 新增 1 条数据库迁移 `250_add_xiaoapi_quota_platform.sql`（只放宽 CHECK 约束，不改表结构、不动计费数据）。
+
+### 当前已有功能
+
+- 与 `0.2.13-lingqu.1` 完全一致（本版未改任何业务逻辑）：充值赠送（recharge bonus）、线下提现幂等、
+  TypeSafe 平台接入、内容审核 risk-control 仅记录模式、简易模式 API Key 限流计费、在途余额预留、
+  备份归档与保留策略、Composite 路由解析器接入 OpenAI 网关、Claude Code 版本同步、Claude reset credits、
+  opencode-go 用量服务、Grok CLI 版本门槛对齐、Antigravity 上游错误脱敏、Cyber policy allowlist。
+- 本地扩展全部保留：`xiaoapi` 视频平台与只读探针、线下结算（`offline_settlement`）、账号共享模式结算、
+  OpenAI 网关在途余额预留接入、SubPilot 内部探针路由、grok 视频 pending 计费快照、SubPilot 租约释放、
+  内池耗尽 503 `upstream_pool_exhausted`、池模式 401/403 同账号重试、`gavin2api` 稳定网络别名部署。
+
+### 验证重点
+
+- **迁移核实（本版核心）**：候选启动后 `schema_migrations` 应出现 `250_add_xiaoapi_quota_platform.sql`；
+  `pg_get_constraintdef` 查 `user_platform_quotas_platform_check` 与 `composite_model_routes_target_platform_check`
+  都必须包含 `xiaoapi`，且两个约束列表长度一致（12）。
+- **回归验证**：管理后台为某用户保存一条 `xiaoapi` 平台配额应成功（此前必然失败）。
+- ⚠️ **回滚提示**：本版只新增 1 条**放宽约束**的迁移，回滚到 `0.2.13-lingqu.1`（容器
+  `gavin2api-release-0.2.13-lingqu.1-9876782d5`，只 stop 不删）**不会**因该迁移失败 ——
+  回滚后唯一影响是 `xiaoapi` 平台配额又变回不可保存。
+- 切流手法：稳定别名金丝雀；退役旧容器用优雅 `docker stop`。
+
+### 发布批次内的运维动作（非代码变更，随本版一并记录）
+
+- 账号 **804（kiro-95）** 已于本次发布前停止被调用：`status=disabled`/`schedulable=false` 无法阻止它被选中
+  （gavin2api 的「单账号分组强制路径」与「动态费率分组自动绑定」都不检查账号状态，且它是 `pool_mode`
+  账号导致错误不标记本地状态、永不冷却）。已通过 `subpilot_channel_configs.dynamic_group_enabled=false`
+  把它从动态费率分组自动分配中排除，验证后调用量归零。
+  ⚠️ 该账号原所属分组 `claude-kiro-vip`(id=8) 已由管理员软删除。
+- 陈旧回滚容器 `0.2.7-lingqu.1-150be00d2`、`0.2.5-lingqu.4` 已清理，只保留 1 个有效回滚点。
+
 ## v0.2.13-lingqu.1 - 2026-10-06
 
 本版为**合并上游 Sub2API v0.2.13（`b8dece900`）后的首个发版**，合并提交 `a63f3cde4`（本地上一版 `08cc24322`，合并基线 `20a94fbb5`）。
