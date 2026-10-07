@@ -2,6 +2,55 @@
 
 每次正式发布都必须新增版本条目，并分别写清楚“修复了什么”、“增加了什么”和“当前已有功能”。没有新增功能时也必须明确记录。
 
+## v0.2.14-lingqu.1 - 2026-10-07
+
+本版为**合并上游 Sub2API v0.2.14 后的首个发版**，核心是修复 EasyPay 伪造回调安全漏洞（#7881）。
+发布提交 `47d46777d` 之后的合并提交 `fc03998fd`（双父 `47d46777d` + `0363b8cdb`），合并基线即 v0.2.13（`b8dece900`），**零冲突**。
+
+### 修复了什么
+
+- **🔴 EasyPay 下单签名可被重放为支付成功回调（#7881，安全漏洞）**。
+  攻击者下单后可在 submit.php 弹窗 URL 里看到下单签名，把它原样重放成支付成功通知即可到账，**全程不需要商户密钥**。
+  两个叠加缺陷：① `CanonicalizeReturnURL` 保留客户端查询参数，攻击者让 `return_url` 以 `&trade_status=TRADE_SUCCESS`
+  结尾并进入签名串；② EasyPay 签名基串不做转义直接拼接，回调把 return_url 解码到一半、被夹带的键值对升级为顶层参数后，
+  重排序的签名基串与下单时逐字节一致，验签通过。修复（上游 `d1aac6b98`）：
+  - `CanonicalizeReturnURL` 丢弃客户端查询参数（`parsed.RawQuery = ""`）——服务端自己构造签名集，客户端查询无合法用途；
+  - `VerifyNotification` 只接受真正的异步通知参数集
+    （pid/trade_no/out_trade_no/type/name/money/trade_status/param/sign/sign_type），其余参数一律拒绝（fail closed）。
+  - 上游附带回归测试（`easypay_notify_security_test.go`，覆盖 PoC 载荷/整单 URL 重放/真实回调/未知参数拒绝/return_url 夹带剥离）。
+  被上游判定误拒的真实支付仍可走既有 QueryOrder 对账路径恢复。
+  **发布前审计结论：该洞在我方代码中存在但未被利用** —— 生产 93 笔 COMPLETED 订单 100% 携带 28 位真支付宝流水号，
+  0 笔有伪造特征；webhook 仅被低强度扫描（7 次 400，无一过验签）。
+- **前端依赖审计修复**（`0f9d460dc`）：vue、source-map-js、xlsx 豁免调整（`.github/audit-exceptions.yml`），`pnpm-lock.yaml` 同步。
+- **测试对齐（本地提交 `f6293250f`）**：上游 `bbba01dae` 改了 `UseKeyModal.vue`（codex 目录发现）但没同步更新测试，
+  导致 v0.2.14 自带测试与组件不一致（上游带病发布）。本版对齐测试断言（`[features]` 新增 `api_key_model_discovery`）。
+
+### 增加了什么
+
+- **setup 加固（#7850 / PR #7893，上游 `d97ccc952`）**：全新安装不再出厂可猜测的管理员凭据
+  （`backend/internal/setup/` cli/handler/setup 重构，+236 行测试）。**对已安装实例无行为变化**。
+- **远程 Codex 目录 API-key 发现（#7851 相关，上游 `bbba01dae`）**：codex CLI 配置在 `[features]` 中新增
+  `api_key_model_discovery = true`、`[model_providers.OpenAI]` 中新增 `model_catalog_url`（远程目录发现）。
+- 无数据库迁移（本版 0 条新迁移，回滚无 DB 顾虑）。
+
+### 当前已有功能
+
+- 与 `0.2.13-lingqu.2` 一致并全部保留：EasyPay 渠道（zpayz.cn）、充值赠送、线下提现幂等、TypeSafe 平台、
+  xiaoapi 平台配额白名单（12 平台）、内容审核 risk-control 仅记录、简易模式限流、在途余额预留、备份归档、
+  Composite 路由、Claude Code 版本同步、opencode-go 用量、Grok CLI 门槛、Antigravity 脱敏、Cyber policy allowlist、
+  小视频工作台、SubPilot 租约释放/内池耗尽 503/池模式同账号重试、`gavin2api` 稳定别名部署等。
+
+### 验证重点
+
+- **EasyPay 安全修复生效**：向 `/api/v1/payment/webhook/easypay` 发送带非标准参数（如 `return_url`、`notify_url`、`device`）
+  的通知必须被拒（日志出现 `unexpected notify param`）；标准参数 + 正确签名的真实回调仍通过。
+- **回归**：EasyPay 真实订单（zpayz.cn 恢复后）下单→支付→回调→到账全链路不受影响。
+- **setup**：已安装实例无变化（不触发 bootstrap）。
+- **回滚提示**：本版无迁移，回滚到 `0.2.13-lingqu.2`（容器 `gavin2api-release-0.2.13-lingqu.2-47d46777d`，只 stop 不删）零 DB 顾虑。
+- ⚠️ **门禁基线说明**：前端 vitest 存在 **16 个合并前既有红**（PaymentView 19、RedeemView 11 等，已在合并前提交
+  `47d46777d` 上实测复现为基线，与本合并无关，单独排期修复）；本合并引入的唯一测试回归（UseKeyModal，上游测试未同步）
+  已在本版修平（30/30 通过）。Go 门禁全绿（52 包，含新增安全回归测试）。
+
 ## v0.2.13-lingqu.2 - 2026-10-06
 
 发布提交 `f61dd5d65`（上一个发版提交 `9876782d5`）。本版为**单点修复版**，只包含 xiaoapi 平台白名单漂移的修复，不含新功能。
