@@ -2,6 +2,64 @@
 
 每次正式发布都必须新增版本条目，并分别写清楚“修复了什么”、“增加了什么”和“当前已有功能”。没有新增功能时也必须明确记录。
 
+## v0.2.14-lingqu.2 - 2026-10-08
+
+单点修复版：堵上「操作员禁用账号仍被调用」的单账号分组绕过口。不含新功能。
+
+### 修复了什么
+
+- **🔴 单账号分组的强制路由会无视操作员的显式禁用**（2026-10-06 由 804/kiro-95 事故定案，
+  至此才真正修掉）。
+  `tryForceSingleAccountGroup`（`backend/internal/service/gateway_scheduling.go`）在"分组恰好绑定 1 个账号"时
+  直接把该账号推去调度，取到账号后**从不检查 `status` / `schedulable`**
+  （`GetSingleAccountIDByGroupID` 的 SQL 也没 join accounts）。于是 `status=disabled`、
+  `schedulable=false` 的账号仍会被选中并真实发出流量。
+
+  修法：取到账号后校验两项**操作员显式控制**——`!account.IsActive() || !account.Schedulable` 时
+  **不走强制路径**（返回 `forced=false`），交回正常调度，由它给出"无可用账号"或改选其它账号；
+  日志记 `single_account_group_skip_disabled_account`。
+  刻意**不**套 `isAccountSchedulableForSelection`：那个口径还包含限流/过载/冷却等瞬态窗口，
+  而这条路径本来就要靠等待计划兜住瞬态不可用，一并拦掉会改变既有行为。
+
+  保留原意：该路径仍会绕过**运行时**状态（限流窗口、冷却、SubPilot 不参与）——
+  这是 2026-07-26 `cec350f3a` 引入时的明确设计（"fix: force routing for single-account groups"），
+  当时只是**误把"运行时状态"与"操作员禁用"混为一谈**：既有测试 `bypasses runtime status and exclusions`
+  直接拿一个 `disabled + schedulable=false` 的账号当例子。本版把测试改成"active 但在限流窗口内"
+  来保住原意，并新增两条用例锁住"禁用必须生效"。
+
+- **顺带修掉 `unit` 构建标签测试套件编译不过**：`account_test_service_openai_test.go` 有 17 处
+  `testOpenAIAccountConnection` 调用少传 `maxTokens` / `reasoningEffort` 两个参数（函数签名早已变更），
+  导致 `go test -tags unit ./internal/service/` **整包编译失败**——这套测试等于一直是死代码。
+  已按生产调用点（`testOpts.MaxTokens, testOpts.ReasoningEffort`）补上 `0, ""`（走默认值）。
+
+### 影响面核对（发布前）
+
+- 生产 `accounts.status` 分布：active 700 / error 321 / disabled 1，**没有空状态**账号 →
+  严格判定不会误伤（测试 fixture 里的零值账号已单独补齐 `Status`/`Schedulable`）。
+- 全库共 6 个"只绑 1 个账号"的分组：36 `jp-gemini-image`、73 `gemini-image`、142 `国模订阅`、
+  145 `nano banana订阅`、146 `openai-官key`、148 `正价kiro`。
+  其中 36/73/145 绑定的账号 884（`nicolessss-gemini`）当前是 `active + schedulable=false`
+  （今天 20:17 被关掉），修复后这 3 个分组将不再派发到它。
+  **实测近 3 小时这 3 个分组与账号 884 的请求量均为 0**，故当前无客户影响；若有流量需先确认 884 的去留。
+- 未修的同类绕过口：DB 函数 `sync_dynamic_rate_group` 的 INSERT 不校验 `status/schedulable`
+  （动态速率分组自动绑定账号），属另一条路径，仍待处理。
+
+### 验证结果
+
+- `go build ./...`、`go vet ./...` 全绿。
+- `TestGatewaySingleAccountGroupForce` 5 个子用例全过（含新增 2 条禁用用例，
+  与改写后的"绕过运行时状态"用例）。
+- ⚠️ `go test -tags unit ./internal/service/` **有 4 个既有失败**（与本次改动无关，
+  因上面那个编译问题此前从未真正跑起来）：`TestAdminService_CNProviderModelsListCandidatesUseProviderDefaults`、
+  `TestBatchImagePublicService_Submit`（2 个子用例）、`TestOllamaProbeCallback_StaleLongDoesNotOverrideNewShort`。
+  单独排期修复，未在本版处理。
+- 前端未改动（沿用 v0.2.14-lingqu.1 的产物）。
+
+### 当前已有功能
+
+与 `0.2.14-lingqu.1` 完全一致（EasyPay 伪造回调安全修复、setup 加固、远程 Codex 目录发现、
+前端依赖审计修复等全部保留），本版只收窄了单账号分组的强制路由条件。
+
 ## v0.2.14-lingqu.1 - 2026-10-07
 
 本版为**合并上游 Sub2API v0.2.14 后的首个发版**，核心是修复 EasyPay 伪造回调安全漏洞（#7881）。

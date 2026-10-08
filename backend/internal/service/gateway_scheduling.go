@@ -1013,6 +1013,23 @@ func (s *GatewayService) tryForceSingleAccountGroup(ctx context.Context, groupID
 		return nil, true, ErrNoAvailableAccounts
 	}
 
+	// 操作员显式禁用必须无条件生效（2026-10-06 由 804/kiro-95 事故定案）。
+	// 这条路径过去只认"分组恰好绑了一个账号"，直接把它推去调度，导致
+	// status=disabled / schedulable=f 的账号仍能被选中并真实发流量。
+	//
+	// 这里只校验"人明确说过别用这个账号"的两项（状态 + 手动开关），刻意不套
+	// isAccountSchedulableForSelection：那个口径还包含限流/过载/冷却等瞬态窗口，
+	// 而这条路径本来就要靠等待计划兜住瞬态不可用——一并拦掉会改变既有行为。
+	// 禁用时不返回 forced，交回正常调度，由它给出"无可用账号"或改选别的账号。
+	if !account.IsActive() || !account.Schedulable {
+		slog.Info("single_account_group_skip_disabled_account",
+			"group_id", *groupID,
+			"account_id", account.ID,
+			"status", account.Status,
+			"schedulable", account.Schedulable)
+		return nil, false, nil
+	}
+
 	result, acquireErr := s.tryAcquireAccountSlot(ctx, account.ID, account.Concurrency)
 	if acquireErr == nil && result != nil && result.Acquired {
 		slog.Debug("single_account_group_forced",
