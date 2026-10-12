@@ -11,8 +11,18 @@ const { appStore } = vi.hoisted(() => ({
 }))
 
 vi.mock('@/components/layout/AppLayout.vue', () => ({ default: { template: '<div><slot /></div>' } }))
+// CustomPageView 在本地定制里挂的是 UserWorkspaceLayout（不是上游的 AppLayout），
+// 只 mock AppLayout 会让定制外壳真身挂载，连带拉起 route/router 与 Pinia store 而报错。
+vi.mock('@/components/layout/UserWorkspaceLayout.vue', () => ({ default: { template: '<div><slot /></div>' } }))
 vi.mock('vue-router', () => ({ useRoute: () => ({ params: { id: 'docs' } }) }))
-vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string) => key, locale: { value: 'en' } }) }))
+// i18n 单例（src/i18n/index.ts）在模块加载期就调用 createI18n，app store 会 import 它，
+// 因此 mock 里要一并提供 createI18n，否则套件在收集阶段就整体失败（0 test）。
+vi.mock('vue-i18n', () => ({
+  createI18n: () => ({
+    global: { t: (key: string) => key, locale: { value: 'en' }, setLocaleMessage: () => {} }
+  }),
+  useI18n: () => ({ t: (key: string) => key, locale: { value: 'en' } })
+}))
 vi.mock('@/stores', () => ({ useAppStore: () => appStore }))
 vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ isAdmin: false, user: { id: 7 }, token: 'test-token' }) }))
 vi.mock('@/stores/adminSettings', () => ({ useAdminSettingsStore: () => ({ customMenuItems: [] }) }))

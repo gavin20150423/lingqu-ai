@@ -52,7 +52,7 @@ export default {
     protocolCTMOAI: 'CTMOAI (Seedance + MiniMax H3)',
     protocolCustomJSON: 'Custom JSON / REST adapter',
     adapterConfig: 'Adapter configuration (JSON)',
-    adapterConfigPlaceholder: '{\n  "version": 1,\n  "auth": { "type": "bearer" },\n  "endpoints": {\n    "models": { "method": "GET", "path": "/v1/models" },\n    "create": { "method": "POST", "path": "/v1/videos" },\n    "status": { "method": "GET", "path": "/v1/videos/{job_id}" }\n  },\n  "request": { "fields": { "model": "model", "prompt": "prompt", "duration": "seconds" } },\n  "response": { "fields": { "job_id": "id", "status": "status" }, "status_map": { "queued": "pending" } },\n  "models": { "items_path": "data" }\n}',
+    adapterConfigPlaceholder: '{\'{\'}\n  "version": 1,\n  "auth": {\'{\'} "type": "bearer" {\'}\'},\n  "endpoints": {\'{\'}\n    "models": {\'{\'} "method": "GET", "path": "/v1/models" {\'}\'},\n    "create": {\'{\'} "method": "POST", "path": "/v1/videos" {\'}\'},\n    "status": {\'{\'} "method": "GET", "path": "/v1/videos/{\'{\'}job_id{\'}\'}" {\'}\'}\n  {\'}\'},\n  "request": {\'{\'} "fields": {\'{\'} "model": "model", "prompt": "prompt", "duration": "seconds" {\'}\'} {\'}\'},\n  "response": {\'{\'} "fields": {\'{\'} "job_id": "id", "status": "status" {\'}\'}, "status_map": {\'{\'} "queued": "pending" {\'}\'} {\'}\'},\n  "models": {\'{\'} "items_path": "data" {\'}\'}\n{\'}\'}',
     adapterConfigHint: 'Paths stay relative to Base URL. Use {job_id} and {media_id} only for resource endpoints; no scripts or external URLs are executed.',
     baseUrl: 'Upstream Base URL',
     apiKey: 'Upstream API Key',

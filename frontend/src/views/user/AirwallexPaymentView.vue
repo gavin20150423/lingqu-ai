@@ -25,7 +25,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import UserWorkspaceLayout from '@/components/layout/UserWorkspaceLayout.vue'
@@ -47,6 +47,10 @@ const paymentBackPath = computed(() => {
   const orderType = String(route.query.order_type || '') || snapshotOrderType.value
   return orderType === 'subscription' ? '/subscription-plans' : '/purchase'
 })
+
+let disposed = false
+
+onUnmounted(() => { disposed = true })
 
 function queryString(key: string): string {
   const value = route.query[key]
@@ -108,11 +112,13 @@ onMounted(async () => {
 
   try {
     const airwallex = await import('@airwallex/components-sdk')
+    if (disposed) return
     const result = await airwallex.init({
       env: snapshot.paymentEnv === 'prod' ? 'prod' : 'demo',
       enabledElements: ['payments'],
       locale: checkoutLocale,
     })
+    if (disposed) return
 
     loading.value = false
     const checkoutOptions = {

@@ -433,6 +433,7 @@
 import { ref, reactive, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
+import { CONCRETE_PLATFORM_OPTIONS } from '@/constants/platforms'
 import { adminAPI } from '@/api/admin'
 import type { ErrorPassthroughRule } from '@/api/admin/errorPassthrough'
 import BaseDialog from '@/components/common/BaseDialog.vue'
@@ -485,14 +486,8 @@ const matchModeOptions = computed(() => [
   { value: 'all', label: t('admin.errorPassthrough.matchMode.all'), description: t('admin.errorPassthrough.matchMode.allHint') }
 ])
 
-const platformOptions = [
-  { value: 'anthropic', label: 'Anthropic' },
-  { value: 'openai', label: 'OpenAI' },
-  { value: 'gemini', label: 'Gemini' },
-  { value: 'antigravity', label: 'Antigravity' },
-  { value: 'grok', label: 'Grok' },
-  { value: 'xiaoapi', label: 'XiaoAPI' }
-]
+// 平台清单（含本地视频平台 xiaoapi）由 @/constants/platforms 统一派生。
+const platformOptions = CONCRETE_PLATFORM_OPTIONS
 
 // Load rules when dialog opens
 watch(() => props.show, (newVal) => {
@@ -627,8 +622,8 @@ const handleSubmit = async () => {
 
 const toggleEnabled = async (rule: ErrorPassthroughRule) => {
   try {
-    await adminAPI.errorPassthrough.toggleEnabled(rule.id, !rule.enabled)
-    rule.enabled = !rule.enabled
+    const updated = await adminAPI.errorPassthrough.toggleEnabled(rule.id, !rule.enabled)
+    rule.enabled = updated.enabled
   } catch (error: any) {
     appStore.showError(error.response?.data?.detail || t('admin.errorPassthrough.failedToToggle'))
     console.error('Error toggling rule:', error)

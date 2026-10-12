@@ -52,7 +52,7 @@ export default {
     protocolCTMOAI: 'CTMOAI（Seedance + MiniMax H3）',
     protocolCustomJSON: '自定义 JSON / REST 适配器',
     adapterConfig: '适配器配置（JSON）',
-    adapterConfigPlaceholder: '{\n  "version": 1,\n  "auth": { "type": "bearer" },\n  "endpoints": {\n    "models": { "method": "GET", "path": "/v1/models" },\n    "create": { "method": "POST", "path": "/v1/videos" },\n    "status": { "method": "GET", "path": "/v1/videos/{job_id}" }\n  },\n  "request": { "fields": { "model": "model", "prompt": "prompt", "duration": "seconds" } },\n  "response": { "fields": { "job_id": "id", "status": "status" }, "status_map": { "queued": "pending" } },\n  "models": { "items_path": "data" }\n}',
+    adapterConfigPlaceholder: '{\'{\'}\n  "version": 1,\n  "auth": {\'{\'} "type": "bearer" {\'}\'},\n  "endpoints": {\'{\'}\n    "models": {\'{\'} "method": "GET", "path": "/v1/models" {\'}\'},\n    "create": {\'{\'} "method": "POST", "path": "/v1/videos" {\'}\'},\n    "status": {\'{\'} "method": "GET", "path": "/v1/videos/{\'{\'}job_id{\'}\'}" {\'}\'}\n  {\'}\'},\n  "request": {\'{\'} "fields": {\'{\'} "model": "model", "prompt": "prompt", "duration": "seconds" {\'}\'} {\'}\'},\n  "response": {\'{\'} "fields": {\'{\'} "job_id": "id", "status": "status" {\'}\'}, "status_map": {\'{\'} "queued": "pending" {\'}\'} {\'}\'},\n  "models": {\'{\'} "items_path": "data" {\'}\'}\n{\'}\'}',
     adapterConfigHint: '路径相对 Base URL，只支持 {job_id} 和 {media_id} 占位符，不执行外部脚本或 URL。',
     baseUrl: '上游 Base URL',
     apiKey: '上游 API Key',

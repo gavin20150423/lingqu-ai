@@ -19,5 +19,9 @@ func TestAllPlatformsIncludesEveryConcretePlatform(t *testing.T) {
 		"minimax",
 		"opencode_go",
 		"typesafe",
+		"command_code",
+		"cline",
+		// 本地视频平台：登记在平台清单末尾，同样属于具体平台。
+		"xiaoapi",
 	}, AllPlatforms())
 }
