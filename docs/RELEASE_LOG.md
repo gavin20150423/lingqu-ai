@@ -2,6 +2,43 @@
 
 每次正式发布都必须新增版本条目，并分别写清楚“修复了什么”、“增加了什么”和“当前已有功能”。没有新增功能时也必须明确记录。
 
+## v0.2.15-lingqu.1 - 2026-10-12
+
+合并上游 sub2api `v0.2.15`（新增 Cline / Command Code 平台、平台清单驱动重构），并修复「渠道编辑页保存会清空该渠道全部定价」的严重数据丢失 bug。
+
+### 修复了什么
+
+- **渠道编辑页保存后渠道定价被整段删除**（用户报「页面上保存，会把数据删除，根本没有保存数据」）。三层叠加：
+  1. `replaceModelPricingTx`（`backend/internal/repository/channel_repo_pricing.go`）是**全量替换**语义（先 `DELETE FROM channel_model_pricing WHERE channel_id=$1` 再逐条 INSERT）；
+  2. `UpdateChannelRequest.ModelPricing` 是**指针**（`*[]T`，`[] != nil` 即命中替换），而 `CreateChannelRequest.ModelPricing` 是值切片（`len>0` 判据）——两者语义不一致；
+  3. 前端 `ChannelsView.formToAPI()` 在平台 section 未启用时 `continue` **丢弃**该平台全部定价条目，于是提交 `model_pricing: []`，后端据此删光该渠道所有定价。
+
+  修法：后端在 handler 层加**三态判定** `classifyReplaceIntent(incomingLen, clearConfirmed, existingLen)` → Apply / Reject / Skip；新增显式清空开关 `clear_model_pricing` / `clear_account_stats_pricing_rules`；空数组且未确认、渠道已有数据时返回 400 `MODEL_PRICING_CLEAR_UNCONFIRMED` / `PRICING_RULES_CLEAR_UNCONFIRMED`；渠道本无数据则 Skip（不误伤首次配置）。前端提交前与编辑前状态对比，会清空或丢弃条目时弹危险确认框；无定价内容时省略该键，不下发空数组。
+
+- **渠道编辑器 composite 分组无条件预勾全部平台**：只卖国模的渠道（如 channel 3 / 分组 142「国模订阅」）会刷出 anthropic / openai / gemini 等空 Tab。改为仅当渠道**无任何平台数据**（新建渠道）时才回落预勾，已有数据时只展示实际用到的平台（用户仍可手动勾选启用）。
+
+- **合并上游 v0.2.15 的适配修复**：上游把平台白名单收敛为单一数据源（`domain.ConcretePlatformIDs()`，迁移 242 显式 DROP `user_platform_quotas` / `composite_model_routes` 的 DB CHECK 约束），本地 `xiaoapi` 视频平台（`gateway=xiao`）保持登记，6 处硬编码平台清单的测试基准改为清单驱动。
+
+- 修复既有破损：`gateway_handler_claude_code_fallback_test.go` 缺参导致 `internal/handler` 包无法编译（基线同样失败）。
+
+### 增加了什么
+
+- 上游 v0.2.15 新增 **Cline** 与 **Command Code** 两个平台（ClinePass 订阅与积分计费；Command Code 按模型自动分流到 Anthropic / Responses / Chat Completions）。
+- 新增后端测试：`TestClassifyReplaceIntent`（5 子用例）、`TestUpdateChannelRequest_ClearFlagsWireContract`（4 子用例）。
+- 新增前端测试：`ChannelsView.pricingClear.spec.ts`（7 用例，覆盖取消勾选弹确认框、无定价省略字段、确认后提交清空开关等）。
+
+### 当前已有功能
+
+- 在 `0.2.14-lingqu.3` 基础上新增 Cline / Command Code 平台接入；平台清单统一由 `domain/platforms.go` 单一数据源驱动。
+- 其余与 `0.2.14-lingqu.3` 一致（动态速率分组跳过禁用账号、单账号强制路径尊重显式禁用、EasyPay 伪造回调安全修复、setup 加固、SubPilot 租约释放等）。
+
+### 验证重点
+
+- 渠道编辑页：取消勾选某平台后保存，必须弹出确认框；未确认时后端返回 400 而非清空定价；确认后按预期清空。
+- 渠道本无定价时保存：应省略 `model_pricing` 字段（不下发空数组），且不报错。
+- 只卖国模的渠道（channel 3）打开编辑器：不应刷出 anthropic/openai 等空 Tab。
+- 迁移 242 在部署新镜像时执行，DROP 两个平台 CHECK 约束后白名单只在应用层生效。
+
 ## v0.2.14-lingqu.3 - 2026-10-09
 
 补齐「操作员禁用账号仍被调用」的**第二个绕过口**（动态速率分组自动绑定）。不含新功能。
