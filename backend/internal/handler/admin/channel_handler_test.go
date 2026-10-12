@@ -630,3 +630,106 @@ func TestGetModelDefaultPricing_OmitsUnsupportedCache1hPrice(t *testing.T) {
 	require.True(t, body.Data.Found)
 	require.Nil(t, body.Data.CacheWrite1hPrice)
 }
+
+// ---------------------------------------------------------------------------
+// classifyReplaceIntent —— 「全量替换」字段的空数组守卫
+//
+// 背景（线上事故）：渠道「国模」(id=3) 在页面上点一次保存，7 条定价被静默删光。
+// 成因是前端在平台分区被取消勾选时静默产出 `model_pricing: []`，而后端把
+// 「非 nil 空切片」当成「全量替换为空」执行 DELETE。以下用例钉死修正后的语义。
+// ---------------------------------------------------------------------------
+
+func TestClassifyReplaceIntent(t *testing.T) {
+	tests := []struct {
+		name           string
+		incomingLen    int
+		clearConfirmed bool
+		existingLen    int
+		want           replaceIntent
+	}{
+		{
+			name:        "有内容 → 正常全量替换",
+			incomingLen: 3, clearConfirmed: false, existingLen: 7,
+			want: replaceIntentApply,
+		},
+		{
+			name:        "有内容且同时传了 clear 标记 → 仍按替换处理，不额外要求确认",
+			incomingLen: 1, clearConfirmed: true, existingLen: 7,
+			want: replaceIntentApply,
+		},
+		{
+			name:        "空数组 + 显式确认清空 → 允许清空",
+			incomingLen: 0, clearConfirmed: true, existingLen: 7,
+			want: replaceIntentApply,
+		},
+		{
+			name:        "空数组 + 未确认 + 渠道已有数据 → 拒绝（本次事故场景）",
+			incomingLen: 0, clearConfirmed: false, existingLen: 7,
+			want: replaceIntentReject,
+		},
+		{
+			name:        "空数组 + 未确认 + 渠道本来就没数据 → 跳过，不下发无意义的 DELETE",
+			incomingLen: 0, clearConfirmed: false, existingLen: 0,
+			want: replaceIntentSkip,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.want,
+				classifyReplaceIntent(tt.incomingLen, tt.clearConfirmed, tt.existingLen))
+		})
+	}
+}
+
+// TestUpdateChannelRequest_ClearFlagsWireContract 钉死前后端之间的线协议：
+//   - 字段省略 → 指针为 nil → 后端「保持原样」
+//   - 显式传 [] → 非 nil 空切片 → 后端视作「潜在的清空」，需要 clear 标记
+//   - clear 标记传 false 不算确认
+func TestUpdateChannelRequest_ClearFlagsWireContract(t *testing.T) {
+	t.Run("省略字段表示保持原样", func(t *testing.T) {
+		var req updateChannelRequest
+		require.NoError(t, json.Unmarshal([]byte(`{"name":"国模"}`), &req))
+		require.Nil(t, req.ModelPricing)
+		require.Nil(t, req.AccountStatsPricingRules)
+		require.Nil(t, req.ClearModelPricing)
+		require.Nil(t, req.ClearAccountStatsPricingRules)
+	})
+
+	t.Run("显式空数组解析为非 nil 空切片", func(t *testing.T) {
+		var req updateChannelRequest
+		require.NoError(t, json.Unmarshal(
+			[]byte(`{"model_pricing":[],"account_stats_pricing_rules":[]}`), &req))
+		require.NotNil(t, req.ModelPricing)
+		require.Empty(t, *req.ModelPricing)
+		require.NotNil(t, req.AccountStatsPricingRules)
+		require.Empty(t, *req.AccountStatsPricingRules)
+		// 未传 clear 标记 → 不能算作已确认清空
+		require.Nil(t, req.ClearModelPricing)
+		require.Nil(t, req.ClearAccountStatsPricingRules)
+	})
+
+	t.Run("显式清空标记为 true 时才算确认", func(t *testing.T) {
+		var req updateChannelRequest
+		require.NoError(t, json.Unmarshal([]byte(
+			`{"model_pricing":[],"account_stats_pricing_rules":[],`+
+				`"clear_model_pricing":true,"clear_account_stats_pricing_rules":true}`), &req))
+		require.NotNil(t, req.ClearModelPricing)
+		require.True(t, *req.ClearModelPricing)
+		require.NotNil(t, req.ClearAccountStatsPricingRules)
+		require.True(t, *req.ClearAccountStatsPricingRules)
+
+		// handler 里的判定方式：指针非 nil 且值为 true
+		require.True(t, req.ClearModelPricing != nil && *req.ClearModelPricing)
+		require.True(t, req.ClearAccountStatsPricingRules != nil && *req.ClearAccountStatsPricingRules)
+	})
+
+	t.Run("clear 标记传 false 不构成确认", func(t *testing.T) {
+		var req updateChannelRequest
+		require.NoError(t, json.Unmarshal(
+			[]byte(`{"model_pricing":[],"clear_model_pricing":false}`), &req))
+		confirmed := req.ClearModelPricing != nil && *req.ClearModelPricing
+		require.False(t, confirmed)
+		// 未确认 + 渠道有数据 → 仍然拒绝，不会误删
+		require.Equal(t, replaceIntentReject, classifyReplaceIntent(0, confirmed, 7))
+	})
+}

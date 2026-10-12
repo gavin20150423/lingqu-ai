@@ -250,6 +250,20 @@
                   <span :class="platformTextClass(p)">{{ t('admin.groups.platforms.' + p, catalogPlatformLabel(p)) }}</span>
                 </label>
               </div>
+              <!-- 取消勾选会连带丢弃该平台已有的定价/规则，提交前明确提示 -->
+              <p
+                v-if="droppedPricingPlatforms.length > 0"
+                class="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-700/60 dark:bg-amber-900/20 dark:text-amber-300"
+              >
+                {{ t('admin.channels.form.droppedPricingWarning', { platforms: droppedPricingPlatforms.map(p => t('admin.groups.platforms.' + p, catalogPlatformLabel(p))).join('、') }) }}
+              </p>
+              <!-- 平台清单外的定价在表单里装不下，保存时会静默丢失 -->
+              <p
+                v-if="unloadablePricingCount > 0"
+                class="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-700/60 dark:bg-amber-900/20 dark:text-amber-300"
+              >
+                {{ t('admin.channels.form.unloadablePricingWarning', { count: unloadablePricingCount }) }}
+              </p>
             </div>
 
             <!-- Apply Pricing to Account Stats (toggle only in basic settings) -->
@@ -624,6 +638,20 @@
       @confirm="confirmDelete"
       @cancel="showDeleteDialog = false"
     />
+
+    <!-- Clear Pricing Confirmation -->
+    <!-- model_pricing / account_stats_pricing_rules 是全量替换语义，空数组=清空全部。
+         本次提交会清空已有数据时，必须让用户显式确认，避免静默删光。 -->
+    <ConfirmDialog
+      :show="showClearPricingDialog"
+      :title="t('admin.channels.form.clearPricingTitle', 'Clear existing pricing?')"
+      :message="clearPricingWarning"
+      :confirm-text="t('admin.channels.form.clearPricingConfirm', 'Clear anyway')"
+      :cancel-text="t('common.cancel', 'Cancel')"
+      :danger="true"
+      @confirm="confirmClearPricing"
+      @cancel="cancelClearPricing"
+    />
   </AppLayout>
 </template>
 
@@ -743,6 +771,13 @@ const submitting = ref(false)
 const showDeleteDialog = ref(false)
 const deletingChannel = ref<Channel | null>(null)
 const activeTab = ref<string>('basic')
+// 「全量替换」字段的清空确认：model_pricing / account_stats_pricing_rules
+// 传空数组会删光已有数据，提交前必须显式确认。
+const showClearPricingDialog = ref(false)
+const clearPricingWarning = ref('')
+let pendingChannelPayload: ChannelSubmitPayload | null = null
+// 打开编辑弹窗时，apiToForm 实际装进表单的定价条数（用于识别「装不下」的条目）
+const loadedPricingCount = ref(0)
 
 // Groups
 const allGroups = ref<AdminGroup[]>([])
@@ -778,6 +813,24 @@ function formatDate(value: string): string {
 
 // ── Platform section helpers ──
 const activePlatforms = computed(() => form.platforms.filter(s => s.enabled).map(s => s.platform))
+
+// 分区被取消勾选、但仍持有定价或账号统计规则的平台。
+// formToAPI / accountStatsRulesToAPI 都会 `if (!section.enabled) continue` 静默丢弃这些数据，
+// 所以必须在界面上提前告知，否则用户以为数据还在，一保存就被删光。
+const droppedPricingPlatforms = computed(() =>
+  form.platforms
+    .filter(s => !s.enabled && (s.model_pricing.length > 0 || s.account_stats_pricing_rules.length > 0))
+    .map(s => s.platform)
+)
+
+// apiToForm 只为「平台清单内」的平台建 section。若渠道持有清单外平台的定价，
+// 这些条目在表单里根本不存在，保存时会连同其它改动一起被静默删除。
+// 用「载入时装进表单的条数」而不是当前条数来比对，避免把用户主动删除误判成丢失。
+const unloadablePricingCount = computed(() => {
+  const channel = editingChannel.value
+  if (!channel) return 0
+  return Math.max(0, (channel.model_pricing?.length ?? 0) - loadedPricingCount.value)
+})
 
 function addPlatformSection(platform: GroupPlatform) {
   form.platforms.push({
@@ -1107,6 +1160,18 @@ function accountStatsRulesToAPI(): AccountStatsPricingRule[] {
 }
 
 // ── Form ↔ API conversion ──
+// 提交给后端的完整载荷。「全量替换」字段（model_pricing / account_stats_pricing_rules）
+// 额外带 clear_* 标记：只有用户显式确认清空时才会置 true，见 submitChannelPayload。
+interface ChannelSubmitPayload {
+  group_ids: number[]
+  model_pricing: ChannelModelPricing[]
+  model_mapping: Record<string, Record<string, string>>
+  features_config: Record<string, unknown>
+  account_stats_pricing_rules: AccountStatsPricingRule[]
+  clear_model_pricing: boolean
+  clear_account_stats_pricing_rules: boolean
+}
+
 function formToAPI(): { group_ids: number[], model_pricing: ChannelModelPricing[], model_mapping: Record<string, Record<string, string>>, features_config: Record<string, unknown> } {
   const group_ids: number[] = []
   const model_pricing: ChannelModelPricing[] = []
@@ -1204,10 +1269,14 @@ function apiToForm(channel: Channel): PlatformSection[] {
 
   // Determine which platforms are active (from groups + pricing + mapping)
   const activePlatforms = new Set<GroupPlatform>()
+  let hasCompositeGroup = false
   for (const gid of channel.group_ids || []) {
     const p = groupPlatformMap.get(gid)
     if (p === 'composite') {
-      compositePlatforms.value.forEach(platform => activePlatforms.add(platform))
+      // composite 分组允许渠道按请求上下文服务任意平台，但「能服务」不等于「已配置」：
+      // 无条件预勾全部平台会让只卖国模的渠道也刷出 anthropic/openai/... 等空 Tab。
+      // 这里只记标记，等下面按渠道的实际定价/映射数据决定最终勾选集合。
+      hasCompositeGroup = true
     } else if (p) {
       activePlatforms.add(p)
     }
@@ -1217,6 +1286,12 @@ function apiToForm(channel: Channel): PlatformSection[] {
   }
   for (const p of Object.keys(channel.model_mapping || {})) {
     if (platformOrder.value.includes(p as GroupPlatform)) activePlatforms.add(p as GroupPlatform)
+  }
+  // composite 分组仅在渠道尚无任何平台数据（新建渠道）时才回落到预勾全部平台；
+  // 已有数据时只展示实际用到的平台，避免空 Tab 刷屏。
+  // 用户仍可通过「平台配置」勾选框随时启用新平台（togglePlatform → addPlatformSection）。
+  if (hasCompositeGroup && activePlatforms.size === 0) {
+    compositePlatforms.value.forEach(platform => activePlatforms.add(platform))
   }
 
   // Build sections in platform order
@@ -1363,6 +1438,7 @@ function resetForm() {
   form.platforms = []
   form.apply_pricing_to_account_stats = false
   activeTab.value = 'basic'
+  loadedPricingCount.value = 0
   ruleAccountSearchRunner.clearAll()
   clearAllRuleAccountSearchState()
   ruleAccountNameCache.value = {}
@@ -1386,6 +1462,7 @@ async function openEditDialog(channel: Channel) {
   // Must load groups first so apiToForm can map groupID → platform
   await Promise.all([loadGroups(), loadAllChannelsForConflict()])
   form.platforms = apiToForm(channel)
+  loadedPricingCount.value = form.platforms.reduce((n, s) => n + s.model_pricing.length, 0)
 
   // Distribute channel-level rules into per-platform sections
   distributeRulesToPlatforms(channel.account_stats_pricing_rules || [])
@@ -1602,7 +1679,78 @@ async function handleSubmit() {
   }
 
   const { group_ids, model_pricing, model_mapping, features_config } = formToAPI()
+  const account_stats_pricing_rules = accountStatsRulesToAPI()
 
+  // model_pricing / account_stats_pricing_rules 在后端是「全量替换」语义：
+  // 空数组 == 清空全部。若本次提交会把已有的定价/规则删空，先弹确认框，
+  // 用户确认后才带上 clear_* 标记下发（否则后端直接 400 拒绝）。
+  if (editingChannel.value) {
+    const existingPricingCount = editingChannel.value.model_pricing?.length ?? 0
+    const existingRulesCount = editingChannel.value.account_stats_pricing_rules?.length ?? 0
+    // 表单装不下的条目（平台不在清单内）也会随本次保存一起丢失，必须一并提示。
+    const unloadableCount = unloadablePricingCount.value
+    const clearsPricing = model_pricing.length === 0 && existingPricingCount > 0
+    const dropsUnloadable = unloadableCount > 0
+    const clearsRules = account_stats_pricing_rules.length === 0 && existingRulesCount > 0
+
+    if (clearsPricing || dropsUnloadable || clearsRules) {
+      const parts: string[] = []
+      if (clearsPricing) {
+        parts.push(t('admin.channels.form.clearPricingMessage',
+          { count: existingPricingCount },
+          `Saving now will delete all ${existingPricingCount} model pricing entries of this channel. This cannot be undone.`))
+      }
+      if (dropsUnloadable) {
+        parts.push(t('admin.channels.form.unloadablePricingMessage',
+          { count: unloadableCount },
+          `Another ${unloadableCount} model pricing entries belong to platforms missing from the platform list and cannot be shown here; saving will delete them.`))
+      }
+      if (clearsRules) {
+        parts.push(t('admin.channels.form.clearRulesMessage',
+          { count: existingRulesCount },
+          `Saving now will delete all ${existingRulesCount} account-stats pricing rules of this channel. This cannot be undone.`))
+      }
+      clearPricingWarning.value = parts.join(' ')
+      pendingChannelPayload = {
+        group_ids,
+        model_pricing,
+        model_mapping,
+        features_config,
+        account_stats_pricing_rules,
+        // 只要确认框是因为「会有条目丢失」弹出来的，就要显式声明清空意图，
+        // 否则后端会因为空数组/缺失条目而拒绝或残留脏数据。
+        clear_model_pricing: clearsPricing || dropsUnloadable,
+        clear_account_stats_pricing_rules: clearsRules,
+      }
+      showClearPricingDialog.value = true
+      return
+    }
+  }
+
+  await submitChannelPayload({
+    group_ids,
+    model_pricing,
+    model_mapping,
+    features_config,
+    account_stats_pricing_rules,
+    clear_model_pricing: false,
+    clear_account_stats_pricing_rules: false,
+  })
+}
+
+function confirmClearPricing() {
+  showClearPricingDialog.value = false
+  const payload = pendingChannelPayload
+  pendingChannelPayload = null
+  if (payload) void submitChannelPayload(payload)
+}
+
+function cancelClearPricing() {
+  showClearPricingDialog.value = false
+  pendingChannelPayload = null
+}
+
+async function submitChannelPayload(payload: ChannelSubmitPayload) {
   submitting.value = true
   try {
     if (editingChannel.value) {
@@ -1610,14 +1758,26 @@ async function handleSubmit() {
         name: form.name.trim(),
         description: form.description.trim() || undefined,
         status: form.status,
-        group_ids,
-        model_pricing,
-        model_mapping: Object.keys(model_mapping).length > 0 ? model_mapping : {},
+        group_ids: payload.group_ids,
+        model_mapping: Object.keys(payload.model_mapping).length > 0 ? payload.model_mapping : {},
         billing_model_source: form.billing_model_source,
         restrict_models: form.restrict_models,
-        features_config,
+        features_config: payload.features_config,
         apply_pricing_to_account_stats: form.apply_pricing_to_account_stats,
-        account_stats_pricing_rules: accountStatsRulesToAPI()
+      }
+      // 只有确实有内容、或用户已显式确认清空时才下发这两个「全量替换」字段。
+      // 省略该键 == 后端保持原样，避免前端漏收内容时静默删光已有配置。
+      if (payload.model_pricing.length > 0) {
+        req.model_pricing = payload.model_pricing
+      } else if (payload.clear_model_pricing) {
+        req.model_pricing = []
+        req.clear_model_pricing = true
+      }
+      if (payload.account_stats_pricing_rules.length > 0) {
+        req.account_stats_pricing_rules = payload.account_stats_pricing_rules
+      } else if (payload.clear_account_stats_pricing_rules) {
+        req.account_stats_pricing_rules = []
+        req.clear_account_stats_pricing_rules = true
       }
       await adminAPI.channels.update(editingChannel.value.id, req)
       appStore.showSuccess(t('admin.channels.updateSuccess', 'Channel updated'))
@@ -1625,14 +1785,14 @@ async function handleSubmit() {
       const req: CreateChannelRequest = {
         name: form.name.trim(),
         description: form.description.trim() || undefined,
-        group_ids,
-        model_pricing,
-        model_mapping: Object.keys(model_mapping).length > 0 ? model_mapping : {},
+        group_ids: payload.group_ids,
+        model_pricing: payload.model_pricing,
+        model_mapping: Object.keys(payload.model_mapping).length > 0 ? payload.model_mapping : {},
         billing_model_source: form.billing_model_source,
         restrict_models: form.restrict_models,
-        features_config,
+        features_config: payload.features_config,
         apply_pricing_to_account_stats: form.apply_pricing_to_account_stats,
-        account_stats_pricing_rules: accountStatsRulesToAPI()
+        account_stats_pricing_rules: payload.account_stats_pricing_rules,
       }
       await adminAPI.channels.create(req)
       appStore.showSuccess(t('admin.channels.createSuccess', 'Channel created'))

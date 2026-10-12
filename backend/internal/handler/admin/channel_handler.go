@@ -55,6 +55,42 @@ type updateChannelRequest struct {
 	FeaturesConfig             map[string]any                    `json:"features_config"`
 	ApplyPricingToAccountStats *bool                             `json:"apply_pricing_to_account_stats"`
 	AccountStatsPricingRules   *[]accountStatsPricingRuleRequest `json:"account_stats_pricing_rules"`
+	// 空数组在「全量替换」语义下等价于「清空全部」。这两个开关要求调用方显式声明
+	// 清空意图，避免客户端漏发内容时静默删光已有配置（见 Update 中的守卫）。
+	ClearModelPricing             *bool `json:"clear_model_pricing"`
+	ClearAccountStatsPricingRules *bool `json:"clear_account_stats_pricing_rules"`
+}
+
+// replaceIntent 描述一次「全量替换」字段（channel_model_pricing /
+// channel_account_stats_pricing_rules）提交应如何处理。
+type replaceIntent int
+
+const (
+	// replaceIntentSkip：保持原样，不下发该字段。仅当提交为空数组、未声明清空意图，
+	// 且渠道原本就没有任何数据时成立（此时清空是无操作）。
+	replaceIntentSkip replaceIntent = iota
+	// replaceIntentApply：下发该字段做全量替换。有内容，或调用方已显式声明清空意图。
+	replaceIntentApply
+	// replaceIntentReject：拒绝请求。提交为空数组、未声明清空意图，但渠道已有数据，
+	// 直接下发会把已有配置删光——这正是「保存后定价凭空消失」事故的成因。
+	replaceIntentReject
+)
+
+// classifyReplaceIntent 判定「全量替换」字段的提交意图。
+//
+// existingLen 是渠道当前已有的条数；调用方只需在 incomingLen == 0 且未声明清空意图时
+// 查库填这个值，其余情况传 0 即可。
+func classifyReplaceIntent(incomingLen int, clearConfirmed bool, existingLen int) replaceIntent {
+	switch {
+	case incomingLen > 0:
+		return replaceIntentApply
+	case clearConfirmed:
+		return replaceIntentApply
+	case existingLen > 0:
+		return replaceIntentReject
+	default:
+		return replaceIntentSkip
+	}
 }
 
 type channelModelPricingRequest struct {
@@ -546,7 +582,31 @@ func (h *ChannelHandler) Update(c *gin.Context) {
 				pricing[i].Platform = service.PlatformAnthropic
 			}
 		}
-		input.ModelPricing = &pricing
+		clearConfirmed := req.ClearModelPricing != nil && *req.ClearModelPricing
+		// 只有「空数组 + 未声明清空意图」才需要知道渠道当前有多少条定价，
+		// 避免在有内容的常规提交上多打一次查询。
+		existingLen := 0
+		if len(pricing) == 0 && !clearConfirmed {
+			existing, err := h.channelService.GetByID(c.Request.Context(), id)
+			if err != nil {
+				response.ErrorFrom(c, err)
+				return
+			}
+			existingLen = len(existing.ModelPricing)
+		}
+		switch classifyReplaceIntent(len(pricing), clearConfirmed, existingLen) {
+		case replaceIntentApply:
+			input.ModelPricing = &pricing
+		case replaceIntentReject:
+			// 历史事故：前端在平台分区被取消勾选时会静默产出空数组，
+			// 配合 replaceModelPricingTx 的「先删后插」直接把整渠道定价删空。
+			response.ErrorFrom(c, infraerrors.BadRequest("MODEL_PRICING_CLEAR_UNCONFIRMED",
+				fmt.Sprintf("model_pricing 为空数组会删除该渠道全部 %d 条定价；确认清空请同时传 clear_model_pricing=true", existingLen)))
+			return
+		default:
+			// replaceIntentSkip：渠道本来就没有定价，空数组是无操作，
+			// 保持原样以免触发无意义的 DELETE。
+		}
 	}
 	if req.AccountStatsPricingRules != nil {
 		statsRules := make([]service.AccountStatsPricingRule, 0, len(*req.AccountStatsPricingRules))
@@ -565,7 +625,27 @@ func (h *ChannelHandler) Update(c *gin.Context) {
 			rule.SortOrder = i
 			statsRules = append(statsRules, rule)
 		}
-		input.AccountStatsPricingRules = &statsRules
+		clearConfirmed := req.ClearAccountStatsPricingRules != nil && *req.ClearAccountStatsPricingRules
+		existingLen := 0
+		if len(statsRules) == 0 && !clearConfirmed {
+			existing, err := h.channelService.GetByID(c.Request.Context(), id)
+			if err != nil {
+				response.ErrorFrom(c, err)
+				return
+			}
+			existingLen = len(existing.AccountStatsPricingRules)
+		}
+		switch classifyReplaceIntent(len(statsRules), clearConfirmed, existingLen) {
+		case replaceIntentApply:
+			input.AccountStatsPricingRules = &statsRules
+		case replaceIntentReject:
+			// 同上：账号统计定价规则也是全量替换，空数组同样可能误删。
+			response.ErrorFrom(c, infraerrors.BadRequest("PRICING_RULES_CLEAR_UNCONFIRMED",
+				fmt.Sprintf("account_stats_pricing_rules 为空数组会删除该渠道全部 %d 条规则；确认清空请同时传 clear_account_stats_pricing_rules=true", existingLen)))
+			return
+		default:
+			// replaceIntentSkip：渠道本来就没有规则，保持原样。
+		}
 	}
 
 	channel, err := h.channelService.Update(c.Request.Context(), id, input)

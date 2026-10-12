@@ -152,14 +152,17 @@ func (r *channelRepository) Update(ctx context.Context, channel *service.Channel
 			}
 		}
 
-		// 更新模型定价
+		// 更新模型定价。nil = 调用方未提供该字段（保持原样）；非 nil = 全量替换，
+		// 空切片即「清空全部定价」（先 DELETE 再插 0 条）。空切片的清空意图必须由
+		// handler 层用 clear_model_pricing 显式确认，见 channel_handler.Update。
 		if channel.ModelPricing != nil {
 			if err := replaceModelPricingTx(ctx, tx, channel.ID, channel.ModelPricing); err != nil {
 				return err
 			}
 		}
 
-		// 更新账号统计定价规则
+		// 更新账号统计定价规则。语义同模型定价：nil = 保持原样，非 nil = 全量替换，
+		// 空切片需 handler 层用 clear_account_stats_pricing_rules 显式确认。
 		if channel.AccountStatsPricingRules != nil {
 			if err := replaceAccountStatsPricingRulesTx(ctx, tx, channel.ID, channel.AccountStatsPricingRules); err != nil {
 				return err

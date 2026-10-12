@@ -108,6 +108,14 @@ export interface UpdateChannelRequest {
   features_config?: Record<string, unknown>
   apply_pricing_to_account_stats?: boolean
   account_stats_pricing_rules?: AccountStatsPricingRule[]
+  /**
+   * model_pricing / account_stats_pricing_rules 是「全量替换」语义：传空数组等于清空全部。
+   * 为避免客户端漏发内容时静默删光已有配置，传空数组时必须显式声明清空意图，
+   * 否则后端返回 400（MODEL_PRICING_CLEAR_UNCONFIRMED / PRICING_RULES_CLEAR_UNCONFIRMED）。
+   * 省略这两个字段（而非传空数组）表示「保持原样」。
+   */
+  clear_model_pricing?: boolean
+  clear_account_stats_pricing_rules?: boolean
 }
 
 interface PaginatedResponse<T> {
