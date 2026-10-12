@@ -2,6 +2,51 @@
 
 每次正式发布都必须新增版本条目，并分别写清楚“修复了什么”、“增加了什么”和“当前已有功能”。没有新增功能时也必须明确记录。
 
+## v0.2.15-lingqu.2 - 2026-10-12
+
+修复「上游缺少工具映射能力（Kiro 无 Claude Code 新工具等价实现）导致成片 400 且不换号」。
+
+### 修复了什么
+
+- **上游工具映射不支持的 400 被判为不可重试，客户侧收到成片报错**。
+  实测：Claude Code 新增 `Read.pages` 工具，Kiro 上游（`pool.chaozhiyuanai.com`）尚无等价实现，
+  对携带该工具的请求主动返回 `400 工具映射不支持: Claude Code Read.pages has no Kiro read_file equivalent`。
+  24 小时内 **1137 次全部只打同一个账号**，而同分组另三个账号同窗口 0 次 400 —— **有号可换，只是没换**。
+  三层原因叠加：
+  1. 上游能力滞后（外因，不在我方）；
+  2. 该账号 `credentials.error_codes` 为空；
+  3. **apikey 账号的重试判定恒判「不重试」**：`shouldRetryUpstreamError`（`gateway_forward.go`）对 apikey 账号
+     = `!account.ShouldHandleErrorCode(statusCode)`，而 `ShouldHandleErrorCode`（`account.go`）在
+     `custom_error_codes_enabled` 未启用或错误码为空时**恒返回 true**，取反得 false。
+
+  修法：新增 `backend/internal/service/upstream_tool_mapping.go`，按**错误语义**识别这类 400 并放行重试/换号：
+  - `isUpstreamToolMappingUnsupportedBody(status, body)`：**只认 400 + 明确工具映射语义**
+    （匹配「工具映射不支持」/ `has no ... equivalent` / `tool mapping ... not supported` / `unsupported tool`）；
+  - `isUpstreamToolMappingUnsupported(resp)`：读取并判定后用 `replayReadCloser` **还原 Body**，下游仍能读到原始报文；
+  - `upstreamToolMappingToolName(resp)`：尽力提取缺失的工具名，仅用于日志可读性。
+
+  接入四处判定：`shouldRetryUpstreamResponse`、`shouldFailoverUpstreamResponse`，
+  以及 `gateway_forward.go` / `gateway_bedrock.go` 中 `resp.StatusCode != 400` 的重试闸门。
+  新增可观测日志：`[Forward] Upstream lacks tool mapping capability, will failover: Account=... tool="Read.pages"`。
+  **普通 400（参数错误、上下文超长等）判定完全不变**，不会被拖进换号重试而白撞 `max_switches`。
+
+### 增加了什么
+
+- 后端新增 `upstream_tool_mapping_test.go`：9 个用例，含**反向验证**（普通参数 400 / 内容策略 400 /
+  上下文超长 400 / 非 400 / 空 body 全部**不命中**），以及 Body 还原与重复判定不互相消费的用例。
+
+### 当前已有功能
+
+- 与 `0.2.15-lingqu.1` 一致（Cline / Command Code 平台、平台清单单一数据源、渠道定价保存三重防护等）。
+- 新增「上游工具映射不支持 → 自动换号重试」；其余 400 语义保持不变。
+
+### 验证重点
+
+- 携带 Kiro 不支持的新工具（如 `Read.pages`）调用，应自动切到其他账号并成功，不再返回 400。
+- 不携带该工具的请求仍走原账号（不额外换号）。
+- 普通参数错误 400（如 `messages: field required`）仍原样返回 400，不触发换号。
+- `docker logs` 中若出现 `Upstream lacks tool mapping capability, will failover` 即表示新逻辑生效。
+
 ## v0.2.15-lingqu.1 - 2026-10-12
 
 合并上游 sub2api `v0.2.15`（新增 Cline / Command Code 平台、平台清单驱动重构），并修复「渠道编辑页保存会清空该渠道全部定价」的严重数据丢失 bug。

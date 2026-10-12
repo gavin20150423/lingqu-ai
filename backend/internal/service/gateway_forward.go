@@ -53,6 +53,16 @@ func (s *GatewayService) shouldRetryUpstreamResponse(account *Account, resp *htt
 	if isUpstreamContentPolicyResponse(resp) {
 		return false
 	}
+	// 上游工具映射不支持（例：Kiro 尚无 Read.pages 等价工具）是**账号能力不足**，
+	// 换个已支持该工具的账号就能成功 —— 必须放它进重试/换号路径，
+	// 否则 apikey 账号对 400 恒判「不重试」，客户侧会收到成片的 400。
+	// 其余 400（参数错误等）维持原判定不变。
+	if isUpstreamToolMappingUnsupported(resp) {
+		logger.LegacyPrintf("service.gateway",
+			"[Forward] Upstream lacks tool mapping capability, will failover: Account=%d(%s) tool=%q",
+			account.ID, account.Name, upstreamToolMappingToolName(resp))
+		return true
+	}
 	return resp != nil && s.shouldRetryUpstreamError(account, resp.StatusCode)
 }
 
@@ -62,6 +72,10 @@ func (s *GatewayService) shouldFailoverUpstreamResponse(resp *http.Response) boo
 	}
 	if isUpstreamContentPolicyResponse(resp) {
 		return false
+	}
+	// 与 shouldRetryUpstreamResponse 同理：工具映射缺失要换号，而非终止。
+	if isUpstreamToolMappingUnsupported(resp) {
+		return true
 	}
 	return resp != nil && s.shouldFailoverUpstreamError(resp.StatusCode)
 }
@@ -638,8 +652,9 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 			}
 		}
 
-		// 检查是否需要通用重试（排除400，因为400已经在上面特殊处理过了）
-		if resp.StatusCode >= 400 && resp.StatusCode != 400 && s.shouldRetryUpstreamResponse(account, resp) {
+		// 检查是否需要通用重试（排除普通 400，因为 400 已经在上面特殊处理过了；
+		// 但「上游工具映射不支持」是账号能力问题，必须走重试换号）
+		if resp.StatusCode >= 400 && (resp.StatusCode != 400 || isUpstreamToolMappingUnsupported(resp)) && s.shouldRetryUpstreamResponse(account, resp) {
 			if attempt < maxRetryAttempts {
 				elapsed := time.Since(retryStart)
 				if elapsed >= maxRetryElapsed {
