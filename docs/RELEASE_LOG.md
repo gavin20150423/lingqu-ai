@@ -2,6 +2,55 @@
 
 每次正式发布都必须新增版本条目，并分别写清楚“修复了什么”、“增加了什么”和“当前已有功能”。没有新增功能时也必须明确记录。
 
+## v0.2.15-lingqu.3 - 2026-10-16
+
+修复 `v0.2.15-lingqu.2` 的残留缺陷：「上游工具映射不支持」的 400 会在同一账号上白撞满重试次数才换号。
+
+### 修复了什么
+
+- **工具映射 400 的同账号重试纯属白撞**。`v0.2.15-lingqu.2` 在放行该 400 进入换号路径时，
+  顺手把**重试循环的闸门**也一起放开了（`gateway_forward.go` / `gateway_bedrock.go` 中的
+  `resp.StatusCode >= 400 && (resp.StatusCode != 400 || isUpstreamToolMappingUnsupported(resp))`），
+  于是这类 400 会先在同一账号上重试满 `maxRetryAttempts`（5 次）才落到换号分支。
+  但该错误是**账号维度确定性的** —— 同一账号（池模式下即同一上游池，成员共享同一上游工具缺口）
+  重试必然复现一模一样的 400。
+
+  实测（2026-10-16 09:03 起的新一波突发，客户侧 Claude Code 新版开始发送 `Read.pages`）：
+  **46 次请求进入该循环，45 次耗尽 5 次重试**，每次白烧约 7–10s（`maxRetryElapsed = 10s`）
+  与 5 次无效上游调用。日志原文：
+  `Account 1055: upstream error 400, retry 2/5 after 600ms (elapsed=6.97085374s/10s)`
+  → `Account 1055: upstream error 400 after 5 retries (not marking account)`。
+
+  修法：抽出 `sameAccountRetryEligible(statusCode int) bool`（`gateway_forward.go`），
+  语义为 `statusCode >= 400 && statusCode != 400` —— **400 一律不进入同账号重试循环**，
+  循环立即 `break`，由既有的换号分支
+  （`shouldRetryUpstreamResponse` + `shouldFailoverUpstreamResponse`）承接。
+  `gateway_forward.go` 与 `gateway_bedrock.go` 两处闸门统一改用它。
+
+  **换号出口一行未改**；普通参数 400、内容策略 400、上下文超长 400、401/403/429/5xx 的
+  判定与行为**完全不变**。
+
+### 增加了什么
+
+- 新增 `TestSameAccountRetryEligible`：8 个子用例，覆盖 400（工具映射 / 参数错误）必须为 false、
+  401/403/429/500/503 必须为 true、2xx 不适用。
+- 新增 `TestToolMapping400_SkipsSameAccountRetryButFailsOver`：组合不变量回归 ——
+  工具映射 400 必须「不同账号重试」但「触发换号」，防止闸门被再次误放开。
+- `sameAccountRetryEligible` 的注释中写明了本次事故与「不要把 400 放回本判据」的警告。
+
+### 当前已有功能
+
+- 与 `0.2.15-lingqu.2` 一致（含「上游工具映射不支持 → 自动换号重试」、Cline / Command Code 平台、
+  平台清单单一数据源、渠道定价保存三重防护等）。
+- 本次为纯行为收敛：工具映射 400 的换号路径不再附加同账号白撞。
+
+### 验证重点
+
+- 携带 Kiro 不支持的新工具（如 `Read.pages`）调用，应在**首次**上游 400 后立即换号，
+  日志中不再出现 `Account <id>: upstream error 400, retry n/5`。
+- `docker logs` 中仍应出现 `Upstream lacks tool mapping capability, will failover`（换号语义未被移除）。
+- 不携带该工具的请求行为不变；普通参数错误 400 仍原样返回，不触发换号。
+
 ## v0.2.15-lingqu.2 - 2026-10-12
 
 修复「上游缺少工具映射能力（Kiro 无 Claude Code 新工具等价实现）导致成片 400 且不换号」。
