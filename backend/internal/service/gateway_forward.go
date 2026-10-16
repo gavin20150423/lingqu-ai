@@ -43,6 +43,19 @@ func (s *GatewayService) shouldRetryUpstreamError(account *Account, statusCode i
 	return !account.ShouldHandleErrorCode(statusCode)
 }
 
+// sameAccountRetryEligible 判定某个上游状态码是否有资格进入**同账号**重试循环。
+//
+// 400 一律排除，理由有两条：
+//  1. 普通 400（参数错误、上下文超长等）由请求体降级路径单独处理，重试同账号纯属浪费；
+//  2. 「上游工具映射不支持」这类 400 是**账号维度确定性**的 —— 同一账号重试必然复现，
+//     池模式下同一上游池成员也共享同一工具缺口。它应该直接换号，而不是白撞 maxRetryAttempts。
+//
+// 该语义的换号出口在 shouldRetryUpstreamResponse / shouldFailoverUpstreamResponse，
+// 不要把 400 放回本判据（2026-10-16 事故：放回后单请求白烧 5 次上游调用、~7–10s 延迟）。
+func sameAccountRetryEligible(statusCode int) bool {
+	return statusCode >= 400 && statusCode != 400
+}
+
 // shouldRetryUpstreamResponse keeps request-scoped upstream policy refusals
 // from entering credential retry loops. The response body is restored by the
 // detector so subsequent logging/error handling sees the original payload.
@@ -652,9 +665,15 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 			}
 		}
 
-		// 检查是否需要通用重试（排除普通 400，因为 400 已经在上面特殊处理过了；
-		// 但「上游工具映射不支持」是账号能力问题，必须走重试换号）
-		if resp.StatusCode >= 400 && (resp.StatusCode != 400 || isUpstreamToolMappingUnsupported(resp)) && s.shouldRetryUpstreamResponse(account, resp) {
+		// 检查是否需要通用重试（排除 400，见 sameAccountRetryEligible 的说明）。
+		//
+		// ⚠️ 这里**故意不**把「上游工具映射不支持」的 400 放进同账号重试循环：
+		// 该错误是**账号维度确定性的** —— 同一账号（池模式下即同一上游池，成员共享同一
+		// 上游工具缺口）重试必然再拿到一模一样的 400。实测 v0.2.15-lingqu.2 放行该 400
+		// 进入本分支后，单次请求会在同一账号上白撞满 maxRetryAttempts 次（~7–10s）才换号。
+		// 正确路径是让循环立即 break，由下面的换号分支承接
+		// （shouldRetryUpstreamResponse + shouldFailoverUpstreamResponse 已放行该语义）。
+		if sameAccountRetryEligible(resp.StatusCode) && s.shouldRetryUpstreamResponse(account, resp) {
 			if attempt < maxRetryAttempts {
 				elapsed := time.Since(retryStart)
 				if elapsed >= maxRetryElapsed {

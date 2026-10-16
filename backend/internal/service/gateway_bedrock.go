@@ -210,9 +210,10 @@ func (s *GatewayService) executeBedrockUpstream(
 			})
 		}
 
-		// 普通 400 不进重试（会走请求体降级路径），但「上游工具映射不支持」
-		// 是账号能力问题 —— 换号即可，不该让客户直接吃 400。
-		if resp.StatusCode >= 400 && (resp.StatusCode != 400 || isUpstreamToolMappingUnsupported(resp)) && s.shouldRetryUpstreamResponse(account, resp) {
+		// 400 一律不进同账号重试循环（普通 400 会走请求体降级路径；
+		// 「上游工具映射不支持」是账号维度确定性的错误，同账号重试必然复现，
+		// 必须立即 break 交给下面的换号分支，见 sameAccountRetryEligible 的说明）。
+		if sameAccountRetryEligible(resp.StatusCode) && s.shouldRetryUpstreamResponse(account, resp) {
 			if attempt < maxRetryAttempts {
 				elapsed := time.Since(retryStart)
 				if elapsed >= maxRetryElapsed {

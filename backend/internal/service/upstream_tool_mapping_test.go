@@ -152,3 +152,42 @@ func TestIsUpstreamToolMappingUnsupported_BodyStillReadableAfterNameExtraction(t
 	require.Equal(t, body, string(got))
 	require.True(t, strings.Contains(string(got), "Read.pages"))
 }
+
+// 同账号重试闸门：400 一律不进入同账号重试循环。
+//
+// 2026-10-16 事故回归：v0.2.15-lingqu.2 曾把「工具映射不支持」的 400 放行进入同账号
+// 重试循环，导致单请求在同一账号上白撞满 5 次（~7–10s）才换号。此用例锁死该不变量。
+func TestSameAccountRetryEligible(t *testing.T) {
+	cases := []struct {
+		name string
+		code int
+		want bool
+	}{
+		{name: "工具映射 400 不得同账号重试", code: 400, want: false},
+		{name: "参数错误 400 不得同账号重试", code: 400, want: false},
+		{name: "401 可同账号重试", code: 401, want: true},
+		{name: "403 可同账号重试", code: 403, want: true},
+		{name: "429 可同账号重试", code: 429, want: true},
+		{name: "500 可同账号重试", code: 500, want: true},
+		{name: "503 可同账号重试", code: 503, want: true},
+		{name: "2xx 不适用", code: 200, want: false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Equal(t, tc.want, sameAccountRetryEligible(tc.code))
+		})
+	}
+}
+
+// 组合不变量：工具映射 400 必须「不同账号重试」但「换号」。
+func TestToolMapping400_SkipsSameAccountRetryButFailsOver(t *testing.T) {
+	svc := &GatewayService{}
+	account := &Account{Type: AccountTypeAPIKey}
+	resp := toolMappingResponse(400,
+		`{"error":{"message":"工具映射不支持: Claude Code Read.pages has no Kiro read_file equivalent"}}`)
+
+	require.False(t, sameAccountRetryEligible(resp.StatusCode), "工具映射 400 不应进入同账号重试循环")
+	require.True(t, svc.shouldRetryUpstreamResponse(account, resp), "工具映射 400 应放行到重试耗尽分支")
+	require.True(t, svc.shouldFailoverUpstreamResponse(resp), "工具映射 400 应触发换号")
+}
