@@ -802,6 +802,12 @@ export default {
       resetQuotaConfirm: "确定要重置 '{user}' 的每日、每周和每月用量配额吗？用量将归零并从今天开始重新计算。",
       quotaResetSuccess: '配额重置成功',
       failedToResetQuota: '重置配额失败',
+      resetDailyWeeklyQuota: '重置日/周额度',
+      resetDailyWeeklyQuotaTitle: '重置日/周用量',
+      resetDailyWeeklyQuotaConfirm:
+        "确定要重置 '{user}' 的每日和每周用量吗？日/周用量将归零并重新计时，月用量保持不变。",
+      quotaResetDailyWeeklySuccess: '日/周额度已重置（月额度未变动）',
+      failedToResetDailyWeeklyQuota: '重置日/周额度失败',
       noSubscriptionsYet: '暂无订阅',
       assignFirstSubscription: '分配一个订阅以开始使用。',
       subscriptionAssigned: '订阅分配成功',
@@ -845,6 +851,8 @@ export default {
           adjustDesc: '延长或缩短订阅有效期',
           resetQuota: '重置配额',
           resetQuotaDesc: '将日/周/月用量归零，重新开始计算',
+          resetDailyWeeklyQuota: '重置日/周额度',
+          resetDailyWeeklyQuotaDesc: '只将日/周用量归零，月用量保持不变',
           revoke: '撤销',
           revokeDesc: '立即终止该用户的订阅，可在已撤销列表中恢复'
         },

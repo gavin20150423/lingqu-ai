@@ -802,6 +802,12 @@ export default {
       resetQuotaConfirm: "Reset the daily, weekly, and monthly usage quota for '{user}'? Usage will be zeroed and windows restarted from today.",
       quotaResetSuccess: 'Quota reset successfully',
       failedToResetQuota: 'Failed to reset quota',
+      resetDailyWeeklyQuota: 'Reset Daily/Weekly',
+      resetDailyWeeklyQuotaTitle: 'Reset Daily & Weekly Usage',
+      resetDailyWeeklyQuotaConfirm:
+        "Reset the daily and weekly usage quota for '{user}'? Those windows restart from now. The monthly quota is left untouched.",
+      quotaResetDailyWeeklySuccess: 'Daily/weekly quota reset (monthly untouched)',
+      failedToResetDailyWeeklyQuota: 'Failed to reset daily/weekly quota',
       noSubscriptionsYet: 'No subscriptions yet',
       assignFirstSubscription: 'Assign a subscription to get started.',
       subscriptionAssigned: 'Subscription assigned successfully',
@@ -847,6 +853,8 @@ export default {
           adjustDesc: 'Extend or shorten the subscription validity period',
           resetQuota: 'Reset Quota',
           resetQuotaDesc: 'Reset daily/weekly/monthly usage to zero',
+          resetDailyWeeklyQuota: 'Reset Daily/Weekly',
+          resetDailyWeeklyQuotaDesc: 'Reset only daily/weekly usage; monthly stays untouched',
           revoke: 'Revoke',
           revokeDesc: 'Immediately terminate the subscription (restorable from the revoked list)'
         },

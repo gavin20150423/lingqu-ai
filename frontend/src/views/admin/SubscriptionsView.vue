@@ -441,6 +441,16 @@
               </button>
               <button
                 v-if="row.status === 'active'"
+                @click="handleResetDailyWeeklyQuota(row)"
+                :disabled="resettingQuota && resettingSubscription?.id === row.id"
+                :title="t('admin.subscriptions.resetDailyWeeklyQuotaConfirm', { user: row.user?.email })"
+                class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-amber-50 hover:text-amber-600 dark:hover:bg-amber-900/20 dark:hover:text-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Icon name="clock" size="sm" />
+                <span class="text-xs whitespace-nowrap">{{ t('admin.subscriptions.resetDailyWeeklyQuota') }}</span>
+              </button>
+              <button
+                v-if="row.status === 'active'"
                 @click="handleRevoke(row)"
                 class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
               >
@@ -808,6 +818,21 @@
       @confirm="confirmResetQuota"
       @cancel="showResetQuotaConfirm = false"
     />
+
+    <!-- Reset Daily/Weekly Quota Confirmation Dialog -->
+    <ConfirmDialog
+      :show="showResetDailyWeeklyConfirm"
+      :title="t('admin.subscriptions.resetDailyWeeklyQuotaTitle')"
+      :message="
+        t('admin.subscriptions.resetDailyWeeklyQuotaConfirm', {
+          user: resettingSubscription?.user?.email
+        })
+      "
+      :confirm-text="t('admin.subscriptions.resetDailyWeeklyQuota')"
+      :cancel-text="t('common.cancel')"
+      @confirm="confirmResetDailyWeeklyQuota"
+      @cancel="showResetDailyWeeklyConfirm = false"
+    />
     <!-- Subscription Guide Modal -->
     <teleport to="body">
       <transition name="modal">
@@ -947,6 +972,10 @@ const showGuideModal = ref(false)
 const guideActionRows = computed(() => [
   { action: t('admin.subscriptions.guide.actions.adjust'), desc: t('admin.subscriptions.guide.actions.adjustDesc') },
   { action: t('admin.subscriptions.guide.actions.resetQuota'), desc: t('admin.subscriptions.guide.actions.resetQuotaDesc') },
+  {
+    action: t('admin.subscriptions.guide.actions.resetDailyWeeklyQuota'),
+    desc: t('admin.subscriptions.guide.actions.resetDailyWeeklyQuotaDesc')
+  },
   { action: t('admin.subscriptions.guide.actions.revoke'), desc: t('admin.subscriptions.guide.actions.revokeDesc') }
 ])
 
@@ -1148,6 +1177,7 @@ const showExtendModal = ref(false)
 const showRevokeDialog = ref(false)
 const showRestoreDialog = ref(false)
 const showResetQuotaConfirm = ref(false)
+const showResetDailyWeeklyConfirm = ref(false)
 const submitting = ref(false)
 const resettingSubscription = ref<UserSubscription | null>(null)
 const resettingQuota = ref(false)
@@ -1657,6 +1687,36 @@ const confirmResetQuota = async () => {
   } catch (error: any) {
     appStore.showError(error.response?.data?.detail || t('admin.subscriptions.failedToResetQuota'))
     console.error('Error resetting quota:', error)
+  } finally {
+    resettingQuota.value = false
+  }
+}
+
+// 只重置日/周额度：日窗口回到当天 0 点、周窗口锚定当前时刻，月窗口原样保留。
+const handleResetDailyWeeklyQuota = (subscription: UserSubscription) => {
+  resettingSubscription.value = subscription
+  showResetDailyWeeklyConfirm.value = true
+}
+
+const confirmResetDailyWeeklyQuota = async () => {
+  if (!resettingSubscription.value) return
+  if (resettingQuota.value) return
+  resettingQuota.value = true
+  try {
+    await adminAPI.subscriptions.resetQuota(resettingSubscription.value.id, {
+      daily: true,
+      weekly: true,
+      monthly: false
+    })
+    appStore.showSuccess(t('admin.subscriptions.quotaResetDailyWeeklySuccess'))
+    showResetDailyWeeklyConfirm.value = false
+    resettingSubscription.value = null
+    await loadSubscriptions()
+  } catch (error: any) {
+    appStore.showError(
+      error.response?.data?.detail || t('admin.subscriptions.failedToResetDailyWeeklyQuota')
+    )
+    console.error('Error resetting daily/weekly quota:', error)
   } finally {
     resettingQuota.value = false
   }
