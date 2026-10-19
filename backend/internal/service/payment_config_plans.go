@@ -97,6 +97,9 @@ type PlanGroupInfo struct {
 	WeeklyLimitUSD     *float64 `json:"weekly_limit_usd"`
 	MonthlyLimitUSD    *float64 `json:"monthly_limit_usd"`
 	ModelScopes        []string `json:"supported_model_scopes"`
+
+	// 不对外输出；handler 按请求语言用它换出 Name 的译文。
+	I18n GroupI18n `json:"-"`
 }
 
 // EffectivePlanLimit returns the tier-specific limit when present and keeps
@@ -139,6 +142,7 @@ func (s *PaymentConfigService) GetGroupInfoMap(ctx context.Context, plans []*dbe
 			WeeklyLimitUSD:     g.WeeklyLimitUsd,
 			MonthlyLimitUSD:    g.MonthlyLimitUsd,
 			ModelScopes:        g.SupportedModelScopes,
+			I18n:               g.I18n,
 		}
 	}
 	return m

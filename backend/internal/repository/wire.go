@@ -88,6 +88,7 @@ var ProviderSet = wire.NewSet(
 	NewAccountShareModeAPIKeyBindingChecker,
 	NewBatchImageRepository,
 	NewVideoRepository,
+	NewGeminiCachedContentRepository,
 	NewIdempotencyRepository,
 	NewUsageCleanupRepository,
 	NewDashboardAggregationRepository,

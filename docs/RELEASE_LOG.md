@@ -2,6 +2,115 @@
 
 每次正式发布都必须新增版本条目，并分别写清楚“修复了什么”、“增加了什么”和“当前已有功能”。没有新增功能时也必须明确记录。
 
+## v0.2.17-lingqu.1 - 2026-10-19
+
+合并上游 `Wei-Shaw/sub2api` v0.2.17（`b0a02a330`）到本地定制分支。**未发布生产**，本条目记录合并口径与冲突解法。
+
+### 合并范围
+
+- 上游 `v0.2.15..v0.2.17`：**127 提交 / 332 文件 / +20917 −1531**。
+- 本地 `v0.2.15..HEAD`（合并前）：**1258 文件 / +382246 −6392** —— 重度定制分支，
+  上游改动只占本地体量的很小一部分，因此风险集中在「两边都改过」的文件。
+- **高危交集 94 个文件**（历史 4 次「上游合并静默吃掉本地改动」事故的全部根因区）。
+- 本次合并提交：**332 文件 / +21030 −1516**，17 处文本冲突全部解决，零残留冲突标记。
+
+### 修复了什么
+
+合并本身暴露了一处**上游把本地能力吃掉**的语义冲突（不是文本冲突，编译器不会报错）：
+
+- **`gateway_usage_billing.go`：账号共享模式倍率被上游 helper 抹掉**。上游 v0.2.17 把倍率与计费模型
+  抽成 `recordUsageMultipliers` / `recordUsageBillingModel` 等 helper，但该 helper **不含本地
+  share-mode 倍率**（`resolveAccountShareModeBillingBinding` →
+  `accountShareModeBillingMultiplier`）。若直接采用上游 helper，共享模式账号的所有调用会**按原价计费**，
+  且无任何报错 —— 属于静默少收。
+
+  修法：展开上游 helper 内容，把 share-mode 倍率插在 `computePeakAwareMultipliers` **之前**：
+  ```go
+  // group/user 倍率 → share-mode 倍率 → 峰值/图片倍率
+  multiplier = accountShareModeBillingMultiplier(accountShareMembership, accountShareListing, multiplier)
+  multiplier, imageMultiplier := computePeakAwareMultipliers(apiKey, multiplier, pricingAt)
+  ```
+  顺序不可颠倒：`computePeakAwareMultipliers` 会基于入参倍率派生图片倍率，
+  若 share-mode 排在其后，图片计费就不带共享因子。
+
+其余 16 处为常规文本冲突，解法见下。
+
+### 增加了什么（来自上游 v0.2.17）
+
+- **分组 i18n**：`groups.i18n` JSONB（迁移 `242_group_i18n.sql`），分组名/描述按 `Accept-Language`
+  本地化，缺失语言回退到 `groups.name` / `groups.description`。订阅列表的分组名已接入
+  `Group.I18n.LocalizeName(...)`，**额度上限仍以订阅计划覆盖值为准**（保持本地口径）。
+- **Gemini 显式缓存（cachedContents）**：网关侧资源绑定表（迁移 `243/244/245`），
+  `public_id` 对外、`upstream_name` 对上游，引用缓存的请求只能路由到创建它的账号；
+  修改串行化、失败回滚、按 Key / 订阅预留确定金额费用。
+- **Gemini 账号体系扩展**：Vertex 支持 API Key 认证与服务账号同步模型列表；
+  AI Studio `AQ.` 格式 Key；第三方上游 Key 与 Vertex 不再套用 AI Studio 等级与模拟配额；
+  Gemini 4 Argon 计费；兼容入口转发思考档位并流式返回思考摘要。
+- **`min_output_tokens` 输出下限**（`apicompat` 配置项，`config.MinOutputTokens`）。
+- **OpenAI 侧**：GPT-5.5 retirement 生效（含 ChatGPT 上游）；`/v1/messages` 对 API Key 账号
+  模拟 `web_search`；Codex 导入按 workspace 隔离；Responses 对象一律带 `created_at`。
+- **支付**：Alipay 退款状态查询（查询失败按 pending 处理）、EasyPay 订单校验与确认后入账、
+  Stripe client secret 从本地订单快照读取、订单类型校验与不支持类型关闭、
+  失败退款原子化收尾；新增**确定金额费用（fixed charge）的 Key / 订阅预留**链路。
+- **账户错误处理**：重试耗尽入口把上游模型名一并交给错误处理（`...requestedModel ...string`
+  变参沿 `handleErrorResponse` / `handleFailoverSideEffects` / `handleRetryExhaustedError` 全链路打通）。
+- 上游 `chore: update sponsors` 下架 `aimzoon` / `proxy4free` 两个赞助商 logo；
+  上游 revert `inline account filters` 删除 `AccountTableFilters.spec.ts`。
+  三者本地均未改动，按上游行为跟随。
+
+### 当前已有功能（本地定制全部保留）
+
+逐项验证存活，均为本地独有能力：
+
+- **工具映射 400 立即换号**（`v0.2.15-lingqu.3`）：`sameAccountRetryEligible`
+  定义于 `gateway_forward.go`，调用点 `gateway_forward.go` + `gateway_bedrock.go`，测试引用齐全。
+- **账号共享模式（share-mode）**：会员/挂牌、共享倍率、计费绑定全链路。
+- **商城订单履约**：`payment.OrderTypeShop` 分支 + `shopFulfillment.ConfirmPaidAndDeliver`，
+  且不参与余额/订阅履约。
+- **SubPilot 租约释放**：`openai_gateway_handler.go` 三处字段透传（约 841 / 1437 / 3184 行）。
+- **内池耗尽 → 503** 分支。
+- **`grok_media.go` 视频 pending 计费快照**。
+- **平台清单 14 平台**（含 `xiaoapi`，gateway=`xiao`），前后端一致；
+  迁移 `242` 的两个 DB CHECK 未被上游重新引入。
+- 本地扩展配置项 `IgnoreAccountCooldowns` / `PassthroughUpstreamErrors` 与上游 `MinOutputTokens` 并存。
+
+### 冲突解法要点
+
+- **生成代码一律重新生成，不手改**：`backend/ent/**`（含 `migrate/schema.go` / `mutation.go` /
+  `runtime/runtime.go`）用 `go generate ./ent` 产出；`backend/cmd/server/wire_gen.go` 用 `wire` 产出。
+  ⚠️ ent 存在**自举死锁**：生成器要先编译 `ent` 包自身，若 `mutation.go` 取上游版本（无 `Shop*Mutation`），
+  会先撞 `undefined: ShopBalanceLedgerMutation`。正确顺序是：先 `git checkout HEAD -- backend/ent`
+  （保留本地 shop/support schema），再用合并后的 `schema/` 覆盖，最后生成。
+- `internal/config/config.go` / `repository/wire.go` / `service/group.go` / `service/gateway_service.go`：
+  两侧新增互不重叠，取并集。
+- `handler/gemini_v1beta_handler.go`：保留本地 `customGeminiModelsList`；
+  账号选取改用上游新名 `SelectAccountForModelsEndpoints`（旧 `SelectAccountForAIStudioEndpoints` 已删）。
+- `service/billing_cache_service.go`：两侧各插入不同函数，全部保留；本地
+  `checkSubscriptionEntitlementEligibility` 补回被截断的函数闭合。
+- `service/payment_fulfillment.go`：`switch` 增加 shop 分支、`isSupportedPaymentOrderType` 加入 shop；
+  上游已把 `rejectUnsupportedOrderType` 改成无返回值签名，本地代码不得再塞回去。
+- 前端交错冲突 `CreateAccountModal.spec.ts` 用脚本重建（前 898 行逐字节一致，再拼两侧尾部），
+  `EditAccountModal.spec.ts` 本地侧为空，直接取上游。
+
+### 迁移
+
+- 上游新增 4 个：`242_group_i18n.sql`、`243_gemini_cached_contents.sql`、
+  `244_gemini_cached_contents_channel_usage.sql`、`245_gemini_cached_contents_mutation_lease.sql`。
+- 本地已占用 240–252。**与上游无同名文件**，runner 按文件名排序执行，同号不同名不会互相阻塞。
+- 新迁移均幂等（`ADD COLUMN IF NOT EXISTS` / `CREATE TABLE IF NOT EXISTS`）。
+- ⚠️ 迁移只在**部署新镜像**时执行，未发布前生产库不受影响。
+
+### 验证重点
+
+- 门禁全绿：`go build ./...`、`go vet ./...`、`go test ./...`（11m32s 零失败）、
+  前端 `vue-tsc --noEmit`、16 个合并涉及前端文件的 `eslint`。
+- **双向丢失审计**：对 94 个交集文件逐行比对，本地 `v0.2.15..HEAD` 中新增的实质行
+  （≥40 字符）在合并结果中的存活情况 —— 仅 4 个生成代码文件报缺失，均为**未重生成时的中间态**，
+  重新生成后全部复位（`mutation.go` 含 Shop* 314 处、`migrate/schema.go` 同时含 `i18n` 与
+  `auto_assign_accounts_by_rate`、`runtime/runtime.go` 含 shopbalanceledger 28 处）。
+- 上线后需重点复核：分组名多语言回退、Gemini 缓存路由与计费、订阅列表额度上限未被 i18n 改动影响、
+  共享模式账号计费倍率仍带共享因子。
+
 ## v0.2.15-lingqu.3 - 2026-10-16
 
 修复 `v0.2.15-lingqu.2` 的残留缺陷：「上游工具映射不支持」的 400 会在同一账号上白撞满重试次数才换号。
