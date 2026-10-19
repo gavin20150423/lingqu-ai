@@ -857,24 +857,14 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 		cacheTTLOverridden = (result.Usage.CacheCreation5mTokens + result.Usage.CacheCreation1hTokens) > 0
 	}
 
-	// 获取费率倍数（优先级：用户专属 > 分组默认 > 系统默认）
-	multiplier := 1.0
-	if s.cfg != nil {
-		multiplier = s.cfg.Default.RateMultiplier
-	}
-	if apiKey.GroupID != nil && apiKey.Group != nil {
-		multiplier = apiKey.Group.RateMultiplier
-		if user != nil {
-			multiplier = s.ResolveUserGroupRateMultiplier(ctx, user.ID, *apiKey.GroupID, multiplier)
-		}
-	}
-	// 账号共享模式的倍率调整（本地能力，上游 v0.2.17 的 recordUsageMultipliers 不含此步）。
-	// 必须排在 computePeakAwareMultipliers 之前，否则图片倍率不会带上共享模式因子。
-	accountShareMembership, accountShareListing, err := resolveAccountShareModeBillingBinding(ctx, s.accountShareModeService, user, apiKey, account)
+	// 基础倍率：用户专属 > 分组默认 > 系统默认，再叠加账号共享模式（本地能力）。
+	// 共享模式是替换语义而非乘性因子，必须排在 computePeakAwareMultipliers 之前，
+	// 否则图片倍率不会带上共享模式因子。
+	// 与 QuoteUsageCost 共用同一解析，保证「预留报价」与「实收」同口径。
+	multiplier, accountShareMembership, accountShareListing, err := s.resolveBaseRateMultiplier(ctx, apiKey, user, account)
 	if err != nil {
 		return err
 	}
-	multiplier = accountShareModeBillingMultiplier(accountShareMembership, accountShareListing, multiplier)
 	// token 倍率叠加高峰因子（token 计费含图片 token，图片按次倍率不受影响）。高峰因子按请求时刻现算，
 	// 不并入上面的 getUserGroupRateMultiplier，以免污染 user:group 倍率缓存。
 	pricingAt := input.PricingAt
@@ -996,9 +986,8 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 	return nil
 }
 
-// recordUsageMultipliers 返回 token / 图片售价倍率（用户专属 > 分组默认 > 系统默认，token 倍率叠加高峰因子）
-// 与计价时刻；pricingAt 为零值时取当前时刻。
-func (s *GatewayService) recordUsageMultipliers(ctx context.Context, apiKey *APIKey, user *User, pricingAt time.Time) (float64, float64, time.Time) {
+// baseRateMultiplier 返回不含账号共享模式的基础售价倍率（用户专属 > 分组默认 > 系统默认）。
+func (s *GatewayService) baseRateMultiplier(ctx context.Context, apiKey *APIKey, user *User) float64 {
 	multiplier := 1.0
 	if s.cfg != nil {
 		multiplier = s.cfg.Default.RateMultiplier
@@ -1008,6 +997,32 @@ func (s *GatewayService) recordUsageMultipliers(ctx context.Context, apiKey *API
 		if user != nil {
 			multiplier = s.ResolveUserGroupRateMultiplier(ctx, user.ID, *apiKey.GroupID, multiplier)
 		}
+	}
+	return multiplier
+}
+
+// resolveBaseRateMultiplier 在基础倍率之上叠加账号共享模式倍率（本地能力）。
+// 共享模式返回的是「替换值」（owner 自用固定倍率 / 挂牌价），不是乘性因子，
+// 因此调用方必须先拿到它再算高峰与图片倍率，不能事后相乘。
+// 同时返回共享模式绑定，供结算快照复用，避免重复查库。
+func (s *GatewayService) resolveBaseRateMultiplier(ctx context.Context, apiKey *APIKey, user *User, account *Account) (float64, *AccountShareMembership, *AccountShareListing, error) {
+	base := s.baseRateMultiplier(ctx, apiKey, user)
+	membership, listing, err := resolveAccountShareModeBillingBinding(ctx, s.accountShareModeService, user, apiKey, account)
+	if err != nil {
+		return 0, nil, nil, err
+	}
+	return accountShareModeBillingMultiplier(membership, listing, base), membership, listing, nil
+}
+
+// recordUsageMultipliers 返回 token / 图片售价倍率（用户专属 > 分组默认 > 系统默认，
+// 叠加账号共享模式与高峰因子）与计价时刻；pricingAt 为零值时取当前时刻。
+//
+// 该函数供不需要错误返回的报价路径（QuoteUsageCost）使用：共享模式绑定解析失败时
+// 降级为基础倍率并继续报价，记账路径（RecordUsage）会因同一错误显式失败并暴露。
+func (s *GatewayService) recordUsageMultipliers(ctx context.Context, apiKey *APIKey, user *User, account *Account, pricingAt time.Time) (float64, float64, time.Time) {
+	multiplier, _, _, err := s.resolveBaseRateMultiplier(ctx, apiKey, user, account)
+	if err != nil {
+		multiplier = s.baseRateMultiplier(ctx, apiKey, user)
 	}
 	// 高峰因子按请求时刻现算，不并入 getUserGroupRateMultiplier，以免污染 user:group 倍率缓存。
 	if pricingAt.IsZero() {
@@ -1083,7 +1098,7 @@ func (s *GatewayService) QuoteUsageCost(ctx context.Context, input *RecordUsageI
 	if user == nil {
 		user = input.APIKey.User
 	}
-	multiplier, imageMultiplier, pricingAt := s.recordUsageMultipliers(ctx, input.APIKey, user, input.PricingAt)
+	multiplier, imageMultiplier, pricingAt := s.recordUsageMultipliers(ctx, input.APIKey, user, input.Account, input.PricingAt)
 	billingModel := s.recordUsageBillingModel(ctx, input.APIKey, input.Result, input.ChannelUsageFields)
 	cost := s.calculateRecordUsageCost(ctx, input.Result, input.APIKey, billingModel, multiplier, imageMultiplier, pricingAt)
 	if cost == nil {

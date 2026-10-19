@@ -12,28 +12,40 @@
 - 本地 `v0.2.15..HEAD`（合并前）：**1258 文件 / +382246 −6392** —— 重度定制分支，
   上游改动只占本地体量的很小一部分，因此风险集中在「两边都改过」的文件。
 - **高危交集 94 个文件**（历史 4 次「上游合并静默吃掉本地改动」事故的全部根因区）。
-- 本次合并提交：**332 文件 / +21030 −1516**，17 处文本冲突全部解决，零残留冲突标记。
+- 本次合并提交：**332 文件 / +21030 −1516**，17 处文本冲突全部解决，零残留冲突标记；
+  随后**追加一个语义修复提交**（倍率解析收敛 + 报价口径对齐，2 文件）。
 
 ### 修复了什么
 
-合并本身暴露了一处**上游把本地能力吃掉**的语义冲突（不是文本冲突，编译器不会报错）：
+合并本身暴露了**两处上游把本地能力吃掉**的语义冲突（不是文本冲突，编译器不会报错）：
 
-- **`gateway_usage_billing.go`：账号共享模式倍率被上游 helper 抹掉**。上游 v0.2.17 把倍率与计费模型
+- **`gateway_usage_billing.go`：倍率解析被上游 helper 抹掉 share-mode**。上游 v0.2.17 把倍率与计费模型
   抽成 `recordUsageMultipliers` / `recordUsageBillingModel` 等 helper，但该 helper **不含本地
-  share-mode 倍率**（`resolveAccountShareModeBillingBinding` →
-  `accountShareModeBillingMultiplier`）。若直接采用上游 helper，共享模式账号的所有调用会**按原价计费**，
-  且无任何报错 —— 属于静默少收。
+  share-mode 倍率**（`resolveAccountShareModeBillingBinding` → `accountShareModeBillingMultiplier`）。
+  若直接采用上游 helper，共享模式账号的所有调用会**按原价计费**，且无任何报错 —— 属于静默少收。
 
-  修法：展开上游 helper 内容，把 share-mode 倍率插在 `computePeakAwareMultipliers` **之前**：
+  修法不是「展开 helper 再补一句」，而是**把倍率解析收敛到单一入口**，从结构上杜绝再次漏接：
   ```go
-  // group/user 倍率 → share-mode 倍率 → 峰值/图片倍率
-  multiplier = accountShareModeBillingMultiplier(accountShareMembership, accountShareListing, multiplier)
-  multiplier, imageMultiplier := computePeakAwareMultipliers(apiKey, multiplier, pricingAt)
+  baseRateMultiplier(...)          // 用户专属 > 分组默认 > 系统默认
+  resolveBaseRateMultiplier(...)   // 再叠加 share-mode（替换语义），并回传绑定供结算复用
+  recordUsageMultipliers(...)      // 叠加高峰/图片倍率（失败时降级为基础倍率，仅报价路径用）
   ```
-  顺序不可颠倒：`computePeakAwareMultipliers` 会基于入参倍率派生图片倍率，
-  若 share-mode 排在其后，图片计费就不带共享因子。
+  `RecordUsage` 与 `QuoteUsageCost` 现在走同一解析。
+  ⚠️ share-mode 是**替换语义**（owner 自用固定倍率 / 挂牌价），不是乘性因子 ——
+  不能事后相乘，必须在 `computePeakAwareMultipliers` 之前拿到；
+  而 `computePeakAwareMultipliers` 会基于入参倍率派生图片倍率，顺序颠倒则图片计费不带共享因子。
 
-其余 16 处为常规文本冲突，解法见下。
+- **Gemini 显式缓存「报价」与「实收」不同口径**。上游新增的 `QuoteUsageCost`（用于确定金额预留）
+  调用 `recordUsageMultipliers` 时**没有传 `Account`**，两处 handler 构造 `RecordUsageInput` 时也没填
+  `Account`；而记账侧 `RecordUsage` 是带 `Account: account` 的。结果：共享模式账号创建/延长缓存时，
+  **预留按无共享因子计、实收按共享倍率计** —— 挂牌加价则预留不足，挂牌折扣则多冻结。
+
+  修法：`recordUsageMultipliers` 增加 `account` 参数，`QuoteUsageCost` 传 `input.Account`，
+  `gemini_cached_contents_handler.go` 两处（创建、PATCH 延长）补 `Account: account`。
+  PATCH 路径的 `account` 取自 `svc.BoundAccount(ctx, record)`（缓存创建时绑定的账号），
+  与记账侧同源，不会出现「报价用选中账号、实收用绑定账号」的偏差。
+
+其余 15 处为常规文本冲突，解法见下。
 
 ### 增加了什么（来自上游 v0.2.17）
 
@@ -109,7 +121,7 @@
   重新生成后全部复位（`mutation.go` 含 Shop* 314 处、`migrate/schema.go` 同时含 `i18n` 与
   `auto_assign_accounts_by_rate`、`runtime/runtime.go` 含 shopbalanceledger 28 处）。
 - 上线后需重点复核：分组名多语言回退、Gemini 缓存路由与计费、订阅列表额度上限未被 i18n 改动影响、
-  共享模式账号计费倍率仍带共享因子。
+  共享模式账号计费倍率仍带共享因子（含 Gemini 显式缓存的**预留金额与实收金额同口径**）。
 
 ## v0.2.15-lingqu.3 - 2026-10-16
 
