@@ -643,7 +643,7 @@ func (s *AccountTestService) testClaudeAccountConnection(c *gin.Context, account
 		if err != nil {
 			return s.sendErrorAndEnd(c, fmt.Sprintf("Invalid base URL: %s", err.Error()))
 		}
-		apiURL = strings.TrimSuffix(normalizedBaseURL, "/") + "/v1/messages?beta=true"
+		apiURL = buildAnthropicMessagesURL(normalizedBaseURL)
 	} else {
 		return s.sendErrorAndEnd(c, fmt.Sprintf("Unsupported account type: %s", account.Type))
 	}
@@ -2478,6 +2478,14 @@ func (s *AccountTestService) reconcileOpenAI429State(ctx context.Context, accoun
 	}
 }
 
+// geminiDefaultTestModel 返回 Gemini 连接测试未指定模型时使用的模型；Google One 账号只能使用其保守模型集。
+func geminiDefaultTestModel(account *Account) string {
+	if account.IsGeminiGoogleOne() {
+		return geminicli.GoogleOneModels[0].ID
+	}
+	return geminicli.DefaultTestModel
+}
+
 // testGeminiAccountConnection tests a Gemini account's connection
 func (s *AccountTestService) testGeminiAccountConnection(c *gin.Context, account *Account, modelID string, prompt string) error {
 	ctx := c.Request.Context()
@@ -2485,7 +2493,7 @@ func (s *AccountTestService) testGeminiAccountConnection(c *gin.Context, account
 	// Determine the model to use
 	testModelID := modelID
 	if testModelID == "" {
-		testModelID = geminicli.DefaultTestModel
+		testModelID = geminiDefaultTestModel(account)
 	}
 
 	// For static upstream credentials with model mapping, map the model
@@ -3155,13 +3163,18 @@ func (s *AccountTestService) testOpenAIImageAPIKey(c *gin.Context, ctx context.C
 
 	s.sendEvent(c, TestEvent{Type: "test_start", Model: modelID})
 
+	// GPT Image models return base64 images by default and reject response_format.
 	payload := map[string]any{
-		"model":           modelID,
-		"prompt":          prompt,
-		"n":               1,
-		"size":            "1024x1024",
-		"quality":         "low",
-		"response_format": "b64_json",
+		"model":   modelID,
+		"prompt":  prompt,
+		"n":       1,
+		// 测试出图统一走低质量 + 1024x1024，成本可控（本地定制）；
+		// 账号若配置了尺寸档位则以上游 OpenAIImageTestSize 为准。
+		"size":    "1024x1024",
+		"quality": "low",
+	}
+	if size := account.OpenAIImageTestSize(); size != "" {
+		payload["size"] = size
 	}
 	payloadBytes, _ := json.Marshal(payload)
 
@@ -3259,7 +3272,9 @@ func (s *AccountTestService) testOpenAIImageOAuth(c *gin.Context, ctx context.Co
 		Endpoint: openAIImagesGenerationsEndpoint,
 		Model:    strings.TrimSpace(modelID),
 		Prompt:   prompt,
+		Size:     account.OpenAIImageTestSize(),
 	}
+	parsed.ExplicitSize = parsed.Size != ""
 	applyOpenAIImagesDefaults(parsed)
 	// Keep the admin probe deterministic and aligned with the default image
 	// preview requested by the UI.

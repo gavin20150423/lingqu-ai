@@ -194,6 +194,7 @@ func ProvideAdminSettingHandler(settingService *service.SettingService, emailSer
 func ProvideHandlers(
 	authHandler *AuthHandler,
 	userHandler *UserHandler,
+	mcpOAuthHandler *MCPOAuthHandler,
 	apiKeyHandler *APIKeyHandler,
 	accountShareModeHandler *AccountShareModeHandler,
 	usageHandler *UsageHandler,
@@ -229,6 +230,7 @@ func ProvideHandlers(
 	return &Handlers{
 		Auth:             authHandler,
 		User:             userHandler,
+		MCPOAuth:         mcpOAuthHandler,
 		APIKey:           apiKeyHandler,
 		AccountShareMode: accountShareModeHandler,
 		Usage:            usageHandler,
@@ -265,6 +267,7 @@ var ProviderSet = wire.NewSet(
 	// Top-level handlers
 	NewAuthHandler,
 	NewUserHandler,
+	NewMCPOAuthHandler,
 	NewAPIKeyHandler,
 	NewAccountShareModeHandler,
 	NewUsageHandler,

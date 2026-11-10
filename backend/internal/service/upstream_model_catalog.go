@@ -44,6 +44,11 @@ type UpstreamModelSpec struct {
 }
 
 // UpstreamModelCatalog extends the common model list with optional pricing metadata.
+//
+// 合并说明（v0.2.20）：本地把该类型从 upstream_models.go 迁到本文件并扩展了
+// xiaoapi 视频定价字段（ModelSpecs / PricingSource / PricingNote）；上游没迁，
+// 而是在原位置新增了 grok 相关字段（DiscoverySource / GrokModelDiagnostics）。
+// 两边字段在此并集，老文件中的重复定义已删除。
 type UpstreamModelCatalog struct {
 	Models        []string                         `json:"models"`
 	ModelSpecs    []UpstreamModelSpec              `json:"model_specs,omitempty"`
@@ -51,6 +56,10 @@ type UpstreamModelCatalog struct {
 	PricingNote   string                           `json:"pricing_note,omitempty"`
 	Metadata      map[string]UpstreamModelMetadata `json:"metadata,omitempty"`
 	Warnings      []UpstreamModelSyncWarning       `json:"warnings,omitempty"`
+	// DiscoverySource 记录模型清单来源（upstream / configured_fallback）。
+	DiscoverySource string `json:"discovery_source,omitempty"`
+	// GrokModelDiagnostics 是 admin 视角的 grok 目录可信度视图，仅 grok 抓取时填充。
+	GrokModelDiagnostics *GrokModelDiagnostics `json:"grok_model_diagnostics,omitempty"`
 }
 
 // FetchUpstreamModelCatalog keeps the common model sync contract while enriching XiaoAPI video accounts.

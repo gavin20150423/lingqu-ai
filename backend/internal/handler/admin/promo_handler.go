@@ -229,5 +229,5 @@ func (h *PromoHandler) GetUsages(c *gin.Context) {
 	for i := range usages {
 		out = append(out, *dto.PromoCodeUsageFromService(&usages[i]))
 	}
-	response.Paginated(c, out, paginationResult.Total, page, pageSize)
+	response.Paginated(c, adminPromoUsagesResponse(c, out), paginationResult.Total, page, pageSize)
 }
