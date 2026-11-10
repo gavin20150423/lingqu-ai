@@ -2,6 +2,82 @@
 
 每次正式发布都必须新增版本条目，并分别写清楚“修复了什么”、“增加了什么”和“当前已有功能”。没有新增功能时也必须明确记录。
 
+## v0.2.20-lingqu.1 - 2026-11-10
+
+合并上游 `Wei-Shaw/sub2api` v0.2.20（`dab829a4e`）到本地定制分支，**已发布生产**。
+合并提交 `a3989c69b`，镜像 `local/gavin2api:0.2.20-lingqu.1-a3989c69b`（`46e84d4b14eb`）。
+
+### 合并范围
+
+- 上游 `v0.2.17..v0.2.20`：**227 提交 / 687 文件 / +59390 −2502**（跨 3 个上游版本）。
+- 本地自基点 243 个定制提交；**两边都改过 160 个文件**（历史 4 次「静默吃掉本地改动」事故的根因区）。
+- 37 处文本冲突全部解决，零残留标记。生成代码（wire_gen + ent 5 个）全部由生成器重写，无手改。
+
+### 修复了什么（本次重点：4 处被静默覆盖的本地能力）
+
+1. **SubPilot 租约回写丢失**（`gateway_handler_chat_completions.go` / `gateway_handler_responses.go`）：
+   上游把 `RecordUsage` 抽成 `submitForwardUsage` 闭包，闭包里**丢了 `SubPilotLeaseID` / `SubPilotSessionKey`**。
+   不补回则 subpilot 无法感知请求结束、租约不释放。已按本地原样补回。
+2. **同一问题在 `handler/grok_media.go`**：同样补回两字段，并把 `RequestPayloadHash` 改用上游已算好的变量
+   （本地那行属于重复计算）。
+3. **OpenAI 图片测试成本口径**（`account_test_service.go`）：上游改为可配置 size，但本地「低质量 + 1024x1024
+   控成本」是既有定制。改为保留本地默认值，账号配了尺寸档位再由 `OpenAIImageTestSize` 覆盖。
+4. **前端 i18n 全面失效**：上游升 `vue-i18n` 至 `^11.4.16`，本地 `node_modules` 仍为 9.14.5，而合并后的
+   `vite.config.ts` 按「v10 起 JIT 恒开启」删掉了 `__INTLIFY_JIT_COMPILATION__`。表现为 **2457 次**
+   message-format 告警、`t()` 全部返回 key。修法不是加回 define，而是按 `pnpm-lock.yaml` 对齐依赖。
+
+另修复合并暴露的 2 个真实测试问题：`testOpenAIAccountConnection` 调用参数不足（本地新增
+`maxTokens`/`reasoningEffort`）、流式路径异步 usage task 捕获 `gin.Context`（改用快照变量）。
+
+### 保留了哪些本地语义（未随上游）
+
+- **`account_repo.BindGroups`**：上游改「全删重建」，本地是「增量 diff（只删 `GroupIDNotIn`）」，用于避免
+  delete/insert 间隙让别的实例插入冲突。保留本地实现，仅补上游新增的 scoped 事务与 `scopedAdminBindGroups`。
+- **`UpstreamModelCatalog`**：本地早已迁至 `upstream_model_catalog.go` 并扩展 xiaoapi 定价字段；上游没迁且
+  在老位置加了 grok 字段。合并为一个类型，两方字段并集，删除老文件重复定义。
+- **`customGeminiModelsList`**（白名单即发布清单）：加「全为精确条目时按声明顺序输出」快路径，既保本地定制
+  又与上游顺序口径一致。
+
+### 增加了什么（来自上游 v0.2.18–v0.2.20）
+
+- 作用域管理密钥（`scoped_admin_api_keys`，仅存摘要 + 撤销审计）
+- MCP OAuth（`mcp_oauth_grants` / `mcp_oauth_codes`，PKCE S256，不落明文）
+- 分组级按张计费开关（`groups.image_count_billing`）
+- Gemini/antigravity 分组生图开关统一开启
+- `/v1/responses/input_tokens` 原生端点、请求体读取失败细分、OpenAI 请求级重试退避、
+  单账号重试探测缓存、gemini declared model_mapping 列表口径等
+
+### 迁移
+
+新增 246/247/248/249 四个上游迁移，**编号与本地已有 246-249 重复但 filename 不同**，按铁律未改号。
+生产执行后：`schema_migrations` 370 → **374**，表 153 → **157**。
+**唯一数据变更来自 246**：3 个 gemini 分组（`37 jp-gemini`、`72 Gemini`、`141 Gemini 订阅`）的
+`allow_image_generation` 被置 true（生产由 3 开 3 关 → 6 全开）。需回退可执行
+`UPDATE groups SET allow_image_generation=false WHERE id IN (37,72,141);`。
+
+### 验证结果
+
+- 后端：build / vet / test 全通过，仅 2 个**基线既有**失败（prompt-audit manifest `/x_search`、
+  `TestMigration213` 触发器断言），与基线一致。
+- 前端：vue-tsc / eslint(0 error) / vite build 通过。vitest 合并后 **55 failed / 3398 passed**，
+  基线（worktree 实测）**56 failed / 3177 passed**；**名单比对新增失败 0 个**，另修复 1 个基线失败。
+- 切流：别名金丝雀 + 压池 + 45s 观察窗 9/9 全 200；候选 `unique_rq=26` 证明真实流量已切换；
+  旧容器优雅 `docker stop -t 90` → `exit=0`、`[Cleanup] All cleanup steps completed`。
+  **未使用 `docker network disconnect` 断流**（黑洞式）。
+- **零中断**：操作者工作站外部双探针覆盖全程，高频探针 **96 次采样 0 次非 200**，跨退役瞬间连续 200。
+- 公网 3 轮 × 5 项（api/cdn health、401、setup/status、root）**15/15 全 OK**。
+- 基础设施 postgres/redis/caddy/subpilot 未变（`started` 与 `restarts` 与发布前一致）。
+
+### 部署范围与回滚
+
+只替换 gavin2api 应用容器。回滚位 `local/gavin2api:0.2.17-lingqu.1-d9c69af0c`
+（容器 `gavin2api-release-0.2.17-lingqu.1-d9c69af0c`，Exited 0，别名已摘）。
+回滚顺序：先 `network connect --alias gavin2api` 再 `docker start`（顺序反了会裸启动连不上 DB）。
+**迁移不可回滚**（374 记录与 3 张新表保留，新代码不写它们，无害）。
+
+运维路径偏差：未使用 `deploy/safe-blue-green-cutover.sh`（其门禁要求 Caddy 运行时出现容器名，
+而本拓扑上游写稳定别名 `gavin2api:8080`，必然失败），改走别名金丝雀并等价复刻全部门禁。
+
 ## v0.2.17-lingqu.1 - 2026-10-19
 
 合并上游 `Wei-Shaw/sub2api` v0.2.17（`b0a02a330`）到本地定制分支。**未发布生产**，本条目记录合并口径与冲突解法。
