@@ -98,12 +98,12 @@ func (d SubPilotRetryDirective) RequiresNextAccount() bool {
 }
 
 type subPilotSelectRequest struct {
-	RequestID          string   `json:"request_id"`
-	APIKeyID           string   `json:"api_key_id,omitempty"`
-	Platform           string   `json:"platform"`
-	GroupID            string   `json:"group_id,omitempty"`
-	Model              string   `json:"model"`
-	SessionKey         string   `json:"session_key,omitempty"`
+	RequestID  string `json:"request_id"`
+	APIKeyID   string `json:"api_key_id,omitempty"`
+	Platform   string `json:"platform"`
+	GroupID    string `json:"group_id,omitempty"`
+	Model      string `json:"model"`
+	SessionKey string `json:"session_key,omitempty"`
 	// ClientType 告诉调度器本次请求来自哪类客户端，用于把"仅限 Claude Code 客户端"
 	// 的上游账号与普通账号分流（`claude_code` / `other`）。
 	//

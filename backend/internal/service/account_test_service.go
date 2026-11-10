@@ -3165,9 +3165,9 @@ func (s *AccountTestService) testOpenAIImageAPIKey(c *gin.Context, ctx context.C
 
 	// GPT Image models return base64 images by default and reject response_format.
 	payload := map[string]any{
-		"model":   modelID,
-		"prompt":  prompt,
-		"n":       1,
+		"model":  modelID,
+		"prompt": prompt,
+		"n":      1,
 		// 测试出图统一走低质量 + 1024x1024，成本可控（本地定制）；
 		// 账号若配置了尺寸档位则以上游 OpenAIImageTestSize 为准。
 		"size":    "1024x1024",

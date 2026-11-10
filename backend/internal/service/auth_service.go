@@ -92,7 +92,7 @@ type AuthService struct {
 	// repository path, which cannot atomically claim an invitation before the
 	// user ID exists. The database path still uses a conditional update.
 	invitationRegistrationMu sync.Mutex
-	mcpGrantRevoker       MCPGrantRevoker
+	mcpGrantRevoker          MCPGrantRevoker
 }
 
 type CaptchaProof struct {

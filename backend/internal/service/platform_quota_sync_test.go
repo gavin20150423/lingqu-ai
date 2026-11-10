@@ -11,9 +11,9 @@ import (
 // TestAllowedQuotaPlatformsMatchEntSchemaValidator 是一条**同步守卫**测试。
 //
 // 背景：平台白名单历史上曾有三处副本 ——
-//   1. service.AllowedQuotaPlatforms（配额接口可见的平台）
-//   2. ent/schema/user_platform_quota.go 的构建期 Validate（hand-written schema）
-//   3. 数据库 CHECK 约束（由迁移维护）
+//  1. service.AllowedQuotaPlatforms（配额接口可见的平台）
+//  2. ent/schema/user_platform_quota.go 的构建期 Validate（hand-written schema）
+//  3. 数据库 CHECK 约束（由迁移维护）
 //
 // 2026-10-06 实际出过事故：本地视频平台 xiaoapi 只在 (1) 里，导致前端配额弹窗能选、
 // 保存时被 ent 校验拒绝。三处之间的漂移不会让任何既有测试变红，所以补这条守卫。
