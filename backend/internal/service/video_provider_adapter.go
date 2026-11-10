@@ -246,30 +246,49 @@ func (ctmoaiVideoAdapter) RewriteCreate(account *Account, raw []byte, model, _ s
 		payload["aspect_ratio"] = aspectRatio
 	}
 
-	images := make([]string, 0)
-	if imageURL := videoStringValue(canonical["image_url"]); imageURL != "" {
-		images = append(images, imageURL)
-	}
+	imageURL := videoStringValue(canonical["image_url"])
 	startFrame := videoStringValue(canonical["start_frame_url"])
 	endFrame := videoStringValue(canonical["end_frame_url"])
+
+	// 对外契约（docs/VIDEO_API_DOWNSTREAM_CN.md §6.3）：
+	// image_url 是旧兼容字段，与显式 start_frame_url 互斥；尾帧必须配首帧。
+	if imageURL != "" && startFrame != "" {
+		return nil, ErrVideoRequestInvalid
+	}
 	if endFrame != "" && startFrame == "" {
 		return nil, ErrVideoRequestInvalid
 	}
-	if startFrame != "" {
+
+	// 首帧/首尾帧是「以该图为第一帧」的语义，与「参考图」不是一回事：
+	// 上游 §6.1 说只要 images 非空就自动落到**多参考图**工作流，§6.2 说需要
+	// 首帧语义时必须显式 workflow_id=fl2v。之前只在「首帧+尾帧两张」时才设 fl2v，
+	// 导致「只传首帧」被静默降级成参考图 —— 现改为只要给了 start_frame_url 就设。
+	firstLastFrame := startFrame != ""
+	images := make([]string, 0, 3)
+	if firstLastFrame {
 		images = append(images, startFrame)
 		if endFrame != "" {
 			images = append(images, endFrame)
-			payload["workflow_id"] = "fl2v"
 		}
-	} else if endFrame != "" {
-		return nil, ErrVideoRequestInvalid
+	} else if imageURL != "" {
+		images = append(images, imageURL)
 	}
 
 	videos, audios := make([]string, 0), make([]string, 0)
+	guidanceImages := make([]string, 0)
 	if guidances, ok := canonical["guidances"].(map[string]any); ok {
-		images = append(images, videoGuidanceURLs(guidances, "image_reference", "image")...)
+		guidanceImages = videoGuidanceURLs(guidances, "image_reference", "image")
 		videos = append(videos, videoGuidanceURLs(guidances, "video_reference_base", "video")...)
 		audios = append(audios, videoGuidanceURLs(guidances, "audio_reference", "audio")...)
+	}
+	// 首尾帧与 guidances.image_reference 不能组合（对外契约 §6.3）。
+	if firstLastFrame && len(guidanceImages) > 0 {
+		return nil, ErrVideoRequestInvalid
+	}
+	images = append(images, guidanceImages...)
+
+	if firstLastFrame {
+		payload["workflow_id"] = "fl2v"
 	}
 
 	if isCTMOAICFModel(model) {

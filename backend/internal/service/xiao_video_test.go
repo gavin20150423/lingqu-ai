@@ -519,6 +519,45 @@ func TestXiaoVideoCTMOAIAdapterMapsSeedanceAndH3Contracts(t *testing.T) {
 	require.ErrorIs(t, err, ErrVideoOptionUnsupported)
 	_, err = adapter.RewriteCreate(&account, []byte(`{"prompt":"Video reference","guidances":{"video_reference_base":[{"video":{"url":"https://cdn.test/ref.mp4"}}]}}`), "minimax-h3-quantized-768p", "768p", 8)
 	require.ErrorIs(t, err, ErrVideoOptionUnsupported)
+
+	// 2026-11-10 修复：只传首帧时也必须显式带 workflow_id=fl2v。
+	// 上游 §6.1 说只要 images 非空就自动落到「多参考图」工作流，§6.2 说首帧语义
+	// 必须显式 fl2v —— 此前只在「首帧+尾帧两张」时才设，单首帧会被静默降级成参考图。
+	startOnlyBody, err := adapter.RewriteCreate(&account, []byte(`{"prompt":"From first frame","start_frame_url":"https://cdn.test/start.jpg"}`), "minimax-h3-original-768p", "768p", 4)
+	require.NoError(t, err)
+	var startOnlyPayload map[string]any
+	require.NoError(t, json.Unmarshal(startOnlyBody, &startOnlyPayload))
+	require.Equal(t, "fl2v", startOnlyPayload["workflow_id"])
+	require.Equal(t, []any{"https://cdn.test/start.jpg"}, startOnlyPayload["images"])
+
+	// image_url 是旧兼容字段，与显式 start_frame_url 互斥（对外契约 §6.3）。
+	_, err = adapter.RewriteCreate(&account, []byte(`{"prompt":"Both","image_url":"https://cdn.test/a.jpg","start_frame_url":"https://cdn.test/b.jpg"}`), "minimax-h3-original-768p", "768p", 4)
+	require.ErrorIs(t, err, ErrVideoRequestInvalid)
+
+	// 首尾帧与 guidances.image_reference 不能组合（对外契约 §6.3）。
+	_, err = adapter.RewriteCreate(&account, []byte(`{"prompt":"Mixed","start_frame_url":"https://cdn.test/a.jpg","guidances":{"image_reference":[{"image":{"url":"https://cdn.test/ref.jpg"}}]}}`), "minimax-h3-original-768p", "768p", 4)
+	require.ErrorIs(t, err, ErrVideoRequestInvalid)
+
+	// 只传尾帧仍然非法。
+	_, err = adapter.RewriteCreate(&account, []byte(`{"prompt":"Only end","end_frame_url":"https://cdn.test/e.jpg"}`), "minimax-h3-original-768p", "768p", 4)
+	require.ErrorIs(t, err, ErrVideoRequestInvalid)
+
+	// image_url 兼容路径保持原语义：单图进 images[]、不带 workflow_id（参考图而非首帧）。
+	legacyBody, err := adapter.RewriteCreate(&account, []byte(`{"prompt":"Legacy ref","image_url":"https://cdn.test/legacy.jpg"}`), "minimax-h3-original-768p", "768p", 4)
+	require.NoError(t, err)
+	var legacyPayload map[string]any
+	require.NoError(t, json.Unmarshal(legacyBody, &legacyPayload))
+	require.Nil(t, legacyPayload["workflow_id"])
+	require.Equal(t, []any{"https://cdn.test/legacy.jpg"}, legacyPayload["images"])
+
+	// CF 模型：单张首帧走 images[] + fl2v（首帧语义），不是 input_reference（参考图语义）。
+	cfFl2vBody, err := adapter.RewriteCreate(&account, []byte(`{"prompt":"CF first frame","start_frame_url":"https://cdn.test/start.jpg"}`), "minimax-h3-original-cf-4k", "4K", 4)
+	require.NoError(t, err)
+	var cfFl2vPayload map[string]any
+	require.NoError(t, json.Unmarshal(cfFl2vBody, &cfFl2vPayload))
+	require.Equal(t, "fl2v", cfFl2vPayload["workflow_id"])
+	require.Equal(t, []any{"https://cdn.test/start.jpg"}, cfFl2vPayload["images"])
+	require.Nil(t, cfFl2vPayload["input_reference"])
 }
 
 func TestCTMOAIVideoAdapterDecodesUploadCollections(t *testing.T) {
