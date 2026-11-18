@@ -1048,6 +1048,8 @@ var ProviderSet = wire.NewSet(
 	NewChannelMonitorRequestTemplateService,
 	ProvideUserPlatformQuotaUsageFlusher,
 	NewCommunityService,
+	NewUsageBillingLaneCombiner,
+	ProvideUsageBillingRepository,
 )
 
 func ProvideShopService(
@@ -1086,6 +1088,11 @@ func ProvideContentModerationService(
 	svc := NewContentModerationService(settingRepo, repo, hashCache, groupRepo, userRepo, proxyRepo, authCacheInvalidator, emailService)
 	svc.SetAccountShareModeResolver(accountShareModeService)
 	return svc
+}
+
+// ProvideUsageBillingRepository 以按用户合并结算的通道作为各服务使用的计费仓储。
+func ProvideUsageBillingRepository(lanes *UsageBillingLaneCombiner) UsageBillingRepository {
+	return lanes
 }
 
 // ProvideUserPlatformQuotaUsageFlusher 创建并启动 UserPlatformQuotaUsageFlusher。

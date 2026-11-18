@@ -148,6 +148,7 @@ docs/*
 !docs/VIDEO_API_DOWNSTREAM_CN.md
 !docs/RELEASE_RUNBOOK_CN.md
 !docs/RELEASE_LOG.md
+!docs/OPENAI_IMAGES_CODEX.md
 !docs/BATCH_IMAGE_MVP.md
 !docs/COMPOSITE_GROUPS.md
 !docs/PLUGIN_DEVELOPMENT.md
@@ -172,3 +173,10 @@ issues/
 .vite/
 # 本地闭源插件开发目录及构建产物不进入 Sub2API 仓库
 /plugins/
+
+# 本地构建产物（曾因误提交触发 GitHub 100MB 单文件限制）
+backend/.codex-*-linux
+backend/backend/
+backend/tmp-release/
+backend/sub2api-subscription*
+backend/sub2api-*-linux

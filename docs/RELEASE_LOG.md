@@ -2,6 +2,87 @@
 
 每次正式发布都必须新增版本条目，并分别写清楚“修复了什么”、“增加了什么”和“当前已有功能”。没有新增功能时也必须明确记录。
 
+## v0.2.23-lingqu.1 - 2026-11-18
+
+合并上游 `Wei-Shaw/sub2api` v0.2.21 ~ v0.2.23 到本地定制分支，**已发布生产**。
+合并提交 `5351413c5`，版本提交 `b3849c438`。
+
+上游跨度：**301 提交 / 524 文件 / +32586 −2574**（189 fix、27 test、18 perf、17 feat）。
+tag SHA 已与 GitHub 官方 API 逐位核对（v0.2.23 = `ce19a640eab5c4b5ef1827c7c1fcfce49569411a`），无篡改。
+
+### 增加了什么
+
+- **GPT-6.2 Sol / Astra 支持**（OpenAI 侧）。
+- **分组强制 OpenAI Ultra Fast 档位**，且**按模型门控**——可与「强制 Fast」并存而非互斥；
+  不可用时若强制 Fast 开启则回落 Fast，否则跟随客户端。
+- **Gemini 4 Hydrogen 计费补齐**。
+- **Gemini Vertex 多区域端点**：账号支持 us/eu 多区域并按模型降级 global；按实际请求区域**加价 10%**。
+- 透传模型过滤器（passthrough model filter）。
+
+### 性能改进（上游）
+
+- 调度快照加载与数据库回源**按 bucket 合并**，减少大分组选号的整组复制。
+- 计费仓储改为**按用户合并结算通道**（usage-billing lane zero-copy）：
+  底层 `UsageBillingBatchRepository` + `UsageBillingLaneCombiner`，由 `ProvideUsageBillingRepository` 注入。
+- Anthropic 请求 JSON 与流式**快速路径**；DeepSeek reasoning 占位与 Ollama Cloud 回填改为**单遍改写**请求体。
+- 原生 Chat Completions 流式透传**在等待上游后才 flush**。
+
+### 修复了什么
+
+- **账号策略执行时机**：原先 `shouldDisable` 为真但状态码不在默认 failover 列表时，
+  `HandleUpstreamError` 永远不会被调用；上游把账号策略提到 failover 判断之前修掉了这个 bug。
+  本地合并时保留 `contentPolicyDenied` 保护，且**内容策略拒绝时连账号策略都不执行**，
+  避免审核拒绝被误判成账号故障而禁用账号。
+- **ETag / 304 与 CSP nonce 的一致性**：有 per-request nonce 时必须禁用 ETag，
+  否则浏览器会复用带旧 nonce 的 HTML、与本次响应的 CSP 不匹配。上游改为按 nonce 精确控制，
+  本地原先是「永远禁用 ETag」的保守写法，本次采用上游版本。
+- 上游另有 189 个 fix 随版本带入。
+
+### 本地定制在本版的处置
+
+- **图生视频首帧语义修复**（`eabc98f2c`，此前未上线，本次一并发布）：
+  只传 `start_frame_url` 时上游要求显式 `workflow_id="fl2v"`，否则会静默降级成「参考图」而非「首帧」；
+  同时补齐 `image_url`/`start_frame_url` 互斥、首尾帧与 `guidances.image_reference` 互斥两条校验。
+- **gofmt 归一化**（`675dfe1af`）：合并解析冲突后若干结构体字段对齐被破坏，统一按 gofmt 归一。
+- **Ultra Fast 提示补 `service_tier=ultrafast`**（`b3849c438`）：上游自带的测试断言该参数必须出现在
+  中英文案里，但上游中英文案都漏了（上游 CI 未跑到该用例）。该参数是开关实际下发的请求参数，
+  管理员排查时会用到，因此补齐文案而不是放宽上游测试。
+
+### 冲突处置（16 个）
+
+原则是**双方都要**：上游新增的计费通道 provider、Ultra Fast 门控，与本地的 Shop / 内容审核 /
+异步生图 / UserWorkspaceLayout 等定制全部保留。生成代码（`wire_gen.go` + ent 4 个文件）由生成器重写，
+不手改——过程中踩到 ent 生成器的鸡生蛋问题两次（详见合并提交说明）。
+
+### 静默覆盖审计
+
+- 删除行审计：合并相对 HEAD 的删除中，涉及本地定制符号的仅 1 行（wire 生成器的长参数列表）。
+- 函数级审计：本地分支新增的 **2565 个函数，合并后丢失 0 个**。
+- 历史 4 处静默覆盖点复核全部健在：SubPilot 租约字段（handler/ 8 个文件）、图片测试成本口径、
+  vue-i18n 依赖对齐、`UpstreamModelCatalog` 单一实现。
+- 视频链路相关文件（`xiao_video.go` / `video_provider_adapter.go` / `upstream_model_catalog.go` /
+  `adapters.go`）上游**零改动**。
+
+### 迁移（新增 5 个，与本地 249-253 同号但不同 filename，按 filename+checksum 去重）
+
+- `249_add_usage_logs_api_key_cost_index_notx.sql` —— `usage_logs` **685 万行 / 14 GB** 上建索引。
+  使用 `CREATE INDEX CONCURRENTLY`（不阻塞业务写入），runner 已支持 `_notx.sql` 非事务执行。
+- `250_openai_cache_write_ttl.sql`
+- `251_group_force_openai_ultrafast.sql`
+- `251_group_usage_rollup_nonblocking_build.sql` —— `SET LOCAL lock_timeout='5s'`
+- `252_channel_pricing_ultrafast_multiplier.sql`
+
+### 门禁
+
+| 项 | 结果 |
+|---|---|
+| `go build ./...` | OK（go 1.27.2 → **1.27.4**，与上游及 Dockerfile 的 `golang:1.27.4-alpine` 对齐） |
+| `go vet ./...` | OK |
+| `go test ./...` | 2 failed / **与合并前基线完全相同**（worktree 实测），零新增回归 |
+| `vue-tsc --noEmit` | OK |
+| `eslint` | 0 error / 3 warning |
+| `vitest` | **55 failed**，与基线一致；合并后唯一新增失败（上游 Ultra Fast 测试）已修复并回到基线 |
+
 ## v0.2.20-lingqu.1 - 2026-11-10
 
 合并上游 `Wei-Shaw/sub2api` v0.2.20（`dab829a4e`）到本地定制分支，**已发布生产**。
