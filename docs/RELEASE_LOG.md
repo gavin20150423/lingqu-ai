@@ -2,6 +2,48 @@
 
 每次正式发布都必须新增版本条目，并分别写清楚“修复了什么”、“增加了什么”和“当前已有功能”。没有新增功能时也必须明确记录。
 
+## v0.2.23-lingqu.3 - 2026-11-23
+
+本地定制版本，无上游合并。**不含数据库迁移**（254 已在 lingqu.2 执行）。
+
+### 增加了什么
+
+- **上游错误文本不再透传给客户**（安全项）。部分上游会在错误体里写加群/导流文案撬客户，
+  现在客户侧错误响应统一重建：
+  - 丢弃上游自由文本（message / detail / 任何未知字段）；
+  - 仅保留白名单内的 `error.type` / `error.code` / Google `error.status`（上游可往 code 塞广告，故必须白名单）；
+  - 文案由网关按状态码生成。
+  - 覆盖 `/v1`、`/v1beta`、`/backend-api/codex`；2xx、SSE、WebSocket 完全直通；
+    网关自身错误文案（余额不足、模型不在白名单等）原样保留；错误体超 64KB 直接丢弃只发文案。
+  - 上游原文**仍完整记录在 ops 日志**，排障不受影响。
+- 另外堵住三处硬泄漏：`writeRawUpstreamError`（原样写上游 body）、Gemini 绑定缓存耗尽的原样回写、非 JSON 纯文本错误体。
+
+### 修复了什么
+
+- **池模式 `pool_mode_retry_count` 被静默钳到 1 次**：`minRetryLimit` 用兜底常量当硬上限，
+  管理员配 2~10 实际只重试 1 次。现按显式配置执行（上限 10）。**注意：错误路径重试次数会增加。**
+- **绑定显式缓存的 429/5xx 同账号重试从未生效**：错误对象同时置 `RetryableOnSameAccount` 与
+  `RequestScopedTransient`，后者在 `sameAccountRetryAllowed` 里一票否决（其本意只是「重试用尽不封禁账号」）。
+  现补 `PoolModeSameAccountRetry` 标记并让其豁免该否决。
+- **ops 归因**：Recovered 凭据类故障漏改 `ErrorSource`（仍记 upstream_http），对齐为 `gateway`；
+  图片链路的客户端超时/取消不再被误记成上游 `request_error`。
+- **单测可运行**：`internal/service` 与 `internal/handler` 两个包此前**编译不过**，已修复；现两包全绿。
+
+### 当前已有功能
+
+- OAuth 与 API Key 多账号管理、账号级并发与健康状态；SubPilot 智能调度（成本优先/稳定优先/综合）。
+- API Key 分发、精确计费、速率限制、用户与账号并发控制。
+- OpenAI、Anthropic、Gemini、Grok、Kimi、智谱、DeepSeek、Antigravity 等平台接入与 Composite 多供应商分组。
+- 订阅套餐（日/周/月独立额度）+ 订阅重置卡（日+周自助清零，月度不动）、充值支付、兑换、返利。
+- 管理后台、渠道监控、用量统计、异步图片任务与视频工作台。
+
+### 验证重点
+
+- 上游返回带导流文案的错误时，客户侧只能看到网关文案；`type`/`code` 等结构化标识保留。
+- 余额不足、模型不在白名单等**网关自身**错误文案不受影响。
+- 流式（SSE）与 WebSocket 响应不得出现任何变化。
+- 池模式账号 429/5xx 的重试次数应等于 `pool_mode_retry_count`（默认 3），不再是 1。
+
 ## v0.2.23-lingqu.2 - 2026-11-23
 
 本地定制功能版本，**不含上游合并**。
