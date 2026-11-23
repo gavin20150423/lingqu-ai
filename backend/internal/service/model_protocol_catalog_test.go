@@ -328,6 +328,9 @@ func TestProtocolRulesWithProtocolSets(t *testing.T) {
 
 // 经真实入口验证：目录声明模型支持入站协议时原样直通，不做协议转换。
 func TestCommandCodeGatewayPassesThroughCatalogProtocols(t *testing.T) {
+	// 与执行顺序解耦：共享缓存可能被前序用例填过同一 key。
+	upstreamModelProtocols.reset()
+
 	type observation struct {
 		url  string
 		body []byte

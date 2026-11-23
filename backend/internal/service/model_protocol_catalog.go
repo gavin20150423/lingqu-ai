@@ -58,6 +58,17 @@ type modelProtocolCatalog struct {
 // upstreamModelProtocols 是全进程共享的模型协议目录。
 var upstreamModelProtocols modelProtocolCatalog
 
+// reset 清空全部目录条目。
+//
+// 仅供测试使用：进程级共享缓存会跨用例留存，若用例依赖「该 key 从未加载过」
+// 的前提（例如验证退避期回落内置规则），前序用例留下的条目就会让断言随执行顺序变化。
+// 用例在开头调用它即可与顺序解耦。
+func (c *modelProtocolCatalog) reset() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.entries = nil
+}
+
 func (c *modelProtocolCatalog) entryLocked(key string) *modelProtocolCatalogEntry {
 	if c.entries == nil {
 		c.entries = make(map[string]*modelProtocolCatalogEntry)
