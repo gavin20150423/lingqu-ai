@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/pkg/clienterror"
 	pkghttputil "github.com/Wei-Shaw/sub2api/internal/pkg/httputil"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ip"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
@@ -840,13 +841,13 @@ func mergeAccountIDSets(a, b map[int64]struct{}) map[int64]struct{} {
 }
 
 // handleGeminiCachedContentFailoverExhausted 处理绑定缓存的请求在持有账号上重试耗尽：没有其他账号可换。
-// 上游网关账号的限流 / 不可用响应反映持有缓存的上游账号状态，原样返回供客户端判断；
-// 其余（含官方账号）仍按普通 Gemini 路径处理：透传规则、通用映射。
+// 上游网关账号的限流 / 不可用响应反映持有缓存的上游账号状态，沿用其状态码与白名单标识返回；
+// 但**不原样透传上游文本**（上游可能借此塞导流/加群文案），文案由网关重建。
 func (h *GatewayHandler) handleGeminiCachedContentFailoverExhausted(c *gin.Context, failoverErr *service.UpstreamFailoverError) {
 	if failoverErr == nil || !failoverErr.BoundUpstreamPassthrough || len(failoverErr.ResponseBody) == 0 || !json.Valid(failoverErr.ResponseBody) {
 		h.handleGeminiFailoverExhausted(c, failoverErr)
 		return
 	}
 	service.SetOpsUpstreamError(c, failoverErr.StatusCode, service.ExtractUpstreamErrorMessage(failoverErr.ResponseBody), "")
-	c.Data(failoverErr.StatusCode, "application/json", failoverErr.ResponseBody)
+	c.Data(failoverErr.StatusCode, "application/json", clienterror.Sanitize(clienterror.ShapeGoogle, failoverErr.StatusCode, failoverErr.ResponseBody))
 }

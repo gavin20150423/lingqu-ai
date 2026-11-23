@@ -96,15 +96,16 @@ func TestGeminiV1BetaModels_BoundCachePoolModeRetriesUpstream429(t *testing.T) {
 	}
 }
 
-func TestGeminiV1BetaModels_BoundCacheRetryExhaustedPassesThroughUpstream429(t *testing.T) {
+func TestGeminiV1BetaModels_BoundCacheRetryExhaustedReturns429WithoutUpstreamText(t *testing.T) {
 	upstream := &boundRetryUpstream{failures: 10}
 	env := newBoundRetryEnv(t, upstream, 429)
 
 	rec := env.generateWithCache()
 
 	require.Len(t, upstream.requestBodies(), 3, "首发 + pool_mode_retry_count 次同账号重试")
-	require.Equal(t, http.StatusTooManyRequests, rec.Code)
-	require.JSONEq(t, boundRetryUpstream429, rec.Body.String(), "重试用尽后原样回写上游网关的响应")
+	require.Equal(t, http.StatusTooManyRequests, rec.Code, "状态码沿用上游")
+	require.NotContains(t, rec.Body.String(), "Resource exhausted", "上游文本不再透传（防上游塞导流文案）")
+	require.Contains(t, rec.Body.String(), `"status":"RESOURCE_EXHAUSTED"`)
 }
 
 // 502 在池模式重试状态码内时同样同账号重试；用尽后原样回写，不按空响应临时封禁本账号。
@@ -115,6 +116,7 @@ func TestGeminiV1BetaModels_BoundCacheRetryExhaustedOn502KeepsAccountSchedulable
 	rec := env.generateWithCache()
 
 	require.Len(t, upstream.requestBodies(), 3)
-	require.Equal(t, http.StatusBadGateway, rec.Code)
-	require.JSONEq(t, boundRetryUpstream502, rec.Body.String())
+	require.Equal(t, http.StatusBadGateway, rec.Code, "状态码沿用上游")
+	require.NotContains(t, rec.Body.String(), "Upstream service temporarily unavailable", "上游文本不再透传")
+	require.Contains(t, rec.Body.String(), `"status":"UNAVAILABLE"`)
 }

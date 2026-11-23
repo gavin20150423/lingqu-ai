@@ -3,12 +3,13 @@ package handler
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
 )
 
-func TestWriteRawUpstreamErrorPreservesStatusBodyAndRetryAfter(t *testing.T) {
+func TestWriteRawUpstreamErrorKeepsStatusAndRetryAfterButSanitizesText(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	router.GET("/", func(c *gin.Context) {
@@ -28,7 +29,10 @@ func TestWriteRawUpstreamErrorPreservesStatusBodyAndRetryAfter(t *testing.T) {
 	if rec.Header().Get("Retry-After") != "7" {
 		t.Fatalf("retry-after=%q, want 7", rec.Header().Get("Retry-After"))
 	}
-	if rec.Body.String() != `{"error":{"type":"overloaded_error","message":"upstream busy"}}` {
-		t.Fatalf("body was rewritten: %s", rec.Body.String())
+	if strings.Contains(rec.Body.String(), "upstream busy") {
+		t.Fatalf("upstream text leaked to client: %s", rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), `"overloaded_error"`) {
+		t.Fatalf("whitelisted type lost: %s", rec.Body.String())
 	}
 }

@@ -221,13 +221,15 @@ func TestHandleGeminiCachedContentFailoverExhausted(t *testing.T) {
 
 	c, rec := newGeminiCachedContentTestContext(http.MethodPost, "/v1beta/models/gemini-3.8-flash:generateContent", apiKey)
 	h.handleGeminiCachedContentFailoverExhausted(c, &service.UpstreamFailoverError{StatusCode: http.StatusServiceUnavailable, ResponseBody: []byte(unavailable), BoundUpstreamPassthrough: true})
-	require.Equal(t, http.StatusServiceUnavailable, rec.Code, "绑定缓存的请求无账号可换，上游网关的 503 原样返回")
-	require.JSONEq(t, unavailable, rec.Body.String())
+	require.Equal(t, http.StatusServiceUnavailable, rec.Code, "绑定缓存的请求无账号可换，上游状态码沿用")
+	require.NotContains(t, rec.Body.String(), "The account holding this cached content", "上游文本不再透传（防上游在错误里塞导流文案）")
+	require.Contains(t, rec.Body.String(), `"status":"UNAVAILABLE"`)
 
 	c, rec = newGeminiCachedContentTestContext(http.MethodPost, "/v1beta/models/gemini-3.8-flash:generateContent", apiKey)
 	h.handleGeminiCachedContentFailoverExhausted(c, &service.UpstreamFailoverError{StatusCode: http.StatusTooManyRequests, ResponseBody: []byte(`{"error":{"code":429,"message":"Too many pending requests, please retry later","status":"RESOURCE_EXHAUSTED"}}`), BoundUpstreamPassthrough: true})
 	require.Equal(t, http.StatusTooManyRequests, rec.Code)
-	require.Contains(t, rec.Body.String(), "Too many pending requests")
+	require.NotContains(t, rec.Body.String(), "Too many pending requests", "上游文本不再透传")
+	require.Contains(t, rec.Body.String(), `"status":"RESOURCE_EXHAUSTED"`)
 
 	officialQuota := `{"error":{"code":429,"message":"You exceeded your current quota","status":"RESOURCE_EXHAUSTED","details":[{"@type":"type.googleapis.com/google.rpc.QuotaFailure","violations":[{"quotaId":"GenerateRequestsPerDayPerProjectPerModel-FreeTier"}]}]}}`
 	c, rec = newGeminiCachedContentTestContext(http.MethodPost, "/v1beta/models/gemini-3.8-flash:generateContent", apiKey)
