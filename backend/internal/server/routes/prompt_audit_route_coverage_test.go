@@ -20,11 +20,18 @@ import (
 func TestEveryGatewayPOSTRouteIsClassifiedForPromptAuditCoverage(t *testing.T) {
 	routeSource, err := os.ReadFile("gateway.go")
 	require.NoError(t, err)
-	pattern := regexp.MustCompile(`(?:gateway|gemini|r|codexDirect|antigravityV1|antigravityV1Beta)\.POST\("([^"]+)"`)
+	// 路由有两种注册形式：`<group>.POST("path", ...)`，以及根路径别名辅助闭包
+	// `rootRoute(http.MethodPost, "path", ...)`（它内部走 r.Handle）。两种都要扫，
+	// 否则走根别名的 /x_search、/responses 会被误判成「清单过期」。
+	pattern := regexp.MustCompile(`(?:gateway|gemini|r|codexDirect|antigravityV1|antigravityV1Beta)\.POST\("([^"]+)"|rootRoute\(http\.MethodPost,\s*"([^"]+)"`)
 	matches := pattern.FindAllStringSubmatch(string(routeSource), -1)
 	actual := map[string]struct{}{}
 	for _, match := range matches {
-		actual[match[1]] = struct{}{}
+		path := match[1]
+		if path == "" {
+			path = match[2]
+		}
+		actual[path] = struct{}{}
 	}
 
 	audited := map[string][]string{
@@ -56,6 +63,10 @@ func TestEveryGatewayPOSTRouteIsClassifiedForPromptAuditCoverage(t *testing.T) {
 		"/messages/count_tokens":     "tokenization only; it does not execute a model request",
 		"/images/batches/:id/cancel": "control-plane cancellation with no user prompt",
 		"/videos/uploads":            "binary media upload with no user prompt",
+		// 语音类端点由 rootVoiceHandler 直接代理到上游音频服务，载荷是音频/音色参数，
+		// 不含可审计的模型提示词（此前走 rootRoute 注册，未被本清单覆盖，补齐分类）。
+		"/stt":           "speech-to-text transcription; audio payload is not a model prompt",
+		"/custom-voices": "voice preset management; no model prompt",
 	}
 
 	unclassified := make([]string, 0)
