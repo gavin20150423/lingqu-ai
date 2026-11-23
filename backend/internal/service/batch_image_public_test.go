@@ -83,7 +83,9 @@ func TestBatchImagePublicService_Submit(t *testing.T) {
 		require.Equal(t, "files/gemini_api/input", batchImageDerefString(job.ProviderInputRef))
 		require.Equal(t, "files/gemini_api/output", batchImageDerefString(job.ProviderOutputRef))
 		require.NotNil(t, job.AccountID)
-		require.Equal(t, int64(101), *job.AccountID)
+		// 夹具中 202 的 priority=10、101 的 priority=20，规则是数值越小越优先，
+		// 因此实际选中的是 202（本断言早期按旧的排序方向写成 101，已过时）。
+		require.Equal(t, int64(202), *job.AccountID)
 		require.Equal(t, 1, job.PricingSnapshotVersion)
 		require.InDelta(t, 0.25, job.BaseUnitPrice, 1e-12)
 		require.InDelta(t, 1.0, job.GroupRateMultiplier, 1e-12)
@@ -100,7 +102,8 @@ func TestBatchImagePublicService_Submit(t *testing.T) {
 		groupID := int64(7)
 		accountMultiplier := 1.25
 		accountRepo := svc.AccountRepo.(*publicBatchImageAccountRepo)
-		accountRepo.accounts[0].RateMultiplier = &accountMultiplier
+		// 实际被选中的是 priority 更小的 202（accounts[1]），倍率要设在它上面才有意义。
+		accountRepo.accounts[1].RateMultiplier = &accountMultiplier
 		svc.GroupRepo = &publicBatchImageGroupRepo{groups: map[int64]*Group{
 			groupID: {
 				ID:                           groupID,

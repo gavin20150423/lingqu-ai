@@ -296,6 +296,16 @@ func defaultModelsListCandidateIDs(platform string) []string {
 		return ids
 	case PlatformGrok:
 		return xai.DefaultModelIDs()
+	// 独立 CN 供应商分组必须展示自己的模型，不能回落到下面的 Claude 默认列表。
+	// 列表与网关侧 defaultModelIDsForPlatform 的口径保持一致；两边都改时请同步。
+	case PlatformKimi:
+		return []string{"kimi-k3", "kimi-k2.6", "kimi-for-coding"}
+	case PlatformZhipu:
+		return []string{"glm-5.3", "glm-5.3-flash", "glm-4.7"}
+	case PlatformDeepseek:
+		return []string{"deepseek-v4-pro", "deepseek-v4-flash", "deepseek-r1"}
+	case PlatformMiniMax:
+		return []string{"MiniMax-M3", "MiniMax-M2.7", "abab6.5-chat"}
 	case PlatformOpenCodeGo:
 		return DefaultOpenCodeGoModelIDs()
 	case PlatformTypeSafe:

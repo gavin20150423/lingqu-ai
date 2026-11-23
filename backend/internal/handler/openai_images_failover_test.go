@@ -211,6 +211,10 @@ type openAIImagesTransportFailoverHTTPUpstream struct {
 	accountIDs            []int64
 	succeedAccountID      int64
 	waitForRequestContext bool
+	// blockFor > 0 时用「可控的慢返回」代替等待 req.Context().Done()。
+	// 图片链路的上游 ctx 在生产代码里被 detachUpstreamContext 主动脱钩
+	// （不随客户端断开而中断），Done() 永远为 nil channel，直接等会永久阻塞。
+	blockFor time.Duration
 }
 
 func (u *openAIImagesTransportFailoverHTTPUpstream) Do(req *http.Request, _ string, accountID int64, _ int) (*http.Response, error) {
@@ -219,6 +223,10 @@ func (u *openAIImagesTransportFailoverHTTPUpstream) Do(req *http.Request, _ stri
 	u.mu.Unlock()
 
 	if u.waitForRequestContext {
+		if u.blockFor > 0 {
+			time.Sleep(u.blockFor)
+			return nil, errors.New("http2: timeout awaiting response headers")
+		}
 		<-req.Context().Done()
 		return nil, req.Context().Err()
 	}
@@ -366,7 +374,7 @@ func TestOpenAIGatewayHandlerImages_APIKeyTransportTimeoutsReturn502WhenExhauste
 
 func TestOpenAIGatewayHandlerImages_APIKeyParentDeadlineDoesNotFailOver(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	upstream := &openAIImagesTransportFailoverHTTPUpstream{waitForRequestContext: true}
+	upstream := &openAIImagesTransportFailoverHTTPUpstream{waitForRequestContext: true, blockFor: 100 * time.Millisecond}
 	handler := newOpenAIImagesAPIKeyFailoverHandler(t, upstream)
 	requestCtx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
 	defer cancel()

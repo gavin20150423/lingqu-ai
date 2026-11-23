@@ -15,6 +15,10 @@ func TestAuthService_Register_BlacklistedEmailAliasRejected(t *testing.T) {
 	svc := newAuthService(repo, map[string]string{
 		SettingKeyRegistrationEnabled:        "true",
 		SettingKeyRegistrationEmailBlacklist: `["spam.user@gmail.com"]`,
+		// 本用例验证「黑名单能命中 + 别名形态」，因此显式关闭别名守卫；
+		// 默认（未配置）时别名守卫开启，会先以 EMAIL_ALIAS_NOT_ALLOWED 拒绝，
+		// 那样就测不到黑名单分支了。
+		SettingKeyEmailAliasRestrictionEnabled: "false",
 	}, nil, nil)
 
 	_, _, err := svc.Register(context.Background(), "SpamUser+1@googlemail.com", "password")
@@ -45,6 +49,8 @@ func TestAuthService_SendVerifyCode_BlacklistedEmailRejected(t *testing.T) {
 		SettingKeyRegistrationEnabled:        "true",
 		SettingKeyEmailVerifyEnabled:         "true",
 		SettingKeyRegistrationEmailBlacklist: `["blocked@example.com"]`,
+		// 同上：关闭别名守卫，才能验证「别名形态也要命中黑名单」。
+		SettingKeyEmailAliasRestrictionEnabled: "false",
 	}, nil, nil)
 
 	require.ErrorIs(t, svc.SendVerifyCode(context.Background(), "blocked+x@example.com"), ErrEmailBlocked)

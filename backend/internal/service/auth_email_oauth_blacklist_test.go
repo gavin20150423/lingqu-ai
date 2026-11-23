@@ -43,6 +43,8 @@ func TestLoginOrRegisterVerifiedEmailOAuth_BlacklistedNewEmailRejected(t *testin
 	svc, _, client := newAuthServiceForEmailBindWithRefreshCache(t, map[string]string{
 		service.SettingKeyRegistrationEnabled:        "true",
 		service.SettingKeyRegistrationEmailBlacklist: `["blocked.user@gmail.com"]`,
+		// 关闭别名守卫，否则会先被 EMAIL_ALIAS_NOT_ALLOWED 拦下，测不到黑名单分支。
+		service.SettingKeyEmailAliasRestrictionEnabled: "false",
 	}, nil, nil, newEmailBindRefreshTokenCacheStub())
 	ctx := context.Background()
 
