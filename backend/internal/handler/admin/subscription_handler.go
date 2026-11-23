@@ -362,3 +362,59 @@ func getAdminIDFromContext(c *gin.Context) int64 {
 	}
 	return subject.UserID
 }
+
+// GrantResetCardsRequest 发放（delta）或直接设置（set）某个用户的订阅重置卡张数。
+type GrantResetCardsRequest struct {
+	Delta int    `json:"delta"`
+	Set   *int   `json:"set"`
+	Note  string `json:"note"`
+}
+
+// GetResetCardBalance 查询某用户剩余订阅重置卡张数。
+// GET /api/v1/admin/users/:id/reset-cards
+func (h *SubscriptionHandler) GetResetCardBalance(c *gin.Context) {
+	userID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		response.BadRequest(c, "Invalid user ID")
+		return
+	}
+
+	balance, err := h.subscriptionService.GetResetCardBalance(c.Request.Context(), userID)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, gin.H{"user_id": userID, "balance": balance})
+}
+
+// GrantResetCards 发放/设置某用户的订阅重置卡。
+// POST /api/v1/admin/users/:id/reset-cards
+//
+// 1 张卡 = 1 次「日 + 周」额度重置（月度不动），由用户自己在订阅页消耗。
+func (h *SubscriptionHandler) GrantResetCards(c *gin.Context) {
+	userID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		response.BadRequest(c, "Invalid user ID")
+		return
+	}
+
+	var req GrantResetCardsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+	if req.Set == nil && req.Delta == 0 {
+		response.BadRequest(c, "Either 'delta' must be non-zero or 'set' must be provided")
+		return
+	}
+
+	operatorID := getAdminIDFromContext(c)
+	balance, err := h.subscriptionService.AdjustResetCardsByAdmin(
+		c.Request.Context(), userID, req.Delta, req.Set, operatorID, req.Note,
+	)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, gin.H{"user_id": userID, "balance": balance})
+}

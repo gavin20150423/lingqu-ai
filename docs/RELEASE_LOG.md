@@ -2,6 +2,45 @@
 
 每次正式发布都必须新增版本条目，并分别写清楚“修复了什么”、“增加了什么”和“当前已有功能”。没有新增功能时也必须明确记录。
 
+## v0.2.23-lingqu.2 - 2026-11-23
+
+本地定制功能版本，**不含上游合并**。
+
+### 增加了什么
+
+- **订阅重置卡**：用户可自助把订阅的「今日 + 本周」用量清零，**月度额度与月度窗口完全不动**。
+  - 默认 1 张**只赠给有订阅的用户**（无订阅用户默认 0 张）；管理员可在后台用户「更多」菜单里按
+    「发放（累加）」或「设为（覆盖）」调整任意用户的张数。
+  - 1 张卡 = 1 次重置；日窗口锚点回到当天 0 点（保持每天 0 点刷新节奏），周窗口锚点重置为当前时刻；
+    与后台「重置额度（日 + 周）」语义一致。
+  - 保护逻辑：日、周用量都为 0 时拒绝消耗（防误点白扣）；订阅不属于本人、已过期、非 active 状态均拒绝；
+    **扣卡后重置失败会自动退回**，不留半截状态。
+  - 新增接口：用户 `GET /api/v1/subscriptions/reset-cards`、`POST /api/v1/subscriptions/:id/reset-card`；
+    后台 `GET|POST /api/v1/admin/users/:id/reset-cards`。
+  - 新增表：`user_subscription_reset_cards`（余额）、`user_subscription_reset_card_logs`（发放/设置/消耗/退回审计）。
+- 订阅用量页卡片新增「重置卡 ×N」按钮（0 张禁用）与二次确认弹窗，明确告知本月额度不受影响。
+
+### 修复了什么
+
+- 修复 `internal/service` 单元测试包编译失败：`anthropic_messages_url_test.go` 调用
+  `testClaudeAccountConnection` 少传 `prompt` / `maxTokens`（补空值与 0，保持原默认行为）。
+- 修复 `internal/handler` 单元测试包编译失败：12 处 `service.NewGatewayService` 调用少传
+  `accountShareModeService`（补齐 nil），恢复 `-tags unit` 门禁可跑。
+
+### 当前已有功能
+
+- OAuth 与 API Key 多账号管理，账号级并发与健康状态管理；SubPilot 智能调度（成本优先 / 稳定优先 / 综合）。
+- API Key 分发、精确计费、速率限制、用户与账号并发控制。
+- OpenAI、Anthropic、Gemini、Grok、Kimi、智谱、DeepSeek、Antigravity 等平台接入与 Composite 多供应商分组。
+- 订阅套餐（日/周/月独立额度）、充值支付、兑换、返利、管理后台、渠道监控、异步图片任务与视频工作台。
+
+### 验证重点
+
+- 有订阅用户的 `/api/v1/subscriptions/reset-cards` 首次读取应返回 1；无订阅用户返回 0。
+- 消耗一张卡后：`daily_usage_usd`、`weekly_usage_usd` 归零，`monthly_usage_usd` 不变，剩余张数 -1。
+- 卡数不足 / 日周均为 0 / 越权 / 订阅过期时，接口应明确报错且不扣卡。
+- 迁移 254 应创建两张新表，并只给「有未删除订阅」的存量用户回填 1 张。
+
 ## v0.2.23-lingqu.1 - 2026-11-18
 
 合并上游 `Wei-Shaw/sub2api` v0.2.21 ~ v0.2.23 到本地定制分支，**已发布生产**。

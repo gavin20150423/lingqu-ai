@@ -747,6 +747,16 @@ export default {
       // Balance History
       balanceHistory: 'Recharge History',
       balanceHistoryTip: 'Click to open recharge history',
+      // Subscription reset cards
+      resetCardsMenu: 'Reset Cards',
+      resetCardsTitle: 'Grant Subscription Reset Cards',
+      resetCardsCurrent: 'Remaining: {count}',
+      resetCardsAmount: 'Amount',
+      resetCardsModeAdd: 'Grant (add to current)',
+      resetCardsModeSet: 'Set (replace with this amount)',
+      resetCardsHint: 'One card resets today + this week usage once. Monthly quota is untouched. Users consume cards themselves on the subscription page.',
+      resetCardsSuccess: 'Updated, remaining {count}',
+      resetCardsFailed: 'Operation failed',
       columnAlwaysVisible: 'This column is always visible',
       // Per-platform usage breakdown (hover tooltip)
       platformBreakdown: 'Per-platform breakdown',

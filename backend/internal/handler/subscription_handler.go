@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"strconv"
+
 	"github.com/Wei-Shaw/sub2api/internal/handler/dto"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
 	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
@@ -103,6 +105,11 @@ func (h *SubscriptionHandler) GetProgress(c *gin.Context) {
 	}
 
 	result := make([]SubscriptionProgressInfo, 0, len(subscriptions))
+	// 重置卡是用户级余额，取一次即可；读失败不影响进度展示（按 0 处理）。
+	remainingCards, balanceErr := h.subscriptionService.GetResetCardBalance(c.Request.Context(), subject.UserID)
+	if balanceErr != nil {
+		remainingCards = 0
+	}
 	for i := range subscriptions {
 		sub := &subscriptions[i]
 		progress, err := h.subscriptionService.GetSubscriptionProgress(c.Request.Context(), sub.ID)
@@ -110,6 +117,7 @@ func (h *SubscriptionHandler) GetProgress(c *gin.Context) {
 			// Skip subscriptions with errors
 			continue
 		}
+		progress.ResetCardsRemaining = remainingCards
 		if sub.Group != nil {
 			progress.GroupName = sub.Group.I18n.LocalizeName(c.GetHeader("Accept-Language"), progress.GroupName)
 		}
@@ -120,6 +128,57 @@ func (h *SubscriptionHandler) GetProgress(c *gin.Context) {
 	}
 
 	response.Success(c, result)
+}
+
+// UseResetCard 消耗一张订阅重置卡，把该订阅的日、周用量清零（月度额度不变）。
+// POST /api/v1/subscriptions/:id/reset-card
+func (h *SubscriptionHandler) UseResetCard(c *gin.Context) {
+	subject, ok := middleware2.GetAuthSubjectFromContext(c)
+	if !ok {
+		response.Unauthorized(c, "User not found in context")
+		return
+	}
+
+	subscriptionID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		response.BadRequest(c, "Invalid subscription ID")
+		return
+	}
+
+	subscription, progress, remaining, err := h.subscriptionService.UseResetCard(
+		c.Request.Context(), subject.UserID, subscriptionID,
+	)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	response.Success(c, struct {
+		RemainingCards int                           `json:"remaining_cards"`
+		Subscription   *dto.UserSubscription         `json:"subscription"`
+		Progress       *service.SubscriptionProgress `json:"progress"`
+	}{
+		RemainingCards: remaining,
+		Subscription:   dto.UserSubscriptionFromService(subscription).Localized(c.GetHeader("Accept-Language")),
+		Progress:       progress,
+	})
+}
+
+// GetResetCardBalance 返回当前用户剩余订阅重置卡张数。
+// GET /api/v1/subscriptions/reset-cards
+func (h *SubscriptionHandler) GetResetCardBalance(c *gin.Context) {
+	subject, ok := middleware2.GetAuthSubjectFromContext(c)
+	if !ok {
+		response.Unauthorized(c, "User not found in context")
+		return
+	}
+
+	balance, err := h.subscriptionService.GetResetCardBalance(c.Request.Context(), subject.UserID)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, gin.H{"balance": balance})
 }
 
 // GetSummary handles getting a summary of current user's subscription status

@@ -741,6 +741,15 @@
                 {{ t('admin.users.balanceHistory') }}
               </button>
 
+              <!-- Subscription Reset Cards -->
+              <button
+                @click="handleGrantResetCards(user); closeActionMenu()"
+                class="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-700"
+              >
+                <Icon name="refresh" size="sm" class="text-primary-500" :stroke-width="2" />
+                {{ t('admin.users.resetCardsMenu') }}
+              </button>
+
               <div class="my-1 border-t border-gray-100 dark:border-dark-700"></div>
 
               <!-- Delete (not for admin) -->
@@ -788,6 +797,7 @@
     <UserBalanceHistoryModal :show="showBalanceHistoryModal" :user="balanceHistoryUser" @close="closeBalanceHistoryModal" @deposit="handleDepositFromHistory" @withdraw="handleWithdrawFromHistory" />
     <GroupReplaceModal :show="showGroupReplaceModal" :user="groupReplaceUser" :old-group="groupReplaceOldGroup" :all-groups="allGroups" @close="closeGroupReplaceModal" @success="loadUsers" />
     <UserAttributesConfigModal :show="showAttributesModal" @close="handleAttributesModalClose" />
+    <GrantResetCardsModal :show="showResetCardsModal" :user="resetCardsUser" @close="closeResetCardsModal" @success="loadUsers" />
   </AppLayout>
 </template>
 
@@ -817,6 +827,7 @@ import GroupBadge from '@/components/common/GroupBadge.vue'
 import Select from '@/components/common/Select.vue'
 import { buildApiKeyGroupFilterOptions } from './apiKeyGroupFilterOptions'
 import UserAttributesConfigModal from '@/components/user/UserAttributesConfigModal.vue'
+import GrantResetCardsModal from '@/components/admin/user/GrantResetCardsModal.vue'
 import UserConcurrencyCell from '@/components/user/UserConcurrencyCell.vue'
 import PlatformUsageBreakdown from '@/components/user/PlatformUsageBreakdown.vue'
 import PlatformCostCell from '@/components/user/PlatformCostCell.vue'
@@ -1352,6 +1363,18 @@ const editingUser = ref<AdminUser | null>(null)
 const deletingUser = ref<AdminUser | null>(null)
 const viewingUser = ref<AdminUser | null>(null)
 const platformQuotaUser = ref<AdminUser | null>(null)
+const showResetCardsModal = ref(false)
+const resetCardsUser = ref<AdminUser | null>(null)
+
+const handleGrantResetCards = (user: AdminUser) => {
+  resetCardsUser.value = user
+  showResetCardsModal.value = true
+}
+
+const closeResetCardsModal = () => {
+  showResetCardsModal.value = false
+  resetCardsUser.value = null
+}
 
 const handlePlatformQuota = (user: AdminUser) => {
   platformQuotaUser.value = user

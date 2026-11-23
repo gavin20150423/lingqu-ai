@@ -90,8 +90,7 @@ func TestGatewayCompatibilityHandlersReasoningEffortPolicy(t *testing.T) {
 						gateway := service.NewGatewayService(
 							nil, &fakeGroupRepo{group: group}, usageRepo, billingRepo, nil, nil, nil, nil, cfg,
 							snapshot, nil, service.NewBillingService(cfg, nil), nil, nil, nil, upstream,
-							&service.DeferredService{}, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
-						)
+							&service.DeferredService{}, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 						h := &GatewayHandler{
 							gatewayService: gateway, billingCacheService: billingCache, cfg: cfg, maxAccountSwitches: 1,
 							concurrencyHelper: NewConcurrencyHelper(service.NewConcurrencyService(&fakeConcurrencyCache{}), SSEPingFormatClaude, 0),

@@ -1321,6 +1321,8 @@ type SubscriptionProgress struct {
 	Daily         *UsageWindowProgress `json:"daily,omitempty"`
 	Weekly        *UsageWindowProgress `json:"weekly,omitempty"`
 	Monthly       *UsageWindowProgress `json:"monthly,omitempty"`
+	// ResetCardsRemaining 是用户剩余订阅重置卡张数（仅用户侧进度接口填充）。
+	ResetCardsRemaining int `json:"reset_cards_remaining"`
 }
 
 // UsageWindowProgress 使用窗口进度

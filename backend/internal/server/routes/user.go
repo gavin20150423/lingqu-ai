@@ -204,6 +204,10 @@ func RegisterUserRoutes(
 			subscriptions.GET("/active", h.Subscription.GetActive)
 			subscriptions.GET("/progress", h.Subscription.GetProgress)
 			subscriptions.GET("/summary", h.Subscription.GetSummary)
+			// 剩余重置卡张数
+			subscriptions.GET("/reset-cards", h.Subscription.GetResetCardBalance)
+			// 消耗一张重置卡，把日/周用量清零（月度不动）
+			subscriptions.POST("/:id/reset-card", h.Subscription.UseResetCard)
 		}
 
 		// 渠道监控（用户只读）

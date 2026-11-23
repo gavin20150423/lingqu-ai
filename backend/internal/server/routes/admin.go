@@ -798,6 +798,10 @@ func registerSubscriptionRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 
 	// 用户下的订阅列表
 	admin.GET("/users/:id/subscriptions", h.Admin.Subscription.ListByUser)
+
+	// 用户订阅重置卡：1 张 = 1 次「日 + 周」额度重置（月度不动），由用户自助消耗
+	admin.GET("/users/:id/reset-cards", h.Admin.Subscription.GetResetCardBalance)
+	admin.POST("/users/:id/reset-cards", h.Admin.Subscription.GrantResetCards)
 }
 
 func registerUsageRoutes(admin *gin.RouterGroup, h *handler.Handlers) {

@@ -430,8 +430,44 @@ export async function resetPlatformQuotaWindow(
   return data
 }
 
-export const usersAPI = {
-  list,
+export interface GrantSubscriptionResetCardsRequest {
+  delta?: number
+  set?: number
+  note?: string
+}
+
+export interface SubscriptionResetCardsResponse {
+  user_id: number
+  balance: number
+}
+
+/**
+ * Grant (delta) or set (set) subscription reset cards for a user.
+ */
+export async function grantSubscriptionResetCards(
+  id: number,
+  payload: GrantSubscriptionResetCardsRequest
+): Promise<SubscriptionResetCardsResponse> {
+  const { data } = await apiClient.post<SubscriptionResetCardsResponse>(
+    `/admin/users/${id}/reset-cards`,
+    payload
+  )
+  return data
+}
+
+/**
+ * Read remaining subscription reset cards of a user.
+ */
+export async function getSubscriptionResetCards(
+  id: number
+): Promise<SubscriptionResetCardsResponse> {
+  const { data } = await apiClient.get<SubscriptionResetCardsResponse>(
+    `/admin/users/${id}/reset-cards`
+  )
+  return data
+}
+
+export const usersAPI = {  list,
   getById,
   create,
   update,
@@ -450,6 +486,8 @@ export const usersAPI = {
   getPlatformQuotas,
   updatePlatformQuotas,
   resetPlatformQuotaWindow,
+  grantSubscriptionResetCards,
+  getSubscriptionResetCards,
 }
 
 export default usersAPI

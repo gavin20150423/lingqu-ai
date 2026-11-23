@@ -67,10 +67,32 @@ export async function getSubscriptionProgress(
   return response.data
 }
 
+/**
+ * Get remaining subscription reset cards for current user
+ */
+export async function getResetCardBalance(): Promise<number> {
+  const response = await apiClient.get<{ balance: number }>('/subscriptions/reset-cards')
+  return response.data.balance
+}
+
+/**
+ * Consume one reset card: clears daily & weekly usage (monthly quota untouched)
+ */
+export async function useResetCard(
+  subscriptionId: number
+): Promise<{ remaining_cards: number }> {
+  const response = await apiClient.post<{ remaining_cards: number }>(
+    `/subscriptions/${subscriptionId}/reset-card`
+  )
+  return response.data
+}
+
 export default {
   getMySubscriptions,
   getActiveSubscriptions,
   getSubscriptionsProgress,
   getSubscriptionSummary,
-  getSubscriptionProgress
+  getSubscriptionProgress,
+  getResetCardBalance,
+  useResetCard
 }

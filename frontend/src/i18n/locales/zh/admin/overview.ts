@@ -748,6 +748,16 @@ export default {
       // 余额变动记录
       balanceHistory: '充值记录',
       balanceHistoryTip: '点击查看充值记录',
+      // 订阅重置卡
+      resetCardsMenu: '重置卡',
+      resetCardsTitle: '发放订阅重置卡',
+      resetCardsCurrent: '当前剩余 {count} 张',
+      resetCardsAmount: '数量',
+      resetCardsModeAdd: '发放（累加到现有数量）',
+      resetCardsModeSet: '设为（直接设置为该数量）',
+      resetCardsHint: '1 张卡 = 1 次「今日 + 本周」额度重置，月度额度不受影响；由用户在订阅页面自行使用。',
+      resetCardsSuccess: '已更新，当前剩余 {count} 张',
+      resetCardsFailed: '操作失败',
       columnAlwaysVisible: '该列固定显示，不可隐藏',
       // 平台用量明细（悬浮显示）
       platformBreakdown: '按平台拆分',
