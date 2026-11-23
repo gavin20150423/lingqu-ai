@@ -759,18 +759,23 @@ func (s *OpenAIGatewayService) forwardOpenAIImagesAPIKey(
 	SetOpsLatencyMs(c, OpsUpstreamLatencyMsKey, time.Since(upstreamStart).Milliseconds())
 	if err != nil {
 		safeErr := sanitizeUpstreamErrorMessage(err.Error())
-		setOpsUpstreamError(c, 0, safeErr, "")
-		appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
-			ProxyID:            opsUpstreamProxyID(account),
-			ProxyName:          opsUpstreamProxyName(account),
-			Platform:           account.Platform,
-			AccountID:          account.ID,
-			AccountName:        account.Name,
-			UpstreamStatusCode: 0,
-			UpstreamURL:        safeUpstreamURL(upstreamReq.URL.String()),
-			Kind:               "request_error",
-			Message:            safeErr,
-		})
+		// 客户端已断开（父级 ctx 超时/取消）时不要记成上游故障：图片链路的上游 ctx
+		// 被 detachUpstreamContext 主动脱钩，若不显式判断，客户端超时会被误记为
+		// 一次上游 request_error，污染账号/上游健康画像。
+		if ctx == nil || ctx.Err() == nil {
+			setOpsUpstreamError(c, 0, safeErr, "")
+			appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
+				ProxyID:            opsUpstreamProxyID(account),
+				ProxyName:          opsUpstreamProxyName(account),
+				Platform:           account.Platform,
+				AccountID:          account.ID,
+				AccountName:        account.Name,
+				UpstreamStatusCode: 0,
+				UpstreamURL:        safeUpstreamURL(upstreamReq.URL.String()),
+				Kind:               "request_error",
+				Message:            safeErr,
+			})
+		}
 		return nil, fmt.Errorf("upstream request failed: %s", safeErr)
 	}
 	if resp.StatusCode >= 400 {

@@ -341,16 +341,21 @@ func runOpenAIImagesAPIKeyFailoverRequest(t *testing.T, handler *OpenAIGatewayHa
 	return rec, c
 }
 
-func TestOpenAIGatewayHandlerImages_APIKeyTransportTimeoutFailsOverToSecondAccount(t *testing.T) {
+// 图片链路的上游传输超时**不换号**，这是刻意的计费安全取舍：
+// 上游可能已经受理并开始生成（传输超时只说明我们没等到响应头），换号重发
+// 会造成同一张图被计费两次；同时图片上游 ctx 被 detachUpstreamContext 脱钩，
+// 无法用父级 ctx 取消来证明"对方没受理"。因此这里只记录账号级错误并回 502。
+// 原先两个用例（failover 到 2 / 耗尽后 502）在"不换号"契约下等价，合并为一个。
+func TestOpenAIGatewayHandlerImages_APIKeyTransportTimeoutDoesNotFailOver(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	upstream := &openAIImagesTransportFailoverHTTPUpstream{succeedAccountID: 2}
 	handler := newOpenAIImagesAPIKeyFailoverHandler(t, upstream)
 
 	rec, c := runOpenAIImagesAPIKeyFailoverRequest(t, handler, context.Background())
 
-	require.Equal(t, []int64{1, 2}, upstream.calls())
-	require.Equal(t, http.StatusOK, rec.Code)
-	require.Equal(t, "aGVsbG8=", gjson.GetBytes(rec.Body.Bytes(), "data.0.b64_json").String())
+	require.Equal(t, []int64{1}, upstream.calls(), "传输超时后不得换号（避免双倍计费）")
+	require.Equal(t, http.StatusBadGateway, rec.Code)
+	require.Equal(t, "upstream_error", gjson.GetBytes(rec.Body.Bytes(), "error.type").String())
 	rawEvents, ok := c.Get(service.OpsUpstreamErrorsKey)
 	require.True(t, ok)
 	events, ok := rawEvents.([]*service.OpsUpstreamErrorEvent)
@@ -367,7 +372,9 @@ func TestOpenAIGatewayHandlerImages_APIKeyTransportTimeoutsReturn502WhenExhauste
 
 	rec, _ := runOpenAIImagesAPIKeyFailoverRequest(t, handler, context.Background())
 
-	require.Equal(t, []int64{1, 2}, upstream.calls())
+	// 同上：不换号，因此只打第一个账号；响应仍是上游错误 502 而不是 503，
+	// 避免把"上游没回响应头"误导成网关自身不可用。
+	require.Equal(t, []int64{1}, upstream.calls())
 	require.Equal(t, http.StatusBadGateway, rec.Code)
 	require.Equal(t, "upstream_error", gjson.GetBytes(rec.Body.Bytes(), "error.type").String())
 }

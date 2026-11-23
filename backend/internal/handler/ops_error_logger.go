@@ -1345,6 +1345,9 @@ func logOpsRecoveredUpstream(c *gin.Context, ops *service.OpsService, finalStatu
 	entry.ErrorMessage = "Recovered upstream error"
 	if lastStage == string(service.GatewayFailureStageAccountAuth) {
 		entry.ErrorPhase = string(service.GatewayFailureStageAccountAuth)
+		// 与「最终失败」路径（classifyOpsErrorSource / shouldSkipFinalOpsFailure 附近）
+		// 保持一致：凭据类故障属于网关侧，不应记成 upstream_http。
+		entry.ErrorSource = "gateway"
 		entry.ErrorMessage = "Recovered account authentication failure"
 	} else if lastStatus > 0 {
 		entry.ErrorMessage += " " + strconv.Itoa(lastStatus)

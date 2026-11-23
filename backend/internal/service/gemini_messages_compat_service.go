@@ -1806,6 +1806,10 @@ func (s *GeminiMessagesCompatService) boundCacheUpstreamPassthroughError(c *gin.
 		ResponseBody:             respBody,
 		BoundUpstreamPassthrough: true,
 		RetryableOnSameAccount:   retryable,
+		// 显式声明「按 pool_mode_retry_status_codes 选入」的同账号重试，
+		// 否则会被 sameAccountRetryAllowed 对 RequestScopedTransient 的一票否决拦掉
+		// （该字段本意只是「重试用尽后不封禁本账号」）。
+		PoolModeSameAccountRetry: retryable,
 		RequestScopedTransient:   retryable,
 	}
 }

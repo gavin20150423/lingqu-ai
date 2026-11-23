@@ -194,8 +194,12 @@ func TestResponsesFailoverExhaustedAfterForwardedTerminalMarksOpsWithoutDuplicat
 	require.Equal(t, 1, strings.Count(markerRecorder.Body.String(), "event: response.failed"))
 	streamErr, ok = service.GetOpsStreamError(markerContext)
 	require.True(t, ok)
-	require.Equal(t, http.StatusTooManyRequests, streamErr.IntendedStatus)
-	require.Equal(t, "rate_limit_error", streamErr.ErrType)
+	// 池限流耗尽映射（isUpstreamPoolRateLimitExhausted 对任意 429 成立）优先于
+	// 下面那个 "statusCode == 429 → 429" 分支，所以 IntendedStatus 是 503。
+	// ⚠️ 该分支因此是不可达的死代码：若将来决定"上游 429 应原样回 429"，
+	// 需要先收窄 isUpstreamPoolRateLimitExhausted 的匹配条件，这会改变客户可见状态码。
+	require.Equal(t, http.StatusServiceUnavailable, streamErr.IntendedStatus)
+	require.Equal(t, "upstream_pool_exhausted", streamErr.ErrType)
 
 	heartbeatRecorder := httptest.NewRecorder()
 	heartbeatContext, _ := gin.CreateTestContext(heartbeatRecorder)

@@ -83,7 +83,10 @@ func sameAccountRetryAllowed(failoverErr *service.UpstreamFailoverError, limits 
 	// 例外：池模式账号通过 credentials.pool_mode_retry_status_codes 显式声明了
 	// 同账号重试状态码（默认列表即含 401/403）。此时 401/403 表达的是共享上游
 	// 池内的凭证轮换/临时拒绝，而不是针对本次请求的确定性拒绝，故不得拦截。
-	if failoverErr.RequestScopedTransient ||
+	// 同理，显式选入（PoolModeSameAccountRetry）的请求级瞬时错误也不得被
+	// RequestScopedTransient 一票否决：该标记的本意只是「重试用尽后不封禁账号」
+	// （如绑定显式缓存的请求，故障属于持有缓存的上游网关，与本账号健康无关）。
+	if (failoverErr.RequestScopedTransient && !failoverErr.PoolModeSameAccountRetry) ||
 		((failoverErr.StatusCode == http.StatusUnauthorized || failoverErr.StatusCode == http.StatusForbidden) &&
 			!failoverErr.PoolModeSameAccountRetry) {
 		return false
@@ -143,6 +146,11 @@ func sameAccountRetryWithinBudget(failoverErr *service.UpstreamFailoverError, cu
 	}
 	if failoverErr != nil && !failoverErr.SameAccountRetryDeadline.IsZero() {
 		return true
+	}
+	// 管理员通过 pool_mode_retry_count 显式配置的次数按原值执行（最多 10），
+	// 不套用 maxSameAccountRetries 这个「兜底/测试默认值」上限。
+	if failoverErr != nil && failoverErr.PoolModeSameAccountRetry {
+		return current < configured
 	}
 	return current < minRetryLimit(configured)
 }
